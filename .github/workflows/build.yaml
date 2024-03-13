@@ -1,0 +1,67 @@
+name: "Checks"
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  merge_group:
+    branches:
+      - main
+    types:
+      - checks_requested
+
+jobs:
+  pr:
+    name: Validate PR title
+    if: contains(fromJSON('["pull_request", "pull_request_target"]'), github.event_name)
+    runs-on: ubuntu-22.04
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@e9fabac35e210fea40ca5b14c0da95a099eff26f
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
+  mavenbuild:
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - buflint
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      - uses: bufbuild/buf-setup-action@382440cdb8ec7bc25a68d7b4711163d95f7cc3aa
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: '20'
+          distribution: 'adopt'
+          server-id: github
+      - name: Extract version
+        run: |
+          VERSION_HASH=$(git rev-parse --short HEAD)
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION=${{ github.ref_name }}
+          elif [[ "${{ github.ref_name }}" == "main" ]]; then
+            VERSION="main-SNAPSHOT"
+          else
+            BRANCH_NAME=$(echo ${{ github.ref_name }} | sed 's/\//-/g')
+            VERSION="dev-${BRANCH_NAME}-${VERSION_HASH}-SNAPSHOT"
+          fi
+          echo "Version=${VERSION}, GIT_SHA=${GIT_SHA}, Branch=${{ github.ref_name }}"
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+        id: info
+      - name: Run Maven Versions Plugin
+        run: mvn versions:set -DnewVersion=$VERSION
+      - name: Compile Java SDK
+        run: |
+          mvn clean deploy -s $GITHUB_WORKSPACE/settings.xml
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+
+

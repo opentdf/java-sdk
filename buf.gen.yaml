@@ -1,0 +1,14 @@
+version: v1
+managed:
+  enabled: true
+  java_package_prefix:
+    default: io.opentdf.platform
+    except:
+      - buf.build/bufbuild/protovalidate
+      - buf.build/googleapis/googleapis
+      - buf.build/grpc-ecosystem/grpc-gateway
+plugins:
+  - plugin: buf.build/protocolbuffers/java:v25.3
+    out: protocol/src/main/protogen
+  - plugin: buf.build/grpc/java:v1.61.1
+    out: protocol/src/main/protogen
