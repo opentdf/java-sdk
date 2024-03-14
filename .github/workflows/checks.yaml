@@ -40,7 +40,7 @@ jobs:
           java-version: '20'
           distribution: 'adopt'
           server-id: github
-      - name: Compile Java SDK
+      - name: Maven Verify
         run: |
           mvn clean verify
   
