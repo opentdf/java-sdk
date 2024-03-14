@@ -26,7 +26,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 
-  mavenbuild:
+  mavenverify:
     runs-on: ubuntu-latest
     if: always()
     needs:
@@ -35,33 +35,25 @@ jobs:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       - uses: bufbuild/buf-setup-action@382440cdb8ec7bc25a68d7b4711163d95f7cc3aa
       - name: Set up JDK
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
         with:
           java-version: '20'
           distribution: 'adopt'
           server-id: github
-      - name: Extract version
-        run: |
-          VERSION_HASH=$(git rev-parse --short HEAD)
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            VERSION=${{ github.ref_name }}
-          elif [[ "${{ github.ref_name }}" == "main" ]]; then
-            VERSION="main-SNAPSHOT"
-          else
-            BRANCH_NAME=$(echo ${{ github.ref_name }} | sed 's/\//-/g')
-            VERSION="dev-${BRANCH_NAME}-${VERSION_HASH}-SNAPSHOT"
-          fi
-          echo "Version=${VERSION}, GIT_SHA=${GIT_SHA}, Branch=${{ github.ref_name }}"
-          echo "VERSION=${VERSION}" >> $GITHUB_ENV
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-        id: info
-      - name: Run Maven Versions Plugin
-        run: mvn versions:set -DnewVersion=$VERSION
       - name: Compile Java SDK
         run: |
-          mvn clean deploy -s $GITHUB_WORKSPACE/settings.xml
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+          mvn clean verify
+  
+  ci:
+    needs:
+      - mavenverify
+      - pr
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - if: contains(needs.*.result, 'failure')
+        run: echo "Failed due to ${{ contains(needs.*.result, 'failure') }}" && exit 1
+        
 
 
 
