@@ -58,10 +58,9 @@ jobs:
           git config user.password "${{ secrets.PERSONAL_ACCESS_TOKEN }}"
           mvn --batch-mode clean install -DskipTests
           mvn --batch-mode verify
-        env:
-          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
-          BUF_INPUT_HTTPS_PASSWORD: '${{ secrets.PERSONAL_ACCESS_TOKEN }}'
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # env:
+        #   BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+        #   BUF_INPUT_HTTPS_PASSWORD: '${{ secrets.PERSONAL_ACCESS_TOKEN }}'
 
   ci:
     needs:
