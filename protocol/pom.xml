@@ -3,8 +3,10 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
+    <groupId>io.opentdf.platform</groupId>
     <name>protocol</name>
     <artifactId>protocol</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
     <parent>
         <artifactId>sdk-pom</artifactId>
         <groupId>io.opentdf.platform</groupId>
@@ -25,17 +27,15 @@
         <dependency>
             <groupId>build.buf</groupId>
             <artifactId>protovalidate</artifactId>
-            <version>0.1.9</version>
+            <version>0.1.5</version>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-protobuf</artifactId>
-            <version>${grpc.version}</version>
-        </dependency>
+       </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-stub</artifactId>
-            <version>${grpc.version}</version>
         </dependency>
     </dependencies>
     <build>
@@ -52,7 +52,7 @@
                             <target>
                                 <exec executable="rm">
                                     <arg value="-rf" />
-                                    <arg value="src/main/protogen" />
+                                    <arg value="src/main/java" />
                                 </exec>
                                 <exec executable="buf" dir="../">
                                     <arg value="generate" />
@@ -68,8 +68,8 @@
                                 </exec>
                                 <exec executable="cp" dir="../">
                                     <arg value="-r" />
-                                    <arg value="tmp-gen/protocol/src/main/protogen/grpc"/>
-                                    <arg value="protocol/src/main/protogen"/>
+                                    <arg value="tmp-gen/protocol/src/main/java/grpc"/>
+                                    <arg value="protocol/src/main/java"/>
                                 </exec>
                                 <exec executable="rm" dir="../">
                                     <arg value="-rf" />
