@@ -43,9 +43,9 @@ jobs:
           app-id: '${{ secrets.APP_ID }}'
           private-key: '${{ secrets.AUTOMATION_KEY }}'
       - run: |
-          git config user.email ""
-          git config user.name "${{ steps.generate_token.outputs.app-slug }}"
-          git config user.password "${{ steps.generate_token.outputs.token }}"
+          git --global config user.email "${{steps.generate_token.outputs.app-slug}}-github-action@users.noreply.github.com"
+          git --global config user.name "${{ steps.generate_token.outputs.app-slug }}"
+          git --global config user.password "${{ steps.generate_token.outputs.token }}"
       - uses: bufbuild/buf-setup-action@382440cdb8ec7bc25a68d7b4711163d95f7cc3aa
         with: 
           github_token: ${{ secrets.GITHUB_TOKEN }}
