@@ -59,8 +59,8 @@ jobs:
         run: |
           mvn --batch-mode clean install -DskipTests
           mvn --batch-mode verify
-        env:
-          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+        # env:
+        #   GITHUB_TOKEN: '${{ steps.generate_token.outputs.token }}'
 
   ci:
     needs:
