@@ -45,6 +45,7 @@ jobs:
       - run: |
           git config --global user.email "github-action@users.noreply.github.com"
           git config --global user.name "GitHub Action"
+          cat ~/.gitconfig
           git config --global user.password "${{ steps.generate_token.outputs.token }}"
       - uses: bufbuild/buf-setup-action@382440cdb8ec7bc25a68d7b4711163d95f7cc3aa
         with: 
