@@ -46,7 +46,9 @@ jobs:
         run: |
           mvn clean install -DskipTests
           mvn verify
-  
+        env:
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+
   ci:
     needs:
       - mavenverify
