@@ -56,7 +56,6 @@
                                 </exec>
                                 <exec executable="buf" dir="../">
                                     <arg value="generate" />
-                                    <arg value="--debug" />
                                     <arg value="https://github.com/opentdf/platform.git#branch=main,subdir=services" />
                                     <arg value="--exclude-path"/>
                                     <arg value="authorization/idp_plugin.proto"/>

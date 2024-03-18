@@ -42,11 +42,6 @@ jobs:
         with:
           app-id: '${{ secrets.APP_ID }}'
           private-key: '${{ secrets.AUTOMATION_KEY }}'
-      - run: |
-          git config user.name "opentdf-automation[bot]"
-          git config user.email "43526202+opentdf-automation[bot]@users.noreply.github.com"
-          git config user.password ${{ steps.generate_token.outputs.token }}
-          echo "GIT_USER=opentdf-automation[bot]:${{ steps.generate_token.outputs.token }}" >> $GITHUB_ENV
       - uses: bufbuild/buf-setup-action@382440cdb8ec7bc25a68d7b4711163d95f7cc3aa
         with: 
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -61,7 +56,8 @@ jobs:
           mvn --batch-mode clean install -DskipTests
           mvn --batch-mode verify
         env:
-          GITHUB_TOKEN: '${{ steps.generate_token.outputs.token }}'
+          BUF_INPUT_HTTPS_USERNAME: opentdf-automation[bot]
+          BUF_INPUT_HTTPS_PASSWORD: '${{ steps.generate_token.outputs.token }}'
 
   ci:
     needs:
