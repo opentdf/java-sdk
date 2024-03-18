@@ -1,4 +1,4 @@
-protocol/src/main/protogen
+protocol/src/main/java
 /.idea/
 /protocol/target/
 /sdk/target/
