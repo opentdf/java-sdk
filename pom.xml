@@ -12,8 +12,8 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 <!--        TODO: Move to new version of Java-->
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
         <log4j.version>2.20.0</log4j.version>
         <grpc.version>1.57.2</grpc.version>
         <protobuf.version>3.25.3</protobuf.version>
