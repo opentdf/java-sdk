@@ -36,7 +36,7 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
         with:
-          java-version: '20'
+          java-version: '21'
           distribution: 'adopt'
           server-id: github
       - name: Publish package

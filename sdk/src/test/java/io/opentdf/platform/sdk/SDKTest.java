@@ -11,20 +11,5 @@ class SDKTest {
     @Test
     public void testIt() {
         System.out.println("Hello");
-        // SDK s = new SDK("localhost:9000", "opentdf", "secret");
-        // ListAttributesResponse resp;
-        // try {
-        // resp = s.attributes.listAttributes(null).get();
-        // assertNotNull(resp);
-        // logger.info(resp.toString());
-        // } catch (InterruptedException e) {
-        // // TODO Auto-generated catch block
-
-        // e.printStackTrace();
-        // } catch (ExecutionException e) {
-        // // TODO Auto-generated catch block
-        // e.printStackTrace();
-        // }
-
     }
 }
