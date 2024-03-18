@@ -50,7 +50,7 @@ jobs:
           mvn --batch-mode clean install -DskipTests
           mvn --batch-mode verify
         env:
-          BUF_INPUT_HTTPS_USERNAME: ${{ secrets.GITHUB_ACTOR }}
+          BUF_INPUT_HTTPS_USERNAME: "opentdf"
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
 
   ci:
