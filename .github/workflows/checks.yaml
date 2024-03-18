@@ -53,14 +53,11 @@ jobs:
           server-id: github
       - name: Maven Verify
         run: |
-          git config user.email "cloudnative@virtru.com"
-          git config user.name "opentdf-bot"
-          git config user.password "${{ secrets.PERSONAL_ACCESS_TOKEN }}"
           mvn --batch-mode clean install -DskipTests
           mvn --batch-mode verify
-        # env:
-        #   BUF_INPUT_HTTPS_USERNAME: opentdf-bot
-        #   BUF_INPUT_HTTPS_PASSWORD: '${{ secrets.PERSONAL_ACCESS_TOKEN }}'
+        env:
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 
   ci:
     needs:
