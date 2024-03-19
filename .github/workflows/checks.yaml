@@ -36,6 +36,12 @@ jobs:
       - pr
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      - name: Generate a token
+        id: generate_token
+        uses: actions/create-github-app-token@f2acddfb5195534d487896a656232b016a682f3c # v1.9.0
+        with:
+          app-id: '${{ secrets.APP_ID }}'
+          private-key: '${{ secrets.AUTOMATION_KEY }}'
       - uses: bufbuild/buf-setup-action@382440cdb8ec7bc25a68d7b4711163d95f7cc3aa
         with: 
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -50,8 +56,8 @@ jobs:
           mvn --batch-mode clean install -DskipTests
           mvn --batch-mode verify
         env:
-          BUF_INPUT_HTTPS_USERNAME: "opentdf"
-          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          BUF_INPUT_HTTPS_USERNAME: "x-access-token"
+          BUF_INPUT_HTTPS_PASSWORD: ${{ steps.generate_token.outputs.token }}
 
   ci:
     needs:
