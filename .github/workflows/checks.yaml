@@ -51,7 +51,7 @@ jobs:
           mvn --batch-mode verify
         env:
           BUF_INPUT_HTTPS_USERNAME: strantalis
-          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_TEST }}
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 
   ci:
     needs:
