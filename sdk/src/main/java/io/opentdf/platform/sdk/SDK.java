@@ -165,11 +165,14 @@ public class SDK {
       return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
         @Override
         public void start(Listener<RespT> responseListener, Metadata headers) {
+          // Not sure the best way to handle this but we need to ignore auth here for wellknown on
+          // the initial sdk setup
           if (method.getFullMethodName()
               .equals("wellknownconfiguration.WellKnownService/GetWellKnownConfiguration")) {
             super.start(responseListener, headers);
             return;
           }
+          // Get the access token
           AccessToken t = getToken();
 
           headers.put(Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER),
