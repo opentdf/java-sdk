@@ -44,8 +44,12 @@ jobs:
           server-id: github
       - name: Maven Verify
         run: |
-          mvn clean verify
-  
+          mvn --batch-mode clean install -DskipTests
+          mvn --batch-mode verify
+        env:
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+    
   ci:
     needs:
       - mavenverify
