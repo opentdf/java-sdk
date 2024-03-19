@@ -48,6 +48,10 @@ import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRespo
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceGrpc;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceGrpc.WellKnownServiceFutureStub;
 
+/**
+ * The SDK class represents a software development kit for interacting with the opentdf platform. It
+ * provides various services and stubs for making API calls to the opentdf platform.
+ */
 public class SDK {
 
   protected OIDCProviderMetadata providerMetadata;
@@ -88,6 +92,9 @@ public class SDK {
     this.providerMetadata = OIDCProviderMetadata.resolve(issuer);
   }
 
+  /**
+   * A builder class for creating instances of the SDK class.
+   */
   public static class SDKBuilder {
     private String platformEndpoint;
     private ClientAuthentication clientAuth;
@@ -110,15 +117,18 @@ public class SDK {
       return this;
     }
 
-
     public SDK build() throws JOSEException, IOException, GeneralException, InterruptedException,
         ExecutionException {
       return new SDK(this);
     }
-
-
   }
 
+
+  /**
+   * The GRPCAuthInterceptor class is responsible for intercepting client calls before they are sent
+   * to the server. It adds authentication headers to the requests by fetching and caching access
+   * tokens.
+   */
   private class GRPCAuthInterceptor implements ClientInterceptor
 
   {
@@ -128,11 +138,27 @@ public class SDK {
     private final ClientAuthentication clientAuth;
     private final RSAKey rsaKey;
 
+    /**
+     * Constructs a new GRPCAuthInterceptor with the specified client authentication and RSA key.
+     *
+     * @param clientAuth the client authentication to be used by the interceptor
+     * @param rsaKey the RSA key to be used by the interceptor
+     */
     public GRPCAuthInterceptor(ClientAuthentication clientAuth, RSAKey rsaKey) {
       this.clientAuth = clientAuth;
       this.rsaKey = rsaKey;
     }
 
+    /**
+     * Intercepts the client call before it is sent to the server.
+     *
+     * @param method The method descriptor for the call.
+     * @param callOptions The call options for the call.
+     * @param next The next channel in the channel pipeline.
+     * @param <ReqT> The type of the request message.
+     * @param <RespT> The type of the response message.
+     * @return A client call with the intercepted behavior.
+     */
     @Override
     public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
         CallOptions callOptions, Channel next) {
@@ -145,9 +171,7 @@ public class SDK {
             return;
           }
           AccessToken t = getToken();
-          System.out.println("Access token: " + t.getValue());
-          System.out.println("Lifetime: " + t.getLifetime());
-          System.out.println("Expires: " + t.toJSONObject().get("expires_in"));
+
           headers.put(Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER),
               "Bearer " + t.getValue());
 
@@ -156,6 +180,11 @@ public class SDK {
       };
     }
 
+    /**
+     * Either fetches a new access token or returns the cached access token if it is still valid.
+     *
+     * @return The access token.
+     */
     private AccessToken getToken() {
       try {
 
@@ -171,13 +200,13 @@ public class SDK {
               clientAuth, clientGrant, null);
           HTTPRequest httpRequest = tokenRequest.toHTTPRequest();
 
-          DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(rsaKey, JWSAlgorithm.RS256);
+          // DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(rsaKey, JWSAlgorithm.RS256);
 
-          SignedJWT proof =
-              dpopFactory.createDPoPJWT(httpRequest.getMethod().name(), httpRequest.getURI());
+          // SignedJWT proof =
+          // dpopFactory.createDPoPJWT(httpRequest.getMethod().name(), httpRequest.getURI());
 
-          httpRequest.setDPoP(proof);
-          System.out.println("DPoP: " + proof.serialize());
+          // httpRequest.setDPoP(proof);
+          // System.out.println("DPoP: " + proof.serialize());
           TokenResponse tokenResponse;
 
           HTTPResponse httpResponse = httpRequest.send();
@@ -200,17 +229,21 @@ public class SDK {
 
         } else {
           // If the token is still valid or not initially null, return the cached token
-          System.out.println("using cached token");
           return this.token;
         }
 
       } catch (Exception e) {
         // TODO Auto-generated catch block
-        throw new RuntimeException("Failed to get token", e);
+        throw new RuntimeException("failed to get token", e);
       }
       return this.token;
     }
 
+    /**
+     * Checks if the token has expired.
+     *
+     * @return true if the token has expired, false otherwise.
+     */
     private boolean isTokenExpired() {
       return this.tokenExpiryTime != null && this.tokenExpiryTime.isBefore(Instant.now());
     }
