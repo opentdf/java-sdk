@@ -51,7 +51,7 @@ jobs:
           mvn --batch-mode verify
         env:
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
-          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
 
   ci:
     needs:
