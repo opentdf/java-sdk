@@ -53,12 +53,12 @@ jobs:
           server-id: github
       - name: Maven Verify
         run: |
-          git clone https://x-access-token:${BUF_INPUT_HTTPS_PASSWORD}@github.com/opentdf/platform.git
+          git clone https://x-access-token:${GIT_PASSWORD}@github.com/opentdf/platform.git
           mvn --batch-mode clean install -DskipTests
           mvn --batch-mode verify
         env:
-          BUF_INPUT_HTTPS_USERNAME: "x-access-token"
-          BUF_INPUT_HTTPS_PASSWORD: ${{ steps.generate_token.outputs.token }}
+          # BUF_INPUT_HTTPS_USERNAME: "x-access-token"
+          GIT_PASSWORD: ${{ steps.generate_token.outputs.token }}
 
   ci:
     needs:
