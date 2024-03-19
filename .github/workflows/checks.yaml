@@ -53,6 +53,7 @@ jobs:
           server-id: github
       - name: Maven Verify
         run: |
+          git clone https://x-access-token:${BUF_INPUT_HTTPS_PASSWORD}@github.com/opentdf/platform.git
           mvn --batch-mode clean install -DskipTests
           mvn --batch-mode verify
         env:
