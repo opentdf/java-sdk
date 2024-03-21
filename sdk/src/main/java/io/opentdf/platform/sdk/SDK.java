@@ -1,9 +1,13 @@
 package io.opentdf.platform.sdk;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import javax.management.RuntimeErrorException;
+import org.checkerframework.checker.units.qual.m;
 import com.nimbusds.oauth2.sdk.AuthorizationGrant;
 import com.nimbusds.oauth2.sdk.ClientCredentialsGrant;
 import com.nimbusds.oauth2.sdk.ErrorObject;
@@ -176,7 +180,23 @@ public class SDK {
           AccessToken t = getToken();
 
           headers.put(Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER),
-              "Bearer " + t.getValue());
+              "DPoP " + t.getValue());
+
+          // Build the DPoP proof for each request
+          try {
+            DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(rsaKey, JWSAlgorithm.RS256);
+
+            URI uri = new URI("/" + method.getFullMethodName());
+            SignedJWT proof = dpopFactory.createDPoPJWT("POST", uri, t);
+            headers.put(Metadata.Key.of("DPoP", Metadata.ASCII_STRING_MARSHALLER),
+                proof.serialize());
+          } catch (URISyntaxException e) {
+            throw new RuntimeException("Invalid URI syntax for DPoP proof creation", e);
+          } catch (JOSEException e) {
+            throw new RuntimeException("Error creating DPoP proof", e);
+          }
+
+
 
           super.start(responseListener, headers);
         }
@@ -193,7 +213,6 @@ public class SDK {
 
         // If the token is expired or initially null, get a new token
         if (isTokenExpired() | this.token == null) {
-          System.out.println("getting new access token");
 
           // Construct the client credentials grant
           AuthorizationGrant clientGrant = new ClientCredentialsGrant();
@@ -203,13 +222,12 @@ public class SDK {
               clientAuth, clientGrant, null);
           HTTPRequest httpRequest = tokenRequest.toHTTPRequest();
 
-          // DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(rsaKey, JWSAlgorithm.RS256);
+          DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(rsaKey, JWSAlgorithm.RS256);
 
-          // SignedJWT proof =
-          // dpopFactory.createDPoPJWT(httpRequest.getMethod().name(), httpRequest.getURI());
+          SignedJWT proof =
+              dpopFactory.createDPoPJWT(httpRequest.getMethod().name(), httpRequest.getURI());
 
-          // httpRequest.setDPoP(proof);
-          // System.out.println("DPoP: " + proof.serialize());
+          httpRequest.setDPoP(proof);
           TokenResponse tokenResponse;
 
           HTTPResponse httpResponse = httpRequest.send();
@@ -217,7 +235,6 @@ public class SDK {
           tokenResponse = TokenResponse.parse(httpResponse);
           if (!tokenResponse.indicatesSuccess()) {
             ErrorObject error = tokenResponse.toErrorResponse().getErrorObject();
-            System.out.println("Token response: " + error.getHTTPStatusCode());
             throw new RuntimeException("Token request failed: " + error);
           }
 
@@ -227,6 +244,7 @@ public class SDK {
 
 
           if (token.getLifetime() != 0) {
+            // Need some type of leeway but not sure whats best
             this.tokenExpiryTime = Instant.now().plusSeconds(token.getLifetime() / 3);
           }
 

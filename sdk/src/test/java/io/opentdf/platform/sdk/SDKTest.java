@@ -11,5 +11,6 @@ class SDKTest {
     @Test
     public void testIt() {
         System.out.println("Hello");
+
     }
 }
