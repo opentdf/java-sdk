@@ -6,6 +6,6 @@
   "include-component-in-tag": false,
   "group-pull-request-title-pattern": "chore(${branch}): release ${version}",
   "packages": {
-    ".":{}
+    ".": {}
   }
 }

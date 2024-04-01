@@ -17,11 +17,11 @@ jobs:
         id: generate_token
         uses: actions/create-github-app-token@f2acddfb5195534d487896a656232b016a682f3c # v1.9.0
         with:
-          app-id: '${{ secrets.APP_ID }}'
-          private-key: '${{ secrets.AUTOMATION_KEY }}'
+          app-id: "${{ secrets.APP_ID }}"
+          private-key: "${{ secrets.AUTOMATION_KEY }}"
       - uses: google-github-actions/release-please-action@v4
         with:
-          token: '${{ steps.generate_token.outputs.token }}'
+          token: "${{ steps.generate_token.outputs.token }}"
           config-file: release-please.json
           manifest-file: .release-please-manifest.json
   release:
@@ -31,13 +31,13 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       - name: Setup Buf
         uses: bufbuild/buf-setup-action@382440cdb8ec7bc25a68d7b4711163d95f7cc3aa
-        with: 
+        with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up JDK
         uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
         with:
-          java-version: '20'
-          distribution: 'adopt'
+          java-version: "11"
+          distribution: "adopt"
           server-id: github
       - name: Publish package
         run: mvn --batch-mode deploy
@@ -45,4 +45,3 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
-      

@@ -25,7 +25,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-
   mavenverify:
     runs-on: ubuntu-latest
     if: always()
@@ -34,13 +33,13 @@ jobs:
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       - uses: bufbuild/buf-setup-action@382440cdb8ec7bc25a68d7b4711163d95f7cc3aa
-        with: 
+        with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up JDK
         uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
         with:
-          java-version: '20'
-          distribution: 'adopt'
+          java-version: "11"
+          distribution: "adopt"
           server-id: github
       - name: Maven Verify
         run: |
@@ -49,7 +48,7 @@ jobs:
         env:
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
-    
+
   ci:
     needs:
       - mavenverify
@@ -59,7 +58,3 @@ jobs:
     steps:
       - if: contains(needs.*.result, 'failure')
         run: echo "Failed due to ${{ contains(needs.*.result, 'failure') }}" && exit 1
-        
-
-
-
