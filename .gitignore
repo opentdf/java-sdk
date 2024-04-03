@@ -2,3 +2,5 @@ protocol/src/main/protogen
 /.idea/
 /protocol/target/
 /sdk/target/
+.vscode/
+.DS_Store
