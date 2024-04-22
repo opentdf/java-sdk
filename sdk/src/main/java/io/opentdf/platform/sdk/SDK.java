@@ -1,11 +1,24 @@
 package io.opentdf.platform.sdk;
 
+import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
+import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceGrpc;
+
 /**
  * Interact with OpenTDF platform services and perform TDF data operations with
  * this object.
  */
 public class SDK {
   private final String platformEndpoint;
+  private AttributesServiceGrpc.AttributesServiceFutureStub attributesServiceFutureStub;
+  private ResourceMappingServiceGrpc.ResourceMappingServiceFutureStub resourceMappingServiceFutureStub;
+
+  public AttributesServiceGrpc.AttributesServiceFutureStub getAttributesServiceFutureStub() {
+    return attributesServiceFutureStub;
+  }
+
+  public ResourceMappingServiceGrpc.ResourceMappingServiceFutureStub getResourceMappingServiceFutureStub() {
+    return resourceMappingServiceFutureStub;
+  }
 
 
   private SDK(String platformEndpoint) {
