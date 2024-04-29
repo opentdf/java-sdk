@@ -11,7 +11,6 @@ import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc.Subje
  * provides various services and stubs for making API calls to the opentdf platform.
  */
 public class SDK {
-    public static final String PLATFORM_ISSUER = "platform_issuer";
     private final Services services;
 
     // TODO: add KAS

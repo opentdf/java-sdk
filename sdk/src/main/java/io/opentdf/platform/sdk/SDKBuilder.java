@@ -30,6 +30,7 @@ import java.util.UUID;
  * A builder class for creating instances of the SDK class.
  */
 public class SDKBuilder {
+    private static final String PLATFORM_ISSUER = "platform_issuer";
     private String platformEndpoint = null;
     private ClientAuthentication clientAuth = null;
     private Boolean usePlainText;
@@ -76,7 +77,7 @@ public class SDKBuilder {
         try {
             platformIssuer = config
                     .getConfiguration()
-                    .getFieldsOrThrow(SDK.PLATFORM_ISSUER)
+                    .getFieldsOrThrow(PLATFORM_ISSUER)
                     .getStringValue();
 
         } catch (Exception e) {
