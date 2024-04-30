@@ -1,6 +1,5 @@
 package io.opentdf.platform.sdk;
 
-import io.grpc.ManagedChannelBuilder;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
 import io.opentdf.platform.policy.namespaces.NamespaceServiceGrpc.NamespaceServiceFutureStub;
 import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceGrpc.ResourceMappingServiceFutureStub;
@@ -24,6 +23,4 @@ public class SDK {
     public SDK(Services services) {
         this.services = services;
     }
-
-
 }

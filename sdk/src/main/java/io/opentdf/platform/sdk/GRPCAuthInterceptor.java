@@ -15,6 +15,7 @@ import com.nimbusds.oauth2.sdk.dpop.DefaultDPoPProofFactory;
 import com.nimbusds.oauth2.sdk.http.HTTPRequest;
 import com.nimbusds.oauth2.sdk.http.HTTPResponse;
 import com.nimbusds.oauth2.sdk.token.AccessToken;
+import com.nimbusds.oauth2.sdk.tokenexchange.TokenExchangeGrant;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -69,7 +70,6 @@ class GRPCAuthInterceptor implements ClientInterceptor {
             public void start(Listener<RespT> responseListener, Metadata headers) {
                 // Get the access token
                 AccessToken t = getToken();
-
                 headers.put(Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER),
                         "DPoP " + t.getValue());
 
@@ -86,8 +86,6 @@ class GRPCAuthInterceptor implements ClientInterceptor {
                 } catch (JOSEException e) {
                     throw new RuntimeException("Error creating DPoP proof", e);
                 }
-
-
                 super.start(responseListener, headers);
             }
         };
@@ -98,11 +96,10 @@ class GRPCAuthInterceptor implements ClientInterceptor {
      *
      * @return The access token.
      */
-    private AccessToken getToken() {
+    private synchronized AccessToken getToken() {
         try {
-
             // If the token is expired or initially null, get a new token
-            if (isTokenExpired() || this.token == null) {
+            if (token == null || isTokenExpired()) {
 
                 // Construct the client credentials grant
                 AuthorizationGrant clientGrant = new ClientCredentialsGrant();
@@ -114,8 +111,7 @@ class GRPCAuthInterceptor implements ClientInterceptor {
 
                 DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(rsaKey, JWSAlgorithm.RS256);
 
-                SignedJWT proof =
-                        dpopFactory.createDPoPJWT(httpRequest.getMethod().name(), httpRequest.getURI());
+                SignedJWT proof = dpopFactory.createDPoPJWT(httpRequest.getMethod().name(), httpRequest.getURI());
 
                 httpRequest.setDPoP(proof);
                 TokenResponse tokenResponse;

@@ -11,14 +11,11 @@ import com.nimbusds.oauth2.sdk.auth.Secret;
 import com.nimbusds.oauth2.sdk.id.ClientID;
 import com.nimbusds.oauth2.sdk.id.Issuer;
 import com.nimbusds.openid.connect.sdk.op.OIDCProviderMetadata;
+import io.grpc.Channel;
 import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
-import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
-import io.opentdf.platform.policy.namespaces.NamespaceServiceGrpc;
-import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceGrpc;
-import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRequest;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceGrpc;
@@ -59,10 +56,8 @@ public class SDKBuilder {
         return this;
     }
 
-    public SDK build() {
-
+    ManagedChannel buildChannel() {
         ManagedChannelBuilder<?> bootstrapChannelBuilder = getManagedChannelBuilder();
-
         GetWellKnownConfigurationResponse config;
         try {
             config = WellKnownServiceGrpc
@@ -103,33 +98,33 @@ public class SDKBuilder {
         }
 
         ClientInterceptor interceptor = new GRPCAuthInterceptor(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI());
-        ManagedChannel channel = getManagedChannelBuilder()
+
+        return getManagedChannelBuilder()
                 .intercept(interceptor)
                 .build();
 
-        SDK.Services services = new SDK.Services() {
-            final AttributesServiceGrpc.AttributesServiceFutureStub attributes = AttributesServiceGrpc.newFutureStub(channel);
-            final NamespaceServiceGrpc.NamespaceServiceFutureStub namespaces = NamespaceServiceGrpc.newFutureStub(channel);
-            final SubjectMappingServiceGrpc.SubjectMappingServiceFutureStub subjectMappings = SubjectMappingServiceGrpc.newFutureStub(channel);
-            final ResourceMappingServiceGrpc.ResourceMappingServiceFutureStub resourceMappings = ResourceMappingServiceGrpc.newFutureStub(channel);
-            @Override
-            public AttributesServiceGrpc.AttributesServiceFutureStub attributes() {
-                return attributes;
-            }
-            @Override
-            public NamespaceServiceGrpc.NamespaceServiceFutureStub namespaces() {
-                return namespaces;
-            }
-            @Override
-            public SubjectMappingServiceGrpc.SubjectMappingServiceFutureStub subjectMappings() {
-                return subjectMappings;
-            }
-            @Override
-            public ResourceMappingServiceGrpc.ResourceMappingServiceFutureStub resourceMappings() {
-                return resourceMappings;
-            }
-        };
-        return new SDK(services);
+//        return new SDK.Services() {
+//            final AttributesServiceGrpc.AttributesServiceFutureStub attributes = AttributesServiceGrpc.newFutureStub(channel);
+//            final NamespaceServiceGrpc.NamespaceServiceFutureStub namespaces = NamespaceServiceGrpc.newFutureStub(channel);
+//            final SubjectMappingServiceGrpc.SubjectMappingServiceFutureStub subjectMappings = SubjectMappingServiceGrpc.newFutureStub(channel);
+//            final ResourceMappingServiceGrpc.ResourceMappingServiceFutureStub resourceMappings = ResourceMappingServiceGrpc.newFutureStub(channel);
+//            @Override
+//            public AttributesServiceGrpc.AttributesServiceFutureStub attributes() {
+//                return attributes;
+//            }
+//            @Override
+//            public NamespaceServiceGrpc.NamespaceServiceFutureStub namespaces() {
+//                return namespaces;
+//            }
+//            @Override
+//            public SubjectMappingServiceGrpc.SubjectMappingServiceFutureStub subjectMappings() {
+//                return subjectMappings;
+//            }
+//            @Override
+//            public ResourceMappingServiceGrpc.ResourceMappingServiceFutureStub resourceMappings() {
+//                return resourceMappings;
+//            }
+//        };
     }
     private ManagedChannelBuilder<?> getManagedChannelBuilder() {
         ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder
