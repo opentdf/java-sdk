@@ -30,9 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class SDKBuilderTest {
 
     @Test
-    void testCreatingSDKWithIssuer() throws IOException, InterruptedException {
+    void testCreatingSDKChannel() throws IOException, InterruptedException {
         Server wellknownServer = null;
-
         // we use the HTTP server for two things:
         // * it returns the OIDC configuration we use at bootstrapping time
         // * it fakes out being an IDP and returns an access token when need to retrieve an access token
