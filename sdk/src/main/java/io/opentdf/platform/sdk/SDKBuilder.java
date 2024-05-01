@@ -42,18 +42,19 @@ public class SDKBuilder {
         return this;
     }
 
-    public SDKBuilder withClientSecret(String clientID, String clientSecret) {
+    public SDKBuilder clientSecret(String clientID, String clientSecret) {
         ClientID cid = new ClientID(clientID);
         Secret cs = new Secret(clientSecret);
         this.clientAuth = new ClientSecretBasic(cid, cs);
         return this;
     }
 
-    public SDKBuilder withInsecurePlaintextConn(Boolean usePlainText) {
+    public SDKBuilder useInsecurePlaintextConnection(Boolean usePlainText) {
         this.usePlainText = usePlainText;
         return this;
     }
 
+    // this is not exposed publicly so that it can be tested
     ManagedChannel buildChannel() {
         // we don't add the auth listener to this channel since it is only used to call the
         //    well known endpoint
@@ -110,7 +111,7 @@ public class SDKBuilder {
                 .build();
     }
 
-    SDK buildSDK() {
+    public SDK build() {
         return new SDK(SDK.Services.newServices(buildChannel()));
     }
 

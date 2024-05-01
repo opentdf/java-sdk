@@ -92,9 +92,9 @@ public class SDKBuilderTest {
 
             ManagedChannel channel = SDKBuilder
                     .newBuilder()
-                    .withClientSecret("client-id", "client-secret")
+                    .clientSecret("client-id", "client-secret")
                     .platformEndpoint("localhost:" + wellknownServer.getPort())
-                    .withInsecurePlaintextConn(true)
+                    .useInsecurePlaintextConnection(true)
                     .buildChannel();
 
             assertThat(channel).isNotNull();
