@@ -90,7 +90,7 @@ public class SDKBuilderTest {
                     .newBuilder()
                     .withClientSecret("client-id", "client-secret")
                     .platformEndpoint("localhost:" + wellknownServer.getPort())
-                    .withPlainTextConnection(true)
+                    .withInsecurePlaintextConn(true)
                     .buildChannel();
 
             assertThat(channel).isNotNull();

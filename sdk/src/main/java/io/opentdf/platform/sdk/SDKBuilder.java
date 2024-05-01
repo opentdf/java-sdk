@@ -49,7 +49,7 @@ public class SDKBuilder {
         return this;
     }
 
-    public SDKBuilder withPlainTextConnection(Boolean usePlainText) {
+    public SDKBuilder withInsecurePlaintextConn(Boolean usePlainText) {
         this.usePlainText = usePlainText;
         return this;
     }
