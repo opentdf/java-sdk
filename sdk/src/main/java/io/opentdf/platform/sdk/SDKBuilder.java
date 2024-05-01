@@ -54,7 +54,6 @@ public class SDKBuilder {
         return this;
     }
 
-
     ManagedChannel buildChannel() {
         // we don't add the auth listener to this channel since it is only used to call the
         //    well known endpoint
@@ -109,30 +108,12 @@ public class SDKBuilder {
         return getManagedChannelBuilder()
                 .intercept(interceptor)
                 .build();
-
-//        return new SDK.Services() {
-//            final AttributesServiceGrpc.AttributesServiceFutureStub attributes = AttributesServiceGrpc.newFutureStub(channel);
-//            final NamespaceServiceGrpc.NamespaceServiceFutureStub namespaces = NamespaceServiceGrpc.newFutureStub(channel);
-//            final SubjectMappingServiceGrpc.SubjectMappingServiceFutureStub subjectMappings = SubjectMappingServiceGrpc.newFutureStub(channel);
-//            final ResourceMappingServiceGrpc.ResourceMappingServiceFutureStub resourceMappings = ResourceMappingServiceGrpc.newFutureStub(channel);
-//            @Override
-//            public AttributesServiceGrpc.AttributesServiceFutureStub attributes() {
-//                return attributes;
-//            }
-//            @Override
-//            public NamespaceServiceGrpc.NamespaceServiceFutureStub namespaces() {
-//                return namespaces;
-//            }
-//            @Override
-//            public SubjectMappingServiceGrpc.SubjectMappingServiceFutureStub subjectMappings() {
-//                return subjectMappings;
-//            }
-//            @Override
-//            public ResourceMappingServiceGrpc.ResourceMappingServiceFutureStub resourceMappings() {
-//                return resourceMappings;
-//            }
-//        };
     }
+
+    SDK buildSDK() {
+        return new SDK(SDK.Services.newServices(buildChannel()));
+    }
+
     private ManagedChannelBuilder<?> getManagedChannelBuilder() {
         ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder
                 .forTarget(platformEndpoint);
