@@ -19,9 +19,9 @@ import okhttp3.mockwebserver.MockWebServer;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-import java.util.Random;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -71,8 +71,12 @@ public class SDKBuilderTest {
             // we use the server in two different ways. the first time we use it to actually return
             // issuer for bootstrapping. the second time we use the interception functionality in order
             // to make sure that we are including a DPoP proof and an auth header
+            int randomPort;
+            try (ServerSocket socket = new ServerSocket(0)) {
+                randomPort = socket.getLocalPort();
+            }
             wellknownServer = ServerBuilder
-                    .forPort(7000 + new Random().nextInt(3000))
+                    .forPort(randomPort)
                     .directExecutor()
                     .addService(wellKnownService)
                     .intercept(new ServerInterceptor() {
