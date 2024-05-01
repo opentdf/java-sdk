@@ -27,7 +27,7 @@
         <dependency>
             <groupId>build.buf</groupId>
             <artifactId>protovalidate</artifactId>
-            <version>0.1.5</version>
+            <version>0.1.9</version>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
@@ -52,7 +52,7 @@
                             <target>
                                 <exec executable="rm">
                                     <arg value="-rf" />
-                                    <arg value="src/main/java" />
+                                    <arg value="src/main/protogen" />
                                 </exec>
                                 <exec executable="buf" dir="../">
                                     <arg value="generate" />
@@ -68,8 +68,8 @@
                                 </exec>
                                 <exec executable="cp" dir="../">
                                     <arg value="-r" />
-                                    <arg value="tmp-gen/protocol/src/main/java/grpc"/>
-                                    <arg value="protocol/src/main/java"/>
+                                    <arg value="tmp-gen/protocol/src/main/protogen/grpc"/>
+                                    <arg value="protocol/src/main/protogen"/>
                                 </exec>
                                 <exec executable="rm" dir="../">
                                     <arg value="-rf" />
@@ -80,6 +80,25 @@
                         <goals>
                             <goal>run</goal>
                         </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>add-source</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>src/main/protogen</source>
+                            </sources>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

@@ -45,7 +45,7 @@ public class SDKBuilderTest {
             oidcConfig = oidcConfig
                     // if we don't do this then the library code complains that the issuer is wrong
                     .replace("<issuer>", issuer)
-                    // we want this server to be called when we fetch an access token
+                    // we want this server to be called when we fetch an access token during a service call
                     .replace("<token_endpoint>", httpServer.url("tokens").toString());
             httpServer.enqueue(new MockResponse()
                     .setBody(oidcConfig)
