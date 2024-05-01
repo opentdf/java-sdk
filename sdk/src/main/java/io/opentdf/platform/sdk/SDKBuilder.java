@@ -67,7 +67,7 @@ public class SDKBuilder {
                 config = stub.getWellKnownConfiguration(GetWellKnownConfigurationRequest.getDefaultInstance());
             } catch (Exception e) {
                 Status status = Status.fromThrowable(e);
-                throw new RuntimeException(String.format("Got grpc status [%s] when getting configuration", status), e);
+                throw new SDKException(String.format("Got grpc status [%s] when getting configuration", status), e);
             }
         } finally {
             if (bootstrapChannel != null) {
@@ -83,7 +83,7 @@ public class SDKBuilder {
                     .getStringValue();
 
         } catch (Exception e) {
-            throw new RuntimeException("Error getting the issuer from the platform", e);
+            throw new SDKException("Error getting the issuer from the platform", e);
         }
 
         Issuer issuer = new Issuer(platformIssuer);
@@ -91,7 +91,7 @@ public class SDKBuilder {
         try {
             providerMetadata = OIDCProviderMetadata.resolve(issuer);
         } catch (IOException | GeneralException e) {
-            throw new RuntimeException("Error resolving the OIDC provider metadata", e);
+            throw new SDKException("Error resolving the OIDC provider metadata", e);
         }
 
         RSAKey rsaKey;
@@ -101,7 +101,7 @@ public class SDKBuilder {
                     .keyID(UUID.randomUUID().toString())
                     .generate();
         } catch (JOSEException e) {
-            throw new RuntimeException("Error generating DPoP key", e);
+            throw new SDKException("Error generating DPoP key", e);
         }
 
         GRPCAuthInterceptor interceptor = new GRPCAuthInterceptor(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI());

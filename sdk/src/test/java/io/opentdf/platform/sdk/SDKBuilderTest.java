@@ -128,7 +128,6 @@ public class SDKBuilderTest {
             assertThat(authHeaderFromRequest.get()).isEqualTo("DPoP hereisthetoken");
 
             var body = new String(accessTokenRequest.getBody().readByteArray(), StandardCharsets.UTF_8);
-            // not pulling in a json library here
             assertThat(body).contains("grant_type=client_credentials");
 
         } finally {
