@@ -11,8 +11,6 @@ import com.nimbusds.oauth2.sdk.auth.Secret;
 import com.nimbusds.oauth2.sdk.id.ClientID;
 import com.nimbusds.oauth2.sdk.id.Issuer;
 import com.nimbusds.openid.connect.sdk.op.OIDCProviderMetadata;
-import io.grpc.Channel;
-import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
@@ -56,16 +54,25 @@ public class SDKBuilder {
         return this;
     }
 
+
     ManagedChannel buildChannel() {
-        ManagedChannelBuilder<?> bootstrapChannelBuilder = getManagedChannelBuilder();
+        // we don't add the auth listener to this channel since it is only used to call the
+        //    well known endpoint
+        ManagedChannel bootstrapChannel = null;
         GetWellKnownConfigurationResponse config;
         try {
-            config = WellKnownServiceGrpc
-                    .newBlockingStub(bootstrapChannelBuilder.build())
-                    .getWellKnownConfiguration(GetWellKnownConfigurationRequest.getDefaultInstance());
-        } catch (Exception e) {
-            Status status = Status.fromThrowable(e);
-            throw new RuntimeException(String.format("Got grpc status [%s] when getting configuration", status), e);
+            bootstrapChannel = getManagedChannelBuilder().build();
+            var stub = WellKnownServiceGrpc.newBlockingStub(bootstrapChannel);
+            try {
+                config = stub.getWellKnownConfiguration(GetWellKnownConfigurationRequest.getDefaultInstance());
+            } catch (Exception e) {
+                Status status = Status.fromThrowable(e);
+                throw new RuntimeException(String.format("Got grpc status [%s] when getting configuration", status), e);
+            }
+        } finally {
+            if (bootstrapChannel != null) {
+                bootstrapChannel.shutdown();
+            }
         }
 
         String platformIssuer;
@@ -97,7 +104,7 @@ public class SDKBuilder {
             throw new RuntimeException("Error generating DPoP key", e);
         }
 
-        ClientInterceptor interceptor = new GRPCAuthInterceptor(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI());
+        GRPCAuthInterceptor interceptor = new GRPCAuthInterceptor(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI());
 
         return getManagedChannelBuilder()
                 .intercept(interceptor)

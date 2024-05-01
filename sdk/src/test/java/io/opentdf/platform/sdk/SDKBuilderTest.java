@@ -2,10 +2,14 @@ package io.opentdf.platform.sdk;
 
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
-import io.grpc.Channel;
+import io.grpc.ConnectivityState;
 import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.ServerCall;
+import io.grpc.ServerCallHandler;
+import io.grpc.ServerInterceptor;
 import io.grpc.stub.StreamObserver;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRequest;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
@@ -16,7 +20,9 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -24,21 +30,29 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class SDKBuilderTest {
 
     @Test
-    void testCreatingSDKWithIssuer() throws IOException {
-        Server server = null;
-        try (MockWebServer oidcDiscoveryServer = new MockWebServer()) {
+    void testCreatingSDKWithIssuer() throws IOException, InterruptedException {
+        Server wellknownServer = null;
+
+        // we use the HTTP server for two things:
+        // * it returns the OIDC configuration we use at bootstrapping time
+        // * it fakes out being an IDP and returns an access token when need to retrieve an access token
+        try (MockWebServer httpServer = new MockWebServer()) {
             String oidcConfig;
             try (var in = SDKBuilderTest.class.getResourceAsStream("/oidc-config.json")) {
                 oidcConfig = new String(in.readAllBytes(), StandardCharsets.UTF_8);
             }
-            String issuer = oidcDiscoveryServer.url("my_realm").toString();
-            oidcConfig = oidcConfig.replace("<issuer>", issuer);
-            oidcDiscoveryServer.enqueue(new MockResponse()
+            String issuer = httpServer.url("my_realm").toString();
+            oidcConfig = oidcConfig
+                    // if we don't do this then the library code complains that the issuer is wrong
+                    .replace("<issuer>", issuer)
+                    // we want this server to be called when we fetch an access token
+                    .replace("<token_endpoint>", httpServer.url("tokens").toString());
+            httpServer.enqueue(new MockResponse()
                     .setBody(oidcConfig)
                     .setHeader("Content-type", "application/json")
             );
 
-            WellKnownServiceGrpc.WellKnownServiceImplBase serviceImplBase = new WellKnownServiceGrpc.WellKnownServiceImplBase() {
+            WellKnownServiceGrpc.WellKnownServiceImplBase wellKnownService = new WellKnownServiceGrpc.WellKnownServiceImplBase() {
                 @Override
                 public void getWellKnownConfiguration(GetWellKnownConfigurationRequest request, StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
                     var val = Value.newBuilder().setStringValue(issuer).build();
@@ -52,29 +66,72 @@ public class SDKBuilderTest {
                 }
             };
 
-            server = ServerBuilder
+            AtomicReference<String> authHeaderFromRequest = new AtomicReference<>(null);
+            AtomicReference<String> dpopHeaderFromRequest = new AtomicReference<>(null);
+
+            // we use the server in two different ways. the first time we use it to actually return
+            // issuer for bootstrapping. the second time we use the interception functionality in order
+            // to make sure that we are including a DPoP proof and an auth header
+            wellknownServer = ServerBuilder
                     .forPort(7000 + new Random().nextInt(3000))
                     .directExecutor()
-                    .addService(serviceImplBase)
+                    .addService(wellKnownService)
+                    .intercept(new ServerInterceptor() {
+                        @Override
+                        public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
+                            authHeaderFromRequest.set(headers.get(Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER)));
+                            dpopHeaderFromRequest.set(headers.get(Metadata.Key.of("DPoP", Metadata.ASCII_STRING_MARSHALLER)));
+                            return next.startCall(call, headers);
+                        }
+                    })
                     .build()
                     .start();
 
             ManagedChannel channel = SDKBuilder
                     .newBuilder()
-                    .withClientSecret("client", "secret")
-                    .platformEndpoint("localhost:" + server.getPort())
+                    .withClientSecret("client-id", "client-secret")
+                    .platformEndpoint("localhost:" + wellknownServer.getPort())
                     .withPlainTextConnection(true)
                     .buildChannel();
 
+            assertThat(channel).isNotNull();
+            assertThat(channel.getState(false)).isEqualTo(ConnectivityState.IDLE);
+
+            var wellKnownStub = WellKnownServiceGrpc.newBlockingStub(channel);
+
+            httpServer.enqueue(new MockResponse()
+                    .setBody("{\"access_token\": \"hereisthetoken\", \"token_type\": \"Bearer\"}")
+                    .setHeader("Content-Type", "application/json"));
+
+            var ignored = wellKnownStub.getWellKnownConfiguration(GetWellKnownConfigurationRequest.getDefaultInstance());
             channel.shutdownNow();
 
-            assertThat(channel).isNotNull();
-        } catch (Exception e) {
-            if (server != null) {
-                server.shutdownNow();
-            }
+            // we've now made two requests. one to get the bootstrapping info and one
+            // call that should activate the token fetching logic
+            assertThat(httpServer.getRequestCount()).isEqualTo(2);
 
-            throw e;
+            httpServer.takeRequest();
+            var accessTokenRequest = httpServer.takeRequest();
+            assertThat(accessTokenRequest).isNotNull();
+            var authHeader = accessTokenRequest.getHeader("Authorization");
+            assertThat(authHeader).isNotNull();
+            var authHeaderParts = authHeader.split(" ");
+            assertThat(authHeaderParts).hasSize(2);
+            assertThat(authHeaderParts[0]).isEqualTo("Basic");
+            var usernameAndPassword = new String(Base64.getDecoder().decode(authHeaderParts[1]), StandardCharsets.UTF_8);
+            assertThat(usernameAndPassword).isEqualTo("client-id:client-secret");
+
+            assertThat(dpopHeaderFromRequest.get()).isNotNull();
+            assertThat(authHeaderFromRequest.get()).isEqualTo("DPoP hereisthetoken");
+
+            var body = new String(accessTokenRequest.getBody().readByteArray(), StandardCharsets.UTF_8);
+            // not pulling in a json library here
+            assertThat(body).contains("grant_type=client_credentials");
+
+        } finally {
+            if (wellknownServer != null) {
+                wellknownServer.shutdownNow();
+            }
         }
     }
 }

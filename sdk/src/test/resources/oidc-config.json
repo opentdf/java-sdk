@@ -1,7 +1,7 @@
 {
   "issuer": "<issuer>",
   "authorization_endpoint": "https://example.com/oauth2/v1/authorize",
-  "token_endpoint": "https://example.com/oauth2/v1/token",
+  "token_endpoint": "<token_endpoint>",
   "userinfo_endpoint": "https://example.com/oauth2/v1/userinfo",
   "registration_endpoint": "https://example.com/oauth2/v1/clients",
   "jwks_uri": "https://example.com/oauth2/v1/keys",
