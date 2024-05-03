@@ -1,7 +1,7 @@
 package io.opentdf.platform.sdk;
 
 import com.nimbusds.jose.jwk.KeyUse;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
@@ -34,7 +34,7 @@ public class RSAKeyPairTest {
     @Test
     public void testGeneratingPEM() throws NoSuchAlgorithmException, InvalidKeySpecException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
         var keypair = new RSAKeyPair();
-        var pem = keypair.toPEM();
+        var pem = keypair.publicKeyPEM();
         var pemLines = pem.split("([\\r\\n])+");
         assertThat(pemLines[0]).isEqualTo("-----BEGIN PUBLIC KEY-----");
         assertThat(pemLines[pemLines.length - 1]).isEqualTo("-----END PUBLIC KEY-----");
@@ -56,6 +56,14 @@ public class RSAKeyPairTest {
 
     @Test
     public void testGettingRSAJWK() {
+        var keypair = new RSAKeyPair();
+        var rsaKey = keypair.toRSAKey();
+        assertThat(rsaKey.isPrivate()).isTrue();
+        assertThat(rsaKey.getKeyUse()).isEqualTo(KeyUse.SIGNATURE);
+    }
+
+    @Test
+    public void testGettingJWSSigner() {
         var keypair = new RSAKeyPair();
         var rsaKey = keypair.toRSAKey();
         assertThat(rsaKey.isPrivate()).isTrue();

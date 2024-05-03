@@ -1,6 +1,7 @@
 package io.opentdf.platform.sdk;
 
-import com.nimbusds.jose.Algorithm;
+import com.nimbusds.jose.JWSSigner;
+import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.RSAKey;
 
@@ -14,7 +15,6 @@ import java.security.NoSuchAlgorithmException;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.util.Base64;
-import java.util.Set;
 
 public class RSAKeyPair {
     final static int KEY_LENGTH = 2048;
@@ -33,12 +33,7 @@ public class RSAKeyPair {
     final private RSAPublicKey rsaPublicKey;
     final private RSAPrivateKey rsaPrivateKey;
 
-    RSAKeyPair(RSAPublicKey rsaPublicKey, RSAPrivateKey rsaPrivateKey) {
-        this.rsaPublicKey = rsaPublicKey;
-        this.rsaPrivateKey = rsaPrivateKey;
-    }
-
-    public String toPEM() {
+    public String publicKeyPEM() {
         var der = this.rsaPublicKey.getEncoded();
         var encoder = Base64.getMimeEncoder(64, new byte[]{'\n'});
         return "-----BEGIN PUBLIC KEY-----\n" + encoder.encodeToString(der) + "\n-----END PUBLIC KEY-----";
@@ -49,6 +44,10 @@ public class RSAKeyPair {
                 .privateKey(rsaPrivateKey)
                 .keyUse(KeyUse.SIGNATURE)
                 .build();
+    }
+
+    public RSASSASigner getSigner() {
+        return new RSASSASigner(rsaPrivateKey);
     }
 
     public RSAKeyPair() {

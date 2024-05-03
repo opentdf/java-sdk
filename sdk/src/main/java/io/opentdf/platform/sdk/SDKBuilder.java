@@ -91,7 +91,8 @@ public class SDKBuilder {
             throw new SDKException("Error getting the issuer from the platform", e);
         }
 
-        var dpopKey = getRsaKey();
+        var dpopKeyPair = new RSAKeyPair();
+        var dpopKey = dpopKeyPair.toRSAKey();
         DPoPProofFactory dPoPProofFactory;
         try {
             dPoPProofFactory = new DefaultDPoPProofFactory(dpopKey, JWSAlgorithm.RS256);
@@ -116,19 +117,9 @@ public class SDKBuilder {
         Function<String, Channel> channelMaker = (String target) -> getManagedChannelBuilder(target)
                 .intercept(interceptor)
                 .build();
-        var kasClient = new KASClient(channelMaker, dPoPProofFactory, getRsaKey());
-        return SDK.Services.newServices(channelMaker.apply(platformEndpoint), kasClient);
-    }
 
-    private RSAKey getRsaKey() {
-        try {
-            return new RSAKeyGenerator(2048)
-                    .keyUse(KeyUse.SIGNATURE)
-                    .keyID(UUID.randomUUID().toString())
-                    .generate();
-        } catch (JOSEException e) {
-            throw new SDKException("Error generating DPoP key", e);
-        }
+        var kasClient = new KASClient(channelMaker, dpopKeyPair);
+        return SDK.Services.newServices(channelMaker.apply(platformEndpoint), kasClient);
     }
 
     public SDK build() {
