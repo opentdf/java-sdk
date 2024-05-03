@@ -1,6 +1,7 @@
 package io.opentdf.platform.sdk;
 
 import com.nimbusds.jose.JOSEException;
+import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
@@ -8,9 +9,12 @@ import com.nimbusds.oauth2.sdk.GeneralException;
 import com.nimbusds.oauth2.sdk.auth.ClientAuthentication;
 import com.nimbusds.oauth2.sdk.auth.ClientSecretBasic;
 import com.nimbusds.oauth2.sdk.auth.Secret;
+import com.nimbusds.oauth2.sdk.dpop.DPoPProofFactory;
+import com.nimbusds.oauth2.sdk.dpop.DefaultDPoPProofFactory;
 import com.nimbusds.oauth2.sdk.id.ClientID;
 import com.nimbusds.oauth2.sdk.id.Issuer;
 import com.nimbusds.openid.connect.sdk.op.OIDCProviderMetadata;
+import io.grpc.Channel;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
@@ -20,6 +24,7 @@ import io.opentdf.platform.wellknownconfiguration.WellKnownServiceGrpc;
 
 import java.io.IOException;
 import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * A builder class for creating instances of the SDK class.
@@ -55,13 +60,13 @@ public class SDKBuilder {
     }
 
     // this is not exposed publicly so that it can be tested
-    ManagedChannel buildChannel() {
+    SDK.Services buildServices() {
         // we don't add the auth listener to this channel since it is only used to call the
         //    well known endpoint
         ManagedChannel bootstrapChannel = null;
         GetWellKnownConfigurationResponse config;
         try {
-            bootstrapChannel = getManagedChannelBuilder().build();
+            bootstrapChannel = getManagedChannelBuilder(platformEndpoint).build();
             var stub = WellKnownServiceGrpc.newBlockingStub(bootstrapChannel);
             try {
                 config = stub.getWellKnownConfiguration(GetWellKnownConfigurationRequest.getDefaultInstance());
@@ -86,7 +91,15 @@ public class SDKBuilder {
             throw new SDKException("Error getting the issuer from the platform", e);
         }
 
-        Issuer issuer = new Issuer(platformIssuer);
+        var dpopKey = getRsaKey();
+        DPoPProofFactory dPoPProofFactory;
+        try {
+            dPoPProofFactory = new DefaultDPoPProofFactory(dpopKey, JWSAlgorithm.RS256);
+        } catch (JOSEException e) {
+            throw new SDKException("error creating DPoP signer", e);
+        }
+
+        var issuer = new Issuer(platformIssuer);
         OIDCProviderMetadata providerMetadata;
         try {
             providerMetadata = OIDCProviderMetadata.resolve(issuer);
@@ -94,30 +107,37 @@ public class SDKBuilder {
             throw new SDKException("Error resolving the OIDC provider metadata", e);
         }
 
-        RSAKey rsaKey;
+        ClientCredentialsTokenSource tokenSource = new ClientCredentialsTokenSource(
+                clientAuth,
+                dPoPProofFactory,
+                providerMetadata.getTokenEndpointURI());
+
+        GRPCAuthInterceptor interceptor = new GRPCAuthInterceptor(tokenSource);
+        Function<String, Channel> channelMaker = (String target) -> getManagedChannelBuilder(target)
+                .intercept(interceptor)
+                .build();
+        var kasClient = new KASClient(channelMaker, dPoPProofFactory, getRsaKey());
+        return SDK.Services.newServices(channelMaker.apply(platformEndpoint), kasClient);
+    }
+
+    private RSAKey getRsaKey() {
         try {
-            rsaKey = new RSAKeyGenerator(2048)
+            return new RSAKeyGenerator(2048)
                     .keyUse(KeyUse.SIGNATURE)
                     .keyID(UUID.randomUUID().toString())
                     .generate();
         } catch (JOSEException e) {
             throw new SDKException("Error generating DPoP key", e);
         }
-
-        GRPCAuthInterceptor interceptor = new GRPCAuthInterceptor(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI());
-
-        return getManagedChannelBuilder()
-                .intercept(interceptor)
-                .build();
     }
 
     public SDK build() {
-        return new SDK(SDK.Services.newServices(buildChannel()));
+        return new SDK(buildServices());
     }
 
-    private ManagedChannelBuilder<?> getManagedChannelBuilder() {
+    private ManagedChannelBuilder<?> getManagedChannelBuilder(String target) {
         ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder
-                .forTarget(platformEndpoint);
+                .forTarget(target);
 
         if (usePlainText) {
             channelBuilder = channelBuilder.usePlaintext();

@@ -10,6 +10,8 @@ import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceGrpc.Res
 import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc;
 import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc.SubjectMappingServiceFutureStub;
 
+import java.net.URI;
+
 /**
  * The SDK class represents a software development kit for interacting with the opentdf platform. It
  * provides various services and stubs for making API calls to the opentdf platform.
@@ -17,14 +19,20 @@ import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc.Subje
 public class SDK {
     private final Services services;
 
+    public interface KAS {
+        String getPublicKey(URI uri);
+        String unwrap(URI uri, Manifest.KeyAccess keyAccess, String policy);
+    }
+
     // TODO: add KAS
     public interface Services {
         AttributesServiceFutureStub attributes();
         NamespaceServiceFutureStub namespaces();
         SubjectMappingServiceFutureStub subjectMappings();
         ResourceMappingServiceFutureStub resourceMappings();
+        KAS kas();
 
-        static Services newServices(Channel channel) {
+        static Services newServices(Channel channel, KASClient kasClient) {
             var attributeService = AttributesServiceGrpc.newFutureStub(channel);
             var namespaceService = NamespaceServiceGrpc.newFutureStub(channel);
             var subjectMappingService = SubjectMappingServiceGrpc.newFutureStub(channel);
@@ -49,6 +57,11 @@ public class SDK {
                 @Override
                 public ResourceMappingServiceFutureStub resourceMappings() {
                     return resourceMappingService;
+                }
+
+                @Override
+                public KAS kas() {
+                    return kasClient;
                 }
             };
         }

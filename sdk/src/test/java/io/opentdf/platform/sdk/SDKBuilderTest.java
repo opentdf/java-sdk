@@ -90,21 +90,20 @@ public class SDKBuilderTest {
                     .build()
                     .start();
 
-            ManagedChannel channel = SDKBuilder
+            String platformEndpoint = "localhost:" + wellknownServer.getPort();
+            SDK.Services services = SDKBuilder
                     .newBuilder()
                     .clientSecret("client-id", "client-secret")
-                    .platformEndpoint("localhost:" + wellknownServer.getPort())
+                    .platformEndpoint(platformEndpoint)
                     .useInsecurePlaintextConnection(true)
-                    .buildChannel();
+                    .buildServices();
 
-            assertThat(channel).isNotNull();
-            assertThat(channel.getState(false)).isEqualTo(ConnectivityState.IDLE);
-
-            var wellKnownStub = WellKnownServiceGrpc.newBlockingStub(channel);
+            assertThat(services).isNotNull();
 
             httpServer.enqueue(new MockResponse()
                     .setBody("{\"access_token\": \"hereisthetoken\", \"token_type\": \"Bearer\"}")
                     .setHeader("Content-Type", "application/json"));
+
 
             var ignored = wellKnownStub.getWellKnownConfiguration(GetWellKnownConfigurationRequest.getDefaultInstance());
             channel.shutdownNow();

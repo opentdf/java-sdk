@@ -34,34 +34,12 @@ import java.time.Instant;
  * tokens.
  */
 class GRPCAuthInterceptor implements ClientInterceptor {
-    private Instant tokenExpiryTime;
-    private AccessToken token;
-    private final ClientAuthentication clientAuth;
-    private final RSAKey rsaKey;
-    private final URI tokenEndpointURI;
 
-    /**
-     * Constructs a new GRPCAuthInterceptor with the specified client authentication and RSA key.
-     *
-     * @param clientAuth the client authentication to be used by the interceptor
-     * @param rsaKey     the RSA key to be used by the interceptor
-     */
-    public GRPCAuthInterceptor(ClientAuthentication clientAuth, RSAKey rsaKey, URI tokenEndpointURI) {
-        this.clientAuth = clientAuth;
-        this.rsaKey = rsaKey;
-        this.tokenEndpointURI = tokenEndpointURI;
+    final TokenSource tokenSource;
+    public GRPCAuthInterceptor(TokenSource tokenSource) {
+        this.tokenSource = tokenSource;
     }
 
-    /**
-     * Intercepts the client call before it is sent to the server.
-     *
-     * @param method      The method descriptor for the call.
-     * @param callOptions The call options for the call.
-     * @param next        The next channel in the channel pipeline.
-     * @param <ReqT>      The type of the request message.
-     * @param <RespT>     The type of the response message.
-     * @return A client call with the intercepted behavior.
-     */
     @Override
     public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
                                                                CallOptions callOptions, Channel next) {
@@ -69,88 +47,22 @@ class GRPCAuthInterceptor implements ClientInterceptor {
             @Override
             public void start(Listener<RespT> responseListener, Metadata headers) {
                 // Get the access token
-                AccessToken t = getToken();
-                headers.put(Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER),
-                        "DPoP " + t.getValue());
-
-                // Build the DPoP proof for each request
+                URI resource;
                 try {
-                    DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(rsaKey, JWSAlgorithm.RS256);
-
-                    URI uri = new URI("/" + method.getFullMethodName());
-                    SignedJWT proof = dpopFactory.createDPoPJWT("POST", uri, t);
-                    headers.put(Metadata.Key.of("DPoP", Metadata.ASCII_STRING_MARSHALLER),
-                            proof.serialize());
+                    resource = new URI("/" + method.getFullMethodName());
                 } catch (URISyntaxException e) {
-                    throw new RuntimeException("Invalid URI syntax for DPoP proof creation", e);
-                } catch (JOSEException e) {
-                    throw new RuntimeException("Error creating DPoP proof", e);
+                    throw new RuntimeException("Invalid URI syntax for DPoP proof creation");
                 }
+
+                var authTokens = tokenSource.getAuthTokens("POST", resource);
+                headers.put(Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER),
+                        "DPoP " + authTokens.getAccessToken());
+                headers.put(Metadata.Key.of("DPoP", Metadata.ASCII_STRING_MARSHALLER),
+                        authTokens.getDpopProof());
+
                 super.start(responseListener, headers);
             }
         };
     }
 
-    /**
-     * Either fetches a new access token or returns the cached access token if it is still valid.
-     *
-     * @return The access token.
-     */
-    private synchronized AccessToken getToken() {
-        try {
-            // If the token is expired or initially null, get a new token
-            if (token == null || isTokenExpired()) {
-
-                // Construct the client credentials grant
-                AuthorizationGrant clientGrant = new ClientCredentialsGrant();
-
-                // Make the token request
-                TokenRequest tokenRequest = new TokenRequest(this.tokenEndpointURI,
-                        clientAuth, clientGrant, null);
-                HTTPRequest httpRequest = tokenRequest.toHTTPRequest();
-
-                DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(rsaKey, JWSAlgorithm.RS256);
-
-                SignedJWT proof = dpopFactory.createDPoPJWT(httpRequest.getMethod().name(), httpRequest.getURI());
-
-                httpRequest.setDPoP(proof);
-                TokenResponse tokenResponse;
-
-                HTTPResponse httpResponse = httpRequest.send();
-
-                tokenResponse = TokenResponse.parse(httpResponse);
-                if (!tokenResponse.indicatesSuccess()) {
-                    ErrorObject error = tokenResponse.toErrorResponse().getErrorObject();
-                    throw new RuntimeException("Token request failed: " + error);
-                }
-
-                this.token = tokenResponse.toSuccessResponse().getTokens().getAccessToken();
-                // DPoPAccessToken dPoPAccessToken = tokens.getDPoPAccessToken();
-
-
-                if (token.getLifetime() != 0) {
-                    // Need some type of leeway but not sure whats best
-                    this.tokenExpiryTime = Instant.now().plusSeconds(token.getLifetime() / 3);
-                }
-
-            } else {
-                // If the token is still valid or not initially null, return the cached token
-                return this.token;
-            }
-
-        } catch (Exception e) {
-            // TODO Auto-generated catch block
-            throw new RuntimeException("failed to get token", e);
-        }
-        return this.token;
-    }
-
-    /**
-     * Checks if the token has expired.
-     *
-     * @return true if the token has expired, false otherwise.
-     */
-    private boolean isTokenExpired() {
-        return this.tokenExpiryTime != null && this.tokenExpiryTime.isBefore(Instant.now());
-    }
 }
