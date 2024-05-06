@@ -1,0 +1,8 @@
+# CODEOWNERS
+
+* @opentdf/java-sdk
+
+## High Security Area
+
+CODEOWNERS     @opentdf/architecture @opentdf/security
+LICENSE        @opentdf/architecture
