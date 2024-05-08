@@ -1,10 +1,41 @@
 package io.opentdf.platform.sdk;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 
 public class ZipReader {
+
+    public class Entry {
+        private final String name;
+        private final long offset;
+
+        private final long size;
+
+        public Entry(String name, long offset, long size) {
+            this.name = name;
+            this.offset = offset;
+            this.size = size;
+        }
+
+        public OutputStream getBytes() {
+            return null;
+        }
+    }
+
+    private static class CentralDirectoryRecord {
+        final int numEntries;
+        final long offsetToStart;
+
+        public CentralDirectoryRecord(int numEntries, long offsetToStart) {
+            this.numEntries = numEntries;
+            this.offsetToStart = offsetToStart;
+        }
+    }
+
     private static final int END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50;
     private static final int ZIP64_END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06064b50;
     private static final int ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIGNATURE = 0x07064b50;
@@ -17,9 +48,8 @@ public class ZipReader {
     private short fileNameLength;
     private short extraFieldLength;
     private long offsetToStartOfCentralDirectory;
-    private long relativeOffsetEndOfZip64EndOfCentralDirectory;
 
-    public void readEndOfCentralDirectory(ByteBuffer buffer) throws Exception {
+    private CentralDirectoryRecord readEndOfCentralDirectory(ByteBuffer buffer) throws Exception {
         buffer.order(ByteOrder.LITTLE_ENDIAN);
         long fileSize = buffer.capacity();
         long pointer = fileSize - 22; // 22 is the minimum size of the EOCDR
@@ -40,29 +70,25 @@ public class ZipReader {
         }
 
         // Read the EOCDR
-        short diskNumber = buffer.getShort();
-        short centralDirectoryDiskNumber = buffer.getShort();
-        short numEntriesThisDisk = buffer.getShort();
+        short _diskNumber = buffer.getShort();
+        short _centralDirectoryDiskNumber = buffer.getShort();
+        short _numEntriesThisDisk = buffer.getShort();
         numEntries = buffer.getShort();
-        int centralDirectorySize = buffer.getInt();
+        int _centralDirectorySize = buffer.getInt();
         offsetToStartOfCentralDirectory = buffer.getInt();
-        short commentLength = buffer.getShort();
+        short _commentLength = buffer.getShort();
 
         // buffer's position at the start of the Central Directory
-        boolean isZip64 = false;
-        if (offsetToStartOfCentralDirectory != ZIP64_MAGICVAL) {
-            //buffer.position((int)offsetToStartOfCentralDirectory);
-        } else {
-            isZip64 = true;
+        if (offsetToStartOfCentralDirectory == ZIP64_MAGICVAL) {
             long index = fileSize - (22+ 20); // 22 is the size of the EOCDR and 20 is the size of the Zip64 EOCDR
             buffer.position((int)index);
             readZip64EndOfCentralDirectoryLocator(buffer);
             index = fileSize  - (22 + 20 + 56); // 56 is the size of the Zip64 EOCDR
             buffer.position((int)index);
-            readZip64EndOfCentralDirectoryRecord(buffer);
-            //buffer.position((int)offsetToStartOfCentralDirectory);
+            return readZip64EndOfCentralDirectoryRecord(buffer);
         }
-        // buffer.position(centralDirectoryOffset);
+
+        return new CentralDirectoryRecord(numEntries, offsetToStartOfCentralDirectory);
     }
 
     private void readZip64EndOfCentralDirectoryLocator(ByteBuffer buffer) {
@@ -70,12 +96,12 @@ public class ZipReader {
         if (signature != ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIGNATURE) {
             throw new RuntimeException("Invalid Zip64 End of Central Directory Record Signature");
         }
-        int numberOfDiskWithZip64End = buffer.getInt();
-        relativeOffsetEndOfZip64EndOfCentralDirectory = buffer.getLong();
-        int totalNumberOfDisks = buffer.getInt();
+        int _numberOfDiskWithZip64End = buffer.getInt();
+        long _relativeOffsetEndOfZip64EndOfCentralDirectory = buffer.getLong();
+        int _totalNumberOfDisks = buffer.getInt();
     }
 
-    private void readZip64EndOfCentralDirectoryRecord(ByteBuffer buffer) {
+    private CentralDirectoryRecord readZip64EndOfCentralDirectoryRecord(ByteBuffer buffer) {
         int signature = buffer.getInt() ;
         if (signature != ZIP64_END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
             throw new RuntimeException("Invalid Zip64 End of Central Directory Record ");
@@ -89,6 +115,8 @@ public class ZipReader {
         numEntries = (int)buffer.getLong();
         long centralDirectorySize = buffer.getLong();
         offsetToStartOfCentralDirectory = buffer.getLong();
+
+        return new CentralDirectoryRecord(numEntries, offsetToStartOfCentralDirectory);
     }
 
     public int getNumEntries() {
@@ -204,5 +232,17 @@ public class ZipReader {
         } else {
             System.out.println("File is compressed, need to decompress it first");
         }*/
+    }
+
+    final int BUFFER_CAPACITY = 1024 * 4; // A central directory bigger than this seems excessive
+
+    public ZipReader(SeekableByteChannel channel) throws IOException {
+        ByteBuffer buf = ByteBuffer.allocate(BUFFER_CAPACITY);
+        long offset = Math.max(0, channel.size() - BUFFER_CAPACITY);
+        channel.position(offset);
+        while (channel.read(buf) > 0){}
+        buf.flip();
+
+        readCentralDirectoryFileHeader(buf);
     }
 }

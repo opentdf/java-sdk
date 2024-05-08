@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
 public class ZipWriterTest {
@@ -29,6 +30,38 @@ public class ZipWriterTest {
 
         byte[] zipData = outputStream.toByteArray();
         assertTrue(zipData.length > 0);
+    }
+
+    @Test
+    public void zipFileRoundTrips() throws Exception {
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        ZipWriter archiveWriter = new ZipWriter(outputStream);
+
+        String filename1 = "file1.txt";
+        String content1 = "Hello, world!";
+        archiveWriter.addHeader(filename1, content1.getBytes(StandardCharsets.UTF_8).length);
+        archiveWriter.addData(content1.getBytes(StandardCharsets.UTF_8));
+        archiveWriter.finish();
+
+        String filename2 = "file2.txt";
+        String content2 = "This is another file.";
+        archiveWriter.addHeader(filename2, content2.getBytes(StandardCharsets.UTF_8).length);
+        archiveWriter.addData(content2.getBytes(StandardCharsets.UTF_8));
+        archiveWriter.finish();
+
+        byte[] zipData = outputStream.toByteArray();
+        assertTrue(zipData.length > 0);
+
+        ByteBuffer buffer = ByteBuffer.wrap(zipData);
+        ZipReader zipReader = new ZipReader();
+        zipReader.readEndOfCentralDirectory(buffer);
+        long centralDirectoryOffset = zipReader.getCDOffset();
+        int numEntries = zipReader.getNumEntries();
+        for (int i = 0; i < numEntries; i++) {
+            long offset = zipReader.readCentralDirectoryFileHeader(buffer);
+            zipReader.readLocalFileHeader(buffer);
+            centralDirectoryOffset += 46 + zipReader.getFileNameLength()  + zipReader.getExtraFieldLength();
+        }
     }
 
     @Test

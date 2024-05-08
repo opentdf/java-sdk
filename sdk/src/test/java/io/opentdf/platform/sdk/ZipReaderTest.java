@@ -35,7 +35,7 @@ public class ZipReaderTest {
         fileChannel.read(buffer);
         buffer.flip();
 
-        ZipReader zipReader = new ZipReader();
+        ZipReader zipReader = new ZipReader(fileChannel);
         zipReader.readEndOfCentralDirectory(buffer);
         buffer.clear();
         long centralDirectoryOffset = zipReader.getCDOffset();
