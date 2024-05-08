@@ -70,8 +70,8 @@ public class ZipWriterTest {
             var zipReader = new ZipReader(channel);
             assertEquals(zipReader.numEntries, 2);
 
-            for (var zipEntry: zipReader.getEntries()) {
-
+            for (var entries = zipReader.getEntries(); entries.hasNext(); ) {
+                var entry = entries.next();
             }
         }
     }

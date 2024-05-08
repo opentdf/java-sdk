@@ -51,11 +51,7 @@ public class ZipReader {
     private static final int ZIP64_MAGICVAL = 0xFFFFFFFF;
     private static final int ZIP64_EXTID= 0x0001;
 
-    private short fileNameLength;
-    private short extraFieldLength;
-    private long offsetToStartOfCentralDirectory;
-
-    private CentralDirectoryRecord readEndOfCentralDirectory(ByteBuffer buffer) {
+    CentralDirectoryRecord readEndOfCentralDirectory(ByteBuffer buffer) {
         buffer.order(ByteOrder.LITTLE_ENDIAN);
         long fileSize = buffer.limit();
         long pointer = fileSize - 22; // 22 is the minimum size of the EOCDR
@@ -81,7 +77,7 @@ public class ZipReader {
         short _numEntriesThisDisk = buffer.getShort();
         short numEntries = buffer.getShort();
         int _centralDirectorySize = buffer.getInt();
-        offsetToStartOfCentralDirectory = buffer.getInt();
+        long offsetToStartOfCentralDirectory = buffer.getInt();
         short _commentLength = buffer.getShort();
 
         // buffer's position at the start of the Central Directory
@@ -121,18 +117,6 @@ public class ZipReader {
 
     public int getNumEntries() {
         return numEntries;
-    }
-
-    public short getFileNameLength() {
-        return fileNameLength;
-    }
-
-    public short getExtraFieldLength() {
-        return extraFieldLength;
-    }
-
-    public long getCDOffset() {
-        return offsetToStartOfCentralDirectory;
     }
 
     private static class LocalFileInfo {
@@ -223,7 +207,7 @@ public class ZipReader {
         }
     }
 
-    private LocalFileValues readLocalFileHeader(ByteBuffer buffer) {
+    LocalFileValues readLocalFileHeader(ByteBuffer buffer) {
         int signature = buffer.getInt();
         if (signature != LOCAL_FILE_HEADER_SIGNATURE) {
             throw new RuntimeException("Invalid Local File Header Signature");
@@ -312,7 +296,6 @@ public class ZipReader {
             zipChannel.position(currentCentralDirectoryOffset);
             zipChannel.read(buffer);
             buffer.flip();
-
             var localFileInfo = readCentralDirectoryFileHeader(buffer);
             buffer.clear();
 
