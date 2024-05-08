@@ -2,13 +2,21 @@ package io.opentdf.platform.sdk;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.OpenOption;
+import java.nio.file.StandardOpenOption;
+import java.util.Set;
 
 public class ZipWriterTest {
     @Test
@@ -52,15 +60,19 @@ public class ZipWriterTest {
         byte[] zipData = outputStream.toByteArray();
         assertTrue(zipData.length > 0);
 
-        ByteBuffer buffer = ByteBuffer.wrap(zipData);
-        ZipReader zipReader = new ZipReader();
-        zipReader.readEndOfCentralDirectory(buffer);
-        long centralDirectoryOffset = zipReader.getCDOffset();
-        int numEntries = zipReader.getNumEntries();
-        for (int i = 0; i < numEntries; i++) {
-            long offset = zipReader.readCentralDirectoryFileHeader(buffer);
-            zipReader.readLocalFileHeader(buffer);
-            centralDirectoryOffset += 46 + zipReader.getFileNameLength()  + zipReader.getExtraFieldLength();
+        var tmpFile = File.createTempFile("zipwriter-tests", "");
+        tmpFile.deleteOnExit();
+
+        try (var channel = FileChannel.open(tmpFile.toPath(), Set.of(StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE, StandardOpenOption.READ))) {
+            MappedByteBuffer mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, zipData.length);
+            mapped.put(zipData, 0, zipData.length);
+
+            var zipReader = new ZipReader(channel);
+            assertEquals(zipReader.numEntries, 2);
+
+            for (var zipEntry: zipReader.getEntries()) {
+
+            }
         }
     }
 
