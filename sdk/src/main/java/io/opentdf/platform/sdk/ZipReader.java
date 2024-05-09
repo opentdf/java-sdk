@@ -28,8 +28,13 @@ public class ZipReader {
             this.size = size;
         }
 
-        public OutputStream getBytes() {
-            return null;
+        public OutputStream getData() {
+            return new OutputStream() {
+                @Override
+                public void write(int b) {
+
+                }
+            };
         }
     }
 
@@ -52,7 +57,6 @@ public class ZipReader {
     private static final int ZIP64_EXTID= 0x0001;
 
     CentralDirectoryRecord readEndOfCentralDirectory(ByteBuffer buffer) {
-        buffer.order(ByteOrder.LITTLE_ENDIAN);
         long fileSize = buffer.limit();
         long pointer = fileSize - 22; // 22 is the minimum size of the EOCDR
 
@@ -77,11 +81,11 @@ public class ZipReader {
         short _numEntriesThisDisk = buffer.getShort();
         short numEntries = buffer.getShort();
         int _centralDirectorySize = buffer.getInt();
-        long offsetToStartOfCentralDirectory = buffer.getInt();
+        long centralDirectoryStart = buffer.getInt();
         short _commentLength = buffer.getShort();
 
         // buffer's position at the start of the Central Directory
-        if (offsetToStartOfCentralDirectory == ZIP64_MAGICVAL) {
+        if (centralDirectoryStart == ZIP64_MAGICVAL) {
             long zip64CentralDirectoryStart = fileSize - (ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIZE + END_OF_CENTRAL_DIRECTORY_SIZE);
             buffer.position((int)zip64CentralDirectoryStart);
             int signature = buffer.getInt() ;
@@ -94,7 +98,7 @@ public class ZipReader {
             return readZip64EndOfCentralDirectoryRecord(buffer);
         }
 
-        return new CentralDirectoryRecord(numEntries, offsetToStartOfCentralDirectory);
+        return new CentralDirectoryRecord(numEntries, centralDirectoryStart);
     }
 
     private CentralDirectoryRecord readZip64EndOfCentralDirectoryRecord(ByteBuffer buffer) {
@@ -271,6 +275,7 @@ public class ZipReader {
             this.numItems = numItems;
             this.currentItem = 0;
             this.currentCentralDirectoryOffset = centralDirectoryStart;
+            buffer.order(ByteOrder.LITTLE_ENDIAN);
         }
 
         @Override
