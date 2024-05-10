@@ -286,8 +286,7 @@ public class TDF {
         tdfWriter.appendManifest(manifestAsStr);
         tdfWriter.finish();
 
-        // TODO: Need to update the size
-        //tdfObject.size = tdfWriter.finish();
+        tdfObject.size = tdfWriter.finish();
 
         return tdfObject;
     }
