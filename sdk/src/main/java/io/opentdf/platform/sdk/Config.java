@@ -29,7 +29,7 @@ public class Config {
     }
 
     public static class TDFConfig {
-        public long defaultSegmentSize;
+        public int defaultSegmentSize;
         public boolean enableEncryption;
         public TDFFormat tdfFormat;
         public String tdfPublicKey;
@@ -76,7 +76,7 @@ public class Config {
         return (TDFConfig config) -> config.metaData = metaData;
     }
 
-    public static Consumer<TDFConfig> withSegmentSize(long size) {
+    public static Consumer<TDFConfig> withSegmentSize(int size) {
         return (TDFConfig config) -> config.defaultSegmentSize = size;
     }
 }

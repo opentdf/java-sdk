@@ -4,8 +4,8 @@ import java.io.*;
 
 public class TDFWriter {
     private ZipWriter archiveWriter;
-    private static final String TDF_PAYLOAD_FILE_NAME = "0.payload";
-    private static final String TDF_MANIFEST_FILE_NAME = "0.manifest.json";
+    public static final String TDF_PAYLOAD_FILE_NAME = "0.payload";
+    public static final String TDF_MANIFEST_FILE_NAME = "0.manifest.json";
 
     public TDFWriter(OutputStream outStream) throws FileNotFoundException {
         this.archiveWriter = new ZipWriter(outStream);

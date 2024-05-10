@@ -11,7 +11,7 @@ import java.util.Arrays;
 import java.util.Base64;
 
 public class AesGcm {
-    private static final int GCM_NONCE_LENGTH = 12; // in bytes
+    public static final int GCM_NONCE_LENGTH = 12; // in bytes
     private static final int GCM_TAG_LENGTH = 16; // in bytes
     private static final String CIPHER_TRANSFORM = "AES/GCM/NoPadding";
 
