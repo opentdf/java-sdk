@@ -28,7 +28,8 @@ public class TDFWriter {
         this.archiveWriter.addData(data);
     }
 
-    public void finish() throws IOException {
+    public long finish() throws IOException {
         this.archiveWriter.finish();
+        return this.archiveWriter.getTotalBytes();
     }
 }

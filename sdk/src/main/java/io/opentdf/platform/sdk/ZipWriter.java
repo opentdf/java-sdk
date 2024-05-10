@@ -140,6 +140,9 @@ public class ZipWriter {
         // Write the data contents
         this.writer.write(data);
 
+        // Update total bytes written
+        this.totalBytes += data.length;
+
         // Update CRC32
         CRC32 crc32 = new CRC32();
         crc32.update(data);
@@ -202,6 +205,10 @@ public class ZipWriter {
     public void finish() throws IOException {
         writeCentralDirectory();
         writeEndOfCentralDirectory();
+    }
+
+    public long getTotalBytes() {
+        return this.totalBytes;
     }
 
     private void writeCentralDirectory() throws IOException {
