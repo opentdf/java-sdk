@@ -67,9 +67,9 @@ public class ManifestTest {
 
         // Test encryptionInformation
         assertEquals(manifest.encryptionInformation.keyAccessType, "split");
-        assertEquals(manifest.encryptionInformation.keyAccess.size(), 1);
+        assertEquals(manifest.encryptionInformation.keyAccessObj.size(), 1);
 
-        List<Manifest.KeyAccess> keyAccess = manifest.encryptionInformation.keyAccess;
+        List<Manifest.KeyAccess> keyAccess = manifest.encryptionInformation.keyAccessObj;
         assertEquals(keyAccess.get(0).keyType, "wrapped");
         assertEquals(keyAccess.get(0).protocol, "kas");
 

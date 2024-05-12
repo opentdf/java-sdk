@@ -8,13 +8,11 @@ import java.security.NoSuchAlgorithmException;
 
 public class CryptoUtils {
     public static byte[] CalculateSHA256Hmac(byte[] key, byte[] data) throws NoSuchAlgorithmException,
-            UnsupportedEncodingException, InvalidKeyException {
+            InvalidKeyException {
         Mac sha256_HMAC = Mac.getInstance("HmacSHA256");
         SecretKeySpec secret_key = new SecretKeySpec(key, "HmacSHA256");
         sha256_HMAC.init(secret_key);
 
         return sha256_HMAC.doFinal(data);
-
-        //return Hex.encodeHexString(sha256_HMAC.doFinal(data.getBytes("UTF-8")));
     }
 }

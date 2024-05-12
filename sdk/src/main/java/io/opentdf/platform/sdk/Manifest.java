@@ -21,8 +21,8 @@ public class Manifest {
     static public class IntegrityInformation {
         public RootSignature rootSignature;
         public String segmentHashAlg;
-        public long segmentSizeDefault;
-        public long encryptedSegmentSizeDefault;
+        public int segmentSizeDefault;
+        public int encryptedSegmentSizeDefault;
         public List<Segment> segments;
     }
 
@@ -46,7 +46,9 @@ public class Manifest {
         @SerializedName(value = "type")
         public String keyAccessType;
         public String policy;
-        public List<KeyAccess> keyAccess;
+
+        @SerializedName(value = "keyAccess")
+        public List<KeyAccess> keyAccessObj;
         public Method method;
         public IntegrityInformation integrityInformation;
     }
