@@ -1,34 +1,98 @@
 package io.opentdf.platform.sdk.nanotdf;
 
 public class SymmetricAndPayloadConfig {
-    private NanoTDFCipher cipher;
-    private int payloadSize;
+    private Data data;
 
     public SymmetricAndPayloadConfig() {
+        data = new Data();
+        data.symmetricCipherEnum = 0x0; // AES_256_GCM_64_TAG
+        data.signatureECCMode = 0x00; // SECP256R1
+        data.hasSignature = 1;
     }
 
-    public SymmetricAndPayloadConfig(byte configByte) {
-        this.cipher = NanoTDFCipher.values()[(configByte & 0xF0) >> 4];
-        this.payloadSize = configByte & 0x0F;
+    public SymmetricAndPayloadConfig(byte value) {
+        data = new Data();
+
+        int cipherType = value & 0x0F; // first 4 bits
+        setSymmetricCipherType(NanoTDFCipher.values()[cipherType]);
+
+        int signatureECCMode = (value >> 4) & 0x07;
+        setSignatureECCMode(EllipticCurve.values()[signatureECCMode]);
+
+        int hasSignature = (value >> 7) & 0x01; // most significant bit
+        data.hasSignature = hasSignature;
     }
 
-    public NanoTDFCipher getCipher() {
-        return this.cipher;
+    public void setHasSignature(boolean flag) {
+        data.hasSignature = flag ? 1 : 0;
     }
 
-    public void setCipher(NanoTDFCipher cipher) {
-        this.cipher = cipher;
+    public void setSignatureECCMode(EllipticCurve curve) {
+        switch (curve) {
+            case SECP256R1:
+                data.signatureECCMode = 0x00;
+                break;
+            case SECP384R1:
+                data.signatureECCMode = 0x01;
+                break;
+            case SECP521R1:
+                data.signatureECCMode = 0x02;
+                break;
+            case SECP256K1:
+                throw new RuntimeException("SDK doesn't support 'secp256k1' curve");
+            default:
+                throw new RuntimeException("Unsupported ECC algorithm.");
+        }
     }
 
-    public int getPayloadSize() {
-        return this.payloadSize;
+    public void setSymmetricCipherType(NanoTDFCipher cipherType) {
+        switch (cipherType) {
+            case AES_256_GCM_64_TAG:
+                data.symmetricCipherEnum = 0x00;
+                break;
+            case AES_256_GCM_96_TAG:
+                data.symmetricCipherEnum = 0x01;
+                break;
+            case AES_256_GCM_104_TAG:
+                data.symmetricCipherEnum = 0x02;
+                break;
+            case AES_256_GCM_112_TAG:
+                data.symmetricCipherEnum = 0x03;
+                break;
+            case AES_256_GCM_120_TAG:
+                data.symmetricCipherEnum = 0x04;
+                break;
+            case AES_256_GCM_128_TAG:
+                data.symmetricCipherEnum = 0x05;
+                break;
+            case EAD_AES_256_HMAC_SHA_256:
+                data.symmetricCipherEnum = 0x06;
+                break;
+            default:
+                throw new RuntimeException("Unsupported symmetric cipher for signature.");
+        }
     }
 
-    public void setPayloadSize(int payloadSize) {
-        this.payloadSize = payloadSize;
+    public boolean hasSignature() {
+        return data.hasSignature == 1;
     }
 
-    public byte toByte() {
-        return (byte) ((this.cipher.ordinal() << 4) | this.payloadSize);
+    public EllipticCurve getSignatureECCMode() {
+        return EllipticCurve.values()[data.signatureECCMode];
+    }
+
+    public NanoTDFCipher getCipherType() {
+        return NanoTDFCipher.values()[data.symmetricCipherEnum];
+    }
+
+    public byte getSymmetricAndPayloadConfigAsByte() {
+        int value = data.hasSignature << 7 | data.signatureECCMode << 4 | data.symmetricCipherEnum;
+        return (byte) value;
+    }
+
+    private static class Data {
+        int symmetricCipherEnum;
+        int signatureECCMode;
+        int hasSignature;
     }
 }
