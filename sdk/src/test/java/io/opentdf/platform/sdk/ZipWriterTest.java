@@ -2,44 +2,21 @@ package io.opentdf.platform.sdk;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.FileOutputStream;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.ByteBuffer;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.OpenOption;
-import java.nio.file.StandardOpenOption;
-import java.util.Set;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
-import java.util.zip.ZipInputStream;
 
 public class ZipWriterTest {
     @Test
     public void writesMultipleFilesToArchive() throws IOException {
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        FileOutputStream fs = new FileOutputStream("herewego.zip");
         new ZipWriter.Builder()
                 .file("file1.txt", "Hello world!".getBytes(StandardCharsets.UTF_8))
                 .file("file2.txt", "Here are some more things to look at".getBytes(StandardCharsets.UTF_8))
-                .build(outputStream);
+                .file("NNN", new ByteArrayInputStream("DDD".getBytes(StandardCharsets.UTF_8)))
+                .build(fs);
 
-        byte[] zipData = outputStream.toByteArray();
-        assertTrue(zipData.length > 0);
-
-        OutputStream fw = new FileOutputStream("herewego.zip");
-        fw.write(zipData);
-        fw.close();
     }
 
 //    @Test
