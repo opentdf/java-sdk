@@ -54,13 +54,26 @@ public class ResourceLocator {
         return 1 + Integer.BYTES + this.body.length;
     }
 
-    public byte[] writeIntoBuffer() {
-        ByteBuffer buffer = ByteBuffer.allocate(getTotalSize());
+    public int writeIntoBuffer(ByteBuffer buffer) {
 
-        buffer.put((byte) this.protocol.ordinal());
-        buffer.putInt(this.bodyLength);
-        buffer.put(this.body);
+        if (buffer.remaining() < getTotalSize()) {
+            throw new RuntimeException("Failed to write resource locator - invalid buffer size.");
+        }
 
-        return buffer.array();
+        int totalBytesWritten = 0;
+
+        // Write the protocol type.
+        buffer.put((byte) protocol.ordinal());
+        totalBytesWritten += 1; // size of byte
+
+        // Write the url body length;
+        buffer.putInt(bodyLength);
+        totalBytesWritten += Integer.BYTES;
+
+        // Write the url body;
+        buffer.put(body);
+        totalBytesWritten += body.length;
+
+        return totalBytesWritten;
     }
 }
