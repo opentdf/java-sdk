@@ -55,10 +55,10 @@ public class ZipReader {
     }
 
     private static final int END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50;
-    private static final int ZIP64_END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06064b50;
     private static final int ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIGNATURE = 0x07064b50;
     private static final int CENTRAL_FILE_HEADER_SIGNATURE =  0x02014b50;
-    private static final int LOCAL_FILE_HEADER_SIGNATURE = 0x04034b50;
+
+    private static final int LOCAL_FILE_HEADER_SIGNATURE =  0x04034b50;
     private static final int ZIP64_MAGICVAL = 0xFFFFFFFF;
     private static final int ZIP64_EXTID= 0x0001;
 
@@ -89,7 +89,9 @@ public class ZipReader {
                 + Short.BYTES // number of entries on this disk
         );
         int numEntries = readShort();
-        int centralDirectorySize = readInt();
+        zipChannel.position(zipChannel.position()
+                + Integer.BYTES // skip the size of the central directory
+        );
         long offsetToStartOfCentralDirectory = readInt();
         short commentLength = readShort();
 
@@ -109,29 +111,13 @@ public class ZipReader {
             );
 
             numEntries = readShort();
-            centralDirectorySize = readInt();
+            zipChannel.position(zipChannel.position()
+                    + Integer.BYTES // skip the size of the central directory
+            );
             offsetToStartOfCentralDirectory = readLong();
         }
 
         zipChannel.position(offsetToStartOfCentralDirectory);
-
-        return new CentralDirectoryRecord(numEntries, offsetToStartOfCentralDirectory);
-    }
-
-    private CentralDirectoryRecord readZip64EndOfCentralDirectoryRecord(ByteBuffer buffer) {
-        int signature = buffer.getInt() ;
-        if (signature != ZIP64_END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
-            throw new RuntimeException("Invalid Zip64 End of Central Directory Record ");
-        }
-        long sizeOfZip64EndOfCentralDirectoryRecord = buffer.getLong();
-        short versionMadeBy = buffer.getShort();
-        short versionNeededToExtract = buffer.getShort();
-        int diskNumber = buffer.getInt();
-        int diskWithCentralDirectory = buffer.getInt();
-        long numEntriesOnThisDisk = buffer.getLong();
-        int numEntries = (int)buffer.getLong();
-        long centralDirectorySize = buffer.getLong();
-        long offsetToStartOfCentralDirectory = buffer.getLong();
 
         return new CentralDirectoryRecord(numEntries, offsetToStartOfCentralDirectory);
     }
@@ -153,7 +139,7 @@ public class ZipReader {
 
         public InputStream getData() throws IOException {
             zipChannel.position(offsetToLocalHeader);
-            if (readInt() != 0x04034b50) {
+            if (readInt() != LOCAL_FILE_HEADER_SIGNATURE) {
                 throw new RuntimeException("Invalid Local Header Signature");
             }
             zipChannel.position(zipChannel.position()
@@ -183,11 +169,11 @@ public class ZipReader {
                     if (zipChannel.position() != position) {
                         zipChannel.position(position);
                     }
-                    position += 1;
                     var buf = ByteBuffer.allocate(1);
                     while (buf.position() != buf.capacity()) {
                         zipChannel.read(buf);
                     }
+                    position += 1;
                     return buf.array()[0] & 0xFF;
                 }
             };
@@ -254,42 +240,6 @@ public class ZipReader {
             this.uncompressedSize = uncompressedSize;
         }
     }
-
-    LocalFileValues readLocalFileHeader(ByteBuffer buffer) {
-        int signature = buffer.getInt();
-        if (signature != LOCAL_FILE_HEADER_SIGNATURE) {
-            throw new RuntimeException("Invalid Local File Header Signature");
-        }
-        short versionNeededToExtract = buffer.getShort();
-        short generalPurposeBitFlag = buffer.getShort();
-        short compressionMethod = buffer.getShort();
-        short lastModFileTime = buffer.getShort();
-        short lastModFileDate = buffer.getShort();
-        int crc32 = buffer.getInt();
-        int compressedSize = buffer.getInt();
-        int uncompressedSize = buffer.getInt();
-        short fileNameLength = buffer.getShort();
-        short extraFieldLength = buffer.getShort();
-
-        byte[] fileName = new byte[fileNameLength];
-        buffer.get(fileName);
-
-        byte[] extraField = new byte[extraFieldLength];
-        buffer.get(extraField);
-
-        return new LocalFileValues(fileName, extraField, compressedSize, uncompressedSize);
-
-        /*byte[] fileData = new byte[compressedSize];
-        buffer.get(fileData);
-
-       if (compressionMethod == 0) {
-            String fileContent = new String(fileData, StandardCharsets.UTF_8);
-            System.out.println("File content: " + fileContent);
-        } else {
-            System.out.println("File is compressed, need to decompress it first");
-        }*/
-    }
-
 
 
     public ZipReader(SeekableByteChannel channel) throws IOException {
