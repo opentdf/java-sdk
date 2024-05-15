@@ -15,7 +15,7 @@ public class ZipWriter {
     private static final int ZIP_VERSION = 0x2D;
     private static final int ZIP_64_MAGIC_VAL = 0xFFFFFFFF;
     private static final long ZIP_64_END_OF_CD_RECORD_SIZE = 56;
-    private static final int ZIP_64_LOCAL_EXTENDED_INFO_EXTRA_FIELD_SIZE = 20;
+    private static final int ZIP_64_LOCAL_EXTENDED_INFO_EXTRA_FIELD_SIZE = 24;
 
     private static final int ZIP_64_GLOBAL_EXTENDED_INFO_EXTRA_FIELD_SIZE = 28;
     private static final int ZIP_32_DATA_DESCRIPTOR_SIZE = 16;
@@ -113,12 +113,6 @@ public class ZipWriter {
                 zip64ExtendedInfoExtraField.compressedSize = fileInfo.size;
                 zip64ExtendedInfoExtraField.localFileHeaderOffset = fileInfo.offset;
                 zip64ExtendedInfoExtraField.write(out);
-
-                Zip64DataDescriptor dataDescriptor = new Zip64DataDescriptor();
-                dataDescriptor.crc32 = fileInfo.crc;
-                dataDescriptor.uncompressedSize = fileInfo.size;
-                dataDescriptor.compressedSize = fileInfo.size;
-                dataDescriptor.write(out);
             }
         }
 
@@ -133,7 +127,7 @@ public class ZipWriter {
             localFileHeader.lastModifiedDate = (int) fileDate;
             localFileHeader.filenameLength = (short) nameBytes.length;
             localFileHeader.crc32 = 0;
-            localFileHeader.generalPurposeBitFlag = 0x8;
+            localFileHeader.generalPurposeBitFlag = (1 << 3) | (1 << 11); // we are using the data descriptor and we are using UTF-8
             localFileHeader.compressedSize = ZIP_64_MAGIC_VAL;
             localFileHeader.uncompressedSize = ZIP_64_MAGIC_VAL;
             localFileHeader.extraFieldLength = 0;
@@ -200,7 +194,7 @@ public class ZipWriter {
 
             var fileInfo = new FileInfo();
             fileInfo.offset = startPosition;
-            fileInfo.flag = 0x0;
+            fileInfo.flag = (1 << 11);
             fileInfo.size = data.length;
             fileInfo.crc = crcValue;
             fileInfo.filename = name;
@@ -418,8 +412,8 @@ public class ZipWriter {
             buffer.order(ByteOrder.LITTLE_ENDIAN);
             buffer.putShort(signature);
             buffer.putShort(size);
-            buffer.putLong(originalSize);
             buffer.putLong(compressedSize);
+            buffer.putLong(originalSize);
             buffer.putLong(localFileHeaderOffset);
 
             out.write(buffer.array());

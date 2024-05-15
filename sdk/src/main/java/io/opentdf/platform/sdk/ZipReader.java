@@ -45,10 +45,10 @@ public class ZipReader {
     }
 
     private static class CentralDirectoryRecord {
-        final int numEntries;
+        final long numEntries;
         final long offsetToStart;
 
-        public CentralDirectoryRecord(int numEntries, long offsetToStart) {
+        public CentralDirectoryRecord(long numEntries, long offsetToStart) {
             this.numEntries = numEntries;
             this.offsetToStart = offsetToStart;
         }
@@ -95,31 +95,39 @@ public class ZipReader {
         long offsetToStartOfCentralDirectory = readInt();
         short commentLength = readShort();
 
-        // buffer's position at the start of the Central Directory
-        if (offsetToStartOfCentralDirectory == ZIP64_MAGICVAL) {
-            long zip64CentralDirectoryLocatorStart = zipChannel.size() - (ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIZE + END_OF_CENTRAL_DIRECTORY_SIZE + commentLength);
-            zipChannel.position(zip64CentralDirectoryLocatorStart);
-            int signature = readInt();
-            if (signature != ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIGNATURE) {
-                throw new RuntimeException("Invalid Zip64 End of Central Directory Record Signature");
-            }
-
-            zipChannel.position(zipChannel.position()
-                    + Short.BYTES // this disk number
-                    + Short.BYTES // number of disk with the central directory
-                    + Short.BYTES // number of entries in CD on this disk
-            );
-
-            numEntries = readShort();
-            zipChannel.position(zipChannel.position()
-                    + Integer.BYTES // skip the size of the central directory
-            );
-            offsetToStartOfCentralDirectory = readLong();
+        if (offsetToStartOfCentralDirectory != ZIP64_MAGICVAL) {
+            return new CentralDirectoryRecord(numEntries, offsetToStartOfCentralDirectory);
         }
 
-        zipChannel.position(offsetToStartOfCentralDirectory);
+        // buffer's position at the start of the Central Directory
+        long zip64CentralDirectoryLocatorStart = zipChannel.size() - (ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIZE + END_OF_CENTRAL_DIRECTORY_SIZE + commentLength);
+        zipChannel.position(zip64CentralDirectoryLocatorStart);
+        int signature = readInt();
+        if (signature != ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIGNATURE) {
+            throw new RuntimeException("Invalid Zip64 End of Central Directory Record Signature");
+        }
 
-        return new CentralDirectoryRecord(numEntries, offsetToStartOfCentralDirectory);
+        int centralDirectoryDiskNumber = readInt();
+        long offsetToEndOfCentralDirectory = readLong();
+        int totalNumberOfDisks = readInt();
+
+        zipChannel.position(offsetToEndOfCentralDirectory);
+        int sig = readInt();
+        if (sig != 0x06064b50) {
+            throw new RuntimeException("Invalid");
+        }
+        long sizeOfEndOfCentralDirectoryRecord = readLong();
+        short versionMadeBy = readShort();
+        short versionNeeded = readShort();
+        int thisDiskNumber = readInt();
+        int cdDiskNumber = readInt();
+        long numCDEntriesOnThisDisk = readLong();
+        long totalNumCDEntries = readLong();
+        long cdSize = readLong();
+        long cdOffset = readLong();
+
+        return new CentralDirectoryRecord(totalNumCDEntries, cdOffset);
+
     }
 
     public class Entry {
@@ -191,8 +199,8 @@ public class ZipReader {
         short lastModFileTime = readShort();
         short lastModFileDate = readShort();
         int crc32 = readInt();
-        int compressedSize = readInt();
-        int uncompressedSize = readInt();
+        long compressedSize = readInt();
+        long uncompressedSize = readInt();
         int fileNameLength = readShort();
         int extraFieldLength = readShort();
         short fileCommentLength = readShort();
@@ -208,18 +216,26 @@ public class ZipReader {
 
         // Parse the extra field
         for (final long startPos = zipChannel.position(); zipChannel.position() < startPos + extraFieldLength; ) {
+            long fieldStart = zipChannel.position();
             int headerId = readShort();
             int dataSize = readShort();
 
             if (headerId == ZIP64_EXTID) {
-                compressedSize = readLong().intValue();
-                uncompressedSize = readLong().intValue();
-                relativeOffsetOfLocalHeader = readLong().intValue();
-                diskNumberStart = readInt().shortValue();
-            } else {
-                // Skip other extra fields
-                zipChannel.position(zipChannel.position() + dataSize);
+                if (compressedSize == -1) {
+                    compressedSize = readLong().intValue();
+                }
+                if (uncompressedSize == -1) {
+                    uncompressedSize = readLong().intValue();
+                }
+                if (relativeOffsetOfLocalHeader == -1) {
+                    relativeOffsetOfLocalHeader = readLong().intValue();
+                }
+                if (diskNumberStart == ZIP64_MAGICVAL) {
+                    diskNumberStart = readInt().shortValue();
+                }
             }
+            // Skip other extra fields
+            zipChannel.position(fieldStart + dataSize + 4);
         }
 
         zipChannel.position(zipChannel.position() + fileCommentLength);
@@ -245,6 +261,7 @@ public class ZipReader {
     public ZipReader(SeekableByteChannel channel) throws IOException {
         zipChannel = channel;
         var centralDirectoryRecord = readEndOfCentralDirectory();
+        zipChannel.position(centralDirectoryRecord.offsetToStart);
         for (int i = 0; i < centralDirectoryRecord.numEntries; i++) {
             entries.add(readCentralDirectoryFileHeader());
         }

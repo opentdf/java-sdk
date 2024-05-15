@@ -2,9 +2,7 @@ package io.opentdf.platform.sdk;
 import com.google.gson.Gson;
 import org.apache.commons.compress.archivers.zip.Zip64Mode;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
-import org.apache.commons.compress.archivers.zip.ZipArchiveEntryRequest;
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
-import org.apache.commons.compress.archivers.zip.ZipFile;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.Test;
 
@@ -12,15 +10,14 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.entry;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -47,7 +44,7 @@ public class ZipReaderTest {
     }
 
     @Test
-    public void testRoundTripping32BitZipFiles() throws IOException {
+    public void testReadingAFileWrittenUsingCommons() throws IOException {
         SeekableInMemoryByteChannel outputChannel = new SeekableInMemoryByteChannel();
         ZipArchiveOutputStream zip = new ZipArchiveOutputStream(outputChannel);
         zip.setUseZip64(Zip64Mode.Always);
@@ -83,28 +80,58 @@ public class ZipReaderTest {
         }
     }
 
-//        ZipReader zipReader = new ZipReader(fileChannel);
-//        zipReader.readEndOfCentralDirectory(buffer);
-//        buffer.clear();
-//        long centralDirectoryOffset = zipReader.getCDOffset();
-//        int numEntries = zipReader.getNumEntries();
-//        for (int i = 0; i < numEntries; i++) {
-//            fileChannel.position(centralDirectoryOffset);
-//            fileChannel.read(buffer);
-//            buffer.flip();
-//            long offset = zipReader.readCentralDirectoryFileHeader(buffer);
-//            buffer.clear();
-//            fileChannel.position(offset);
-//            fileChannel.read(buffer);
-//            buffer.flip();
-//            zipReader.readLocalFileHeader(buffer);
-//            centralDirectoryOffset += 46 + zipReader.getFileNameLength()  + zipReader.getExtraFieldLength();
-//            buffer.clear();
-//        }
-//
-//        assertEquals(2, zipReader.getNumEntries());
-//        assertNotNull(zipReader.getFileNameLength());
-//        assertNotNull(zipReader.getCDOffset());
-//
-//        raf.close();
+    @Test
+    public void testReadingAndWritingRandomFiles() throws IOException {
+        Random r = new Random();
+        int numEntries = r.nextInt(500) + 10;
+        var testData = IntStream.range(0, numEntries)
+                .mapToObj(ignored -> {
+                    int fileNameLength = r.nextInt(1000);
+                    String name = IntStream.range(0, fileNameLength)
+                            .mapToObj(idx -> {
+                                var chars = "abcdefghijklmnopqrstuvwxyz ≈ç´ƒ∆∂ßƒåˆß∂øƒ¨åß∂∆˚¬…∆˚¬ˆøπ¨πøƒ∂åß˚¬…∆¬…ˆøåπƒ∆";
+                                var randIdx = r.nextInt(chars.length());
+                                return chars.substring(randIdx, randIdx + 1);
+                            })
+                            .collect(Collectors.joining());
+                    int fileSize = r.nextInt(3000);
+                    byte[] fileContent = new byte[fileSize];
+                    r.nextBytes(fileContent);
+
+                    return new Object[] {name, fileContent};
+                }).collect(Collectors.toList());
+
+        ZipWriter.Builder writer = new ZipWriter.Builder();
+        HashMap<String, byte[]> namesToData = new HashMap<>();
+        for (var data: testData) {
+            var fileName = (String)data[0];
+            var content = (byte[])data[1];
+
+            if (namesToData.containsKey(fileName)) {
+                continue;
+            }
+
+            namesToData.put(fileName, content);
+
+            if (r.nextBoolean()) {
+                writer = writer.file(fileName, content);
+            } else {
+                writer = writer.file(fileName, new ByteArrayInputStream(content));
+            }
+        }
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        writer.build(out);
+
+        var channel = new SeekableInMemoryByteChannel(out.toByteArray());
+
+        ZipReader reader = new ZipReader(channel);
+
+        for (var entry: reader.getEntries()) {
+            assertThat(namesToData).containsKey(entry.getName());
+            var zipData = new ByteArrayOutputStream();
+            entry.getData().transferTo(zipData);
+            assertThat(zipData.toByteArray()).isEqualTo(namesToData.get(entry.getName()));
+        }
+    }
 }
