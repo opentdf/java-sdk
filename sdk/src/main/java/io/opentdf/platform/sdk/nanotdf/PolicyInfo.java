@@ -21,8 +21,8 @@ public class PolicyInfo {
         if (this.type == NanoTDFPolicyType.REMOTE_POLICY) {
             ResourceLocator policyUrl = new ResourceLocator(bytes);
             int policyUrlSize = policyUrl.getTotalSize();
-            body = new byte[policyUrlSize];
-            buffer = ByteBuffer.wrap(body);
+            this.body = new byte[policyUrlSize];
+            buffer = ByteBuffer.wrap(this.body);
             policyUrl.writeIntoBuffer(buffer);
             bytes = Arrays.copyOfRange(bytes, policyUrlSize, bytes.length);
         } else {
@@ -57,7 +57,7 @@ public class PolicyInfo {
 
         int totalSize = 0;
 
-        if (type == NanoTDFPolicyType.REMOTE_POLICY) {
+        if (this.type == NanoTDFPolicyType.REMOTE_POLICY) {
             totalSize = (1 + body.length + binding.length);
         } else {
             if (type == NanoTDFPolicyType.EMBEDDED_POLICY_PLAIN_TEXT ||
@@ -128,5 +128,60 @@ public class PolicyInfo {
         totalBytesWritten += binding.length;
 
         return totalBytesWritten;
+    }
+
+    public NanoTDFPolicyType getPolicyType() {
+        return this.type;
+    }
+
+    public void setRemotePolicy(String policyUrl) {
+        ResourceLocator remotePolicyUrl = new ResourceLocator(policyUrl);
+        int size = remotePolicyUrl.getTotalSize();
+        this.body = new byte[size];
+        remotePolicyUrl.writeIntoBuffer(ByteBuffer.wrap(this.body));
+        this.type = NanoTDFPolicyType.REMOTE_POLICY;
+    }
+
+    public String getRemotePolicyUrl() {
+        if (this.type != NanoTDFPolicyType.REMOTE_POLICY) {
+            throw new RuntimeException("Policy is not remote type.");
+        }
+        ResourceLocator policyUrl = new ResourceLocator(this.body);
+        return policyUrl.getResourceUrl();
+    }
+
+    public void setEmbeddedPlainTextPolicy(byte[] bytes) {
+        this.body = new byte[bytes.length];
+        System.arraycopy(bytes, 0, this.body, 0, bytes.length);
+        this.type = NanoTDFPolicyType.EMBEDDED_POLICY_PLAIN_TEXT;
+    }
+
+    public byte[] getEmbeddedPlainTextPolicy() {
+        if (this.type != NanoTDFPolicyType.EMBEDDED_POLICY_PLAIN_TEXT) {
+            throw new RuntimeException("Policy is not embedded plain text type.");
+        }
+        return this.body;
+    }
+
+    public void setEmbeddedEncryptedTextPolicy(byte[] bytes) {
+        this.body = new byte[bytes.length];
+        System.arraycopy(bytes, 0, this.body, 0, bytes.length);
+        this.type = NanoTDFPolicyType.EMBEDDED_POLICY_ENCRYPTED;
+    }
+
+    public byte[] getEmbeddedEncryptedTextPolicy() {
+        if (this.type != NanoTDFPolicyType.EMBEDDED_POLICY_ENCRYPTED) {
+            throw new RuntimeException("Policy is not embedded encrypted text type.");
+        }
+        return this.body;
+    }
+
+    public void setPolicyBinding(byte[] bytes) {
+        this.binding = new byte[bytes.length];
+        System.arraycopy(bytes, 0, this.binding, 0, bytes.length);
+    }
+
+    public byte[] getPolicyBinding() {
+        return this.binding;
     }
 }
