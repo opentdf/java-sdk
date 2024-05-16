@@ -27,7 +27,7 @@ public class ZipWriterTest {
     @Test
     public void writesMultipleFilesToArchive() throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        new ZipWriter.Builder()
+        new ZipWriter()
                 .file("file1∞®ƒ両†.txt", "Hello world!".getBytes(StandardCharsets.UTF_8))
                 .file("file2.txt", "Here are some more things to look at".getBytes(StandardCharsets.UTF_8))
                 .file("the streaming one", new ByteArrayInputStream("this is a long long stream".getBytes(StandardCharsets.UTF_8)))
@@ -53,7 +53,7 @@ public class ZipWriterTest {
     public void createsNonZip64Archive() throws IOException {
         // when we create things using only byte arrays we create an archive that is non zip64
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        new ZipWriter.Builder()
+        new ZipWriter()
                 .file("file1∞®ƒ両†.txt", "Hello world!".getBytes(StandardCharsets.UTF_8))
                 .file("file2.txt", "Here are some more things to look at".getBytes(StandardCharsets.UTF_8))
                 .build(out);
@@ -89,7 +89,7 @@ public class ZipWriterTest {
         zipFile.deleteOnExit();
         try (var in = new FileInputStream(testFile)) {
             try (var out = new FileOutputStream(zipFile)) {
-                new ZipWriter.Builder().file("a big one", in).build(out);
+                new ZipWriter().file("a big one", in).build(out);
             }
         }
 

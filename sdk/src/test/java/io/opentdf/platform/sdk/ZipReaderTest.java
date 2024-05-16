@@ -101,7 +101,7 @@ public class ZipReaderTest {
                     return new Object[] {name, fileContent};
                 }).collect(Collectors.toList());
 
-        ZipWriter.Builder writer = new ZipWriter.Builder();
+        ZipWriter writer = new ZipWriter();
         HashMap<String, byte[]> namesToData = new HashMap<>();
         for (var data: testData) {
             var fileName = (String)data[0];
