@@ -1,7 +1,6 @@
 package io.opentdf.platform.sdk;
 
 
-import org.apache.commons.io.output.ByteArrayOutputStream;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.apache.commons.codec.binary.Hex;
@@ -10,6 +9,7 @@ import org.apache.commons.codec.binary.Hex;
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
