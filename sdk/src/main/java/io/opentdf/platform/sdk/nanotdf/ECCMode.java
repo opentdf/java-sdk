@@ -11,6 +11,7 @@ public class ECCMode {
     }
 
     public ECCMode(byte value) {
+        data = new ECCModeStruct();
         int curveMode = value & 0x07; // first 3 bits
         setEllipticCurve(EllipticCurve.values()[curveMode]);
         int useECDSABinding = (value >> 7) & 0x01; // most significant bit
