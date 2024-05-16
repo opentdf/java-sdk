@@ -167,26 +167,61 @@ public class ZipReader {
             int filenameLength = readShort();
             int extrafieldLength = readShort();
 
-            zipChannel.position(zipChannel.position() + filenameLength + extrafieldLength);
-
-            final long startPosition = zipChannel.position();
-
+            final long startPosition = zipChannel.position() + filenameLength + extrafieldLength;
             return new InputStream() {
-                long position = zipChannel.position();
+                long position = startPosition;
                 @Override
                 public int read() throws IOException {
-                    if (position >= startPosition + fileSize) {
+                    if (doneReading()) {
                         return -1;
                     }
-                    if (zipChannel.position() != position) {
-                        zipChannel.position(position);
-                    }
+                    setChannelPosition();
                     var buf = ByteBuffer.allocate(1);
                     while (buf.position() != buf.capacity()) {
-                        zipChannel.read(buf);
+                        if (zipChannel.read(buf) < 0) {
+                            return -1;
+                        }
                     }
                     position += 1;
                     return buf.array()[0] & 0xFF;
+                }
+
+                private boolean doneReading() {
+                    return position >= startPosition + fileSize;
+                }
+
+                private void setChannelPosition() throws IOException {
+                    if (zipChannel.position() != position) {
+                        zipChannel.position(position);
+                    }
+                }
+
+                @Override
+                public int read(byte[] b) throws IOException {
+                    if (doneReading()) {
+                        return -1;
+                    }
+                    setChannelPosition();
+                    var buf = ByteBuffer.wrap(b);
+                    int nread = zipChannel.read(buf);
+                    if (nread > 0) {
+                        position += nread;
+                    }
+                    return nread;
+                }
+
+                @Override
+                public int read(byte[] b, int off, int len) throws IOException {
+                    if (doneReading()) {
+                        return -1;
+                    }
+                    setChannelPosition();
+                    var buf = ByteBuffer.wrap(b, off, len);
+                    int nread = zipChannel.read(buf);
+                    if (nread > 0) {
+                        position += nread;
+                    }
+                    return nread;
                 }
             };
         }

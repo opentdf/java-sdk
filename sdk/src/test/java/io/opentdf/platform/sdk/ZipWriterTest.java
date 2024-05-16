@@ -107,20 +107,44 @@ public class ZipWriterTest {
                 .withFailMessage("extracted file was of the wrong length")
                 .isEqualTo(testFile.length());
 
+
         var buf = new byte[2048];
         var unzippedCRC = new CRC32();
         try (var inputStream = new FileInputStream(unzippedData)) {
             var read = inputStream.read(buf);
             unzippedCRC.update(buf, 0, read);
         }
+        unzippedData.delete();
+
         var testFileCRC = new CRC32();
         try (var inputStream = new FileInputStream(testFile)) {
             var read = inputStream.read(buf);
             testFileCRC.update(buf, 0, read);
         }
+        testFile.delete();
 
         assertThat(unzippedCRC.getValue())
                 .withFailMessage("the extracted file's CRC differs from the CRC of the test data")
+                .isEqualTo(testFileCRC.getValue());
+
+        var ourUnzippedData = File.createTempFile("big-file-we-unzipped", "");
+        ourUnzippedData.deleteOnExit();
+        try (var unzippedStream = new FileOutputStream(ourUnzippedData)) {
+            try (var chan = FileChannel.open(zipFile.toPath(), StandardOpenOption.READ)) {
+                ZipReader reader = new ZipReader(chan);
+                assertThat(reader.getEntries().size()).isEqualTo(1);
+                reader.getEntries().get(0).getData().transferTo(unzippedStream);
+            }
+        }
+
+        var ourTestFileCRC = new CRC32();
+        try (var inputStream = new FileInputStream(ourUnzippedData)) {
+            var read = inputStream.read(buf);
+            ourTestFileCRC.update(buf, 0, read);
+        }
+
+        assertThat(ourTestFileCRC.getValue())
+                .withFailMessage("the file we extracted differs from the CRC of the test data")
                 .isEqualTo(testFileCRC.getValue());
     }
 
