@@ -3,15 +3,9 @@ package io.opentdf.platform.sdk;
 import com.nimbusds.jose.jwk.KeyUse;
 import org.junit.jupiter.api.Test;
 
-import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.NoSuchPaddingException;
 import java.nio.charset.StandardCharsets;
-import java.security.InvalidKeyException;
 import java.security.KeyFactory;
-import java.security.NoSuchAlgorithmException;
-import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Base64;
@@ -21,18 +15,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class RSAKeyPairTest {
     @Test
-    public void testEncryptingAndDecrypting() {
+    public void testEncryptingAndDecrypting() throws Exception {
         var keypair = new RSAKeyPair();
 
         var inData = "this is a secret message".getBytes(StandardCharsets.UTF_8);
-        var encrypted = keypair.encrypt(inData);
-        var decrypted = keypair.decrypt(encrypted);
+        var encrypted = keypair.getAsymEncryption().encrypt(inData);
+        var decrypted = keypair.getAsymDecryption().decrypt(encrypted);
 
         assertThat(decrypted).isEqualTo(inData);
     }
 
     @Test
-    public void testGeneratingPEM() throws NoSuchAlgorithmException, InvalidKeySpecException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
+    public void testGeneratingPEM() throws Exception {
         var keypair = new RSAKeyPair();
         var pem = keypair.publicKeyPEM();
         var pemLines = pem.split("([\\r\\n])+");
@@ -49,7 +43,7 @@ public class RSAKeyPairTest {
         cipher.init(Cipher.ENCRYPT_MODE, publicKey);
         var plaintext = "more secret stuff".getBytes(StandardCharsets.UTF_8);
         var encrypted = cipher.doFinal(plaintext);
-        var decrypted = keypair.decrypt(encrypted);
+        var decrypted = keypair.getAsymDecryption().decrypt(encrypted);
 
         assertThat(decrypted).isEqualTo(plaintext);
     }

@@ -21,7 +21,7 @@ public class SDK {
 
     public interface KAS {
         String getPublicKey(URI uri);
-        byte[] unwrap(URI uri, String policy);
+        byte[] unwrap(URI uri, PolicyObject policyObject);
     }
 
     // TODO: add KAS

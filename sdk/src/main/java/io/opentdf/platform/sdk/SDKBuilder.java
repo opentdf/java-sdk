@@ -62,7 +62,7 @@ public class SDKBuilder {
     // this is not exposed publicly so that it can be tested
     SDK.Services buildServices() {
         // we don't add the auth listener to this channel since it is only used to call the
-        //    well known endpoint
+        //    well known endpoint, which isn't behind any auth
         ManagedChannel bootstrapChannel = null;
         GetWellKnownConfigurationResponse config;
         try {
@@ -86,7 +86,6 @@ public class SDKBuilder {
                     .getConfiguration()
                     .getFieldsOrThrow(PLATFORM_ISSUER)
                     .getStringValue();
-
         } catch (Exception e) {
             throw new SDKException("Error getting the issuer from the platform", e);
         }

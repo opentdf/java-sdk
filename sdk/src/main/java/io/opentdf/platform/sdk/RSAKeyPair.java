@@ -56,35 +56,11 @@ public class RSAKeyPair {
         this.rsaPublicKey = (RSAPublicKey) keypair.getPublic();
     }
 
-    /**
-     * <p>encrypt.</p>
-     *
-     * @param data the data to encrypt
-     * @return the encrypted data
-     */
-    public byte[] encrypt(byte[] data) {
-        try {
-            Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORM);
-            cipher.init(Cipher.ENCRYPT_MODE, rsaPublicKey);
-            return cipher.doFinal(data);
-        } catch (NoSuchPaddingException | NoSuchAlgorithmException | IllegalBlockSizeException | BadPaddingException | InvalidKeyException e) {
-            throw new SDKException("error performing encryption", e);
-        }
+    public AsymDecryption getAsymDecryption() {
+        return new AsymDecryption(this.rsaPrivateKey);
     }
 
-    /**
-     * <p>decrypt.</p>
-     *
-     * @param data the data to decrypt
-     * @return the decrypted data
-     */
-    public byte[] decrypt(byte[] data) {
-        try {
-        Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORM);
-        cipher.init(Cipher.DECRYPT_MODE, rsaPrivateKey);
-        return cipher.doFinal(data);
-        } catch (NoSuchPaddingException | NoSuchAlgorithmException | IllegalBlockSizeException | BadPaddingException | InvalidKeyException e) {
-            throw new SDKException("error performing decryption", e);
-        }
+    public AsymEncryption getAsymEncryption() {
+        return new AsymEncryption(this.rsaPublicKey);
     }
 }

@@ -29,6 +29,13 @@ public class AsymDecryption {
         this.privateKey = kf.generatePrivate(spec);
     }
 
+    public AsymDecryption(PrivateKey privateKey) {
+        if (!"RSA".equals(privateKey.getAlgorithm())) {
+            throw new IllegalArgumentException("Private key with invalid algorithm provided: " + privateKey.getAlgorithm());
+        }
+        this.privateKey = privateKey;
+    }
+
     /**
      * <p>decrypt.</p>
      *

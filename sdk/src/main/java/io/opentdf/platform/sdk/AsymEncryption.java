@@ -28,6 +28,13 @@ public class AsymEncryption {
         this.publicKey = kf.generatePublic(spec);
     }
 
+    public AsymEncryption(PublicKey publicKey) {
+        if (!"RSA".equals(publicKey.getAlgorithm())) {
+            throw new IllegalArgumentException("public key with invalid algorithm specified: " + publicKey.getAlgorithm());
+        }
+        this.publicKey = publicKey;
+    }
+
     /**
      * <p>encrypt.</p>
      *
@@ -36,7 +43,7 @@ public class AsymEncryption {
      */
     public byte[] encrypt(byte[] data) throws Exception {
         if (this.publicKey == null) {
-            throw new Exception("Failed to encrypt, public key is empty");
+            throw new IllegalArgumentException("Failed to encrypt, public key is empty");
         }
 
         Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORM);
