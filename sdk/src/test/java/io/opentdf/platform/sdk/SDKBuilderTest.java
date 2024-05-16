@@ -11,6 +11,9 @@ import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.stub.StreamObserver;
+import io.opentdf.platform.policy.subjectmapping.MatchSubjectMappingsRequest;
+import io.opentdf.platform.policy.subjectmapping.MatchSubjectMappingsResponse;
+import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRequest;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceGrpc;
@@ -22,6 +25,7 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -65,6 +69,14 @@ public class SDKBuilderTest {
                 }
             };
 
+            SubjectMappingServiceGrpc.SubjectMappingServiceImplBase subjectMappingServiceImplBase = new SubjectMappingServiceGrpc.SubjectMappingServiceImplBase() {
+                @Override
+                public void matchSubjectMappings(MatchSubjectMappingsRequest request, StreamObserver<MatchSubjectMappingsResponse> responseObserver) {
+                    responseObserver.onNext(MatchSubjectMappingsResponse.getDefaultInstance());
+                    responseObserver.onCompleted();
+                }
+            };
+
             AtomicReference<String> authHeaderFromRequest = new AtomicReference<>(null);
             AtomicReference<String> dpopHeaderFromRequest = new AtomicReference<>(null);
 
@@ -79,6 +91,7 @@ public class SDKBuilderTest {
                     .forPort(randomPort)
                     .directExecutor()
                     .addService(wellKnownService)
+                    .addService(subjectMappingServiceImplBase)
                     .intercept(new ServerInterceptor() {
                         @Override
                         public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
@@ -90,24 +103,22 @@ public class SDKBuilderTest {
                     .build()
                     .start();
 
-            ManagedChannel channel = SDKBuilder
+            SDK.Services services = SDKBuilder
                     .newBuilder()
                     .clientSecret("client-id", "client-secret")
                     .platformEndpoint("localhost:" + wellknownServer.getPort())
                     .useInsecurePlaintextConnection(true)
-                    .buildChannel();
+                    .buildServices();
 
-            assertThat(channel).isNotNull();
-            assertThat(channel.getState(false)).isEqualTo(ConnectivityState.IDLE);
-
-            var wellKnownStub = WellKnownServiceGrpc.newBlockingStub(channel);
+            assertThat(services).isNotNull();
 
             httpServer.enqueue(new MockResponse()
                     .setBody("{\"access_token\": \"hereisthetoken\", \"token_type\": \"Bearer\"}")
                     .setHeader("Content-Type", "application/json"));
 
-            var ignored = wellKnownStub.getWellKnownConfiguration(GetWellKnownConfigurationRequest.getDefaultInstance());
-            channel.shutdownNow();
+            var ignored = services.subjectMappings()
+                    .matchSubjectMappings(MatchSubjectMappingsRequest.getDefaultInstance())
+                    .get();
 
             // we've now made two requests. one to get the bootstrapping info and one
             // call that should activate the token fetching logic
@@ -130,6 +141,8 @@ public class SDKBuilderTest {
             var body = new String(accessTokenRequest.getBody().readByteArray(), StandardCharsets.UTF_8);
             assertThat(body).contains("grant_type=client_credentials");
 
+        } catch (ExecutionException e) {
+            throw new RuntimeException(e);
         } finally {
             if (wellknownServer != null) {
                 wellknownServer.shutdownNow();
