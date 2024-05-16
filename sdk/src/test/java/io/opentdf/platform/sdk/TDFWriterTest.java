@@ -61,7 +61,6 @@ public class TDFWriterTest {
         String payload = "Hello, world!";
         FileOutputStream fileOutStream = new FileOutputStream("sample.tdf");
         TDFWriter writer = new TDFWriter(fileOutStream);
-        writer.setPayloadSize(payload.length());
         writer.appendPayload(payload.getBytes());
         writer.appendManifest(kManifestJsonFromTDF);
         writer.finish();

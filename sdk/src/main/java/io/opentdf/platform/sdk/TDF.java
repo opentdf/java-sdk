@@ -322,9 +322,7 @@ public class TDF {
         }
 
         long encryptedSegmentSize = segmentSize + kGcmIvSize + kAesBlockSize;
-        long payloadSize = inputSize + (totalSegments * (kGcmIvSize + kAesBlockSize));
         TDFWriter tdfWriter = new TDFWriter(outputStream);
-        tdfWriter.setPayloadSize(payloadSize);
 
         long readPos = 0;
         StringBuilder aggregateHash = new StringBuilder();
