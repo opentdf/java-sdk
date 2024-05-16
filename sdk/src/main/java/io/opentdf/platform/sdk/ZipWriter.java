@@ -2,7 +2,6 @@ package io.opentdf.platform.sdk;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -38,21 +37,21 @@ public class ZipWriter {
             final byte[] data;
         }
 
-        private static class FileStream {
-            public FileStream(String name, InputStream data) {
+        private static class InputStream {
+            public InputStream(String name, java.io.InputStream data) {
                 this.name = name;
                 this.data = data;
             }
 
             final String name;
-            private final InputStream data;
+            private final java.io.InputStream data;
         }
 
         private final ArrayList<FileBytes> byteFiles = new ArrayList<>();
-        private final ArrayList<FileStream> streamFiles = new ArrayList<>();
+        private final ArrayList<InputStream> streamFiles = new ArrayList<>();
 
-        public Builder file(String name, InputStream data) {
-            streamFiles.add(new FileStream(name, data));
+        public Builder file(String name, java.io.InputStream data) {
+            streamFiles.add(new InputStream(name, data));
             return this;
         }
 
@@ -120,7 +119,7 @@ public class ZipWriter {
             }
         }
 
-        private FileInfo writeStream(String name, InputStream data, CountingOutputStream out) throws IOException {
+        private FileInfo writeStream(String name, java.io.InputStream data, CountingOutputStream out) throws IOException {
             var startPosition = out.position;
             long fileTime, fileDate;
             fileTime = fileDate = getTimeDateUnMSDosFormat();
@@ -224,9 +223,9 @@ public class ZipWriter {
 
         private void writeEndOfCentralDirectory(boolean hasZip64Entry, long numEntries, long startOfCentralDirectory, long sizeOfCentralDirectory, CountingOutputStream out) throws IOException {
             var isZip64 = hasZip64Entry
-                    || (numEntries & 0xFF) != 0
-                    || (startOfCentralDirectory & 0xFFFF) != 0
-                    || (sizeOfCentralDirectory & 0xFFFF) != 0;
+                    || (numEntries & ~0xFF) != 0
+                    || (startOfCentralDirectory & ~0xFFFF) != 0
+                    || (sizeOfCentralDirectory & ~0xFFFF) != 0;
 
             if (isZip64) {
                 var endPosition = out.position;

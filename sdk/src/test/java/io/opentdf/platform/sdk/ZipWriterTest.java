@@ -49,6 +49,26 @@ public class ZipWriterTest {
         assertThat(entry3).isNotNull();
         assertThat(getDataStream(z, entry3).toString(StandardCharsets.UTF_8)).isEqualTo("this is a long long stream");
     }
+    @Test
+    public void createsNonZip64Archive() throws IOException {
+        // when we create things using only byte arrays we create an archive that is non zip64
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        new ZipWriter.Builder()
+                .file("file1∞®ƒ両†.txt", "Hello world!".getBytes(StandardCharsets.UTF_8))
+                .file("file2.txt", "Here are some more things to look at".getBytes(StandardCharsets.UTF_8))
+                .build(out);
+
+        SeekableByteChannel chan = new SeekableInMemoryByteChannel(out.toByteArray());
+        ZipFile z = new ZipFile.Builder().setSeekableByteChannel(chan).get();
+        var entry1 = z.getEntry("file1∞®ƒ両†.txt");
+        assertThat(entry1).isNotNull();
+        var entry1Data = getDataStream(z, entry1);
+        assertThat(entry1Data.toString(StandardCharsets.UTF_8)).isEqualTo("Hello world!");
+
+        var entry2 = z.getEntry("file2.txt");
+        assertThat(entry1).isNotNull();
+        assertThat(getDataStream(z, entry2).toString(StandardCharsets.UTF_8)).isEqualTo("Here are some more things to look at");
+    }
 
     @Test
     @Disabled("this takes a long time and shouldn't run on build machines")
