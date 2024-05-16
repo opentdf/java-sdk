@@ -1,5 +1,6 @@
 package io.opentdf.platform.sdk;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -27,8 +28,6 @@ public class ZipWriter {
     private static final int MONTH_SHIFT = 5;
 
     public static class Builder {
-        private boolean isZip64;
-
         private static class FileBytes {
             public FileBytes(String name, byte[] data) {
                 this.name = name;
@@ -82,8 +81,13 @@ public class ZipWriter {
             }
 
             final var sizeOfCentralDirectory = out.position - startOfCentralDirectory;
-            final var isZip64 = !streamFiles.isEmpty();
-            writeEndOfCentralDirectory(isZip64, (short)fileInfos.size(), (int)startOfCentralDirectory, (int)sizeOfCentralDirectory, out);
+            writeEndOfCentralDirectory(!streamFiles.isEmpty(), fileInfos.size(), startOfCentralDirectory, sizeOfCentralDirectory, out);
+        }
+
+        public byte[] build() throws IOException {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            build(out);
+            return out.toByteArray();
         }
 
         private static void writeCentralDirectoryHeader(FileInfo fileInfo, OutputStream out) throws IOException {
@@ -140,6 +144,18 @@ public class ZipWriter {
                 public void write(int b) throws IOException {
                     crc.update(b);
                     out.write(b);
+                }
+
+                @Override
+                public void write(byte[] b) throws IOException {
+                    crc.update(b);
+                    out.write(b);
+                }
+
+                @Override
+                public void write(byte[] b, int off, int len) throws IOException {
+                    crc.update(b, off, len);
+                    out.write(b, off, len);
                 }
             };
 
@@ -200,13 +216,18 @@ public class ZipWriter {
             fileInfo.filename = name;
             fileInfo.fileTime = (short)fileTime;
             fileInfo.fileDate = (short)fileDate;
-            fileInfo.isZip64 = isZip64;
+            fileInfo.isZip64 = false;
 
             return fileInfo;
         }
 
 
-        private void writeEndOfCentralDirectory(boolean isZip64, short numEntries, int startOfCentralDirectory, int sizeOfCentralDirectory, CountingOutputStream out) throws IOException {
+        private void writeEndOfCentralDirectory(boolean hasZip64Entry, long numEntries, long startOfCentralDirectory, long sizeOfCentralDirectory, CountingOutputStream out) throws IOException {
+            var isZip64 = hasZip64Entry
+                    || (numEntries & 0xFF) != 0
+                    || (startOfCentralDirectory & 0xFFFF) != 0
+                    || (sizeOfCentralDirectory & 0xFFFF) != 0;
+
             if (isZip64) {
                 var endPosition = out.position;
                 writeZip64EndOfCentralDirectory(numEntries, startOfCentralDirectory, sizeOfCentralDirectory, out);
@@ -214,15 +235,15 @@ public class ZipWriter {
             }
 
             EndOfCDRecord endOfCDRecord = new EndOfCDRecord();
-            endOfCDRecord.numberOfCDRecordEntries = numEntries;
-            endOfCDRecord.totalCDRecordEntries = numEntries;
-            endOfCDRecord.centralDirectoryOffset = isZip64 ? ZIP_64_MAGIC_VAL : startOfCentralDirectory;
-            endOfCDRecord.sizeOfCentralDirectory = sizeOfCentralDirectory;
+            endOfCDRecord.numberOfCDRecordEntries = isZip64 ? ZIP_64_MAGIC_VAL : (short)numEntries;
+            endOfCDRecord.totalCDRecordEntries = isZip64 ? ZIP_64_MAGIC_VAL : (short)numEntries;
+            endOfCDRecord.centralDirectoryOffset = isZip64 ? ZIP_64_MAGIC_VAL : (int)startOfCentralDirectory;
+            endOfCDRecord.sizeOfCentralDirectory = isZip64 ? ZIP_64_MAGIC_VAL : (int)sizeOfCentralDirectory;
 
             endOfCDRecord.write(out);
         }
 
-        private void writeZip64EndOfCentralDirectory(short numEntries, int startOfCentralDirectory, int sizeOfCentralDirectory, OutputStream out) throws IOException {
+        private void writeZip64EndOfCentralDirectory(long numEntries, long startOfCentralDirectory, long sizeOfCentralDirectory, OutputStream out) throws IOException {
             Zip64EndOfCDRecord zip64EndOfCDRecord = new Zip64EndOfCDRecord();
             zip64EndOfCDRecord.numberOfCDRecordEntries = numEntries;
             zip64EndOfCDRecord.totalCDRecordEntries = numEntries;
@@ -254,6 +275,18 @@ public class ZipWriter {
         public void write(int b) throws IOException {
             inner.write(b);
             position += 1;
+        }
+
+        @Override
+        public void write(byte[] b) throws IOException {
+            inner.write(b);
+            position += b.length;
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            inner.write(b, off, len);
+            position += len;
         }
     }
 
