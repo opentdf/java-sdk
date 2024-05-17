@@ -1,6 +1,5 @@
 package io.opentdf.platform.sdk;
 
-import grpc.gateway.protoc_gen_openapiv2.options.SecurityScheme;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,7 +59,7 @@ public class ZipReader {
         }
     }
 
-    private static final int END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50;
+    private static final int ZIP_64_END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06064b50;
     private static final int ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIGNATURE = 0x07064b50;
     private static final int CENTRAL_FILE_HEADER_SIGNATURE =  0x02014b50;
 
@@ -74,7 +73,7 @@ public class ZipReader {
         while (eoCDRStart >= 0) {
             zipChannel.position(eoCDRStart);
             int signature = readInt();
-            if (signature == END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
+            if (signature == ZIP_64_END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
                 if (logger.isDebugEnabled()) {
                     logger.debug("Found end of central directory signature at {}", zipChannel.position() - Integer.BYTES);
                 }
@@ -118,7 +117,7 @@ public class ZipReader {
 
         zipChannel.position(offsetToEndOfCentralDirectory);
         int sig = readInt();
-        if (sig != END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
+        if (sig != ZIP_64_END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
             throw new RuntimeException("Invalid");
         }
         long sizeOfEndOfCentralDirectoryRecord = readLong();
