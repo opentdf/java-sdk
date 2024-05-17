@@ -1,6 +1,5 @@
-package io.opentdf.platform.sdk;
+package io.opentdf.platform.sdk.nanotdf;
 
-import io.opentdf.platform.sdk.nanotdf.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -45,7 +44,7 @@ class HeaderTest {
 
     @Test
     void settingAndGettingPolicyInfo() {
-        PolicyInfo info = new PolicyInfo(new byte[]{1, 2, 3}, new ECCMode((byte) 1));
+        PolicyInfo info = new PolicyInfo(new byte[]{1, 2, 3}, new ECCMode((byte) 0));
         header.setPolicyInfo(info);
         assertEquals(info, header.getPolicyInfo());
     }
