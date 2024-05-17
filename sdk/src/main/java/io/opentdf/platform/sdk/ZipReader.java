@@ -60,6 +60,7 @@ public class ZipReader {
     }
 
     private static final int ZIP_64_END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06064b50;
+    private static final int END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50;
     private static final int ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIGNATURE = 0x07064b50;
     private static final int CENTRAL_FILE_HEADER_SIGNATURE =  0x02014b50;
 
@@ -73,7 +74,7 @@ public class ZipReader {
         while (eoCDRStart >= 0) {
             zipChannel.position(eoCDRStart);
             int signature = readInt();
-            if (signature == ZIP_64_END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
+            if (signature == END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
                 if (logger.isDebugEnabled()) {
                     logger.debug("Found end of central directory signature at {}", zipChannel.position() - Integer.BYTES);
                 }
