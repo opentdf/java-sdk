@@ -118,7 +118,7 @@ public class ZipReader {
 
         zipChannel.position(offsetToEndOfCentralDirectory);
         int sig = readInt();
-        if (sig != 0x06064b50) {
+        if (sig != END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
             throw new RuntimeException("Invalid");
         }
         long sizeOfEndOfCentralDirectoryRecord = readLong();
@@ -192,8 +192,9 @@ public class ZipReader {
                 }
 
                 private void setChannelPosition() throws IOException {
-                    if (zipChannel.position() != startPosition + offset) {
-                        zipChannel.position(startPosition + offset);
+                    var nextPosition = startPosition + offset;
+                    if (zipChannel.position() != nextPosition) {
+                        zipChannel.position(nextPosition);
                     }
                 }
 
@@ -202,10 +203,10 @@ public class ZipReader {
                     if (doneReading()) {
                         return -1;
                     }
-                    len = (int)Math.min(len, fileSize - offset); // cast is always valid because len is an int
                     setChannelPosition();
-                    var buf = ByteBuffer.wrap(b, off, len);
-                    int nread = zipChannel.read(buf);
+                    var lenToRead = (int)Math.min(len, fileSize - offset); // cast is always valid because len is an int
+                    var buf = ByteBuffer.wrap(b, off, lenToRead);
+                    var nread = zipChannel.read(buf);
                     if (nread > 0) {
                         offset += nread;
                     }
