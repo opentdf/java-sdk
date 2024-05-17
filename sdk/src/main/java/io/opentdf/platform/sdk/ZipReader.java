@@ -168,46 +168,33 @@ public class ZipReader {
             int extrafieldLength = readShort();
 
             final long startPosition = zipChannel.position() + filenameLength + extrafieldLength;
+            final long endPosition = startPosition + fileSize;
+            final ByteBuffer buf = ByteBuffer.allocate(1);
             return new InputStream() {
-                long position = startPosition;
+                long offset = 0;
                 @Override
                 public int read() throws IOException {
                     if (doneReading()) {
                         return -1;
                     }
                     setChannelPosition();
-                    var buf = ByteBuffer.allocate(1);
                     while (buf.position() != buf.capacity()) {
                         if (zipChannel.read(buf) < 0) {
                             return -1;
                         }
                     }
-                    position += 1;
+                    offset += 1;
                     return buf.array()[0] & 0xFF;
                 }
 
                 private boolean doneReading() {
-                    return position >= startPosition + fileSize;
+                    return offset >= fileSize;
                 }
 
                 private void setChannelPosition() throws IOException {
-                    if (zipChannel.position() != position) {
-                        zipChannel.position(position);
+                    if (zipChannel.position() != startPosition + offset) {
+                        zipChannel.position(startPosition + offset);
                     }
-                }
-
-                @Override
-                public int read(byte[] b) throws IOException {
-                    if (doneReading()) {
-                        return -1;
-                    }
-                    setChannelPosition();
-                    var buf = ByteBuffer.wrap(b);
-                    int nread = zipChannel.read(buf);
-                    if (nread > 0) {
-                        position += nread;
-                    }
-                    return nread;
                 }
 
                 @Override
@@ -215,11 +202,12 @@ public class ZipReader {
                     if (doneReading()) {
                         return -1;
                     }
+                    len = (int)Math.min(len, fileSize - offset); // cast is always valid because len is an int
                     setChannelPosition();
                     var buf = ByteBuffer.wrap(b, off, len);
                     int nread = zipChannel.read(buf);
                     if (nread > 0) {
-                        position += nread;
+                        offset += nread;
                     }
                     return nread;
                 }
