@@ -103,22 +103,22 @@ public class TDF {
     }
 
     public static class TDFObject {
+        private final SDK sdk;
         private Manifest manifest;
         private long size;
         private AesGcm aesGcm;
         private final byte[] payloadKey = new byte[GCM_KEY_SIZE];
 
-        public TDFObject() {
+        protected TDFObject(SDK sdk) {
             this.manifest = new Manifest();
             this.manifest.encryptionInformation = new Manifest.EncryptionInformation();
             this.manifest.encryptionInformation.integrityInformation = new Manifest.IntegrityInformation();
             this.manifest.encryptionInformation.method = new Manifest.Method();
             this.size = 0;
+            this.sdk = sdk;
         }
 
         PolicyObject createPolicyObject(List<String> attributes) {
-            UUID uuid = UUID.randomUUID();
-
             PolicyObject policyObject = new PolicyObject();
             policyObject.body = new PolicyObject.Body();
             policyObject.uuid = UUID.randomUUID().toString();
@@ -144,8 +144,10 @@ public class TDF {
             List<byte[]> symKeys = new ArrayList<>();
 
             for (Config.KASInfo kasInfo: tdfConfig.kasInfoList) {
-                if (kasInfo.PublicKey.isEmpty()) {
-                    throw new KasPublicKeyMissing("Kas public key is missing in kas information list");
+                if (kasInfo.PublicKey == null || kasInfo.PublicKey.isEmpty()) {
+                    kasInfo.PublicKey = sdk.services()
+                            .kas()
+                            .getPublicKey(kasInfo);
                 }
 
                 // Symmetric key

@@ -11,6 +11,9 @@ import com.nimbusds.oauth2.sdk.dpop.DPoPProofFactory;
 import com.nimbusds.oauth2.sdk.token.AccessToken;
 import com.nimbusds.oauth2.sdk.token.BearerAccessToken;
 import io.grpc.Channel;
+import io.grpc.ManagedChannelBuilder;
+import io.grpc.StatusException;
+import io.grpc.StatusRuntimeException;
 import io.opentdf.platform.kas.AccessServiceGrpc;
 import io.opentdf.platform.kas.PublicKeyRequest;
 import io.opentdf.platform.kas.RewrapRequest;
@@ -24,33 +27,38 @@ import java.util.HashMap;
 import java.util.function.Function;
 
 public class KASClient implements SDK.KAS {
-    private final Function<String, Channel> channelMaker;
+    // this exists to allow some customization per-kas
+    private final Function<String, ManagedChannelBuilder<?>> channelMaker;
     private final RSAKeyPair signingKeypair;
     private final RSAKeyPair encryptionKeypair;
 
-    private final HashMap<URI, Channel> channels = new HashMap<>();
+    private final HashMap<String, Channel> channels = new HashMap<>();
 
-    public KASClient(Function<String, Channel> channelMaker, RSAKeyPair signingKeypair) {
+    public KASClient(Function<String, ManagedChannelBuilder<?>> channelMaker, RSAKeyPair signingKeypair) {
         this.channelMaker = channelMaker;
         this.encryptionKeypair = new RSAKeyPair();
         this.signingKeypair = signingKeypair;
     }
 
-    private synchronized Channel getChannel(URI uri) {
+    private synchronized Channel getChannel(String uri) {
         if (!channels.containsKey(uri)) {
-            channels.put(uri, channelMaker.apply(uri.toString()));
+            channels.put(uri, channelMaker.apply(uri).build());
         }
 
         return channels.get(uri);
     }
 
     @Override
-    public String getPublicKey(URI uri) {
-        Channel channel = getChannel(uri);
-        return AccessServiceGrpc
-                .newBlockingStub(channel)
-                .publicKey(PublicKeyRequest.getDefaultInstance())
-                .getPublicKey();
+    public String getPublicKey(Config.KASInfo kasInfo) {
+        Channel channel = getChannel(kasInfo.URL);
+        try {
+            return AccessServiceGrpc
+                    .newBlockingStub(channel)
+                    .publicKey(PublicKeyRequest.getDefaultInstance())
+                    .getPublicKey();
+        } catch (StatusRuntimeException e) {
+
+        }
     }
 
     private static class RewrapRequestBody {
@@ -60,8 +68,8 @@ public class KASClient implements SDK.KAS {
 
     final private Gson gson = new Gson();
     @Override
-    public byte[] unwrap(URI uri, PolicyObject policy) {
-        Channel channel = channelMaker.apply(uri.toString());
+    public byte[] unwrap(Config.KASInfo kasInfo, PolicyObject policy) {
+        Channel channel = channelMaker.apply(kasInfo.URL).build();
         RewrapRequestBody body = new RewrapRequestBody();
         body.policy = gson.toJson(policy);
         body.clientPublicKey = encryptionKeypair.publicKeyPEM();

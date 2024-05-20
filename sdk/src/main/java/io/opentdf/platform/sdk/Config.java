@@ -1,9 +1,12 @@
 package io.opentdf.platform.sdk;
 
+import io.grpc.ManagedChannelBuilder;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 public class Config {
 
@@ -20,8 +23,6 @@ public class Config {
         HS256,
         GMAC
     }
-
-    public static final int K_HTTP_OK = 200;
 
     public static class KASInfo {
         public String URL;

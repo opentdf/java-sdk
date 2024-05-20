@@ -113,12 +113,12 @@ public class SDKBuilder {
                 providerMetadata.getTokenEndpointURI());
 
         GRPCAuthInterceptor interceptor = new GRPCAuthInterceptor(tokenSource);
-        Function<String, Channel> channelMaker = (String target) -> getManagedChannelBuilder(target)
-                .intercept(interceptor)
-                .build();
+        Function<String, ManagedChannelBuilder<?>> channelMaker = (String target) -> getManagedChannelBuilder(target)
+                .intercept(interceptor);
 
         var kasClient = new KASClient(channelMaker, dpopKeyPair);
-        return SDK.Services.newServices(channelMaker.apply(platformEndpoint), kasClient);
+        var platformChannel = channelMaker.apply(platformEndpoint).build();
+        return SDK.Services.newServices(platformChannel, kasClient);
     }
 
     public SDK build() {

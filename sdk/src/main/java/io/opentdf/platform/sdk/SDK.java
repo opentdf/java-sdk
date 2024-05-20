@@ -20,11 +20,10 @@ public class SDK {
     private final Services services;
 
     public interface KAS {
-        String getPublicKey(URI uri);
-        byte[] unwrap(URI uri, PolicyObject policyObject);
+        String getPublicKey(Config.KASInfo kasInfo);
+        byte[] unwrap(Config.KASInfo kasInfo, PolicyObject policyObject);
     }
 
-    // TODO: add KAS
     public interface Services {
         AttributesServiceFutureStub attributes();
         NamespaceServiceFutureStub namespaces();
@@ -69,5 +68,9 @@ public class SDK {
 
     public SDK(Services services) {
         this.services = services;
+    }
+
+    protected Services services() {
+        return services;
     }
 }
