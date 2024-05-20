@@ -69,7 +69,7 @@ public class ZipReader {
     private static final int ZIP64_EXTID= 0x0001;
 
     CentralDirectoryRecord readEndOfCentralDirectory() throws IOException {
-        long eoCDRStart = zipChannel.size() - 22; // 22 is the minimum size of the EOCDR
+        long eoCDRStart = zipChannel.size() - END_OF_CENTRAL_DIRECTORY_SIZE; // 22 is the minimum size of the EOCDR
 
         while (eoCDRStart >= 0) {
             zipChannel.position(eoCDRStart);
