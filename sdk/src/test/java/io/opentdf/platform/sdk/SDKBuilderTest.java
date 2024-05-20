@@ -39,7 +39,7 @@ public class SDKBuilderTest {
 
     @Test
     void testCreatingSDKServices() throws IOException, InterruptedException {
-        Server grpcServicesServer = null;
+        Server platformServicesServer = null;
         Server kasServer = null;
         // we use the HTTP server for two things:
         // * it returns the OIDC configuration we use at bootstrapping time
@@ -86,7 +86,7 @@ public class SDKBuilderTest {
             // we use the server in two different ways. the first time we use it to actually return
             // issuer for bootstrapping. the second time we use the interception functionality in order
             // to make sure that we are including a DPoP proof and an auth header
-            grpcServicesServer = ServerBuilder
+            platformServicesServer = ServerBuilder
                     .forPort(getRandomPort())
                     .directExecutor()
                     .addService(wellKnownService)
@@ -127,7 +127,7 @@ public class SDKBuilderTest {
             SDK.Services services = SDKBuilder
                     .newBuilder()
                     .clientSecret("client-id", "client-secret")
-                    .platformEndpoint("localhost:" + grpcServicesServer.getPort())
+                    .platformEndpoint("localhost:" + platformServicesServer.getPort())
                     .useInsecurePlaintextConnection(true)
                     .buildServices();
 
@@ -171,8 +171,8 @@ public class SDKBuilderTest {
             assertThat(kasDPoPHeader.get()).isNotNull();
             assertThat(kasAuthHeader.get()).isEqualTo("DPoP hereisthetoken");
         } finally {
-            if (grpcServicesServer != null) {
-                grpcServicesServer.shutdownNow();
+            if (platformServicesServer != null) {
+                platformServicesServer.shutdownNow();
             }
             if (kasServer != null) {
                 kasServer.shutdownNow();
