@@ -14,9 +14,12 @@ import com.nimbusds.openid.connect.sdk.op.OIDCProviderMetadata;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRequest;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceGrpc;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.UUID;
@@ -65,7 +68,7 @@ public class SDKBuilder {
             var stub = WellKnownServiceGrpc.newBlockingStub(bootstrapChannel);
             try {
                 config = stub.getWellKnownConfiguration(GetWellKnownConfigurationRequest.getDefaultInstance());
-            } catch (Exception e) {
+            } catch (StatusRuntimeException e) {
                 Status status = Status.fromThrowable(e);
                 throw new SDKException(String.format("Got grpc status [%s] when getting configuration", status), e);
             }
@@ -82,7 +85,7 @@ public class SDKBuilder {
                     .getFieldsOrThrow(PLATFORM_ISSUER)
                     .getStringValue();
 
-        } catch (Exception e) {
+        } catch (StatusRuntimeException e) {
             throw new SDKException("Error getting the issuer from the platform", e);
         }
 
