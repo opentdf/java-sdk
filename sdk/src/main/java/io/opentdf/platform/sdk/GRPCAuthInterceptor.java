@@ -15,7 +15,6 @@ import com.nimbusds.oauth2.sdk.dpop.DefaultDPoPProofFactory;
 import com.nimbusds.oauth2.sdk.http.HTTPRequest;
 import com.nimbusds.oauth2.sdk.http.HTTPResponse;
 import com.nimbusds.oauth2.sdk.token.AccessToken;
-import com.nimbusds.oauth2.sdk.tokenexchange.TokenExchangeGrant;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -23,6 +22,8 @@ import io.grpc.ClientInterceptor;
 import io.grpc.ForwardingClientCall;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -39,6 +40,9 @@ class GRPCAuthInterceptor implements ClientInterceptor {
     private final ClientAuthentication clientAuth;
     private final RSAKey rsaKey;
     private final URI tokenEndpointURI;
+
+    private static final Logger logger = LoggerFactory.getLogger(GRPCAuthInterceptor.class);
+
 
     /**
      * Constructs a new GRPCAuthInterceptor with the specified client authentication and RSA key.
@@ -101,6 +105,8 @@ class GRPCAuthInterceptor implements ClientInterceptor {
             // If the token is expired or initially null, get a new token
             if (token == null || isTokenExpired()) {
 
+                logger.trace("The current access token is expired or empty, getting a new one");
+
                 // Construct the client credentials grant
                 AuthorizationGrant clientGrant = new ClientCredentialsGrant();
 
@@ -124,9 +130,17 @@ class GRPCAuthInterceptor implements ClientInterceptor {
                     throw new RuntimeException("Token request failed: " + error);
                 }
 
-                this.token = tokenResponse.toSuccessResponse().getTokens().getAccessToken();
-                // DPoPAccessToken dPoPAccessToken = tokens.getDPoPAccessToken();
 
+                var tokens = tokenResponse.toSuccessResponse().getTokens();
+                if (tokens.getDPoPAccessToken() != null) {
+                    logger.trace("retrieved a new DPoP access token");
+                } else if (tokens.getAccessToken() != null) {
+                    logger.trace("retrieved a new access token");
+                } else {
+                    logger.trace("got an access token of unknown type");
+                }
+
+                this.token = tokens.getAccessToken();
 
                 if (token.getLifetime() != 0) {
                     // Need some type of leeway but not sure whats best
