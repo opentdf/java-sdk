@@ -44,14 +44,20 @@ class HeaderTest {
 
     @Test
     void settingAndGettingPolicyInfo() {
-        PolicyInfo info = new PolicyInfo(new byte[]{1, 2, 3}, new ECCMode((byte) 0));
+        byte[] infoBytes = new byte[4]; // Ensure the byte array is large enough to read an integer
+        ECCMode mode = new ECCMode((byte) 0);
+        PolicyInfo info = new PolicyInfo(infoBytes, mode);
         header.setPolicyInfo(info);
         assertEquals(info, header.getPolicyInfo());
     }
 
     @Test
     void settingAndGettingEphemeralKey() {
-        byte[] key = new byte[]{1, 2, 3};
+        ECCMode mode = new ECCMode((byte) 1); // Initialize the ECCMode object
+        header.setECCMode(mode); // Set the ECCMode object
+
+        int keySize = mode.getECCompressedPubKeySize(mode.getEllipticCurveType());
+        byte[] key = new byte[keySize]; // Ensure the key size is correct
         header.setEphemeralKey(key);
         assertArrayEquals(key, header.getEphemeralKey());
     }

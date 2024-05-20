@@ -51,13 +51,14 @@ public class ResourceLocator {
     }
 
     public int getTotalSize() {
-        return 1 + Integer.BYTES + this.body.length;
+        return 1 + 1 + this.body.length;
     }
 
     public int writeIntoBuffer(ByteBuffer buffer) {
-
-        if (buffer.remaining() < getTotalSize()) {
-            throw new RuntimeException("Failed to write resource locator - invalid buffer size.");
+        int totalSize = getTotalSize();
+        if (buffer.remaining() < totalSize) {
+           // throw new RuntimeException("Failed to write resource locator - invalid buffer size.");
+            buffer = ByteBuffer.allocate(totalSize);
         }
 
         int totalBytesWritten = 0;
@@ -67,8 +68,8 @@ public class ResourceLocator {
         totalBytesWritten += 1; // size of byte
 
         // Write the url body length;
-        buffer.putInt(bodyLength);
-        totalBytesWritten += Integer.BYTES;
+        buffer.put((byte)bodyLength);
+        totalBytesWritten += 1;
 
         // Write the url body;
         buffer.put(body);
