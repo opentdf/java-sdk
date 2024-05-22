@@ -25,7 +25,6 @@ public class ZipWriter {
     private static final int BASE_YEAR = 1980;
     private static final int DEFAULT_SECOND_VALUE = 29;
     private static final int MONTH_SHIFT = 5;
-
     private static class FileBytes {
         public FileBytes(String name, byte[] data) {
             this.name = name;
@@ -59,7 +58,14 @@ public class ZipWriter {
         return this;
     }
 
-    public void build(OutputStream sink) throws IOException {
+    /**
+     * Writes the zip file to a stream and returns the number of
+     * bytes written to the stream
+     * @param sink
+     * @return the number of bytes written
+     * @throws IOException
+     */
+    public long build(OutputStream sink) throws IOException {
         var out = new CountingOutputStream(sink);
         ArrayList<FileInfo> fileInfos = new ArrayList<>();
 
@@ -80,6 +86,8 @@ public class ZipWriter {
 
         final var sizeOfCentralDirectory = out.position - startOfCentralDirectory;
         writeEndOfCentralDirectory(!streamFiles.isEmpty(), fileInfos.size(), startOfCentralDirectory, sizeOfCentralDirectory, out);
+
+        return out.position;
     }
 
     public byte[] build() throws IOException {
@@ -218,7 +226,6 @@ public class ZipWriter {
 
         return fileInfo;
     }
-
 
     private void writeEndOfCentralDirectory(boolean hasZip64Entry, long numEntries, long startOfCentralDirectory, long sizeOfCentralDirectory, CountingOutputStream out) throws IOException {
         var isZip64 = hasZip64Entry
