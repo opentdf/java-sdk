@@ -90,6 +90,27 @@ public class SymmetricAndPayloadConfig {
         return (byte) value;
     }
 
+    public int sizeOfAuthTagForCipher(NanoTDFCipher cipherType) {
+        switch (cipherType) {
+            case AES_256_GCM_64_TAG:
+                return 8;
+            case AES_256_GCM_96_TAG:
+                return 12;
+            case AES_256_GCM_104_TAG:
+                return 13;
+            case AES_256_GCM_112_TAG:
+                return 14;
+            case AES_256_GCM_120_TAG:
+                return 15;
+            case AES_256_GCM_128_TAG:
+                return 16;
+            case EAD_AES_256_HMAC_SHA_256:
+                return 32;
+            default:
+                throw new IllegalArgumentException("Unsupported symmetric cipher for signature.");
+        }
+    }
+
     private static class Data {
         int symmetricCipherEnum;
         int signatureECCMode;
