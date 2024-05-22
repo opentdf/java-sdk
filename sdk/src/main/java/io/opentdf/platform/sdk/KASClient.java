@@ -18,13 +18,18 @@ public class KASClient implements SDK.KAS {
 
     @Override
     public String getPublicKey(SDK.KASInfo kasInfo) {
-        return getStub(kasInfo).publicKey(PublicKeyRequest.getDefaultInstance()).getPublicKey();
+        return getStub(kasInfo)
+                .publicKey(PublicKeyRequest.getDefaultInstance())
+                .getPublicKey();
     }
 
     @Override
     public byte[] unwrap(SDK.KASInfo kasInfo, SDK.Policy policy) {
         // this is obviously wrong. we still have to generate a correct request and decrypt the payload
-        return getStub(kasInfo).rewrap(RewrapRequest.getDefaultInstance()).getEntityWrappedKey().toByteArray();
+        return getStub(kasInfo)
+                .rewrap(RewrapRequest.getDefaultInstance())
+                .getEntityWrappedKey()
+                .toByteArray();
     }
 
     private final HashMap<SDK.KASInfo, AccessServiceGrpc.AccessServiceBlockingStub> stubs = new HashMap<>();
