@@ -2,6 +2,7 @@ package io.opentdf.platform.sdk;
 
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.apache.commons.io.output.ByteArrayOutputStream;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -12,8 +13,8 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 public class TDFE2ETest {
 
-    @Test
-    public void testCreatingAndDecryptingTDF() throws Exception {
+    @Test @Disabled("this needs the backend services running to work")
+    public void createAndDecryptTdfIT() throws Exception {
         var sdk = SDKBuilder
                 .newBuilder()
                 .clientSecret("opentdf-sdk", "secret")
