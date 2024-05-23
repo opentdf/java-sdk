@@ -67,7 +67,6 @@ public class KASClient implements SDK.KAS {
         var requestBody = gson.toJson(body);
 
         var claims = new JWTClaimsSet.Builder()
-                // TODO: fix this when we have JSON serialization integrated
                 .claim("requestBody", requestBody)
                 .issueTime(Date.from(Instant.now()))
                 .expirationTime(Date.from(Instant.now().plus(Duration.ofMinutes(1))))
