@@ -167,7 +167,12 @@ public class SDKBuilderTest {
             var keyAccess = new Manifest.KeyAccess();
             keyAccess.url = "localhost:" + kasServer.getPort();
 
-            services.kas().unwrap(keyAccess, "");
+            try {
+                services.kas().unwrap(keyAccess, "");
+            } catch (Exception ignoredException) {
+                // not going to bother making a real request with real crypto, just make sure that
+                // we have the right headers
+            }
 
             assertThat(kasDPoPHeader.get()).isNotNull();
             assertThat(kasAuthHeader.get()).isEqualTo("DPoP hereisthetoken");
