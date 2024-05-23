@@ -39,7 +39,7 @@ public class TDFTest {
     private static ArrayList<KeyPair> keypairs = new ArrayList<>();
 
     @BeforeAll
-    static void createKeypairs() throws NoSuchAlgorithmException {
+    static void createKeypairs() {
         for (int i = 0; i < 5; i++) {
             keypairs.add(CryptoUtils.generateRSAKeypair());
         }

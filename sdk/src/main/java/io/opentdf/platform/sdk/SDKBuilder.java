@@ -63,7 +63,7 @@ public class SDKBuilder {
         return this;
     }
 
-    private GRPCAuthInterceptor getGrpcAuthInterceptor() {
+    private GRPCAuthInterceptor getGrpcAuthInterceptor(RSAKey rsaKey) {
         if (platformEndpoint == null) {
             throw new SDKException("cannot build an SDK without specifying the platform endpoint");
         }
@@ -111,9 +111,13 @@ public class SDKBuilder {
             throw new SDKException("Error resolving the OIDC provider metadata", e);
         }
 
-        RSAKey rsaKey;
+        return new GRPCAuthInterceptor(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI());
+    }
+
+    SDK.Services buildServices() {
+        RSAKey dpopKey;
         try {
-            rsaKey = new RSAKeyGenerator(2048)
+            dpopKey = new RSAKeyGenerator(2048)
                     .keyUse(KeyUse.SIGNATURE)
                     .keyID(UUID.randomUUID().toString())
                     .generate();
@@ -121,13 +125,9 @@ public class SDKBuilder {
             throw new SDKException("Error generating DPoP key", e);
         }
 
-        return new GRPCAuthInterceptor(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI());
-    }
-
-    SDK.Services buildServices() {
-        var authInterceptor = getGrpcAuthInterceptor();
+        var authInterceptor = getGrpcAuthInterceptor(dpopKey);
         var channel = getManagedChannelBuilder().intercept(authInterceptor).build();
-        var client = new KASClient(getChannelFactory(authInterceptor));
+        var client = new KASClient(getChannelFactory(authInterceptor), dpopKey);
         return SDK.Services.newServices(channel, client);
     }
 
