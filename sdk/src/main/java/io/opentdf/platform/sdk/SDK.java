@@ -21,7 +21,7 @@ public class SDK {
 
     interface KAS {
         String getPublicKey(Config.KASInfo kasInfo);
-        byte[] unwrap(Config.KASInfo kasInfo, String policy, byte[] wrappedKey);
+        byte[] unwrap(Manifest.KeyAccess keyAccess, String policy);
     }
 
     // TODO: add KAS

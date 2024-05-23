@@ -21,7 +21,7 @@ import java.util.function.Function;
 
 public class KASClient implements SDK.KAS {
 
-    private final Function<Config.KASInfo, Channel> channelFactory;
+    private final Function<String, Channel> channelFactory;
     private final RSASSASigner signer;
 
     private final AsymEncryption encryptor;
@@ -29,7 +29,7 @@ public class KASClient implements SDK.KAS {
 
     private final String publicKeyPEM;
 
-    public KASClient(Function <Config.KASInfo, Channel> channelFactory, RSAKey key) {
+    public KASClient(Function <String, Channel> channelFactory, RSAKey key) {
         this.channelFactory = channelFactory;
         try {
             this.signer = new RSASSASigner(key);
@@ -44,7 +44,7 @@ public class KASClient implements SDK.KAS {
 
     @Override
     public String getPublicKey(Config.KASInfo kasInfo) {
-        return getStub(kasInfo)
+        return getStub(kasInfo.URL)
                 .publicKey(PublicKeyRequest.getDefaultInstance())
                 .getPublicKey();
     }
@@ -52,15 +52,18 @@ public class KASClient implements SDK.KAS {
     private static class RewrapRequestBody {
         String policy;
         String clientPublicKey;
+
+        Manifest.KeyAccess keyAccess;
     }
 
     private static final Gson gson = new Gson();
 
     @Override
-    public byte[] unwrap(Config.KASInfo kasInfo, String policy, byte[] wrapped) {
+    public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy) {
         RewrapRequestBody body = new RewrapRequestBody();
         body.policy = policy;
         body.clientPublicKey = publicKeyPEM;
+        body.keyAccess = keyAccess;
         var requestBody = gson.toJson(body);
 
         var claims = new JWTClaimsSet.Builder()
@@ -82,20 +85,20 @@ public class KASClient implements SDK.KAS {
                 .newBuilder()
                 .setSignedRequestToken(jwt.serialize())
                 .build();
-        var response = getStub(kasInfo).rewrap(request);
+        var response = getStub(keyAccess.url).rewrap(request);
         var wrappedKey = response.getEntityWrappedKey().toByteArray();
         return decryptor.decrypt(wrappedKey);
     }
 
-    private final HashMap<Config.KASInfo, AccessServiceGrpc.AccessServiceBlockingStub> stubs = new HashMap<>();
+    private final HashMap<String, AccessServiceGrpc.AccessServiceBlockingStub> stubs = new HashMap<>();
 
-    private synchronized AccessServiceGrpc.AccessServiceBlockingStub getStub(Config.KASInfo kasInfo) {
-        if (!stubs.containsKey(kasInfo)) {
-            var channel = channelFactory.apply(kasInfo);
+    private synchronized AccessServiceGrpc.AccessServiceBlockingStub getStub(String url) {
+        if (!stubs.containsKey(url)) {
+            var channel = channelFactory.apply(url);
             var stub = AccessServiceGrpc.newBlockingStub(channel);
-            stubs.put(kasInfo, stub);
+            stubs.put(url, stub);
         }
 
-        return stubs.get(kasInfo);
+        return stubs.get(url);
     }
 }

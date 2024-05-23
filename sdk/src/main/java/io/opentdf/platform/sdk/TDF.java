@@ -14,7 +14,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidAlgorithmParameterException;
@@ -138,6 +137,7 @@ public class TDF {
             return policyObject;
         }
 
+        private static Base64.Encoder encoder = Base64.getEncoder();
         private void prepareManifest(Config.TDFConfig tdfConfig) throws Exception {
             Gson gson = new GsonBuilder().create();
 
@@ -163,8 +163,8 @@ public class TDF {
                 keyAccess.protocol = kKasProtocol;
 
                 // Add policyBinding
-                keyAccess.policyBinding = Hex.encodeHexString(CryptoUtils.CalculateSHA256Hmac(symKey,
-                        base64PolicyObject.getBytes(StandardCharsets.UTF_8)));
+                var hexBinding = Hex.encodeHexString(CryptoUtils.CalculateSHA256Hmac(symKey, base64PolicyObject.getBytes(StandardCharsets.UTF_8)));
+                keyAccess.policyBinding = encoder.encodeToString(hexBinding.getBytes(StandardCharsets.UTF_8));
 
                 // Wrap the key with kas public key
                 AsymEncryption asymmetricEncrypt = new AsymEncryption(kasInfo.PublicKey);
@@ -227,12 +227,7 @@ public class TDF {
                 // Perform rewrap
                 byte[] wrappedKey = new byte[GCM_KEY_SIZE]; // Replace with kas client rewrap call
 
-                var kasInfo = new Config.KASInfo();
-                kasInfo.URL = keyAccess.url;
-
-                var wrappedKeyBytes = decoder.decode(keyAccess.wrappedKey);
-                var unwrappedKey = kas.unwrap(kasInfo, manifest.encryptionInformation.policy, wrappedKeyBytes);
-
+                var unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy);
                 for (int index = 0; index < wrappedKey.length; index++) {
                     this.payloadKey[index] ^= unwrappedKey[index];
                 }

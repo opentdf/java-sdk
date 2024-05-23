@@ -25,11 +25,12 @@ public class TDFTest {
         }
 
         @Override
-        public byte[] unwrap(Config.KASInfo kasInfo, String policy, byte[] wrappedKey) {
-            int index = Integer.parseInt(kasInfo.URL);
+        public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy) {
+            int index = Integer.parseInt(keyAccess.url);
             var decryptor = new AsymDecryption(keypairs.get(index).getPrivate());
+            var bytes = Base64.getDecoder().decode(keyAccess.wrappedKey);
             try {
-                return decryptor.decrypt(wrappedKey);
+                return decryptor.decrypt(bytes);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }

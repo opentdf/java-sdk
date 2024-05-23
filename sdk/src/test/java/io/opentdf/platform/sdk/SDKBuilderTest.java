@@ -164,11 +164,10 @@ public class SDKBuilderTest {
             assertThat(body).contains("grant_type=client_credentials");
 
             // now call KAS _on a different server_ and make sure that the interceptors provide us with auth tokens
-            var kasInfo = new Config.KASInfo();
-            kasInfo.URL = "localhost:" + kasServer.getPort();
-            kasInfo.PublicKey = null;
+            var keyAccess = new Manifest.KeyAccess();
+            keyAccess.url = "localhost:" + kasServer.getPort();
 
-            services.kas().unwrap(kasInfo, "", new byte[0]);
+            services.kas().unwrap(keyAccess, "");
 
             assertThat(kasDPoPHeader.get()).isNotNull();
             assertThat(kasAuthHeader.get()).isEqualTo("DPoP hereisthetoken");
