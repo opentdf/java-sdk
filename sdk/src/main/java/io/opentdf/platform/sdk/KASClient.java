@@ -10,21 +10,21 @@ import java.util.function.Function;
 
 public class KASClient implements SDK.KAS {
 
-    private final Function<SDK.KASInfo, Channel> channelFactory;
+    private final Function<Config.KASInfo, Channel> channelFactory;
 
-    public KASClient(Function <SDK.KASInfo, Channel> channelFactory) {
+    public KASClient(Function <Config.KASInfo, Channel> channelFactory) {
         this.channelFactory = channelFactory;
     }
 
     @Override
-    public String getPublicKey(SDK.KASInfo kasInfo) {
+    public String getPublicKey(Config.KASInfo kasInfo) {
         return getStub(kasInfo)
                 .publicKey(PublicKeyRequest.getDefaultInstance())
                 .getPublicKey();
     }
 
     @Override
-    public byte[] unwrap(SDK.KASInfo kasInfo, SDK.Policy policy) {
+    public byte[] unwrap(Config.KASInfo kasInfo, String policy, byte[] wrapped) {
         // this is obviously wrong. we still have to generate a correct request and decrypt the payload
         return getStub(kasInfo)
                 .rewrap(RewrapRequest.getDefaultInstance())
@@ -32,9 +32,9 @@ public class KASClient implements SDK.KAS {
                 .toByteArray();
     }
 
-    private final HashMap<SDK.KASInfo, AccessServiceGrpc.AccessServiceBlockingStub> stubs = new HashMap<>();
+    private final HashMap<Config.KASInfo, AccessServiceGrpc.AccessServiceBlockingStub> stubs = new HashMap<>();
 
-    private synchronized AccessServiceGrpc.AccessServiceBlockingStub getStub(SDK.KASInfo kasInfo) {
+    private synchronized AccessServiceGrpc.AccessServiceBlockingStub getStub(Config.KASInfo kasInfo) {
         if (!stubs.containsKey(kasInfo)) {
             var channel = channelFactory.apply(kasInfo);
             var stub = AccessServiceGrpc.newBlockingStub(channel);

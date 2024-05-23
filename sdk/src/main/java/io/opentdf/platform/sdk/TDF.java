@@ -4,6 +4,8 @@ package io.opentdf.platform.sdk;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.apache.commons.codec.binary.Hex;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
@@ -12,18 +14,22 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
-import java.util.Random;
 import java.util.UUID;
 
 public class TDF {
+
+    public static Logger logger = LoggerFactory.getLogger(TDF.class);
 
     private static final long MAX_TDF_INPUT_SIZE = 68719476736L;
     private static final int GCM_KEY_SIZE = 32;
@@ -40,6 +46,8 @@ public class TDF {
     private static final String kDefaultMimeType = "application/octet-stream";
     private static final String kTDFAsZip = "zip";
     private static final String kTDFZipReference = "reference";
+
+    private static final SecureRandom sRandom = new SecureRandom();
 
     public static class DataSizeNotSupported extends Exception {
         public DataSizeNotSupported(String errorMessage) {
@@ -116,8 +124,6 @@ public class TDF {
         }
 
         PolicyObject createPolicyObject(List<String> attributes) {
-            UUID uuid = UUID.randomUUID();
-
             PolicyObject policyObject = new PolicyObject();
             policyObject.body = new PolicyObject.Body();
             policyObject.uuid = UUID.randomUUID().toString();
@@ -143,14 +149,13 @@ public class TDF {
             List<byte[]> symKeys = new ArrayList<>();
 
             for (Config.KASInfo kasInfo: tdfConfig.kasInfoList) {
-                if (kasInfo.PublicKey.isEmpty()) {
+                if (kasInfo.PublicKey == null || kasInfo.PublicKey.isEmpty()) {
                     throw new KasPublicKeyMissing("Kas public key is missing in kas information list");
                 }
 
                 // Symmetric key
-                Random rd = new Random();
                 byte[] symKey = new byte[GCM_KEY_SIZE];
-                //rd.nextBytes(symKey); TODO: Remove this - disabled for testing.
+                sRandom.nextBytes(symKey);
 
                 Manifest.KeyAccess keyAccess = new Manifest.KeyAccess();
                 keyAccess.keyType = kWrapped;
@@ -201,7 +206,10 @@ public class TDF {
         }
     }
 
+    private static final Base64.Decoder decoder = Base64.getDecoder();
     private static class Reader {
+
+        private SDK.KAS kas;
         private TDFReader tdfReader;
         private Manifest manifest;
         private String unencryptedMetadata;
@@ -209,18 +217,27 @@ public class TDF {
         private long payloadSize;
         private AesGcm aesGcm;
 
+        Reader(SDK.KAS kas) {
+            this.kas = kas;
+        }
+
         private void doPayloadKeyUnwrap() throws IOException, InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException, FailedToCreateGMAC, NotValidateRootSignature, SegmentSizeMismatch {
             for (Manifest.KeyAccess keyAccess: this.manifest.encryptionInformation.keyAccessObj) {
                 // Create KAS client
-
                 // Perform rewrap
                 byte[] wrappedKey = new byte[GCM_KEY_SIZE]; // Replace with kas client rewrap call
 
+                var kasInfo = new Config.KASInfo();
+                kasInfo.URL = keyAccess.url;
+
+                var wrappedKeyBytes = decoder.decode(keyAccess.wrappedKey);
+                var unwrappedKey = kas.unwrap(kasInfo, manifest.encryptionInformation.policy, wrappedKeyBytes);
+
                 for (int index = 0; index < wrappedKey.length; index++) {
-                    this.payloadKey[index] ^= wrappedKey[index];
+                    this.payloadKey[index] ^= unwrappedKey[index];
                 }
 
-                if (!keyAccess.encryptedMetadata.isEmpty()) {
+                if (keyAccess.encryptedMetadata != null && !keyAccess.encryptedMetadata.isEmpty()) {
                     AesGcm aesGcm = new AesGcm(wrappedKey);
 
                     String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata), "UTF-8");
@@ -291,18 +308,17 @@ public class TDF {
     public TDFObject createTDF(InputStream inputStream,
                           long inputSize,
                                OutputStream outputStream,
-                               Config.TDFConfig tdfConfig) throws Exception {
+                               Config.TDFConfig tdfConfig, SDK.KAS kas) throws Exception {
         if (inputSize > MAX_TDF_INPUT_SIZE) {
             throw new DataSizeNotSupported("can't create tdf larger than 64gb");
         }
 
         if (tdfConfig.kasInfoList.isEmpty()) {
+
             throw new KasInfoMissing("kas information is missing");
         }
 
-
-        // Fetch the kas public keys
-        // FetchKasPubKeys();
+        fillInPublicKeyInfo(tdfConfig.kasInfoList, kas);
 
         TDFObject tdfObject = new TDFObject();
         tdfObject.prepareManifest(tdfConfig);
@@ -393,12 +409,22 @@ public class TDF {
         return tdfObject;
     }
 
-    public void loadTDF(InputStream inputStream, OutputStream outputStream) throws InvalidAlgorithmParameterException,
+    private void fillInPublicKeyInfo(List<Config.KASInfo> kasInfoList, SDK.KAS kas) {
+        for (var kasInfo: kasInfoList) {
+            if (kasInfo.PublicKey != null && !kasInfo.PublicKey.isBlank()) {
+                continue;
+            }
+            logger.info("no public key information provided for kas at {}, retrieving", kasInfo.URL);
+            kasInfo.PublicKey = kas.getPublicKey(kasInfo);
+        }
+    }
+
+    public void loadTDF(SeekableByteChannel tdf, OutputStream outputStream, SDK.KAS kas) throws InvalidAlgorithmParameterException,
             NotValidateRootSignature, SegmentSizeMismatch, NoSuchPaddingException,
             IllegalBlockSizeException, IOException, NoSuchAlgorithmException,
             BadPaddingException, InvalidKeyException, FailedToCreateGMAC, TDFReadFailed, SegmentSignatureMismatch {
-        Reader reader = new Reader();
-        reader.tdfReader = new TDFReader(inputStream);
+        Reader reader = new Reader(kas);
+        reader.tdfReader = new TDFReader(tdf);
         String manifest = reader.tdfReader.manifest();
 
 
@@ -407,14 +433,12 @@ public class TDF {
 
         reader.doPayloadKeyUnwrap();
 
-        long totalBytes = 0;
-        long payloadOffset = 0;
-
         for (Manifest.Segment segment: reader.manifest.encryptionInformation.integrityInformation.segments) {
-            byte[] readBuf = reader.tdfReader.readPayload(payloadOffset, segment.encryptedSegmentSize);
+            byte[] readBuf = new byte[(int)segment.encryptedSegmentSize];
+            int bytesRead = reader.tdfReader.readPayloadBytes(readBuf);
 
-            if (readBuf.length != segment.encryptedSegmentSize) {
-                throw new TDFReadFailed("faile to read payload");
+            if (readBuf.length != bytesRead) {
+                throw new TDFReadFailed("failed to read payload");
             }
 
             String segHashAlg = reader.manifest.encryptionInformation.integrityInformation.segmentHashAlg;
@@ -431,11 +455,6 @@ public class TDF {
 
             byte[] writeBuf = reader.aesGcm.decrypt(readBuf);
             outputStream.write(writeBuf);
-
-            payloadOffset += segment.encryptedSegmentSize;
-            totalBytes += readBuf.length;
         }
     }
-
-
 }

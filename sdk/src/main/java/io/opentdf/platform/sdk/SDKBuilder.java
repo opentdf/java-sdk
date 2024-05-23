@@ -144,11 +144,11 @@ public class SDKBuilder {
         return channelBuilder;
     }
 
-    Function<SDK.KASInfo, Channel> getChannelFactory(GRPCAuthInterceptor authInterceptor) {
+    Function<Config.KASInfo, Channel> getChannelFactory(GRPCAuthInterceptor authInterceptor) {
         var pt = usePlainText; // no need to have the builder be able to influence things from beyond the grave
-        return (SDK.KASInfo kasInfo) -> {
+        return (Config.KASInfo kasInfo) -> {
             ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder
-                    .forTarget(kasInfo.getAddress())
+                    .forTarget(kasInfo.URL)
                     .intercept(authInterceptor);
             if (pt) {
                 channelBuilder = channelBuilder.usePlaintext();

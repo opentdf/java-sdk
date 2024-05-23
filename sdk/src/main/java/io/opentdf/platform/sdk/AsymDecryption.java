@@ -6,7 +6,7 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Base64;
 
 public class AsymDecryption {
-    private PrivateKey privateKey;
+    private final PrivateKey privateKey;
     private static final String PRIVATE_KEY_HEADER = "-----BEGIN PRIVATE KEY-----";
     private static final String PRIVATE_KEY_FOOTER = "-----END PRIVATE KEY-----";
     private static final String CIPHER_TRANSFORM = "RSA/ECB/OAEPWithSHA-1AndMGF1Padding";
@@ -27,6 +27,10 @@ public class AsymDecryption {
         PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(decoded);
         KeyFactory kf = KeyFactory.getInstance("RSA");
         this.privateKey = kf.generatePrivate(spec);
+    }
+
+    public AsymDecryption(PrivateKey privateKey) {
+        this.privateKey = privateKey;
     }
 
     /**

@@ -17,14 +17,11 @@ import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc.Subje
 public class SDK {
     private final Services services;
 
-    public interface KASInfo{
-        String getAddress();
-    }
     public interface Policy{}
 
     interface KAS {
-        String getPublicKey(KASInfo kasInfo);
-        byte[] unwrap(KASInfo kasInfo, Policy policy);
+        String getPublicKey(Config.KASInfo kasInfo);
+        byte[] unwrap(Config.KASInfo kasInfo, String policy, byte[] wrappedKey);
     }
 
     // TODO: add KAS

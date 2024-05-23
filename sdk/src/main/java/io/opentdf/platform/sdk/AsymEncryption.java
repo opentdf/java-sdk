@@ -6,7 +6,7 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
 public class AsymEncryption {
-    private PublicKey publicKey;
+    private final PublicKey publicKey;
     private static final String PUBLIC_KEY_HEADER = "-----BEGIN PUBLIC KEY-----";
     private static final String PUBLIC_KEY_FOOTER = "-----END PUBLIC KEY-----";
     private static final String CIPHER_TRANSFORM = "RSA/ECB/OAEPWithSHA-1AndMGF1Padding";
@@ -26,6 +26,10 @@ public class AsymEncryption {
         X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
         KeyFactory kf = KeyFactory.getInstance("RSA");
         this.publicKey = kf.generatePublic(spec);
+    }
+
+    public AsymEncryption(PublicKey publicKey) {
+        this.publicKey = publicKey;
     }
 
     /**
