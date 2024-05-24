@@ -11,6 +11,7 @@ import com.nimbusds.oauth2.sdk.auth.Secret;
 import com.nimbusds.oauth2.sdk.id.ClientID;
 import com.nimbusds.oauth2.sdk.id.Issuer;
 import com.nimbusds.openid.connect.sdk.op.OIDCProviderMetadata;
+import io.grpc.Channel;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
@@ -23,6 +24,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * A builder class for creating instances of the SDK class.
@@ -33,9 +35,13 @@ public class SDKBuilder {
     private ClientAuthentication clientAuth = null;
     private Boolean usePlainText;
 
+    private static final Logger logger = LoggerFactory.getLogger(SDKBuilder.class);
+
     public static SDKBuilder newBuilder() {
         SDKBuilder builder = new SDKBuilder();
         builder.usePlainText = false;
+        builder.clientAuth = null;
+        builder.platformEndpoint = null;
 
         return builder;
     }
@@ -57,8 +63,16 @@ public class SDKBuilder {
         return this;
     }
 
-    // this is not exposed publicly so that it can be tested
-    ManagedChannel buildChannel() {
+    private GRPCAuthInterceptor getGrpcAuthInterceptor() {
+        if (platformEndpoint == null) {
+            throw new SDKException("cannot build an SDK without specifying the platform endpoint");
+        }
+
+        if (clientAuth == null) {
+            // this simplifies things for now, if we need to support this case we can revisit
+            throw new SDKException("cannot build an SDK without specifying OAuth credentials");
+        }
+
         // we don't add the auth listener to this channel since it is only used to call the
         //    well known endpoint
         ManagedChannel bootstrapChannel = null;
@@ -107,24 +121,39 @@ public class SDKBuilder {
             throw new SDKException("Error generating DPoP key", e);
         }
 
-        GRPCAuthInterceptor interceptor = new GRPCAuthInterceptor(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI());
+        return new GRPCAuthInterceptor(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI());
+    }
 
-        return getManagedChannelBuilder()
-                .intercept(interceptor)
-                .build();
+    SDK.Services buildServices() {
+        var authInterceptor = getGrpcAuthInterceptor();
+        var channel = getManagedChannelBuilder().intercept(authInterceptor).build();
+        var client = new KASClient(getChannelFactory(authInterceptor));
+        return SDK.Services.newServices(channel, client);
     }
 
     public SDK build() {
-        return new SDK(SDK.Services.newServices(buildChannel()));
+        return new SDK(buildServices());
     }
 
     private ManagedChannelBuilder<?> getManagedChannelBuilder() {
-        ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder
-                .forTarget(platformEndpoint);
+        ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forTarget(platformEndpoint);
 
         if (usePlainText) {
             channelBuilder = channelBuilder.usePlaintext();
         }
         return channelBuilder;
+    }
+
+    Function<SDK.KASInfo, Channel> getChannelFactory(GRPCAuthInterceptor authInterceptor) {
+        var pt = usePlainText; // no need to have the builder be able to influence things from beyond the grave
+        return (SDK.KASInfo kasInfo) -> {
+            ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder
+                    .forTarget(kasInfo.getAddress())
+                    .intercept(authInterceptor);
+            if (pt) {
+                channelBuilder = channelBuilder.usePlaintext();
+            }
+            return channelBuilder.build();
+        };
     }
 }
