@@ -28,7 +28,7 @@ public class ResourceLocator {
         ByteBuffer buffer = ByteBuffer.wrap(bytes);
 
         this.protocol = Protocol.values()[buffer.get()];
-        this.bodyLength = buffer.getInt();
+        this.bodyLength = buffer.get();
         this.body = new byte[this.bodyLength];
         buffer.get(this.body);
     }

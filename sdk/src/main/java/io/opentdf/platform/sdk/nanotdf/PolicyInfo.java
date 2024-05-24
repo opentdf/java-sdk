@@ -17,9 +17,11 @@ public class PolicyInfo {
 
         this.type = NanoTDFPolicyType.values()[buffer.get()];
         this.hasECDSABinding = eccMode.isECDSABindingEnabled();
+        byte[] remainingBytes = new byte[buffer.remaining()];
+        buffer.get(remainingBytes);
 
         if (this.type == NanoTDFPolicyType.REMOTE_POLICY) {
-            ResourceLocator policyUrl = new ResourceLocator(bytes);
+            ResourceLocator policyUrl = new ResourceLocator(remainingBytes);
             int policyUrlSize = policyUrl.getTotalSize();
             this.body = new byte[policyUrlSize];
             buffer = ByteBuffer.wrap(this.body);
