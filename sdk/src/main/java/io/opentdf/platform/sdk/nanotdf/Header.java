@@ -37,6 +37,16 @@ public class Header {
         return Arrays.copyOf(MAGIC_NUMBER_AND_VERSION,  MAGIC_NUMBER_AND_VERSION.length);
     }
 
+    public void setMagicNumberAndVersion(byte[] magicNumberAndVersion) {
+        if (magicNumberAndVersion.length != MAGIC_NUMBER_AND_VERSION.length) {
+            throw new IllegalArgumentException("Invalid magic number and version length.");
+        }
+        if (!Arrays.equals(magicNumberAndVersion, MAGIC_NUMBER_AND_VERSION)) {
+            throw new IllegalArgumentException("Invalid magic number and version. It must be {0x4C, 0x31, 0x4C}.");
+        }
+        System.arraycopy(magicNumberAndVersion, 0, MAGIC_NUMBER_AND_VERSION, 0, MAGIC_NUMBER_AND_VERSION.length);
+    }
+
     public void setKasLocator(ResourceLocator kasLocator) {
         this.kasLocator = kasLocator;
     }

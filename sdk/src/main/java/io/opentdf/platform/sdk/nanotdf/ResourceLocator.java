@@ -33,6 +33,18 @@ public class ResourceLocator {
         buffer.get(this.body);
     }
 
+    public void setProtocol(Protocol protocol) {
+        this.protocol = protocol;
+    }
+
+    public void setBodyLength(int bodyLength) {
+        this.bodyLength = bodyLength;
+    }
+
+    public void setBody(byte[] body) {
+        this.body = body;
+    }
+
     public String getResourceUrl() {
         StringBuilder sb = new StringBuilder();
 
