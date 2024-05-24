@@ -173,7 +173,6 @@ public class SDKBuilderTest {
                 // not going to bother making a real request with real crypto, just make sure that
                 // we have the right headers
             }
-
             assertThat(kasDPoPHeader.get()).isNotNull();
             assertThat(kasAuthHeader.get()).isEqualTo("DPoP hereisthetoken");
         } finally {
