@@ -52,7 +52,7 @@ public class PolicyInfo {
         }
 
         this.binding = new byte[bindingBytesSize];
-        buffer.get(this.binding);
+        System.arraycopy(bytes, 0, this.binding, 0, bindingBytesSize);
     }
 
     public int getTotalSize() {
