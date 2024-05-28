@@ -76,7 +76,7 @@ public class SDKBuilder {
         ManagedChannel bootstrapChannel = null;
         GetWellKnownConfigurationResponse config;
         try {
-            bootstrapChannel = getManagedChannelBuilder().build();
+            bootstrapChannel = getManagedChannelBuilder(platformEndpoint).build();
             var stub = WellKnownServiceGrpc.newBlockingStub(bootstrapChannel);
             try {
                 config = stub.getWellKnownConfiguration(GetWellKnownConfigurationRequest.getDefaultInstance());
