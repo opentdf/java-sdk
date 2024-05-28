@@ -53,7 +53,7 @@ public class ManifestTest {
                 "    \"type\": \"reference\",\n" +
                 "    \"url\": \"0.payload\"\n" +
                 "  }\n" +
-                "}\n";
+                "}";
 
         GsonBuilder gsonBuilder = new GsonBuilder();
         Gson gson = gsonBuilder.setPrettyPrinting().create();

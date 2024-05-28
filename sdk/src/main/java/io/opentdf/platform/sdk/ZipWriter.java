@@ -227,6 +227,7 @@ public class ZipWriter {
         return fileInfo;
     }
 
+
     private void writeEndOfCentralDirectory(boolean hasZip64Entry, long numEntries, long startOfCentralDirectory, long sizeOfCentralDirectory, CountingOutputStream out) throws IOException {
         var isZip64 = hasZip64Entry
                 || (numEntries & ~0xFF) != 0

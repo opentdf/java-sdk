@@ -2,6 +2,7 @@ package io.opentdf.platform.sdk;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
@@ -12,7 +13,8 @@ public class TDFWriterTest {
     @Test
     void simpleTDFCreate() throws IOException {
 
-        String kManifestJsonFromTDF = " \"encryptionInformation\": {\n" +
+        String kManifestJsonFromTDF = "{\n" +
+                "  \"encryptionInformation\": {\n" +
                 "    \"integrityInformation\": {\n" +
                 "      \"encryptedSegmentSizeDefault\": 1048604,\n" +
                 "      \"rootSignature\": {\n" +
