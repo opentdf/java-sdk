@@ -17,8 +17,6 @@ import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc.Subje
 public class SDK {
     private final Services services;
 
-    public interface Policy{}
-
     interface KAS {
         String getPublicKey(Config.KASInfo kasInfo);
         byte[] unwrap(Manifest.KeyAccess keyAccess, String policy);

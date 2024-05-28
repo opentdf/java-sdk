@@ -23,7 +23,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.UUID;
-import java.util.function.Function;
 
 /**
  * A builder class for creating instances of the SDK class.
@@ -125,8 +124,8 @@ public class SDKBuilder {
         }
 
         var authInterceptor = getGrpcAuthInterceptor(dpopKey);
-        var channel = getManagedChannelBuilder().intercept(authInterceptor).build();
-        var client = new KASClient(getChannelFactory(authInterceptor), dpopKey);
+        var channel = getManagedChannelBuilder(platformEndpoint).intercept(authInterceptor).build();
+        var client = new KASClient(endpoint -> getManagedChannelBuilder(endpoint).intercept(authInterceptor).build(), dpopKey);
         return SDK.Services.newServices(channel, client);
     }
 
@@ -134,25 +133,20 @@ public class SDKBuilder {
         return new SDK(buildServices());
     }
 
-    private ManagedChannelBuilder<?> getManagedChannelBuilder() {
-        ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forTarget(platformEndpoint);
+    /**
+     * This produces a channel configured with all the available SDK options. The only
+     * reason it can't take in an interceptor is because we need to create a channel that
+     * doesn't have any authentication when we are bootstrapping
+     * @param endpoint The endpoint that we are creating the channel for
+     * @return {@type ManagedChannelBuilder<?>} configured with the SDK options
+     */
+    private ManagedChannelBuilder<?> getManagedChannelBuilder(String endpoint) {
+        ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder
+                .forTarget(endpoint);
 
         if (usePlainText) {
             channelBuilder = channelBuilder.usePlaintext();
         }
         return channelBuilder;
-    }
-
-    Function<String, ManagedChannel> getChannelFactory(GRPCAuthInterceptor authInterceptor) {
-        var pt = usePlainText; // no need to have the builder be able to influence things from beyond the grave
-        return (String url) -> {
-            ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder
-                    .forTarget(url)
-                    .intercept(authInterceptor);
-            if (pt) {
-                channelBuilder = channelBuilder.usePlaintext();
-            }
-            return channelBuilder.build();
-        };
     }
 }
