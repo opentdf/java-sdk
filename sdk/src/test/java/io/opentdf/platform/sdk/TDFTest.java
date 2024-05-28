@@ -8,10 +8,13 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Base64;
+
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 public class TDFTest {
 
@@ -20,9 +23,7 @@ public class TDFTest {
         public String getPublicKey(Config.KASInfo kasInfo) {
             int index = Integer.parseInt(kasInfo.URL);
 
-            return "-----BEGIN PUBLIC KEY-----\r\n" +
-                Base64.getMimeEncoder().encodeToString(keypairs.get(index).getPublic().getEncoded()) +
-                "\r\n-----END PUBLIC KEY-----";
+            return CryptoUtils.getRSAPublicKeyPEM(keypairs.get(index).getPublic());
         }
 
         @Override
@@ -60,7 +61,7 @@ public class TDFTest {
                 Config.withKasInformation(kasInfos.toArray(new Config.KASInfo[0]))
         );
 
-        String plainText = "this is some crazy crazy text right here!!!";
+        String plainText = "this is extremely sensitive stuff!!!";
         InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
@@ -69,5 +70,9 @@ public class TDFTest {
 
         var unwrappedData = new java.io.ByteArrayOutputStream();
         tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), unwrappedData, kas);
+
+        assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
+                .isEqualTo(plainText);
+
     }
 }
