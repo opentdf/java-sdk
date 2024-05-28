@@ -18,7 +18,7 @@ public class TDFWriter {
         this.archiveWriter = this.archiveWriter.file(TDF_MANIFEST_FILE_NAME, manifest.getBytes(StandardCharsets.UTF_8));
     }
 
-    public void appendPayload(byte[] data) throws IOException {
+    public void appendPayload(byte[] data) {
         this.archiveWriter = this.archiveWriter.file(TDF_PAYLOAD_FILE_NAME, data);
     }
 

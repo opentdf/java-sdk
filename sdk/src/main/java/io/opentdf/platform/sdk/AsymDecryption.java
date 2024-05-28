@@ -61,17 +61,17 @@ public class AsymDecryption {
         try {
             cipher = Cipher.getInstance(CIPHER_TRANSFORM);
         } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
-            throw new RuntimeException(e);
+            throw new SDKException("error getting instance of cipher", e);
         }
         try {
             cipher.init(Cipher.DECRYPT_MODE, this.privateKey);
         } catch (InvalidKeyException e) {
-            throw new RuntimeException(e);
+            throw new SDKException("error initializing cipher", e);
         }
         try {
             return cipher.doFinal(data);
         } catch (IllegalBlockSizeException | BadPaddingException e) {
-            throw new RuntimeException(e);
+            throw new SDKException("error performing decryption", e);
         }
     }
 }

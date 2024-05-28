@@ -18,7 +18,6 @@ public class ZipWriter {
     private static final int ZIP_64_LOCAL_EXTENDED_INFO_EXTRA_FIELD_SIZE = 24;
 
     private static final int ZIP_64_GLOBAL_EXTENDED_INFO_EXTRA_FIELD_SIZE = 28;
-    private static final int ZIP_32_DATA_DESCRIPTOR_SIZE = 16;
 
     private static final int ZIP_64_DATA_DESCRIPTOR_SIZE = 24;
     private static final int HALF_SECOND = 2;
@@ -148,12 +147,6 @@ public class ZipWriter {
         var outputStream = new OutputStream() {
             @Override
             public void write(int b) throws IOException {
-                crc.update(b);
-                out.write(b);
-            }
-
-            @Override
-            public void write(byte[] b) throws IOException {
                 crc.update(b);
                 out.write(b);
             }
@@ -351,25 +344,6 @@ public class ZipWriter {
             buffer.putLong(compressedSize);
             buffer.putLong(uncompressedSize);
 
-            out.write(buffer.array());
-            assert buffer.position() == buffer.capacity();
-        }
-    }
-
-    private static class Zip32DataDescriptor {
-        final int signature = 0x08074b50;
-        ;
-        long crc32;
-        int compressedSize;
-        int uncompressedSize;
-
-        void write(OutputStream out) throws IOException {
-            ByteBuffer buffer = ByteBuffer.allocate(ZIP_32_DATA_DESCRIPTOR_SIZE);
-            buffer.order(ByteOrder.LITTLE_ENDIAN);
-            buffer.putInt(signature);
-            buffer.putInt((int) crc32);
-            buffer.putInt(compressedSize);
-            buffer.putInt(uncompressedSize);
             out.write(buffer.array());
             assert buffer.position() == buffer.capacity();
         }
