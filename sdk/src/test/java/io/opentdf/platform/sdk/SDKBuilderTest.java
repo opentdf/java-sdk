@@ -11,11 +11,19 @@ import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.stub.StreamObserver;
+import io.opentdf.platform.kas.AccessServiceGrpc;
+import io.opentdf.platform.kas.RewrapRequest;
+import io.opentdf.platform.kas.RewrapResponse;
+import io.opentdf.platform.policy.namespaces.GetNamespaceRequest;
+import io.opentdf.platform.policy.namespaces.GetNamespaceResponse;
+import io.opentdf.platform.policy.namespaces.NamespaceServiceGrpc;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRequest;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceGrpc;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -30,8 +38,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class SDKBuilderTest {
 
     @Test
-    void testCreatingSDKChannel() throws IOException, InterruptedException {
-        Server wellknownServer = null;
+    void testCreatingSDKServices() throws IOException, InterruptedException {
+        Server platformServicesServer = null;
+        Server kasServer = null;
         // we use the HTTP server for two things:
         // * it returns the OIDC configuration we use at bootstrapping time
         // * it fakes out being an IDP and returns an access token when need to retrieve an access token
@@ -51,6 +60,8 @@ public class SDKBuilderTest {
                     .setHeader("Content-type", "application/json")
             );
 
+            // this service returns the platform_issuer url to the SDK during bootstrapping. This
+            // tells the SDK where to download the OIDC discovery document from (our test webserver!)
             WellKnownServiceGrpc.WellKnownServiceImplBase wellKnownService = new WellKnownServiceGrpc.WellKnownServiceImplBase() {
                 @Override
                 public void getWellKnownConfiguration(GetWellKnownConfigurationRequest request, StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
@@ -65,55 +76,76 @@ public class SDKBuilderTest {
                 }
             };
 
-            AtomicReference<String> authHeaderFromRequest = new AtomicReference<>(null);
-            AtomicReference<String> dpopHeaderFromRequest = new AtomicReference<>(null);
+            // remember the auth headers that we received during GRPC calls to platform services
+            AtomicReference<String> servicesAuthHeader = new AtomicReference<>(null);
+            AtomicReference<String> servicesDPoPHeader = new AtomicReference<>(null);
 
+            // remember the auth headers that we received during GRPC calls to KAS
+            AtomicReference<String> kasAuthHeader = new AtomicReference<>(null);
+            AtomicReference<String> kasDPoPHeader = new AtomicReference<>(null);
             // we use the server in two different ways. the first time we use it to actually return
             // issuer for bootstrapping. the second time we use the interception functionality in order
             // to make sure that we are including a DPoP proof and an auth header
-            int randomPort;
-            try (ServerSocket socket = new ServerSocket(0)) {
-                randomPort = socket.getLocalPort();
-            }
-            wellknownServer = ServerBuilder
-                    .forPort(randomPort)
+            platformServicesServer = ServerBuilder
+                    .forPort(getRandomPort())
                     .directExecutor()
                     .addService(wellKnownService)
+                    .addService(new NamespaceServiceGrpc.NamespaceServiceImplBase() {})
                     .intercept(new ServerInterceptor() {
                         @Override
                         public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
-                            authHeaderFromRequest.set(headers.get(Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER)));
-                            dpopHeaderFromRequest.set(headers.get(Metadata.Key.of("DPoP", Metadata.ASCII_STRING_MARSHALLER)));
+                            servicesAuthHeader.set(headers.get(Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER)));
+                            servicesDPoPHeader.set(headers.get(Metadata.Key.of("DPoP", Metadata.ASCII_STRING_MARSHALLER)));
                             return next.startCall(call, headers);
                         }
                     })
                     .build()
                     .start();
 
-            ManagedChannel channel = SDKBuilder
+
+            kasServer = ServerBuilder
+                    .forPort(getRandomPort())
+                    .directExecutor()
+                    .addService(new AccessServiceGrpc.AccessServiceImplBase() {
+                        @Override
+                        public void rewrap(RewrapRequest request, StreamObserver<RewrapResponse> responseObserver) {
+                            responseObserver.onNext(RewrapResponse.getDefaultInstance());
+                            responseObserver.onCompleted();
+                        }
+                    })
+                    .intercept(new ServerInterceptor() {
+                        @Override
+                        public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
+                            kasAuthHeader.set(headers.get(Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER)));
+                            kasDPoPHeader.set(headers.get(Metadata.Key.of("DPoP", Metadata.ASCII_STRING_MARSHALLER)));
+                            return next.startCall(call, headers);
+                        }
+                    })
+                    .build()
+                    .start();
+
+            SDK.Services services = SDKBuilder
                     .newBuilder()
                     .clientSecret("client-id", "client-secret")
-                    .platformEndpoint("localhost:" + wellknownServer.getPort())
+                    .platformEndpoint("localhost:" + platformServicesServer.getPort())
                     .useInsecurePlaintextConnection(true)
-                    .buildChannel();
+                    .buildServices();
 
-            assertThat(channel).isNotNull();
-            assertThat(channel.getState(false)).isEqualTo(ConnectivityState.IDLE);
-
-            var wellKnownStub = WellKnownServiceGrpc.newBlockingStub(channel);
+            assertThat(services).isNotNull();
 
             httpServer.enqueue(new MockResponse()
                     .setBody("{\"access_token\": \"hereisthetoken\", \"token_type\": \"Bearer\"}")
                     .setHeader("Content-Type", "application/json"));
 
-            var ignored = wellKnownStub.getWellKnownConfiguration(GetWellKnownConfigurationRequest.getDefaultInstance());
-            channel.shutdownNow();
+            var ignored = services.namespaces().getNamespace(GetNamespaceRequest.getDefaultInstance());
 
             // we've now made two requests. one to get the bootstrapping info and one
             // call that should activate the token fetching logic
             assertThat(httpServer.getRequestCount()).isEqualTo(2);
 
             httpServer.takeRequest();
+
+            // validate that we made a reasonable request to our fake IdP to get an access token
             var accessTokenRequest = httpServer.takeRequest();
             assertThat(accessTokenRequest).isNotNull();
             var authHeader = accessTokenRequest.getHeader("Authorization");
@@ -124,16 +156,35 @@ public class SDKBuilderTest {
             var usernameAndPassword = new String(Base64.getDecoder().decode(authHeaderParts[1]), StandardCharsets.UTF_8);
             assertThat(usernameAndPassword).isEqualTo("client-id:client-secret");
 
-            assertThat(dpopHeaderFromRequest.get()).isNotNull();
-            assertThat(authHeaderFromRequest.get()).isEqualTo("DPoP hereisthetoken");
+            // validate that during the request to the namespace service we supplied a valid token
+            assertThat(servicesDPoPHeader.get()).isNotNull();
+            assertThat(servicesAuthHeader.get()).isEqualTo("DPoP hereisthetoken");
 
             var body = new String(accessTokenRequest.getBody().readByteArray(), StandardCharsets.UTF_8);
             assertThat(body).contains("grant_type=client_credentials");
 
+            // now call KAS _on a different server_ and make sure that the interceptors provide us with auth tokens
+            int kasPort = kasServer.getPort();
+            SDK.KASInfo kasInfo = () -> "localhost:" + kasPort;
+            services.kas().unwrap(kasInfo, new SDK.Policy() {});
+
+            assertThat(kasDPoPHeader.get()).isNotNull();
+            assertThat(kasAuthHeader.get()).isEqualTo("DPoP hereisthetoken");
         } finally {
-            if (wellknownServer != null) {
-                wellknownServer.shutdownNow();
+            if (platformServicesServer != null) {
+                platformServicesServer.shutdownNow();
+            }
+            if (kasServer != null) {
+                kasServer.shutdownNow();
             }
         }
+    }
+
+    private static int getRandomPort() throws IOException {
+        int randomPort;
+        try (ServerSocket socket = new ServerSocket(0)) {
+            randomPort = socket.getLocalPort();
+        }
+        return randomPort;
     }
 }
