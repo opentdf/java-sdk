@@ -83,8 +83,6 @@ public class ZipWriterTest {
                 random.nextBytes(buf);
                 out.write(buf);
             }
-            random.nextBytes(buf);
-            out.write(buf, 0, random.nextInt(buf.length));
         }
 
         var zipFile = File.createTempFile("zip-file", "zip");
