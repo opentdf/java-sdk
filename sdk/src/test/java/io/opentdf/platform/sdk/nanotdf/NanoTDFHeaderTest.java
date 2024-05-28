@@ -9,8 +9,11 @@ import javax.crypto.NoSuchPaddingException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.io.IOException;
+import java.io.*;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.*;
 import java.security.cert.CertificateException;
 import java.security.spec.InvalidKeySpecException;
@@ -20,6 +23,7 @@ public class NanoTDFHeaderTest {
 
     byte[] binding = new byte[]{(byte) 0x33, (byte) 0x31, (byte) 0x63, (byte) 0x31,
             (byte) 0x66, (byte) 0x35, (byte) 0x35, (byte) 0x00};
+    String kasUrl = "https://api.example.com/kas";
     String remotePolicyUrl = "https://api-develop01.develop.virtru.com/acm/api/policies/1a1d5e42-bf91-45c7-a86a-61d5331c1f55";
 
     // Curve - "prime256v1"
@@ -68,13 +72,13 @@ public class NanoTDFHeaderTest {
 
 
     @Test
-    public void testNanoTDFHeaderRemotePolicy() {
+    public void testNanoTDFHeaderRemotePolicy() throws IOException {
         byte[] headerData = new byte[155];
 
         // Construct empty header - encrypt use case
         Header header = new Header();
 
-        ResourceLocator kasLocator = new ResourceLocator("https://api.exampl.com/kas");
+        ResourceLocator kasLocator = new ResourceLocator(kasUrl);
         header.setKasLocator(kasLocator);
 
         ECCMode eccMode = new ECCMode((byte) 0x0); //no ecdsa binding and 'secp256r1'
@@ -99,89 +103,60 @@ public class NanoTDFHeaderTest {
     }
 
     @Test
-    public void testNanoTDFEncryption() throws IOException, InvalidAlgorithmParameterException, NoSuchAlgorithmException, NoSuchProviderException, CertificateException, InvalidKeyException, InvalidKeySpecException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, SignatureException {
-        final int kGmacPayloadLength = 8;
-        final int nanoTDFIvSize = 3;
-        String policy = "{\"body\":{\"dataAttributes\":[],\"dissem\":[\"cn=virtru-user\",\"user@example.com\"]},\"uuid\":\"1a84b9c7-d59c-45ed-b092-c7ed7de73a07\"}";
+    public void testNanoTDFReader() throws IOException, InvalidAlgorithmParameterException, NoSuchAlgorithmException, NoSuchProviderException, CertificateException, InvalidKeyException, InvalidKeySpecException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, SignatureException {
 
-// Some buffers for compare.
-        byte[] compressedPubKey;
-        byte[] headerBuffer;
-        byte[] encryptedPayLoad;
-        byte[] policyBinding;
-        byte[] encryptKey;
+        Header header2 = new Header();
+        FileInputStream fileIn = new FileInputStream("src/test/resources/javasdknanotdf.ntdf");
+        DataInputStream dataIn = new DataInputStream(fileIn);
 
-        SymmetricAndPayloadConfig payloadConfig = new SymmetricAndPayloadConfig((byte) 0x0);
-        int tagSize = payloadConfig.sizeOfAuthTagForCipher(payloadConfig.getCipherType());
-        byte[] tag = new byte[tagSize];
+        // Read each field of the Header object from the file
+       byte[] magicNumberAndVersion = new byte[3]; // size of magic number and version
+        dataIn.readFully(magicNumberAndVersion);
+        header2.setMagicNumberAndVersion(magicNumberAndVersion);
 
-        ECCMode eccMode = new ECCMode((byte) 0x0); //no ecdsa binding and 'secp256r1'
-        ECKeyPair sdkECKeyPair = new ECKeyPair(eccMode.getCurveName(), ECKeyPair.ECAlgorithm.ECDH);
-        String sdkPrivateKeyForEncrypt = sdkECKeyPair.privateKeyInPEMFormat();
-        String sdkPublicKeyForEncrypt = sdkECKeyPair.publicKeyInPEMFormat();
+        Protocol protocol = Protocol.values()[dataIn.readByte()];
 
-        ECKeyPair kasECKeyPair = new ECKeyPair(eccMode.getCurveName(), ECKeyPair.ECAlgorithm.ECDH);
-        String kasPublicKey = kasECKeyPair.publicKeyInPEMFormat();
-        // Encrypt
-        Header header = new Header();
+        // Read the body length
+        int bodyLength = dataIn.readByte();
 
-        ResourceLocator kasLocator = new ResourceLocator("https://test.com");
-        header.setKasLocator(kasLocator);
+        // Read the body
+        byte[] body = new byte[bodyLength];
+        dataIn.readFully(body);
 
-        header.setECCMode(eccMode);
-        header.setPayloadConfig(payloadConfig);
+        // Create a new ResourceLocator object
+        ResourceLocator resourceLocator = new ResourceLocator();
+        resourceLocator.setProtocol(protocol);
+        resourceLocator.setBodyLength(bodyLength);
+        resourceLocator.setBody(body);
+        header2.setKasLocator(resourceLocator);
 
-        byte[] secret = ECKeyPair.computeECDHKey(ECKeyPair.publicKeyFromPem(kasPublicKey), ECKeyPair.privateKeyFromPem(sdkPrivateKeyForEncrypt));
-        byte[] saltValue = {'V', 'I', 'R', 'T', 'R', 'U'};
-        encryptKey = ECKeyPair.calculateHKDF(saltValue, secret);
+        ECCMode eccMode2 = new ECCMode(dataIn.readByte());
+        header2.setECCMode(eccMode2);
 
-        // Encrypt the policy with key from KDF
-        int encryptedPayLoadSize = policy.length() + nanoTDFIvSize + tagSize;
-        encryptedPayLoad = new byte[encryptedPayLoadSize];
+        SymmetricAndPayloadConfig payloadConfig2 = new SymmetricAndPayloadConfig(dataIn.readByte());
+        header2.setPayloadConfig(payloadConfig2);
 
-        SecureRandom secureRandom = new SecureRandom();
-        byte[] iv = new byte[nanoTDFIvSize];
-        secureRandom.nextBytes(iv);
+        // Read the policy type
+        int remainingBytes = dataIn.available();
 
-        // Adjust the span to add the IV vector at the start of the buffer
-        byte[] encryptBufferSpan = Arrays.copyOfRange(encryptedPayLoad, nanoTDFIvSize, encryptedPayLoad.length);
+       // Create a byte array to hold the remaining bytes
+        byte[] remainingBytesArray = new byte[remainingBytes];
 
-        AesGcm encoder = new AesGcm(encryptKey);
-        encoder.encrypt(encryptBufferSpan);
+       // Read the remaining bytes into the byte array
+        dataIn.readFully(remainingBytesArray);
+        PolicyInfo policyInfo = new PolicyInfo(remainingBytesArray, header2.getECCMode());
+        header2.setPolicyInfo(policyInfo);
 
-        byte[] authTag = new byte[tag.length];
-        //encoder.finish(authTag);
+        int sizeToRead = policyInfo.getTotalSize();
+        int compressedPubKeySize = ECCMode.getECCompressedPubKeySize(header2.getECCMode().getEllipticCurveType());
+        byte[] ephemeralKey = new byte[compressedPubKeySize]; // size of compressed public key
+        System.arraycopy(remainingBytesArray, sizeToRead, ephemeralKey, 0, ephemeralKey.length);
+        header2.setEphemeralKey(ephemeralKey);
 
-        // Copy IV at start
-        System.arraycopy(iv, 0, encryptedPayLoad, 0, iv.length);
+        dataIn.close();
+        fileIn.close();
 
-        // Copy tag at end
-        System.arraycopy(tag, 0, encryptedPayLoad, nanoTDFIvSize + policy.length(), tag.length);
-
-
-        // Create an encrypted policy.
-        PolicyInfo encryptedPolicy = new PolicyInfo();
-        encryptedPolicy.setEmbeddedEncryptedTextPolicy(encryptedPayLoad);
-
-        byte[] digest = encryptedPayLoad;
-        if (eccMode.isECDSABindingEnabled()) {
-            // Calculate the ecdsa binding.
-            policyBinding = ECKeyPair.computeECDSASig(digest, ECKeyPair.privateKeyFromPem(sdkPrivateKeyForEncrypt));
-            encryptedPolicy.setPolicyBinding(policyBinding);
-        } else {
-            // Calculate the gmac binding
-            byte[] gmac = Arrays.copyOfRange(digest, digest.length - kGmacPayloadLength, digest.length);
-            encryptedPolicy.setPolicyBinding(gmac);
-        }
-
-        header.setPolicyInfo(encryptedPolicy);
-
-        compressedPubKey = ECKeyPair.compressECPublickey(sdkPublicKeyForEncrypt);
-        header.setEphemeralKey(compressedPubKey);
-
-        int headerSize = header.getTotalSize();
-        headerBuffer = new byte[headerSize];
-        int sizeWritten = header.writeIntoBuffer(ByteBuffer.wrap(headerBuffer));
-        assertEquals(sizeWritten, headerSize);
+       assertEquals(kasUrl, header2.getKasLocator().getResourceUrl());
+       assertEquals(remotePolicyUrl, header2.getPolicyInfo().getRemotePolicyUrl());
     }
 }
