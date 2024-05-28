@@ -8,38 +8,41 @@ import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
-import io.grpc.Channel;
+import io.grpc.ManagedChannel;
 import io.opentdf.platform.kas.AccessServiceGrpc;
 import io.opentdf.platform.kas.PublicKeyRequest;
 import io.opentdf.platform.kas.RewrapRequest;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
-public class KASClient implements SDK.KAS {
+public class KASClient implements SDK.KAS, AutoCloseable {
 
-    private final Function<String, Channel> channelFactory;
+    private final Function<String, ManagedChannel> channelFactory;
     private final RSASSASigner signer;
-
-    private final AsymEncryption encryptor;
     private final AsymDecryption decryptor;
-
     private final String publicKeyPEM;
 
-    public KASClient(Function <String, Channel> channelFactory, RSAKey key) {
+    /***
+     * A client that communicates with KAS
+     * @param channelFactory A function that produces channels that can be used to communicate
+     * @param dpopKey
+     */
+    public KASClient(Function <String, ManagedChannel> channelFactory, RSAKey dpopKey) {
         this.channelFactory = channelFactory;
         try {
-            this.signer = new RSASSASigner(key);
+            this.signer = new RSASSASigner(dpopKey);
         } catch (JOSEException e) {
             throw new SDKException("error creating dpop signer", e);
         }
-        var keypair = CryptoUtils.generateRSAKeypair();
-        encryptor = new AsymEncryption(keypair.getPublic());
-        decryptor = new AsymDecryption(keypair.getPrivate());
-        publicKeyPEM = CryptoUtils.getRSAPublicKeyPEM(keypair.getPublic());
+        var encryptionKeypair = CryptoUtils.generateRSAKeypair();
+        decryptor = new AsymDecryption(encryptionKeypair.getPrivate());
+        publicKeyPEM = CryptoUtils.getRSAPublicKeyPEM(encryptionKeypair.getPublic());
     }
 
     @Override
@@ -49,10 +52,18 @@ public class KASClient implements SDK.KAS {
                 .getPublicKey();
     }
 
-    private static class RewrapRequestBody {
+    @Override
+    public void close() {
+        var entries = new ArrayList<>(stubs.values());
+        stubs.clear();
+        for (var entry: entries) {
+            entry.channel.shutdownNow();
+        }
+    }
+
+    static class RewrapRequestBody {
         String policy;
         String clientPublicKey;
-
         Manifest.KeyAccess keyAccess;
     }
 
@@ -89,16 +100,25 @@ public class KASClient implements SDK.KAS {
         return decryptor.decrypt(wrappedKey);
     }
 
-    private final HashMap<String, AccessServiceGrpc.AccessServiceBlockingStub> stubs = new HashMap<>();
+    private final HashMap<String, CacheEntry> stubs = new HashMap<>();
+    private static class CacheEntry {
+        final ManagedChannel channel;
+        final AccessServiceGrpc.AccessServiceBlockingStub stub;
+
+        private CacheEntry(ManagedChannel channel, AccessServiceGrpc.AccessServiceBlockingStub stub) {
+            this.channel = channel;
+            this.stub = stub;
+        }
+    }
 
     private synchronized AccessServiceGrpc.AccessServiceBlockingStub getStub(String url) {
         if (!stubs.containsKey(url)) {
             var channel = channelFactory.apply(url);
             var stub = AccessServiceGrpc.newBlockingStub(channel);
-            stubs.put(url, stub);
+            stubs.put(url, new CacheEntry(channel, stub));
         }
 
-        return stubs.get(url);
+        return stubs.get(url).stub;
     }
 }
 

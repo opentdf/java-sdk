@@ -409,7 +409,7 @@ public class TDF {
             if (kasInfo.PublicKey != null && !kasInfo.PublicKey.isBlank()) {
                 continue;
             }
-            logger.info("no public key information provided for kas at {}, retrieving", kasInfo.URL);
+            logger.info("no public key provided for KAS at {}, retrieving", kasInfo.URL);
             kasInfo.PublicKey = kas.getPublicKey(kasInfo);
         }
     }

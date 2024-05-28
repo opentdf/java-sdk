@@ -185,7 +185,7 @@ public class SDKBuilderTest {
         }
     }
 
-    private static int getRandomPort() throws IOException {
+    public static int getRandomPort() throws IOException {
         int randomPort;
         try (ServerSocket socket = new ServerSocket(0)) {
             randomPort = socket.getLocalPort();

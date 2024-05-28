@@ -1,5 +1,6 @@
 package io.opentdf.platform.sdk;
 
+import org.apache.commons.compress.utils.Lists;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.junit.jupiter.api.BeforeAll;
@@ -55,9 +56,11 @@ public class TDFTest {
             kasInfos.add(kasInfo);
         }
 
-        Config.TDFConfig config = Config.newTDFConfig(Config.withKasInformation(kasInfos.toArray(new Config.KASInfo[0])));
+        Config.TDFConfig config = Config.newTDFConfig(
+                Config.withKasInformation(kasInfos.toArray(new Config.KASInfo[0]))
+        );
 
-        String plainText = "text";
+        String plainText = "this is some crazy crazy text right here!!!";
         InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 

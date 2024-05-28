@@ -11,7 +11,6 @@ import com.nimbusds.oauth2.sdk.auth.Secret;
 import com.nimbusds.oauth2.sdk.id.ClientID;
 import com.nimbusds.oauth2.sdk.id.Issuer;
 import com.nimbusds.openid.connect.sdk.op.OIDCProviderMetadata;
-import io.grpc.Channel;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
@@ -144,7 +143,7 @@ public class SDKBuilder {
         return channelBuilder;
     }
 
-    Function<String, Channel> getChannelFactory(GRPCAuthInterceptor authInterceptor) {
+    Function<String, ManagedChannel> getChannelFactory(GRPCAuthInterceptor authInterceptor) {
         var pt = usePlainText; // no need to have the builder be able to influence things from beyond the grave
         return (String url) -> {
             ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder
