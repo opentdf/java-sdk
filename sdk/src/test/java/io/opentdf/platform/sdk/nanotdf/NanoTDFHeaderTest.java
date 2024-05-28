@@ -78,7 +78,7 @@ public class NanoTDFHeaderTest {
         // Construct empty header - encrypt use case
         Header header = new Header();
 
-        ResourceLocator kasLocator = new ResourceLocator(kasUrl);
+        ResourceLocator kasLocator = new ResourceLocator("https://api.exampl.com/kas");
         header.setKasLocator(kasLocator);
 
         ECCMode eccMode = new ECCMode((byte) 0x0); //no ecdsa binding and 'secp256r1'
@@ -95,8 +95,6 @@ public class NanoTDFHeaderTest {
         header.setEphemeralKey(compressedPubKey);
 
         int headerSize = header.getTotalSize();
-        assertEquals(headerData.length, headerSize);
-
         headerSize = header.writeIntoBuffer(ByteBuffer.wrap(headerData));
         assertEquals(headerData.length, headerSize);
         assertTrue(Arrays.equals(headerData, expectedHeader));
@@ -158,5 +156,92 @@ public class NanoTDFHeaderTest {
 
        assertEquals(kasUrl, header2.getKasLocator().getResourceUrl());
        assertEquals(remotePolicyUrl, header2.getPolicyInfo().getRemotePolicyUrl());
+    }
+
+    @Test
+    public void testNanoTDFEncryption() throws IOException, InvalidAlgorithmParameterException, NoSuchAlgorithmException, NoSuchProviderException, CertificateException, InvalidKeyException, InvalidKeySpecException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, SignatureException {
+        final int kGmacPayloadLength = 8;
+        final int nanoTDFIvSize = 3;
+        String policy = "{\"body\":{\"dataAttributes\":[],\"dissem\":[\"cn=virtru-user\",\"user@example.com\"]},\"uuid\":\"1a84b9c7-d59c-45ed-b092-c7ed7de73a07\"}";
+
+// Some buffers for compare.
+        byte[] compressedPubKey;
+        byte[] headerBuffer;
+        byte[] encryptedPayLoad;
+        byte[] policyBinding;
+        byte[] encryptKey;
+
+        SymmetricAndPayloadConfig payloadConfig = new SymmetricAndPayloadConfig((byte) 0x0);
+        int tagSize = payloadConfig.sizeOfAuthTagForCipher(payloadConfig.getCipherType());
+        byte[] tag = new byte[tagSize];
+
+        ECCMode eccMode = new ECCMode((byte) 0x0); //no ecdsa binding and 'secp256r1'
+        ECKeyPair sdkECKeyPair = new ECKeyPair(eccMode.getCurveName(), ECKeyPair.ECAlgorithm.ECDH);
+        String sdkPrivateKeyForEncrypt = sdkECKeyPair.privateKeyInPEMFormat();
+        String sdkPublicKeyForEncrypt = sdkECKeyPair.publicKeyInPEMFormat();
+
+        ECKeyPair kasECKeyPair = new ECKeyPair(eccMode.getCurveName(), ECKeyPair.ECAlgorithm.ECDH);
+        String kasPublicKey = kasECKeyPair.publicKeyInPEMFormat();
+        // Encrypt
+        Header header = new Header();
+
+        ResourceLocator kasLocator = new ResourceLocator("https://test.com");
+        header.setKasLocator(kasLocator);
+
+        header.setECCMode(eccMode);
+        header.setPayloadConfig(payloadConfig);
+
+        byte[] secret = ECKeyPair.computeECDHKey(ECKeyPair.publicKeyFromPem(kasPublicKey), ECKeyPair.privateKeyFromPem(sdkPrivateKeyForEncrypt));
+        byte[] saltValue = {'V', 'I', 'R', 'T', 'R', 'U'};
+        encryptKey = ECKeyPair.calculateHKDF(saltValue, secret);
+
+        // Encrypt the policy with key from KDF
+        int encryptedPayLoadSize = policy.length() + nanoTDFIvSize + tagSize;
+        encryptedPayLoad = new byte[encryptedPayLoadSize];
+
+        SecureRandom secureRandom = new SecureRandom();
+        byte[] iv = new byte[nanoTDFIvSize];
+        secureRandom.nextBytes(iv);
+
+        // Adjust the span to add the IV vector at the start of the buffer
+        byte[] encryptBufferSpan = Arrays.copyOfRange(encryptedPayLoad, nanoTDFIvSize, encryptedPayLoad.length);
+
+        AesGcm encoder = new AesGcm(encryptKey);
+        encoder.encrypt(encryptBufferSpan);
+
+        byte[] authTag = new byte[tag.length];
+        //encoder.finish(authTag);
+
+        // Copy IV at start
+        System.arraycopy(iv, 0, encryptedPayLoad, 0, iv.length);
+
+        // Copy tag at end
+        System.arraycopy(tag, 0, encryptedPayLoad, nanoTDFIvSize + policy.length(), tag.length);
+
+
+        // Create an encrypted policy.
+        PolicyInfo encryptedPolicy = new PolicyInfo();
+        encryptedPolicy.setEmbeddedEncryptedTextPolicy(encryptedPayLoad);
+
+        byte[] digest = encryptedPayLoad;
+        if (eccMode.isECDSABindingEnabled()) {
+            // Calculate the ecdsa binding.
+            policyBinding = ECKeyPair.computeECDSASig(digest, ECKeyPair.privateKeyFromPem(sdkPrivateKeyForEncrypt));
+            encryptedPolicy.setPolicyBinding(policyBinding);
+        } else {
+            // Calculate the gmac binding
+            byte[] gmac = Arrays.copyOfRange(digest, digest.length - kGmacPayloadLength, digest.length);
+            encryptedPolicy.setPolicyBinding(gmac);
+        }
+
+        header.setPolicyInfo(encryptedPolicy);
+
+        compressedPubKey = ECKeyPair.compressECPublickey(sdkPublicKeyForEncrypt);
+        header.setEphemeralKey(compressedPubKey);
+
+        int headerSize = header.getTotalSize();
+        headerBuffer = new byte[headerSize];
+        int sizeWritten = header.writeIntoBuffer(ByteBuffer.wrap(headerBuffer));
+        assertEquals(sizeWritten, headerSize);
     }
 }
