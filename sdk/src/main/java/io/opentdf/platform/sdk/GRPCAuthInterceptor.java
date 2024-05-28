@@ -22,6 +22,7 @@ import io.grpc.ClientInterceptor;
 import io.grpc.ForwardingClientCall;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import nl.altindag.ssl.SSLFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,7 +41,7 @@ class GRPCAuthInterceptor implements ClientInterceptor {
     private final ClientAuthentication clientAuth;
     private final RSAKey rsaKey;
     private final URI tokenEndpointURI;
-
+    private SSLFactory sslFactory;
     private static final Logger logger = LoggerFactory.getLogger(GRPCAuthInterceptor.class);
 
 
@@ -49,11 +50,13 @@ class GRPCAuthInterceptor implements ClientInterceptor {
      *
      * @param clientAuth the client authentication to be used by the interceptor
      * @param rsaKey     the RSA key to be used by the interceptor
+     * @param sslFactory Optional SSLFactory for Requests
      */
-    public GRPCAuthInterceptor(ClientAuthentication clientAuth, RSAKey rsaKey, URI tokenEndpointURI) {
+    public GRPCAuthInterceptor(ClientAuthentication clientAuth, RSAKey rsaKey, URI tokenEndpointURI, SSLFactory sslFactory) {
         this.clientAuth = clientAuth;
         this.rsaKey = rsaKey;
         this.tokenEndpointURI = tokenEndpointURI;
+        this.sslFactory = sslFactory;
     }
 
     /**
@@ -114,6 +117,9 @@ class GRPCAuthInterceptor implements ClientInterceptor {
                 TokenRequest tokenRequest = new TokenRequest(this.tokenEndpointURI,
                         clientAuth, clientGrant, null);
                 HTTPRequest httpRequest = tokenRequest.toHTTPRequest();
+                if(sslFactory!=null){
+                    httpRequest.setSSLSocketFactory(sslFactory.getSslSocketFactory());
+                }
 
                 DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(rsaKey, JWSAlgorithm.RS256);
 
