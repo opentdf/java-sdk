@@ -14,9 +14,12 @@ import com.nimbusds.openid.connect.sdk.op.OIDCProviderMetadata;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRequest;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceGrpc;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.UUID;
@@ -30,9 +33,13 @@ public class SDKBuilder {
     private ClientAuthentication clientAuth = null;
     private Boolean usePlainText;
 
+    private static final Logger logger = LoggerFactory.getLogger(SDKBuilder.class);
+
     public static SDKBuilder newBuilder() {
         SDKBuilder builder = new SDKBuilder();
         builder.usePlainText = false;
+        builder.clientAuth = null;
+        builder.platformEndpoint = null;
 
         return builder;
     }
@@ -54,18 +61,26 @@ public class SDKBuilder {
         return this;
     }
 
-    // this is not exposed publicly so that it can be tested
-    ManagedChannel buildChannel() {
+    private GRPCAuthInterceptor getGrpcAuthInterceptor(RSAKey rsaKey) {
+        if (platformEndpoint == null) {
+            throw new SDKException("cannot build an SDK without specifying the platform endpoint");
+        }
+
+        if (clientAuth == null) {
+            // this simplifies things for now, if we need to support this case we can revisit
+            throw new SDKException("cannot build an SDK without specifying OAuth credentials");
+        }
+
         // we don't add the auth listener to this channel since it is only used to call the
         //    well known endpoint
         ManagedChannel bootstrapChannel = null;
         GetWellKnownConfigurationResponse config;
         try {
-            bootstrapChannel = getManagedChannelBuilder().build();
+            bootstrapChannel = getManagedChannelBuilder(platformEndpoint).build();
             var stub = WellKnownServiceGrpc.newBlockingStub(bootstrapChannel);
             try {
                 config = stub.getWellKnownConfiguration(GetWellKnownConfigurationRequest.getDefaultInstance());
-            } catch (Exception e) {
+            } catch (StatusRuntimeException e) {
                 Status status = Status.fromThrowable(e);
                 throw new SDKException(String.format("Got grpc status [%s] when getting configuration", status), e);
             }
@@ -82,7 +97,7 @@ public class SDKBuilder {
                     .getFieldsOrThrow(PLATFORM_ISSUER)
                     .getStringValue();
 
-        } catch (Exception e) {
+        } catch (StatusRuntimeException e) {
             throw new SDKException("Error getting the issuer from the platform", e);
         }
 
@@ -94,9 +109,13 @@ public class SDKBuilder {
             throw new SDKException("Error resolving the OIDC provider metadata", e);
         }
 
-        RSAKey rsaKey;
+        return new GRPCAuthInterceptor(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI());
+    }
+
+    SDK.Services buildServices() {
+        RSAKey dpopKey;
         try {
-            rsaKey = new RSAKeyGenerator(2048)
+            dpopKey = new RSAKeyGenerator(2048)
                     .keyUse(KeyUse.SIGNATURE)
                     .keyID(UUID.randomUUID().toString())
                     .generate();
@@ -104,20 +123,26 @@ public class SDKBuilder {
             throw new SDKException("Error generating DPoP key", e);
         }
 
-        GRPCAuthInterceptor interceptor = new GRPCAuthInterceptor(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI());
-
-        return getManagedChannelBuilder()
-                .intercept(interceptor)
-                .build();
+        var authInterceptor = getGrpcAuthInterceptor(dpopKey);
+        var channel = getManagedChannelBuilder(platformEndpoint).intercept(authInterceptor).build();
+        var client = new KASClient(endpoint -> getManagedChannelBuilder(endpoint).intercept(authInterceptor).build(), dpopKey);
+        return SDK.Services.newServices(channel, client);
     }
 
     public SDK build() {
-        return new SDK(SDK.Services.newServices(buildChannel()));
+        return new SDK(buildServices());
     }
 
-    private ManagedChannelBuilder<?> getManagedChannelBuilder() {
+    /**
+     * This produces a channel configured with all the available SDK options. The only
+     * reason it can't take in an interceptor is because we need to create a channel that
+     * doesn't have any authentication when we are bootstrapping
+     * @param endpoint The endpoint that we are creating the channel for
+     * @return {@type ManagedChannelBuilder<?>} configured with the SDK options
+     */
+    private ManagedChannelBuilder<?> getManagedChannelBuilder(String endpoint) {
         ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder
-                .forTarget(platformEndpoint);
+                .forTarget(endpoint);
 
         if (usePlainText) {
             channelBuilder = channelBuilder.usePlaintext();

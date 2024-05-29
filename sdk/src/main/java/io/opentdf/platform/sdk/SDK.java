@@ -17,14 +17,20 @@ import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc.Subje
 public class SDK {
     private final Services services;
 
+    interface KAS {
+        String getPublicKey(Config.KASInfo kasInfo);
+        byte[] unwrap(Manifest.KeyAccess keyAccess, String policy);
+    }
+
     // TODO: add KAS
-    public interface Services {
+    interface Services {
         AttributesServiceFutureStub attributes();
         NamespaceServiceFutureStub namespaces();
         SubjectMappingServiceFutureStub subjectMappings();
         ResourceMappingServiceFutureStub resourceMappings();
+        KAS kas();
 
-        static Services newServices(Channel channel) {
+        static Services newServices(Channel channel, KAS kas) {
             var attributeService = AttributesServiceGrpc.newFutureStub(channel);
             var namespaceService = NamespaceServiceGrpc.newFutureStub(channel);
             var subjectMappingService = SubjectMappingServiceGrpc.newFutureStub(channel);
@@ -50,11 +56,16 @@ public class SDK {
                 public ResourceMappingServiceFutureStub resourceMappings() {
                     return resourceMappingService;
                 }
+
+                @Override
+                public KAS kas() {
+                    return kas;
+                }
             };
         }
     }
 
-    public SDK(Services services) {
+    SDK(Services services) {
         this.services = services;
     }
 }

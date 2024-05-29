@@ -4,4 +4,8 @@ public class SDKException extends RuntimeException {
     public SDKException(String message, Exception reason) {
         super(message, reason);
     }
+
+    public SDKException(String message) {
+        super(message);
+    }
 }
