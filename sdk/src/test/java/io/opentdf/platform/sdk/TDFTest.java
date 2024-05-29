@@ -20,6 +20,9 @@ public class TDFTest {
 
     private static SDK.KAS kas = new SDK.KAS() {
         @Override
+        public void close() {}
+
+        @Override
         public String getPublicKey(Config.KASInfo kasInfo) {
             int index = Integer.parseInt(kasInfo.URL);
 
