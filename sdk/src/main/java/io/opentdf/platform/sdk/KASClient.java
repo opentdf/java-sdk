@@ -53,7 +53,7 @@ public class KASClient implements SDK.KAS, AutoCloseable {
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         var entries = new ArrayList<>(stubs.values());
         stubs.clear();
         for (var entry: entries) {
