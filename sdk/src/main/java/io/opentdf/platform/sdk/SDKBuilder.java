@@ -206,4 +206,8 @@ public class SDKBuilder {
         }
         return channelBuilder;
     }
+
+    SSLFactory getSslFactory(){
+        return this.sslFactory;
+    }
 }
