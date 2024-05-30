@@ -1,6 +1,5 @@
 protocol/src/main/protogen
 /.idea/
-/protocol/target/
-/sdk/target/
+target/
 .vscode/
 .DS_Store
