@@ -22,6 +22,7 @@
     <modules>
         <module>protocol</module>
         <module>sdk</module>
+        <module>cmdline</module>
     </modules>
     <dependencyManagement>
         <dependencies>

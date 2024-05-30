@@ -35,8 +35,7 @@ public class AesGcm {
      * @param plaintext the plaintext to encrypt
      * @return the encrypted text
      */
-    public byte[] encrypt(byte[] plaintext) throws NoSuchPaddingException, NoSuchAlgorithmException,
-            InvalidAlgorithmParameterException, InvalidKeyException, BadPaddingException, IllegalBlockSizeException {
+    public byte[] encrypt(byte[] plaintext) {
         return encrypt(plaintext, 0, plaintext.length);
     }
 
@@ -48,15 +47,38 @@ public class AesGcm {
      * @param len input length
      * @return the encrypted text
      */
-    public byte[] encrypt(byte[] plaintext, int offset, int len) throws NoSuchPaddingException, NoSuchAlgorithmException,
-            InvalidAlgorithmParameterException, InvalidKeyException, BadPaddingException, IllegalBlockSizeException {
-        Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORM);
+    public byte[] encrypt(byte[] plaintext, int offset, int len)  {
+        Cipher cipher = null;
+        try {
+            cipher = Cipher.getInstance(CIPHER_TRANSFORM);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        } catch (NoSuchPaddingException e) {
+            throw new RuntimeException(e);
+        }
         byte[] nonce = new byte[GCM_NONCE_LENGTH];
-        SecureRandom.getInstanceStrong().nextBytes(nonce);
+        try {
+            SecureRandom.getInstanceStrong().nextBytes(nonce);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
         GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, nonce);
-        cipher.init(Cipher.ENCRYPT_MODE, key, spec);
+        try {
+            cipher.init(Cipher.ENCRYPT_MODE, key, spec);
+        } catch (InvalidKeyException e) {
+            throw new RuntimeException(e);
+        } catch (InvalidAlgorithmParameterException e) {
+            throw new RuntimeException(e);
+        }
 
-        byte[] cipherText = cipher.doFinal(plaintext, offset, len);
+        byte[] cipherText = new byte[0];
+        try {
+            cipherText = cipher.doFinal(plaintext, offset, len);
+        } catch (IllegalBlockSizeException e) {
+            throw new RuntimeException(e);
+        } catch (BadPaddingException e) {
+            throw new RuntimeException(e);
+        }
         byte[] cipherTextWithNonce = new byte[nonce.length + cipherText.length];
         System.arraycopy(nonce, 0, cipherTextWithNonce, 0, nonce.length);
         System.arraycopy(cipherText, 0, cipherTextWithNonce, nonce.length, cipherText.length);

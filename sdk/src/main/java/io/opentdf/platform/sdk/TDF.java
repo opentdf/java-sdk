@@ -48,55 +48,55 @@ public class TDF {
 
     private static final SecureRandom sRandom = new SecureRandom();
 
-    public static class DataSizeNotSupported extends Exception {
+    public static class DataSizeNotSupported extends RuntimeException {
         public DataSizeNotSupported(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class KasInfoMissing extends Exception {
+    public static class KasInfoMissing extends RuntimeException {
         public KasInfoMissing(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class KasPublicKeyMissing extends Exception {
+    public static class KasPublicKeyMissing extends RuntimeException {
         public KasPublicKeyMissing(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class InputStreamReadFailed extends Exception {
+    public static class InputStreamReadFailed extends RuntimeException {
         public InputStreamReadFailed(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class FailedToCreateGMAC extends Exception {
+    public static class FailedToCreateGMAC extends RuntimeException {
         public FailedToCreateGMAC(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class NotValidateRootSignature extends Exception {
+    public static class NotValidateRootSignature extends RuntimeException {
         public NotValidateRootSignature(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class SegmentSizeMismatch extends Exception {
+    public static class SegmentSizeMismatch extends RuntimeException {
         public SegmentSizeMismatch(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class SegmentSignatureMismatch extends Exception {
+    public static class SegmentSignatureMismatch extends RuntimeException {
         public SegmentSignatureMismatch(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class TDFReadFailed extends Exception {
+    public static class TDFReadFailed extends RuntimeException {
         public TDFReadFailed(String errorMessage) {
             super(errorMessage);
         }
@@ -138,7 +138,7 @@ public class TDF {
         }
 
         private static Base64.Encoder encoder = Base64.getEncoder();
-        private void prepareManifest(Config.TDFConfig tdfConfig) throws Exception {
+        private void prepareManifest(Config.TDFConfig tdfConfig) {
             Gson gson = new GsonBuilder().create();
 
             manifest.encryptionInformation.keyAccessType = kSplitKeyType;
@@ -285,15 +285,14 @@ public class TDF {
     }
 
 
-    private static String calculateSignature(byte[] data, byte[] secret, Config.IntegrityAlgorithm algorithm)
-            throws NoSuchAlgorithmException, InvalidKeyException, FailedToCreateGMAC {
+    private static String calculateSignature(byte[] data, byte[] secret, Config.IntegrityAlgorithm algorithm) {
         if (algorithm == Config.IntegrityAlgorithm.HS256) {
             byte[] hmac = CryptoUtils.CalculateSHA256Hmac(secret, data);
             return Hex.encodeHexString(hmac);
         }
 
         if (kGMACPayloadLength > data.length) {
-            throw new FailedToCreateGMAC("Dail to create gmac signature");
+            throw new FailedToCreateGMAC("fail to create gmac signature");
         }
 
         byte[] gmacPayload = Arrays.copyOfRange(data, data.length - kGMACPayloadLength, data.length);
@@ -301,15 +300,9 @@ public class TDF {
     }
 
     public TDFObject createTDF(InputStream inputStream,
-                          long inputSize,
                                OutputStream outputStream,
-                               Config.TDFConfig tdfConfig, SDK.KAS kas) throws Exception {
-        if (inputSize > MAX_TDF_INPUT_SIZE) {
-            throw new DataSizeNotSupported("can't create tdf larger than 64gb");
-        }
-
+                               Config.TDFConfig tdfConfig, SDK.KAS kas) throws IOException {
         if (tdfConfig.kasInfoList.isEmpty()) {
-
             throw new KasInfoMissing("kas information is missing");
         }
 
@@ -318,18 +311,7 @@ public class TDF {
         TDFObject tdfObject = new TDFObject();
         tdfObject.prepareManifest(tdfConfig);
 
-        int segmentSize = tdfConfig.defaultSegmentSize;
-        long totalSegments = inputSize / segmentSize;
-        if (inputSize % segmentSize != 0) {
-            totalSegments += 1;
-        }
-
-        // Empty payload we still want to create a payload
-        if (totalSegments == 0) {
-            totalSegments = 1;
-        }
-
-        long encryptedSegmentSize = segmentSize + kGcmIvSize + kAesBlockSize;
+        long encryptedSegmentSize = tdfConfig.defaultSegmentSize + kGcmIvSize + kAesBlockSize;
         TDFWriter tdfWriter = new TDFWriter(outputStream);
 
         long readPos = 0;
@@ -337,18 +319,17 @@ public class TDF {
         byte[] readBuf = new byte[tdfConfig.defaultSegmentSize];
 
         tdfObject.manifest.encryptionInformation.integrityInformation.segments = new ArrayList<>();
-        while (totalSegments != 0) {
-            long readSize = segmentSize;
-            if ((inputSize - readPos) < segmentSize) {
-                readSize = inputSize - readPos;
-            }
+        long totalSegments = 0;
+        long totalSize = 0;
+        int nRead = 0;
 
-            long n = inputStream.read(readBuf, 0, (int) readSize);
-            if (n != readSize) {
-                throw new InputStreamReadFailed("Input stream read miss match");
+        while ((nRead=inputStream.read(readBuf)) >= 0) {
+            totalSegments += 1;
+            totalSize += nRead;
+            if (totalSize > MAX_TDF_INPUT_SIZE) {
+                throw new DataSizeNotSupported("can't create tdf larger than 64gb");
             }
-
-            byte[] cipherData = tdfObject.aesGcm.encrypt(readBuf, 0, (int) readSize);
+            byte[] cipherData = tdfObject.aesGcm.encrypt(readBuf, 0, nRead);
             tdfWriter.appendPayload(cipherData);
 
             String segmentSig = calculateSignature(cipherData, tdfObject.payloadKey, tdfConfig.segmentIntegrityAlgorithm);
@@ -356,13 +337,13 @@ public class TDF {
             aggregateHash.append(segmentSig);
             Manifest.Segment segmentInfo = new Manifest.Segment();
             segmentInfo.hash = Base64.getEncoder().encodeToString(segmentSig.getBytes(StandardCharsets.UTF_8));
-            segmentInfo.segmentSize = readSize;
+            segmentInfo.segmentSize = nRead;
             segmentInfo.encryptedSegmentSize = cipherData.length;
 
             tdfObject.manifest.encryptionInformation.integrityInformation.segments.add(segmentInfo);
 
-            totalSegments -= 1;
-            readPos += readSize;
+            totalSegments += 1;
+            totalSize += nRead;
         }
 
         Manifest.RootSignature rootSignature = new Manifest.RootSignature();
@@ -377,7 +358,7 @@ public class TDF {
         rootSignature.algorithm = alg;
         tdfObject.manifest.encryptionInformation.integrityInformation.rootSignature = rootSignature;
 
-        tdfObject.manifest.encryptionInformation.integrityInformation.segmentSizeDefault = segmentSize;
+        tdfObject.manifest.encryptionInformation.integrityInformation.segmentSizeDefault = tdfConfig.defaultSegmentSize;
         tdfObject.manifest.encryptionInformation.integrityInformation.encryptedSegmentSizeDefault = (int)encryptedSegmentSize;
 
         tdfObject.manifest.encryptionInformation.integrityInformation.segmentHashAlg = kGmacIntegrityAlgorithm;
