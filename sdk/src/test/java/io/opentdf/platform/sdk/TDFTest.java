@@ -8,13 +8,16 @@ import javax.annotation.Nonnull;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TDFTest {
 
@@ -50,10 +53,8 @@ public class TDFTest {
 
     @Test
     void testSimpleTDFEncryptAndDecrypt() throws Exception {
-        var kasInfos = getKASInfos();
-
         Config.TDFConfig config = Config.newTDFConfig(
-                Config.withKasInformation(kasInfos.toArray(new Config.KASInfo[0]))
+                Config.withKasInformation(getKASInfos())
         );
 
         String plainText = "this is extremely sensitive stuff!!!";
@@ -73,11 +74,10 @@ public class TDFTest {
 
     @Test
     public void testCreatingTDFWithMultipleSegments() throws Exception {
-        var kasInfos = getKASInfos();
         var random = new Random();
 
         Config.TDFConfig config = Config.newTDFConfig(
-                Config.withKasInformation(kasInfos.toArray(Config.KASInfo[]::new)),
+                Config.withKasInformation(getKASInfos()),
                 // use a random segment size that makes sure that we will use multiple segments
                 Config.withSegmentSize(1 + random.nextInt(20))
         );
@@ -98,8 +98,50 @@ public class TDFTest {
 
     }
 
+    @Test
+    public void testCreatingTooLargeTDF() throws Exception {
+        var random = new Random();
+        var maxSize = 1 + random.nextInt(1024);
+        var numReturned = new AtomicInteger(0);
+
+        // return 1 more byte than the maximum size
+        var is = new InputStream() {
+            @Override
+            public int read() {
+                var ans = numReturned.get() > maxSize ? -1 : 1;
+                numReturned.incrementAndGet();
+                return ans;
+            }
+
+            @Override
+            public int read(byte[] b, int off, int len) {
+                var numToReturn = Math.min(len, maxSize - numReturned.get() + 1);
+                numReturned.addAndGet(numToReturn);
+                return numToReturn;
+            }
+        };
+
+        var os = new OutputStream() {
+            @Override
+            public void write(int b) {}
+            @Override
+            public void write(byte[] b, int off, int len) {}
+        };
+
+        var tdf = new TDF(maxSize);
+        var tdfConfig = Config.newTDFConfig(
+                Config.withKasInformation(getKASInfos()),
+                Config.withSegmentSize(1 + random.nextInt(128)));
+        assertThrows(TDF.DataSizeNotSupported.class,
+                () -> tdf.createTDF(is, os, tdfConfig, kas),
+                "didn't throw an exception when we created TDF that was too large");
+        assertThat(numReturned.get())
+                .withFailMessage("test returned the wrong number of bytes")
+                .isEqualTo(maxSize + 1);
+    }
+
     @Nonnull
-    private static ArrayList<Object> getKASInfos() {
+    private static Config.KASInfo[] getKASInfos() {
         var kasInfos = new ArrayList<>();
         for (int i = 0; i < keypairs.size(); i++) {
             var kasInfo = new Config.KASInfo();
@@ -107,6 +149,6 @@ public class TDFTest {
             kasInfo.PublicKey = null;
             kasInfos.add(kasInfo);
         }
-        return kasInfos;
+        return kasInfos.toArray(Config.KASInfo[]::new);
     }
 }
