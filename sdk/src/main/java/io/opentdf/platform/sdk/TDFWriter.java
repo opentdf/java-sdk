@@ -11,18 +11,19 @@ public class TDFWriter {
 
     public TDFWriter(OutputStream destination) {
         this.destination = destination;
-        this.archiveWriter = new ZipWriter();
+        this.archiveWriter = new ZipWriter(destination);
     }
 
-    public void appendManifest(String manifest) {
-        this.archiveWriter = this.archiveWriter.file(TDF_MANIFEST_FILE_NAME, manifest.getBytes(StandardCharsets.UTF_8));
+    public void appendManifest(String manifest) throws IOException {
+        this.archiveWriter.file(TDF_MANIFEST_FILE_NAME, manifest.getBytes(StandardCharsets.UTF_8));
     }
 
-    public void appendPayload(byte[] data) {
-        this.archiveWriter = this.archiveWriter.file(TDF_PAYLOAD_FILE_NAME, data);
+    public OutputStream payload() throws IOException {
+        return this.archiveWriter.stream(TDF_PAYLOAD_FILE_NAME);
+
     }
 
     public long finish() throws IOException {
-        return this.archiveWriter.build(this.destination);
+        return this.archiveWriter.finish();
     }
 }
