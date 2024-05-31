@@ -302,9 +302,8 @@ public class TDF {
 
     public TDFObject createTDF(InputStream payload,
                                OutputStream outputStream,
-                               Config.TDFConfig tdfConfig, SDK.KAS kas) throws IOException {
+                               Config.TDFConfig tdfConfig, SDK.KAS kas) throws Exception {
         if (tdfConfig.kasInfoList.isEmpty()) {
-
             throw new KasInfoMissing("kas information is missing");
         }
 
