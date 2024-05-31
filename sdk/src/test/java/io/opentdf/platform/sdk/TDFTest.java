@@ -78,10 +78,12 @@ public class TDFTest {
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withKasInformation(kasInfos.toArray(Config.KASInfo[]::new)),
-                Config.withSegmentSize(1 + random.nextInt(19))
+                // use a random segment size that makes sure that we will use multiple segments
+                Config.withSegmentSize(1 + random.nextInt(20)),
         );
 
-        var data = new byte[random.nextInt(2048)];
+        // data should be bigger than the largest segment
+        var data = new byte[21 + random.nextInt(2048)];
         random.nextBytes(data);
         var plainTextInputStream = new ByteArrayInputStream(data);
         var tdfOutputStream = new ByteArrayOutputStream();
@@ -93,6 +95,7 @@ public class TDFTest {
         assertThat(unwrappedData.toByteArray())
                 .withFailMessage("extracted data does not match")
                 .containsExactly(data);
+
     }
 
     @Nonnull
