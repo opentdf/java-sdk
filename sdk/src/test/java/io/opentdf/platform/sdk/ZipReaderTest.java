@@ -101,7 +101,8 @@ public class ZipReaderTest {
                     return new Object[] {name, fileContent};
                 }).collect(Collectors.toList());
 
-        ZipWriter writer = new ZipWriter();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ZipWriter writer = new ZipWriter(out);
         HashMap<String, byte[]> namesToData = new HashMap<>();
         for (var data: testData) {
             var fileName = (String)data[0];
@@ -116,12 +117,13 @@ public class ZipReaderTest {
             if (r.nextBoolean()) {
                 writer = writer.file(fileName, content);
             } else {
-                writer = writer.file(fileName, new ByteArrayInputStream(content));
+                try (var streamEntry = writer.stream(fileName)) {
+                    new ByteArrayInputStream(content).transferTo(streamEntry);
+                }
             }
         }
 
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        writer.build(out);
+        writer.finish();
 
         var channel = new SeekableInMemoryByteChannel(out.toByteArray());
 
