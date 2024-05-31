@@ -73,4 +73,34 @@ public class TDFTest {
                 .isEqualTo(plainText);
 
     }
+
+    @Test
+    public void testCreatingTDFWithMultipleSegments() throws Exception {
+        var kasInfos = new ArrayList<>();
+        for (int i = 0; i < keypairs.size(); i++) {
+            var kasInfo = new Config.KASInfo();
+            kasInfo.URL = Integer.toString(i);
+            kasInfo.PublicKey = null;
+            kasInfos.add(kasInfo);
+        }
+
+        Config.TDFConfig config = Config.newTDFConfig(
+                Config.withKasInformation(kasInfos.toArray(Config.KASInfo[]::new)),
+                Config.withSegmentSize(10)
+        );
+
+        String plainText = "this is an extremely important message and we need to protect it completely";
+        InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+
+        TDF tdf = new TDF();
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
+
+        var unwrappedData = new java.io.ByteArrayOutputStream();
+        tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), unwrappedData, kas);
+
+        assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
+                .isEqualTo(plainText);
+
+    }
 }
