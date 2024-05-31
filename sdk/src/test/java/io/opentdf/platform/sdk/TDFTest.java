@@ -79,7 +79,7 @@ public class TDFTest {
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withKasInformation(kasInfos.toArray(Config.KASInfo[]::new)),
                 // use a random segment size that makes sure that we will use multiple segments
-                Config.withSegmentSize(1 + random.nextInt(20)),
+                Config.withSegmentSize(1 + random.nextInt(20))
         );
 
         // data should be bigger than the largest segment
