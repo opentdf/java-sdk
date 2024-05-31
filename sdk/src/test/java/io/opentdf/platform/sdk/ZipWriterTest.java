@@ -77,7 +77,7 @@ public class ZipWriterTest {
     public void testWritingLargeFile() throws IOException {
         var random = new Random();
         // create a file between 7 and 8 GB
-        long fileSize = 0 * (1L << 30) + (long)Math.floor(random.nextDouble() * (1L << 30));
+        long fileSize = 7 * (1L << 30) + (long)Math.floor(random.nextDouble() * (1L << 30));
         var testFile = File.createTempFile("big-file", "");
         testFile.deleteOnExit();
         try (var out = new FileOutputStream(testFile)) {
