@@ -43,7 +43,7 @@ public class TDFTest {
 
     @BeforeAll
     static void createKeypairs() {
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 1 + new Random().nextInt(5); i++) {
             keypairs.add(CryptoUtils.generateRSAKeypair());
         }
     }
