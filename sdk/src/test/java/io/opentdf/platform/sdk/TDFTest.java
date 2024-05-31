@@ -1,16 +1,18 @@
 package io.opentdf.platform.sdk;
 
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
-import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import javax.annotation.Nonnull;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Random;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
@@ -45,15 +47,10 @@ public class TDFTest {
             keypairs.add(CryptoUtils.generateRSAKeypair());
         }
     }
+
     @Test
     void testSimpleTDFEncryptAndDecrypt() throws Exception {
-        var kasInfos = new ArrayList<>();
-        for (int i = 0; i < keypairs.size(); i++) {
-            var kasInfo = new Config.KASInfo();
-            kasInfo.URL = Integer.toString(i);
-            kasInfo.PublicKey = null;
-            kasInfos.add(kasInfo);
-        }
+        var kasInfos = getKASInfos();
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withKasInformation(kasInfos.toArray(new Config.KASInfo[0]))
@@ -66,16 +63,40 @@ public class TDFTest {
         TDF tdf = new TDF();
         tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
 
-        var unwrappedData = new java.io.ByteArrayOutputStream();
+        var unwrappedData = new ByteArrayOutputStream();
         tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), unwrappedData, kas);
 
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
+                .withFailMessage("extracted data does not match")
                 .isEqualTo(plainText);
-
     }
 
     @Test
     public void testCreatingTDFWithMultipleSegments() throws Exception {
+        var kasInfos = getKASInfos();
+        var random = new Random();
+
+        Config.TDFConfig config = Config.newTDFConfig(
+                Config.withKasInformation(kasInfos.toArray(Config.KASInfo[]::new)),
+                Config.withSegmentSize(1 + random.nextInt(19))
+        );
+
+        var data = new byte[random.nextInt(2048)];
+        random.nextBytes(data);
+        var plainTextInputStream = new ByteArrayInputStream(data);
+        var tdfOutputStream = new ByteArrayOutputStream();
+        var tdf = new TDF();
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
+        var unwrappedData = new ByteArrayOutputStream();
+        tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), unwrappedData, kas);
+
+        assertThat(unwrappedData.toByteArray())
+                .withFailMessage("extracted data does not match")
+                .containsExactly(data);
+    }
+
+    @Nonnull
+    private static ArrayList<Object> getKASInfos() {
         var kasInfos = new ArrayList<>();
         for (int i = 0; i < keypairs.size(); i++) {
             var kasInfo = new Config.KASInfo();
@@ -83,24 +104,6 @@ public class TDFTest {
             kasInfo.PublicKey = null;
             kasInfos.add(kasInfo);
         }
-
-        Config.TDFConfig config = Config.newTDFConfig(
-                Config.withKasInformation(kasInfos.toArray(Config.KASInfo[]::new)),
-                Config.withSegmentSize(10)
-        );
-
-        String plainText = "this is an extremely important message and we need to protect it completely";
-        InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
-        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
-
-        TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
-
-        var unwrappedData = new java.io.ByteArrayOutputStream();
-        tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), unwrappedData, kas);
-
-        assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
-                .isEqualTo(plainText);
-
+        return kasInfos;
     }
 }
