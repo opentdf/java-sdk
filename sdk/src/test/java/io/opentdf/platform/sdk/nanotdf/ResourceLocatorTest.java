@@ -39,7 +39,7 @@ class ResourceLocatorTest {
         ResourceLocator original = new ResourceLocator(url);
         ByteBuffer buffer = ByteBuffer.allocate(original.getTotalSize());
         original.writeIntoBuffer(buffer);
-        locator = new ResourceLocator(buffer.array());
+        locator = new ResourceLocator(buffer);
         assertEquals(url, locator.getResourceUrl());
     }
 

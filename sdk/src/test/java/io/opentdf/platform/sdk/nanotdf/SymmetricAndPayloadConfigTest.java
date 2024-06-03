@@ -24,8 +24,8 @@ class SymmetricAndPayloadConfigTest {
 
     @Test
     void settingAndGettingSignatureECCMode() {
-        for (EllipticCurve curve : EllipticCurve.values()) {
-            if (curve != EllipticCurve.SECP256K1) { // SDK doesn't support 'secp256k1' curve
+        for (NanoTDFType.ECCurve curve : NanoTDFType.ECCurve.values()) {
+            if (curve != NanoTDFType.ECCurve.SECP256K1) { // SDK doesn't support 'secp256k1' curve
                 config.setSignatureECCMode(curve);
                 assertEquals(curve, config.getSignatureECCMode());
             }
@@ -34,12 +34,12 @@ class SymmetricAndPayloadConfigTest {
 
     @Test
     void settingUnsupportedSignatureECCMode() {
-        assertThrows(RuntimeException.class, () -> config.setSignatureECCMode(EllipticCurve.SECP256K1));
+        assertThrows(RuntimeException.class, () -> config.setSignatureECCMode(NanoTDFType.ECCurve.SECP256K1));
     }
 
     @Test
     void settingAndGettingCipherType() {
-        for (NanoTDFCipher cipher : NanoTDFCipher.values()) {
+        for (NanoTDFType.Cipher cipher : NanoTDFType.Cipher.values()) {
             config.setSymmetricCipherType(cipher);
             assertEquals(cipher, config.getCipherType());
         }
@@ -48,8 +48,8 @@ class SymmetricAndPayloadConfigTest {
     @Test
     void gettingSymmetricAndPayloadConfigAsByte() {
         config.setHasSignature(true);
-        config.setSignatureECCMode(EllipticCurve.SECP256R1);
-        config.setSymmetricCipherType(NanoTDFCipher.AES_256_GCM_64_TAG);
+        config.setSignatureECCMode(NanoTDFType.ECCurve.SECP256R1);
+        config.setSymmetricCipherType(NanoTDFType.Cipher.AES_256_GCM_64_TAG);
         byte expected = (byte) (1 << 7 | 0x00 << 4 | 0x00);
         assertEquals(expected, config.getSymmetricAndPayloadConfigAsByte());
     }

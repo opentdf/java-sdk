@@ -12,7 +12,7 @@ import java.util.Base64;
 
 public class AesGcm {
     public static final int GCM_NONCE_LENGTH = 12; // in bytes
-    private static final int GCM_TAG_LENGTH = 16; // in bytes
+    public static final int GCM_TAG_LENGTH = 16; // in bytes
     private static final String CIPHER_TRANSFORM = "AES/GCM/NoPadding";
 
     private final SecretKey key;
@@ -60,6 +60,30 @@ public class AesGcm {
         byte[] cipherTextWithNonce = new byte[nonce.length + cipherText.length];
         System.arraycopy(nonce, 0, cipherTextWithNonce, 0, nonce.length);
         System.arraycopy(cipherText, 0, cipherTextWithNonce, nonce.length, cipherText.length);
+        return cipherTextWithNonce;
+    }
+
+    /**
+     * <p>encrypt.</p>
+     *
+     * @param iv the IV vector
+     * @param authTagLen the length of the auth tag
+     * @param plaintext the plaintext byte array to encrypt
+     * @param offset where the input start
+     * @param len input length
+     * @return the encrypted text
+     */
+    public byte[] encrypt(byte[] iv, int authTagLen, byte[] plaintext, int offset, int len) throws NoSuchPaddingException, NoSuchAlgorithmException,
+            InvalidAlgorithmParameterException, InvalidKeyException, BadPaddingException, IllegalBlockSizeException {
+        Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORM);
+
+        GCMParameterSpec spec = new GCMParameterSpec(authTagLen * 8, iv);
+        cipher.init(Cipher.ENCRYPT_MODE, key, spec);
+
+        byte[] cipherText = cipher.doFinal(plaintext, offset, len);
+        byte[] cipherTextWithNonce = new byte[iv.length + cipherText.length];
+        System.arraycopy(iv, 0, cipherTextWithNonce, 0, iv.length);
+        System.arraycopy(cipherText, 0, cipherTextWithNonce, iv.length, cipherText.length);
         return cipherTextWithNonce;
     }
 

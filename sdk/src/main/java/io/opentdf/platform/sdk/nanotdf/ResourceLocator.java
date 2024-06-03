@@ -4,7 +4,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 public class ResourceLocator {
-    private Protocol protocol;
+    private NanoTDFType.Protocol protocol;
     private int bodyLength;
     private byte[] body;
 
@@ -13,9 +13,9 @@ public class ResourceLocator {
 
     public ResourceLocator(String resourceUrl) {
         if (resourceUrl.startsWith("http://")) {
-            this.protocol = Protocol.HTTP;
+            this.protocol = NanoTDFType.Protocol.HTTP;
         } else if (resourceUrl.startsWith("https://")) {
-            this.protocol = Protocol.HTTPS;
+            this.protocol = NanoTDFType.Protocol.HTTPS;
         } else {
             throw new RuntimeException("Unsupported protocol for resource locator");
         }
@@ -24,16 +24,14 @@ public class ResourceLocator {
         this.bodyLength = this.body.length;
     }
 
-    public ResourceLocator(byte[] bytes) {
-        ByteBuffer buffer = ByteBuffer.wrap(bytes);
-
-        this.protocol = Protocol.values()[buffer.get()];
+    public ResourceLocator(ByteBuffer buffer) {
+        this.protocol = NanoTDFType.Protocol.values()[buffer.get()];
         this.bodyLength = buffer.get();
         this.body = new byte[this.bodyLength];
         buffer.get(this.body);
     }
 
-    public void setProtocol(Protocol protocol) {
+    public void setProtocol(NanoTDFType.Protocol protocol) {
         this.protocol = protocol;
     }
 

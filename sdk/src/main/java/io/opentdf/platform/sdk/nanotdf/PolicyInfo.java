@@ -1,10 +1,12 @@
 package io.opentdf.platform.sdk.nanotdf;
 
+import io.opentdf.platform.sdk.NanoTDF;
+
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 public class PolicyInfo {
-    private NanoTDFPolicyType type;
+    private NanoTDFType.PolicyType type;
     private boolean hasECDSABinding;
     private byte[] body;
     private byte[] binding;
@@ -12,34 +14,29 @@ public class PolicyInfo {
     public PolicyInfo() {
     }
 
-    public PolicyInfo(byte[] bytes, ECCMode eccMode) {
-        ByteBuffer buffer = ByteBuffer.wrap(bytes);
-
-        this.type = NanoTDFPolicyType.values()[buffer.get()];
+    public PolicyInfo(ByteBuffer buffer, ECCMode eccMode)  {
+        this.type = NanoTDFType.PolicyType.values()[buffer.get()];
         this.hasECDSABinding = eccMode.isECDSABindingEnabled();
-        byte[] remainingBytes = new byte[buffer.remaining()];
-        buffer.get(remainingBytes);
 
-        if (this.type == NanoTDFPolicyType.REMOTE_POLICY) {
-            ResourceLocator policyUrl = new ResourceLocator(remainingBytes);
-            int policyUrlSize = policyUrl.getTotalSize();
-            this.body = new byte[policyUrlSize];
-            buffer = ByteBuffer.wrap(this.body);
-            policyUrl.writeIntoBuffer(buffer);
-            bytes = Arrays.copyOfRange(bytes, policyUrlSize, bytes.length);
+
+//        byte[] remainingBytes = new byte[buffer.remaining()];
+//        buffer.get(remainingBytes);
+
+        if (this.type == NanoTDFType.PolicyType.REMOTE_POLICY) {
+            throw new RuntimeException("Embedded policy with key access is not supported.");
         } else {
-            int policyLength = buffer.getInt();
+            byte[] policyLengthBuf = new byte[Short.BYTES];
+            buffer.get(policyLengthBuf);
 
-            if (this.type == NanoTDFPolicyType.EMBEDDED_POLICY_PLAIN_TEXT ||
-                    this.type == NanoTDFPolicyType.EMBEDDED_POLICY_ENCRYPTED) {
+            short policyLength = ByteBuffer.wrap(policyLengthBuf).getShort();
+
+            if (this.type == NanoTDFType.PolicyType.EMBEDDED_POLICY_PLAIN_TEXT ||
+                    this.type == NanoTDFType.PolicyType.EMBEDDED_POLICY_ENCRYPTED) {
 
                 // Copy the policy data.
                 this.body = new byte[policyLength];
                 buffer.get(this.body);
-
-                bytes = Arrays.copyOfRange(bytes, policyLength, bytes.length);
-
-            } else if (this.type == NanoTDFPolicyType.EMBEDDED_POLICY_ENCRYPTED_POLICY_KEY_ACCESS) {
+            } else if (this.type == NanoTDFType.PolicyType.EMBEDDED_POLICY_ENCRYPTED_POLICY_KEY_ACCESS) {
                 throw new RuntimeException("Embedded policy with key access is not supported.");
             } else {
                 throw new RuntimeException("Invalid policy type.");
@@ -52,21 +49,21 @@ public class PolicyInfo {
         }
 
         this.binding = new byte[bindingBytesSize];
-        System.arraycopy(bytes, 0, this.binding, 0, bindingBytesSize);
+        buffer.get(this.binding);
     }
 
     public int getTotalSize() {
 
         int totalSize = 0;
 
-        if (this.type == NanoTDFPolicyType.REMOTE_POLICY) {
+        if (this.type == NanoTDFType.PolicyType.REMOTE_POLICY) {
             totalSize = (1 + body.length + binding.length);
         } else {
-            if (type == NanoTDFPolicyType.EMBEDDED_POLICY_PLAIN_TEXT ||
-                    type == NanoTDFPolicyType.EMBEDDED_POLICY_ENCRYPTED) {
+            if (type == NanoTDFType.PolicyType.EMBEDDED_POLICY_PLAIN_TEXT ||
+                    type == NanoTDFType.PolicyType.EMBEDDED_POLICY_ENCRYPTED) {
 
                 int policySize =  body.length;
-                totalSize = (1 + Integer.BYTES + body.length + binding.length);
+                totalSize = (1 + Short.BYTES + body.length + binding.length);
             } else {
                 throw new RuntimeException("Embedded policy with key access is not supported.");
             }
@@ -91,12 +88,8 @@ public class PolicyInfo {
         totalBytesWritten += 1; // size of byte
 
         // Remote policy - The body is resource locator.
-        if (type == NanoTDFPolicyType.REMOTE_POLICY) {
-
-            // Write the policy in this case it's a resource locator;
-            buffer.put(body);
-            totalBytesWritten += body.length;
-
+        if (type == NanoTDFType.PolicyType.REMOTE_POLICY) {
+            throw new RuntimeException("Embedded policy with key access is not supported.");
         } else { // Embedded Policy
 
             // Embedded policy layout
@@ -107,18 +100,19 @@ public class PolicyInfo {
             //      2 - ephemeral public key, the size depends on ECC mode.
 
             // Write the length of the policy
-            buffer.putInt(body.length);
-            totalBytesWritten += Integer.BYTES;
 
-            if (type == NanoTDFPolicyType.EMBEDDED_POLICY_PLAIN_TEXT ||
-                    type == NanoTDFPolicyType.EMBEDDED_POLICY_ENCRYPTED) {
 
-                int policySize = body.length;
+            short policyLength = (short)body.length;
+            buffer.putShort(policyLength);
+            totalBytesWritten += Short.BYTES;
+
+            if (type == NanoTDFType.PolicyType.EMBEDDED_POLICY_PLAIN_TEXT ||
+                    type == NanoTDFType.PolicyType.EMBEDDED_POLICY_ENCRYPTED) {
 
                 // Copy the policy data.
                 buffer.put(body);
-                totalBytesWritten += policySize;
-            } else if (type == NanoTDFPolicyType.EMBEDDED_POLICY_ENCRYPTED_POLICY_KEY_ACCESS) {
+                totalBytesWritten += policyLength;
+            } else if (type == NanoTDFType.PolicyType.EMBEDDED_POLICY_ENCRYPTED_POLICY_KEY_ACCESS) {
                 throw new RuntimeException("Embedded policy with key access is not supported.");
             } else {
                 throw new RuntimeException("Invalid policy type.");
@@ -132,7 +126,7 @@ public class PolicyInfo {
         return totalBytesWritten;
     }
 
-    public NanoTDFPolicyType getPolicyType() {
+    public NanoTDFType.PolicyType getPolicyType() {
         return this.type;
     }
 
@@ -141,25 +135,25 @@ public class PolicyInfo {
         int size = remotePolicyUrl.getTotalSize();
         this.body = new byte[size];
         remotePolicyUrl.writeIntoBuffer(ByteBuffer.wrap(this.body));
-        this.type = NanoTDFPolicyType.REMOTE_POLICY;
+        this.type = NanoTDFType.PolicyType.REMOTE_POLICY;
     }
 
     public String getRemotePolicyUrl() {
-        if (this.type != NanoTDFPolicyType.REMOTE_POLICY) {
+        if (this.type != NanoTDFType.PolicyType.REMOTE_POLICY) {
             throw new RuntimeException("Policy is not remote type.");
         }
-        ResourceLocator policyUrl = new ResourceLocator(this.body);
+        ResourceLocator policyUrl = new ResourceLocator(ByteBuffer.wrap(this.body));
         return policyUrl.getResourceUrl();
     }
 
     public void setEmbeddedPlainTextPolicy(byte[] bytes) {
         this.body = new byte[bytes.length];
         System.arraycopy(bytes, 0, this.body, 0, bytes.length);
-        this.type = NanoTDFPolicyType.EMBEDDED_POLICY_PLAIN_TEXT;
+        this.type = NanoTDFType.PolicyType.EMBEDDED_POLICY_PLAIN_TEXT;
     }
 
     public byte[] getEmbeddedPlainTextPolicy() {
-        if (this.type != NanoTDFPolicyType.EMBEDDED_POLICY_PLAIN_TEXT) {
+        if (this.type != NanoTDFType.PolicyType.EMBEDDED_POLICY_PLAIN_TEXT) {
             throw new RuntimeException("Policy is not embedded plain text type.");
         }
         return this.body;
@@ -168,11 +162,11 @@ public class PolicyInfo {
     public void setEmbeddedEncryptedTextPolicy(byte[] bytes) {
         this.body = new byte[bytes.length];
         System.arraycopy(bytes, 0, this.body, 0, bytes.length);
-        this.type = NanoTDFPolicyType.EMBEDDED_POLICY_ENCRYPTED;
+        this.type = NanoTDFType.PolicyType.EMBEDDED_POLICY_ENCRYPTED;
     }
 
     public byte[] getEmbeddedEncryptedTextPolicy() {
-        if (this.type != NanoTDFPolicyType.EMBEDDED_POLICY_ENCRYPTED) {
+        if (this.type != NanoTDFType.PolicyType.EMBEDDED_POLICY_ENCRYPTED) {
             throw new RuntimeException("Policy is not embedded encrypted text type.");
         }
         return this.body;

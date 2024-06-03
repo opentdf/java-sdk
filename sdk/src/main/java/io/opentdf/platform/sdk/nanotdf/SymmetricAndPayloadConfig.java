@@ -14,10 +14,10 @@ public class SymmetricAndPayloadConfig {
         data = new Data();
 
         int cipherType = value & 0x0F; // first 4 bits
-        setSymmetricCipherType(NanoTDFCipher.values()[cipherType]);
+        setSymmetricCipherType(NanoTDFType.Cipher.values()[cipherType]);
 
         int signatureECCMode = (value >> 4) & 0x07;
-        setSignatureECCMode(EllipticCurve.values()[signatureECCMode]);
+        setSignatureECCMode(NanoTDFType.ECCurve.values()[signatureECCMode]);
 
         int hasSignature = (value >> 7) & 0x01; // most significant bit
         data.hasSignature = hasSignature;
@@ -27,7 +27,7 @@ public class SymmetricAndPayloadConfig {
         data.hasSignature = flag ? 1 : 0;
     }
 
-    public void setSignatureECCMode(EllipticCurve curve) {
+    public void setSignatureECCMode(NanoTDFType.ECCurve curve) {
         switch (curve) {
             case SECP256R1:
                 data.signatureECCMode = 0x00;
@@ -45,7 +45,7 @@ public class SymmetricAndPayloadConfig {
         }
     }
 
-    public void setSymmetricCipherType(NanoTDFCipher cipherType) {
+    public void setSymmetricCipherType(NanoTDFType.Cipher cipherType) {
         switch (cipherType) {
             case AES_256_GCM_64_TAG:
                 data.symmetricCipherEnum = 0x00;
@@ -77,12 +77,12 @@ public class SymmetricAndPayloadConfig {
         return data.hasSignature == 1;
     }
 
-    public EllipticCurve getSignatureECCMode() {
-        return EllipticCurve.values()[data.signatureECCMode];
+    public NanoTDFType.ECCurve getSignatureECCMode() {
+        return NanoTDFType.ECCurve.values()[data.signatureECCMode];
     }
 
-    public NanoTDFCipher getCipherType() {
-        return NanoTDFCipher.values()[data.symmetricCipherEnum];
+    public NanoTDFType.Cipher getCipherType() {
+        return NanoTDFType.Cipher.values()[data.symmetricCipherEnum];
     }
 
     public byte getSymmetricAndPayloadConfigAsByte() {
@@ -90,7 +90,7 @@ public class SymmetricAndPayloadConfig {
         return (byte) value;
     }
 
-    public int sizeOfAuthTagForCipher(NanoTDFCipher cipherType) {
+    static public int sizeOfAuthTagForCipher(NanoTDFType.Cipher cipherType) {
         switch (cipherType) {
             case AES_256_GCM_64_TAG:
                 return 8;

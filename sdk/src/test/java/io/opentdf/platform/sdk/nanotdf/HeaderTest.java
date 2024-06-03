@@ -46,7 +46,7 @@ class HeaderTest {
     void settingAndGettingPolicyInfo() {
         byte[] infoBytes = new byte[4]; // Ensure the byte array is large enough to read an integer
         ECCMode mode = new ECCMode((byte) 0);
-        PolicyInfo info = new PolicyInfo(infoBytes, mode);
+        PolicyInfo info = new PolicyInfo(ByteBuffer.wrap(infoBytes), mode);
         header.setPolicyInfo(info);
         assertEquals(info, header.getPolicyInfo());
     }

@@ -13,7 +13,7 @@ public class ECCMode {
     public ECCMode(byte value) {
         data = new ECCModeStruct();
         int curveMode = value & 0x07; // first 3 bits
-        setEllipticCurve(EllipticCurve.values()[curveMode]);
+        setEllipticCurve(NanoTDFType.ECCurve.values()[curveMode]);
         int useECDSABinding = (value >> 7) & 0x01; // most significant bit
         data.useECDSABinding = useECDSABinding;
     }
@@ -26,7 +26,7 @@ public class ECCMode {
         }
     }
 
-    public void setEllipticCurve(EllipticCurve curve) {
+    public void setEllipticCurve(NanoTDFType.ECCurve curve) {
         switch (curve) {
             case SECP256R1:
                 data.curveMode = 0x00;
@@ -44,8 +44,8 @@ public class ECCMode {
         }
     }
 
-    public EllipticCurve getEllipticCurveType() {
-        return EllipticCurve.values()[data.curveMode];
+    public NanoTDFType.ECCurve getEllipticCurveType() {
+        return NanoTDFType.ECCurve.values()[data.curveMode];
     }
 
     public boolean isECDSABindingEnabled() {
@@ -53,7 +53,7 @@ public class ECCMode {
     }
 
     public String getCurveName() {
-        return getEllipticCurveName(EllipticCurve.values()[data.curveMode]);
+        return getEllipticCurveName(NanoTDFType.ECCurve.values()[data.curveMode]);
     }
 
     public byte getECCModeAsByte() {
@@ -61,10 +61,10 @@ public class ECCMode {
         return (byte) value;
     }
 
-    public static String getEllipticCurveName(EllipticCurve curve) {
+    public static String getEllipticCurveName(NanoTDFType.ECCurve curve) {
         switch (curve) {
             case SECP256R1:
-                return "prime256v1";
+                return "secp256r1";
             case SECP384R1:
                 return "secp384r1";
             case SECP521R1:
@@ -76,7 +76,7 @@ public class ECCMode {
         }
     }
 
-    public static int getECKeySize(EllipticCurve curve) {
+    public static int getECKeySize(NanoTDFType.ECCurve curve) {
         switch (curve) {
             case SECP256K1:
                 throw new RuntimeException("SDK doesn't support 'secp256k1' curve");
@@ -91,7 +91,7 @@ public class ECCMode {
         }
     }
 
-    public static int getECDSASignatureStructSize(EllipticCurve curve) {
+    public static int getECDSASignatureStructSize(NanoTDFType.ECCurve curve) {
         int keySize = getECKeySize(curve);
         return (1 + keySize + 1 + keySize);
     }
@@ -100,7 +100,7 @@ public class ECCMode {
         return ECKeyPair.getECKeySize(curveName);
     }
 
-    public static int getECCompressedPubKeySize(EllipticCurve curve) {
+    public static int getECCompressedPubKeySize(NanoTDFType.ECCurve curve) {
         switch (curve) {
             case SECP256K1:
                 throw new RuntimeException("SDK doesn't support 'secp256k1' curve");

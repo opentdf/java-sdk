@@ -112,7 +112,7 @@ public class NanoTDFHeaderTest {
         dataIn.readFully(magicNumberAndVersion);
         header2.setMagicNumberAndVersion(magicNumberAndVersion);
 
-        Protocol protocol = Protocol.values()[dataIn.readByte()];
+        NanoTDFType.Protocol protocol =  NanoTDFType.Protocol.values()[dataIn.readByte()];
 
         // Read the body length
         int bodyLength = dataIn.readByte();
@@ -142,7 +142,7 @@ public class NanoTDFHeaderTest {
 
        // Read the remaining bytes into the byte array
         dataIn.readFully(remainingBytesArray);
-        PolicyInfo policyInfo = new PolicyInfo(remainingBytesArray, header2.getECCMode());
+        PolicyInfo policyInfo = new PolicyInfo(ByteBuffer.wrap(remainingBytesArray), header2.getECCMode());
         header2.setPolicyInfo(policyInfo);
 
         int sizeToRead = policyInfo.getTotalSize();
