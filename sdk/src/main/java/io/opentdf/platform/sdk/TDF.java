@@ -178,11 +178,11 @@ public class TDF {
                 // Add meta data
                 if(tdfConfig.metaData != null && !tdfConfig.metaData.trim().isEmpty()) {
                     AesGcm aesGcm = new AesGcm(symKey);
-                    byte[] ciphertext = aesGcm.encrypt(tdfConfig.metaData.getBytes(StandardCharsets.UTF_8));
+                    byte[][] ivAndCiphertext = aesGcm.encrypt(tdfConfig.metaData.getBytes(StandardCharsets.UTF_8));
 
                     EncryptedMetadata encryptedMetadata = new EncryptedMetadata();
-                    encryptedMetadata.ciphertext = encoder.encodeToString(Arrays.copyOfRange(ciphertext, 12, ciphertext.length));
-                    encryptedMetadata.iv = encoder.encodeToString(Arrays.copyOfRange(ciphertext, 0, 12));
+                    encryptedMetadata.iv = encoder.encodeToString(ivAndCiphertext[0]);
+                    encryptedMetadata.ciphertext = encoder.encodeToString(ivAndCiphertext[1]);
 
                     var metadata = gson.toJson(encryptedMetadata);
                     keyAccess.encryptedMetadata = encoder.encodeToString(metadata.getBytes(StandardCharsets.UTF_8));
@@ -223,12 +223,8 @@ public class TDF {
 
         private void doPayloadKeyUnwrap() throws IOException, InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException, FailedToCreateGMAC, NotValidateRootSignature, SegmentSizeMismatch {
             for (Manifest.KeyAccess keyAccess: this.manifest.encryptionInformation.keyAccessObj) {
-                // Create KAS client
-                // Perform rewrap
-                byte[] wrappedKey = new byte[GCM_KEY_SIZE]; // Replace with kas client rewrap call
-
                 var unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy);
-                for (int index = 0; index < wrappedKey.length; index++) {
+                for (int index = 0; index < unwrappedKey.length; index++) {
                     this.payloadKey[index] ^= unwrappedKey[index];
                 }
 
@@ -240,12 +236,14 @@ public class TDF {
                     Gson gson = new GsonBuilder().create();
                     EncryptedMetadata encryptedMetadata = gson.fromJson(decodedMetadata, EncryptedMetadata.class);
 
-                    byte[] cipherText = decoder.decode(encryptedMetadata.ciphertext);
-                    byte[] iv = decoder.decode(encryptedMetadata.iv);
-                    byte[] toDecrypt = new byte[iv.length + cipherText.length];
-                    System.arraycopy(iv, 0, toDecrypt, 0, iv.length);
-                    System.arraycopy(cipherText, 0, toDecrypt, iv.length, cipherText.length);
+                    byte[] toDecrypt = CryptoUtils.concat(
+                        decoder.decode(encryptedMetadata.iv),
+                        decoder.decode(encryptedMetadata.ciphertext)
+                    );
+
                     byte[] decrypted = aesGcm.decrypt(toDecrypt);
+                    // this is a little bit weird... the last unencrypted metadata we get from a KAS is the one
+                    // that we return to the user. This is OK because we can't have different metadata per-KAS
                     this.unencryptedMetadata = new String(decrypted, StandardCharsets.UTF_8);
                 }
             }
@@ -287,6 +285,7 @@ public class TDF {
             this.aesGcm = new AesGcm(this.payloadKey);
         }
     }
+
 
 
     private static String calculateSignature(byte[] data, byte[] secret, Config.IntegrityAlgorithm algorithm)
@@ -352,7 +351,7 @@ public class TDF {
                 throw new InputStreamReadFailed("Input stream read miss match");
             }
 
-            byte[] cipherData = tdfObject.aesGcm.encrypt(readBuf, 0, (int) readSize);
+            byte[] cipherData = CryptoUtils.concat(tdfObject.aesGcm.encrypt(readBuf, 0, (int) readSize));
             tdfWriter.appendPayload(cipherData);
 
             String segmentSig = calculateSignature(cipherData, tdfObject.payloadKey, tdfConfig.segmentIntegrityAlgorithm);

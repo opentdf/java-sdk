@@ -37,7 +37,7 @@ public class AesGcm {
      * @param plaintext the plaintext to encrypt
      * @return the encrypted text
      */
-    public byte[] encrypt(byte[] plaintext) throws NoSuchPaddingException, NoSuchAlgorithmException,
+    public byte[][] encrypt(byte[] plaintext) throws NoSuchPaddingException, NoSuchAlgorithmException,
             InvalidAlgorithmParameterException, InvalidKeyException, BadPaddingException, IllegalBlockSizeException {
         return encrypt(plaintext, 0, plaintext.length);
     }
@@ -50,19 +50,16 @@ public class AesGcm {
      * @param len input length
      * @return the encrypted text
      */
-    public byte[] encrypt(byte[] plaintext, int offset, int len) throws NoSuchPaddingException, NoSuchAlgorithmException,
+    public byte[][] encrypt(byte[] plaintext, int offset, int len) throws NoSuchPaddingException, NoSuchAlgorithmException,
             InvalidAlgorithmParameterException, InvalidKeyException, BadPaddingException, IllegalBlockSizeException {
         Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORM);
         byte[] nonce = new byte[GCM_NONCE_LENGTH];
         SecureRandom.getInstanceStrong().nextBytes(nonce);
         GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, nonce);
         cipher.init(Cipher.ENCRYPT_MODE, key, spec);
-
         byte[] cipherText = cipher.doFinal(plaintext, offset, len);
-        byte[] cipherTextWithNonce = new byte[nonce.length + cipherText.length];
-        System.arraycopy(nonce, 0, cipherTextWithNonce, 0, nonce.length);
-        System.arraycopy(cipherText, 0, cipherTextWithNonce, nonce.length, cipherText.length);
-        return cipherTextWithNonce;
+
+        return new byte[][] { nonce, cipherText };
     }
 
     /**
@@ -71,13 +68,15 @@ public class AesGcm {
      * @param cipherTextWithNonce the ciphertext with nonce to decrypt
      * @return the decrypted text
      */
-    public byte[] decrypt(byte[] cipherTextWithNonce) throws NoSuchPaddingException, NoSuchAlgorithmException,
+    public byte[] decrypt(byte[][] cipherTextWithNonce) throws NoSuchPaddingException, NoSuchAlgorithmException,
             InvalidAlgorithmParameterException, InvalidKeyException, BadPaddingException, IllegalBlockSizeException {
         Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORM);
-        byte[] nonce = Arrays.copyOfRange(cipherTextWithNonce, 0, GCM_NONCE_LENGTH);
-        byte[] cipherText = Arrays.copyOfRange(cipherTextWithNonce, GCM_NONCE_LENGTH, cipherTextWithNonce.length);
-        GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, nonce);
+        GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, cipherTextWithNonce[0]);
         cipher.init(Cipher.DECRYPT_MODE, key, spec);
-        return cipher.doFinal(cipherText);
+        return cipher.doFinal(cipherTextWithNonce[1]);
+    }
+    public byte[] decrypt(byte[] cipherTextWithNonce) throws NoSuchPaddingException, NoSuchAlgorithmException,
+            InvalidAlgorithmParameterException, InvalidKeyException, BadPaddingException, IllegalBlockSizeException {
+        return decrypt(CryptoUtils.split(cipherTextWithNonce, GCM_NONCE_LENGTH));
     }
 }
