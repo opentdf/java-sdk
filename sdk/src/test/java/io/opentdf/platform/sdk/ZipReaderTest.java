@@ -115,7 +115,7 @@ public class ZipReaderTest {
             namesToData.put(fileName, content);
 
             if (r.nextBoolean()) {
-                writer = writer.file(fileName, content);
+                writer.data(fileName, content);
             } else {
                 try (var streamEntry = writer.stream(fileName)) {
                     new ByteArrayInputStream(content).transferTo(streamEntry);

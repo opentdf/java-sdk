@@ -14,7 +14,7 @@ public class TDFWriter {
     }
 
     public void appendManifest(String manifest) throws IOException {
-        this.archiveWriter.file(TDF_MANIFEST_FILE_NAME, manifest.getBytes(StandardCharsets.UTF_8));
+        this.archiveWriter.data(TDF_MANIFEST_FILE_NAME, manifest.getBytes(StandardCharsets.UTF_8));
     }
 
     public OutputStream payload() throws IOException {

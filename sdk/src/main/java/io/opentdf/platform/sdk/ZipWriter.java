@@ -91,9 +91,8 @@ public class ZipWriter {
         };
     }
 
-    public ZipWriter file(String name, byte[] content) throws IOException {
+    public void data(String name, byte[] content) throws IOException {
         fileInfos.add(writeByteArray(name, content, out));
-        return this;
     }
 
     /**
@@ -108,8 +107,8 @@ public class ZipWriter {
             writeCentralDirectoryHeader(fileInfo, out);
         }
         final var sizeOfCentralDirectory = out.position - startOfCentralDirectory;
-        final var isZip64 = fileInfos.stream().anyMatch(f -> f.isZip64);
-        writeEndOfCentralDirectory(isZip64, fileInfos.size(), startOfCentralDirectory, sizeOfCentralDirectory, out);
+        final var hasZip64Entry = fileInfos.stream().anyMatch(f -> f.isZip64);
+        writeEndOfCentralDirectory(hasZip64Entry, fileInfos.size(), startOfCentralDirectory, sizeOfCentralDirectory, out);
 
         return out.position;
     }
