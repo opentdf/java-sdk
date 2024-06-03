@@ -175,11 +175,11 @@ public class TDF {
                 // Add meta data
                 if(tdfConfig.metaData != null && !tdfConfig.metaData.trim().isEmpty()) {
                     AesGcm aesGcm = new AesGcm(symKey);
-                    byte[][] ivAndCiphertext = aesGcm.encrypt(tdfConfig.metaData.getBytes(StandardCharsets.UTF_8));
+                    var encrypted = aesGcm.encrypt(tdfConfig.metaData.getBytes(StandardCharsets.UTF_8));
 
                     EncryptedMetadata encryptedMetadata = new EncryptedMetadata();
-                    encryptedMetadata.iv = encoder.encodeToString(ivAndCiphertext[0]);
-                    encryptedMetadata.ciphertext = encoder.encodeToString(ivAndCiphertext[1]);
+                    encryptedMetadata.iv = encoder.encodeToString(encrypted.getIv());
+                    encryptedMetadata.ciphertext = encoder.encodeToString(encrypted.getCiphertext());
 
                     var metadata = gson.toJson(encryptedMetadata);
                     keyAccess.encryptedMetadata = encoder.encodeToString(metadata.getBytes(StandardCharsets.UTF_8));
@@ -246,7 +246,7 @@ public class TDF {
                     throw new SegmentSignatureMismatch("segment signature miss match");
                 }
 
-                byte[] writeBuf = aesGcm.decrypt(readBuf);
+                byte[] writeBuf = aesGcm.decrypt(new AesGcm.Encrypted(readBuf));
                 outputStream.write(writeBuf);
             }
         }
@@ -315,16 +315,16 @@ public class TDF {
                 throw new InputStreamReadFailed("Input stream read miss match");
             }
 
-            byte[] cipherData = CryptoUtils.concat(tdfObject.aesGcm.encrypt(readBuf, 0, (int) readSize));
-            tdfWriter.appendPayload(cipherData);
+            var encrypted = tdfObject.aesGcm.encrypt(readBuf, 0, (int) readSize).asBytes();
+            tdfWriter.appendPayload(encrypted);
 
-            String segmentSig = calculateSignature(cipherData, tdfObject.payloadKey, tdfConfig.segmentIntegrityAlgorithm);
+            String segmentSig = calculateSignature(encrypted, tdfObject.payloadKey, tdfConfig.segmentIntegrityAlgorithm);
 
             aggregateHash.append(segmentSig);
             Manifest.Segment segmentInfo = new Manifest.Segment();
             segmentInfo.hash = Base64.getEncoder().encodeToString(segmentSig.getBytes(StandardCharsets.UTF_8));
             segmentInfo.segmentSize = readSize;
-            segmentInfo.encryptedSegmentSize = cipherData.length;
+            segmentInfo.encryptedSegmentSize = encrypted.length;
 
             tdfObject.manifest.encryptionInformation.integrityInformation.segments.add(segmentInfo);
 
@@ -399,19 +399,19 @@ public class TDF {
             }
 
             if (keyAccess.encryptedMetadata != null && !keyAccess.encryptedMetadata.isEmpty()) {
-                AesGcm aesGcm1 = new AesGcm(unwrappedKey);
+                AesGcm aesGcm = new AesGcm(unwrappedKey);
 
                 String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata), "UTF-8");
 
                 Gson gson = new GsonBuilder().create();
                 EncryptedMetadata encryptedMetadata = gson.fromJson(decodedMetadata, EncryptedMetadata.class);
 
-                byte[] toDecrypt = CryptoUtils.concat(
-                        decoder.decode(encryptedMetadata.iv),
-                        decoder.decode(encryptedMetadata.ciphertext)
+                var encryptedData = new AesGcm.Encrypted(
+                    decoder.decode(encryptedMetadata.iv),
+                    decoder.decode(encryptedMetadata.ciphertext)
                 );
 
-                byte[] decrypted = aesGcm1.decrypt(toDecrypt);
+                byte[] decrypted = aesGcm.decrypt(encryptedData);
                 // this is a little bit weird... the last unencrypted metadata we get from a KAS is the one
                 // that we return to the user. This is OK because we can't have different metadata per-KAS
                 unencryptedMetadata = new String(decrypted, StandardCharsets.UTF_8);
