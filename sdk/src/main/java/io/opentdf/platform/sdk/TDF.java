@@ -14,6 +14,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Array;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidAlgorithmParameterException;
@@ -25,6 +26,8 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
+
+import static io.opentdf.platform.sdk.AesGcm.GCM_NONCE_LENGTH;
 
 public class TDF {
 
@@ -137,7 +140,7 @@ public class TDF {
             return policyObject;
         }
 
-        private static Base64.Encoder encoder = Base64.getEncoder();
+        private static final Base64.Encoder encoder = Base64.getEncoder();
         private void prepareManifest(Config.TDFConfig tdfConfig) throws Exception {
             Gson gson = new GsonBuilder().create();
 
@@ -145,7 +148,7 @@ public class TDF {
             manifest.encryptionInformation.keyAccessObj =  new ArrayList<>();
 
             PolicyObject policyObject = createPolicyObject(tdfConfig.attributes);
-            String base64PolicyObject  = Base64.getEncoder().encodeToString(gson.toJson(policyObject).getBytes(StandardCharsets.UTF_8));
+            String base64PolicyObject  = encoder.encodeToString(gson.toJson(policyObject).getBytes(StandardCharsets.UTF_8));
             List<byte[]> symKeys = new ArrayList<>();
 
             for (Config.KASInfo kasInfo: tdfConfig.kasInfoList) {
@@ -164,28 +167,25 @@ public class TDF {
 
                 // Add policyBinding
                 var hexBinding = Hex.encodeHexString(CryptoUtils.CalculateSHA256Hmac(symKey, base64PolicyObject.getBytes(StandardCharsets.UTF_8)));
-                keyAccess.policyBinding = encoder.encodeToString(hexBinding.getBytes(StandardCharsets.UTF_8));
+                keyAccess.policyBinding = TDFObject.encoder.encodeToString(hexBinding.getBytes(StandardCharsets.UTF_8));
 
                 // Wrap the key with kas public key
                 AsymEncryption asymmetricEncrypt = new AsymEncryption(kasInfo.PublicKey);
                 byte[] wrappedKey = asymmetricEncrypt.encrypt(symKey);
 
-                keyAccess.wrappedKey = Base64.getEncoder().encodeToString(wrappedKey);
+                keyAccess.wrappedKey = encoder.encodeToString(wrappedKey);
 
                 // Add meta data
                 if(tdfConfig.metaData != null && !tdfConfig.metaData.trim().isEmpty()) {
                     AesGcm aesGcm = new AesGcm(symKey);
                     byte[] ciphertext = aesGcm.encrypt(tdfConfig.metaData.getBytes(StandardCharsets.UTF_8));
 
-
-                    byte[] iv = new byte[AesGcm.GCM_NONCE_LENGTH];
-                    System.arraycopy(ciphertext, 0, iv, 0, iv.length);
-
                     EncryptedMetadata encryptedMetadata = new EncryptedMetadata();
-                    encryptedMetadata.ciphertext = new String(ciphertext);
-                    encryptedMetadata.iv = new String(iv);
+                    encryptedMetadata.ciphertext = encoder.encodeToString(Arrays.copyOfRange(ciphertext, 12, ciphertext.length));
+                    encryptedMetadata.iv = encoder.encodeToString(Arrays.copyOfRange(ciphertext, 0, 12));
 
-                    keyAccess.encryptedMetadata = gson.toJson(encryptedMetadata);
+                    var metadata = gson.toJson(encryptedMetadata);
+                    keyAccess.encryptedMetadata = encoder.encodeToString(metadata.getBytes(StandardCharsets.UTF_8));
                 }
 
                 symKeys.add(symKey);
@@ -233,16 +233,20 @@ public class TDF {
                 }
 
                 if (keyAccess.encryptedMetadata != null && !keyAccess.encryptedMetadata.isEmpty()) {
-                    AesGcm aesGcm = new AesGcm(wrappedKey);
+                    AesGcm aesGcm = new AesGcm(unwrappedKey);
 
                     String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata), "UTF-8");
 
                     Gson gson = new GsonBuilder().create();
                     EncryptedMetadata encryptedMetadata = gson.fromJson(decodedMetadata, EncryptedMetadata.class);
 
-                    String encodedCipherText = encryptedMetadata.ciphertext;
-                    byte[] cipherText = Base64.getDecoder().decode(encodedCipherText);
-                    this.unencryptedMetadata = new String(aesGcm.decrypt(cipherText), "UTF-8");
+                    byte[] cipherText = decoder.decode(encryptedMetadata.ciphertext);
+                    byte[] iv = decoder.decode(encryptedMetadata.iv);
+                    byte[] toDecrypt = new byte[iv.length + cipherText.length];
+                    System.arraycopy(iv, 0, toDecrypt, 0, iv.length);
+                    System.arraycopy(cipherText, 0, toDecrypt, iv.length, cipherText.length);
+                    byte[] decrypted = aesGcm.decrypt(toDecrypt);
+                    this.unencryptedMetadata = new String(decrypted, StandardCharsets.UTF_8);
                 }
             }
 
@@ -414,7 +418,8 @@ public class TDF {
         }
     }
 
-    public void loadTDF(SeekableByteChannel tdf, OutputStream outputStream, SDK.KAS kas) throws InvalidAlgorithmParameterException,
+    // TODO: make this more like the reader from the go SDK
+    public Manifest loadTDF(SeekableByteChannel tdf, OutputStream outputStream, SDK.KAS kas) throws InvalidAlgorithmParameterException,
             NotValidateRootSignature, SegmentSizeMismatch, NoSuchPaddingException,
             IllegalBlockSizeException, IOException, NoSuchAlgorithmException,
             BadPaddingException, InvalidKeyException, FailedToCreateGMAC, TDFReadFailed, SegmentSignatureMismatch {
@@ -451,5 +456,7 @@ public class TDF {
             byte[] writeBuf = reader.aesGcm.decrypt(readBuf);
             outputStream.write(writeBuf);
         }
+
+        return reader.manifest;
     }
 }

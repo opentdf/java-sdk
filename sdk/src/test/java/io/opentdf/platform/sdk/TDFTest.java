@@ -58,7 +58,8 @@ public class TDFTest {
         }
 
         Config.TDFConfig config = Config.newTDFConfig(
-                Config.withKasInformation(kasInfos.toArray(new Config.KASInfo[0]))
+                Config.withKasInformation(kasInfos.toArray(Config.KASInfo[]::new)),
+                Config.withMetaData("here is some metadata")
         );
 
         String plainText = "this is extremely sensitive stuff!!!";
@@ -68,11 +69,12 @@ public class TDFTest {
         TDF tdf = new TDF();
         tdf.createTDF(plainTextInputStream, plainText.length(), tdfOutputStream, config, kas);
 
-        var unwrappedData = new java.io.ByteArrayOutputStream();
-        tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), unwrappedData, kas);
+        var unwrappedData = new ByteArrayOutputStream();
+        var manifest = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), unwrappedData, kas);
 
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
                 .isEqualTo(plainText);
+
 
     }
 }
