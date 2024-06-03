@@ -99,18 +99,20 @@ public class TDFTest {
     }
 
     @Test
-    public void testCreatingTooLargeTDF() throws Exception {
+    public void testCreatingTooLargeTDF() {
         var random = new Random();
-        var maxSize = 1 + random.nextInt(1024);
+        var maxSize = random.nextInt(1024);
         var numReturned = new AtomicInteger(0);
 
         // return 1 more byte than the maximum size
         var is = new InputStream() {
             @Override
             public int read() {
-                var ans = numReturned.get() > maxSize ? -1 : 1;
+                if (numReturned.get() > maxSize) {
+                    return -1;
+                }
                 numReturned.incrementAndGet();
-                return ans;
+                return 1;
             }
 
             @Override
