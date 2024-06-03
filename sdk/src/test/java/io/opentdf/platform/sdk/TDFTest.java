@@ -1,6 +1,5 @@
 package io.opentdf.platform.sdk;
 
-import org.apache.commons.compress.utils.Lists;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.junit.jupiter.api.BeforeAll;
@@ -10,7 +9,6 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Base64;
 
@@ -70,11 +68,12 @@ public class TDFTest {
         tdf.createTDF(plainTextInputStream, plainText.length(), tdfOutputStream, config, kas);
 
         var unwrappedData = new ByteArrayOutputStream();
-        var manifest = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), unwrappedData, kas);
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
+        reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
                 .isEqualTo(plainText);
-
+        assertThat(reader.getMetadata()).isEqualTo("here is some metadata");
 
     }
 }
