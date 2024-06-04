@@ -48,6 +48,8 @@ public class TDF {
 
     private static final SecureRandom sRandom = new SecureRandom();
 
+    private static final Gson gson = new GsonBuilder().create();
+
     public static class DataSizeNotSupported extends Exception {
         public DataSizeNotSupported(String errorMessage) {
             super(errorMessage);
@@ -139,8 +141,6 @@ public class TDF {
 
         private static final Base64.Encoder encoder = Base64.getEncoder();
         private void prepareManifest(Config.TDFConfig tdfConfig) throws Exception {
-            Gson gson = new GsonBuilder().create();
-
             manifest.encryptionInformation.keyAccessType = kSplitKeyType;
             manifest.encryptionInformation.keyAccessObj =  new ArrayList<>();
 
@@ -164,7 +164,7 @@ public class TDF {
 
                 // Add policyBinding
                 var hexBinding = Hex.encodeHexString(CryptoUtils.CalculateSHA256Hmac(symKey, base64PolicyObject.getBytes(StandardCharsets.UTF_8)));
-                keyAccess.policyBinding = TDFObject.encoder.encodeToString(hexBinding.getBytes(StandardCharsets.UTF_8));
+                keyAccess.policyBinding = encoder.encodeToString(hexBinding.getBytes(StandardCharsets.UTF_8));
 
                 // Wrap the key with kas public key
                 AsymEncryption asymmetricEncrypt = new AsymEncryption(kasInfo.PublicKey);
@@ -362,7 +362,6 @@ public class TDF {
         tdfObject.manifest.payload.url = TDFWriter.TDF_PAYLOAD_FILE_NAME;
         tdfObject.manifest.payload.isEncrypted = true;
 
-        Gson gson = new GsonBuilder().create();
         String manifestAsStr = gson.toJson(tdfObject.manifest);
 
         tdfWriter.appendManifest(manifestAsStr);
@@ -388,7 +387,7 @@ public class TDF {
 
         TDFReader tdfReader = new TDFReader(tdf);
         String manifestJson = tdfReader.manifest();
-        Manifest manifest = new Gson().fromJson(manifestJson, Manifest.class);
+        Manifest manifest = gson.fromJson(manifestJson, Manifest.class);
         byte[] payloadKey = new byte[GCM_KEY_SIZE];
         String unencryptedMetadata = null;
 
@@ -402,8 +401,6 @@ public class TDF {
                 AesGcm aesGcm = new AesGcm(unwrappedKey);
 
                 String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata), "UTF-8");
-
-                Gson gson = new GsonBuilder().create();
                 EncryptedMetadata encryptedMetadata = gson.fromJson(decodedMetadata, EncryptedMetadata.class);
 
                 var encryptedData = new AesGcm.Encrypted(
