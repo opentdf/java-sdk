@@ -1,6 +1,5 @@
 package io.opentdf.platform.sdk;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -15,7 +14,6 @@ public class ZipWriter {
     private static final int ZIP_VERSION = 0x2D;
     private static final int ZIP_64_MAGIC_VAL = 0xFFFFFFFF;
     private static final long ZIP_64_END_OF_CD_RECORD_SIZE = 56;
-    private static final int ZIP_64_LOCAL_EXTENDED_INFO_EXTRA_FIELD_SIZE = 24;
 
     private static final int ZIP_64_GLOBAL_EXTENDED_INFO_EXTRA_FIELD_SIZE = 28;
 
@@ -24,75 +22,95 @@ public class ZipWriter {
     private static final int BASE_YEAR = 1980;
     private static final int DEFAULT_SECOND_VALUE = 29;
     private static final int MONTH_SHIFT = 5;
-    private static class FileBytes {
-        public FileBytes(String name, byte[] data) {
-            this.name = name;
-            this.data = data;
-        }
+    private final CountingOutputStream out;
+    private final ArrayList<FileInfo> fileInfos = new ArrayList<>();
 
-        final String name;
-        final byte[] data;
+    public ZipWriter(OutputStream out) {
+        this.out = new CountingOutputStream(out);
     }
 
-    private static class InputStream {
-        public InputStream(String name, java.io.InputStream data) {
-            this.name = name;
-            this.data = data;
-        }
+    public OutputStream stream(String name) throws IOException {
+        var startPosition = out.position;
+        long fileTime, fileDate;
+        fileTime = fileDate = getTimeDateUnMSDosFormat();
 
-        final String name;
-        private final java.io.InputStream data;
+        var nameBytes = name.getBytes(StandardCharsets.UTF_8);
+        LocalFileHeader localFileHeader = new LocalFileHeader();
+        localFileHeader.lastModifiedTime = (int) fileTime;
+        localFileHeader.lastModifiedDate = (int) fileDate;
+        localFileHeader.filenameLength = (short) nameBytes.length;
+        localFileHeader.crc32 = 0;
+        localFileHeader.generalPurposeBitFlag = (1 << 3) | (1 << 11); // we are using the data descriptor and we are using UTF-8
+        localFileHeader.compressedSize = ZIP_64_MAGIC_VAL;
+        localFileHeader.uncompressedSize = ZIP_64_MAGIC_VAL;
+        localFileHeader.extraFieldLength = 0;
+
+        localFileHeader.write(out, nameBytes);
+
+        var crc = new CRC32();
+        long fileStart = out.position;
+        return new OutputStream() {
+            @Override
+            public void write(int b) throws IOException {
+                crc.update(b);
+                out.write(b);
+            }
+
+            @Override
+            public void write(byte[] b, int off, int len) throws IOException {
+                crc.update(b, off, len);
+                out.write(b, off, len);
+            }
+
+            @Override
+            public void close() throws IOException {
+                super.close();
+
+                long fileSize = out.position - fileStart;
+                long crcValue = crc.getValue();
+
+                // Write Zip64 data descriptor
+                Zip64DataDescriptor dataDescriptor = new Zip64DataDescriptor();
+                dataDescriptor.crc32 = crcValue;
+                dataDescriptor.compressedSize = fileSize;
+                dataDescriptor.uncompressedSize = fileSize;
+                dataDescriptor.write(out);
+
+                var fileInfo = new FileInfo();
+                fileInfo.offset = startPosition;
+                fileInfo.flag = (short) localFileHeader.generalPurposeBitFlag;
+                fileInfo.size = fileSize;
+                fileInfo.crc = crcValue;
+                fileInfo.filename = name;
+                fileInfo.fileTime = (short) fileTime;
+                fileInfo.fileDate = (short) fileDate;
+                fileInfo.isZip64 = true;
+
+                fileInfos.add(fileInfo);
+            }
+        };
     }
 
-    private final ArrayList<FileBytes> byteFiles = new ArrayList<>();
-    private final ArrayList<InputStream> streamFiles = new ArrayList<>();
-
-    public ZipWriter file(String name, java.io.InputStream data) {
-        streamFiles.add(new InputStream(name, data));
-        return this;
-    }
-
-    public ZipWriter file(String name, byte[] content) {
-        byteFiles.add(new FileBytes(name, content));
-        return this;
+    public void data(String name, byte[] content) throws IOException {
+        fileInfos.add(writeByteArray(name, content, out));
     }
 
     /**
      * Writes the zip file to a stream and returns the number of
      * bytes written to the stream
-     * @param sink
      * @return the number of bytes written
-     * @throws IOException
+     * @throws IOException when writing to the underlying stream causes an error
      */
-    public long build(OutputStream sink) throws IOException {
-        var out = new CountingOutputStream(sink);
-        ArrayList<FileInfo> fileInfos = new ArrayList<>();
-
-        for (var byteFile : byteFiles) {
-            var fileInfo = writeByteArray(byteFile.name, byteFile.data, out);
-            fileInfos.add(fileInfo);
-        }
-
-        for (var streamFile : streamFiles) {
-            var fileInfo = writeStream(streamFile.name, streamFile.data, out);
-            fileInfos.add(fileInfo);
-        }
-
+    public long finish() throws IOException {
         final var startOfCentralDirectory = out.position;
         for (var fileInfo : fileInfos) {
             writeCentralDirectoryHeader(fileInfo, out);
         }
-
         final var sizeOfCentralDirectory = out.position - startOfCentralDirectory;
-        writeEndOfCentralDirectory(!streamFiles.isEmpty(), fileInfos.size(), startOfCentralDirectory, sizeOfCentralDirectory, out);
+        final var hasZip64Entry = fileInfos.stream().anyMatch(f -> f.isZip64);
+        writeEndOfCentralDirectory(hasZip64Entry, fileInfos.size(), startOfCentralDirectory, sizeOfCentralDirectory, out);
 
         return out.position;
-    }
-
-    public byte[] build() throws IOException {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        build(out);
-        return out.toByteArray();
     }
 
     private static void writeCentralDirectoryHeader(FileInfo fileInfo, OutputStream out) throws IOException {
@@ -123,64 +141,6 @@ public class ZipWriter {
             zip64ExtendedInfoExtraField.localFileHeaderOffset = fileInfo.offset;
             zip64ExtendedInfoExtraField.write(out);
         }
-    }
-
-    private FileInfo writeStream(String name, java.io.InputStream data, CountingOutputStream out) throws IOException {
-        var startPosition = out.position;
-        long fileTime, fileDate;
-        fileTime = fileDate = getTimeDateUnMSDosFormat();
-
-        var nameBytes = name.getBytes(StandardCharsets.UTF_8);
-        LocalFileHeader localFileHeader = new LocalFileHeader();
-        localFileHeader.lastModifiedTime = (int) fileTime;
-        localFileHeader.lastModifiedDate = (int) fileDate;
-        localFileHeader.filenameLength = (short) nameBytes.length;
-        localFileHeader.crc32 = 0;
-        localFileHeader.generalPurposeBitFlag = (1 << 3) | (1 << 11); // we are using the data descriptor and we are using UTF-8
-        localFileHeader.compressedSize = ZIP_64_MAGIC_VAL;
-        localFileHeader.uncompressedSize = ZIP_64_MAGIC_VAL;
-        localFileHeader.extraFieldLength = 0;
-
-        localFileHeader.write(out, nameBytes);
-
-        var crc = new CRC32();
-        var outputStream = new OutputStream() {
-            @Override
-            public void write(int b) throws IOException {
-                crc.update(b);
-                out.write(b);
-            }
-
-            @Override
-            public void write(byte[] b, int off, int len) throws IOException {
-                crc.update(b, off, len);
-                out.write(b, off, len);
-            }
-        };
-
-        long fileStart = out.position;
-        data.transferTo(outputStream);
-        long fileSize = out.position - fileStart;
-        long crcValue = crc.getValue();
-
-        // Write Zip64 data descriptor
-        Zip64DataDescriptor dataDescriptor = new Zip64DataDescriptor();
-        dataDescriptor.crc32 = crcValue;
-        dataDescriptor.compressedSize = fileSize;
-        dataDescriptor.uncompressedSize = fileSize;
-        dataDescriptor.write(out);
-
-        var fileInfo = new FileInfo();
-        fileInfo.offset = startPosition;
-        fileInfo.flag = (short) localFileHeader.generalPurposeBitFlag;
-        fileInfo.size = fileSize;
-        fileInfo.crc = crcValue;
-        fileInfo.filename = name;
-        fileInfo.fileTime = (short) fileTime;
-        fileInfo.fileDate = (short) fileDate;
-        fileInfo.isZip64 = true;
-
-        return fileInfo;
     }
 
     private FileInfo writeByteArray(String name, byte[] data, CountingOutputStream out) throws IOException {
@@ -389,25 +349,6 @@ public class ZipWriter {
             buffer.putInt(externalFileAttributes);
             buffer.putInt(localHeaderOffset);
             buffer.put(filename);
-
-            out.write(buffer.array());
-            assert buffer.position() == buffer.capacity();
-        }
-    }
-
-    private static class Zip64LocalExtendedInfoExtraField {
-        final short signature = 0x0001;
-        final short size = ZIP_64_LOCAL_EXTENDED_INFO_EXTRA_FIELD_SIZE;
-        long originalSize;
-        long compressedSize;
-
-        void write(OutputStream out) throws IOException {
-            var buffer = ByteBuffer.allocate(ZIP_64_LOCAL_EXTENDED_INFO_EXTRA_FIELD_SIZE);
-            buffer.order(ByteOrder.LITTLE_ENDIAN);
-            buffer.putShort(signature);
-            buffer.putShort(size);
-            buffer.putLong(originalSize);
-            buffer.putLong(compressedSize);
 
             out.write(buffer.array());
             assert buffer.position() == buffer.capacity();
