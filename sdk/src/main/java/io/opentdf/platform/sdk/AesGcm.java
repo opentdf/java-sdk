@@ -37,6 +37,9 @@ public class AesGcm {
         }
 
         public Encrypted(byte[] ivAndCiphertext) {
+            if (ivAndCiphertext.length < GCM_NONCE_LENGTH) {
+                throw new IllegalArgumentException("too short for IV and ciphertext");
+            }
             this.iv = new byte[GCM_NONCE_LENGTH];
             this.ciphertext = new byte[ivAndCiphertext.length - GCM_NONCE_LENGTH];
 
