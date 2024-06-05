@@ -2,9 +2,12 @@ package io.opentdf.platform.sdk;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -59,7 +62,9 @@ public class TDFWriterTest {
         String payload = "Hello, world!";
         FileOutputStream fileOutStream = new FileOutputStream("sample.tdf");
         TDFWriter writer = new TDFWriter(fileOutStream);
-        writer.appendPayload(payload.getBytes());
+        try (var p = writer.payload()) {
+            new ByteArrayInputStream(payload.getBytes(StandardCharsets.UTF_8)).transferTo(p);
+        }
         writer.appendManifest(kManifestJsonFromTDF);
         writer.finish();
         fileOutStream.close();

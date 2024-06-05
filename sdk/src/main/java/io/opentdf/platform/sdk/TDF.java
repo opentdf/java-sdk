@@ -28,6 +28,17 @@ import java.util.UUID;
 
 public class TDF {
 
+    private final long maximumSize;
+
+    public TDF() {
+        this(MAX_TDF_INPUT_SIZE);
+    }
+
+    // constructor for tests so that we can set a maximum size that's tractable for tests
+    TDF(long maximumInputSize) {
+        this.maximumSize = maximumInputSize;
+    }
+
     public static Logger logger = LoggerFactory.getLogger(TDF.class);
 
     private static final long MAX_TDF_INPUT_SIZE = 68719476736L;
@@ -62,12 +73,6 @@ public class TDF {
 
     public static class KasPublicKeyMissing extends Exception {
         public KasPublicKeyMissing(String errorMessage) {
-            super(errorMessage);
-        }
-    }
-
-    public static class InputStreamReadFailed extends Exception {
-        public InputStreamReadFailed(String errorMessage) {
             super(errorMessage);
         }
     }
@@ -300,16 +305,10 @@ public class TDF {
         return Hex.encodeHexString(gmacPayload);
     }
 
-    public TDFObject createTDF(InputStream inputStream,
-                          long inputSize,
+    public TDFObject createTDF(InputStream payload,
                                OutputStream outputStream,
                                Config.TDFConfig tdfConfig, SDK.KAS kas) throws Exception {
-        if (inputSize > MAX_TDF_INPUT_SIZE) {
-            throw new DataSizeNotSupported("can't create tdf larger than 64gb");
-        }
-
         if (tdfConfig.kasInfoList.isEmpty()) {
-
             throw new KasInfoMissing("kas information is missing");
         }
 
@@ -318,51 +317,41 @@ public class TDF {
         TDFObject tdfObject = new TDFObject();
         tdfObject.prepareManifest(tdfConfig);
 
-        int segmentSize = tdfConfig.defaultSegmentSize;
-        long totalSegments = inputSize / segmentSize;
-        if (inputSize % segmentSize != 0) {
-            totalSegments += 1;
-        }
-
-        // Empty payload we still want to create a payload
-        if (totalSegments == 0) {
-            totalSegments = 1;
-        }
-
-        long encryptedSegmentSize = segmentSize + kGcmIvSize + kAesBlockSize;
+        long encryptedSegmentSize = tdfConfig.defaultSegmentSize + kGcmIvSize + kAesBlockSize;
         TDFWriter tdfWriter = new TDFWriter(outputStream);
 
-        long readPos = 0;
         StringBuilder aggregateHash = new StringBuilder();
         byte[] readBuf = new byte[tdfConfig.defaultSegmentSize];
 
         tdfObject.manifest.encryptionInformation.integrityInformation.segments = new ArrayList<>();
-        while (totalSegments != 0) {
-            long readSize = segmentSize;
-            if ((inputSize - readPos) < segmentSize) {
-                readSize = inputSize - readPos;
-            }
+        long totalSize = 0;
+        boolean finished;
+        try (var payloadOutput = tdfWriter.payload()) {
+            do {
+                int nRead = 0;
+                int readThisLoop = 0;
+                while (readThisLoop < readBuf.length && (nRead = payload.read(readBuf, readThisLoop, readBuf.length - readThisLoop)) > 0) {
+                    readThisLoop += nRead;
+                }
+                finished = nRead < 0;
+                totalSize += readThisLoop;
 
-            long n = inputStream.read(readBuf, 0, (int) readSize);
-            if (n != readSize) {
-                throw new InputStreamReadFailed("Input stream read miss match");
-            }
+                if (totalSize > maximumSize) {
+                    throw new DataSizeNotSupported("can't create tdf larger than 64gb");
+                }
+                byte[] cipherData = tdfObject.aesGcm.encrypt(readBuf, 0, readThisLoop);
+                payloadOutput.write(cipherData);
 
-            byte[] cipherData = tdfObject.aesGcm.encrypt(readBuf, 0, (int) readSize);
-            tdfWriter.appendPayload(cipherData);
+                String segmentSig = calculateSignature(cipherData, tdfObject.payloadKey, tdfConfig.segmentIntegrityAlgorithm);
 
-            String segmentSig = calculateSignature(cipherData, tdfObject.payloadKey, tdfConfig.segmentIntegrityAlgorithm);
+                aggregateHash.append(segmentSig);
+                Manifest.Segment segmentInfo = new Manifest.Segment();
+                segmentInfo.hash = Base64.getEncoder().encodeToString(segmentSig.getBytes(StandardCharsets.UTF_8));
+                segmentInfo.segmentSize = readThisLoop;
+                segmentInfo.encryptedSegmentSize = cipherData.length;
 
-            aggregateHash.append(segmentSig);
-            Manifest.Segment segmentInfo = new Manifest.Segment();
-            segmentInfo.hash = Base64.getEncoder().encodeToString(segmentSig.getBytes(StandardCharsets.UTF_8));
-            segmentInfo.segmentSize = readSize;
-            segmentInfo.encryptedSegmentSize = cipherData.length;
-
-            tdfObject.manifest.encryptionInformation.integrityInformation.segments.add(segmentInfo);
-
-            totalSegments -= 1;
-            readPos += readSize;
+                tdfObject.manifest.encryptionInformation.integrityInformation.segments.add(segmentInfo);
+            } while (!finished);
         }
 
         Manifest.RootSignature rootSignature = new Manifest.RootSignature();
@@ -377,7 +366,7 @@ public class TDF {
         rootSignature.algorithm = alg;
         tdfObject.manifest.encryptionInformation.integrityInformation.rootSignature = rootSignature;
 
-        tdfObject.manifest.encryptionInformation.integrityInformation.segmentSizeDefault = segmentSize;
+        tdfObject.manifest.encryptionInformation.integrityInformation.segmentSizeDefault = tdfConfig.defaultSegmentSize;
         tdfObject.manifest.encryptionInformation.integrityInformation.encryptedSegmentSizeDefault = (int)encryptedSegmentSize;
 
         tdfObject.manifest.encryptionInformation.integrityInformation.segmentHashAlg = kGmacIntegrityAlgorithm;
