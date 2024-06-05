@@ -54,7 +54,8 @@ public class TDFE2ETest {
         kasInfo.URL = "http://localhost:8080";
 
         Config.NanoTDFConfig config = Config.newNanoTDFConfig(
-                Config.withNanoKasInformation(kasInfo)
+                Config.withNanoKasInformation(kasInfo),
+                Config.witDataAttributes("https://example.com/attr/attr1/value/value1")
         );
 
         String plainText = "text";
