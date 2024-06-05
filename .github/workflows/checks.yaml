@@ -143,6 +143,23 @@ jobs:
             --platform-endpoint=localhost:8080 \
             -i \
             encrypt --kas-url=localhost:8080 -f data -m 'here is some metadata' > test.tdf
+
+          java -jar target/cmdline.jar \
+            --client-id=opentdf-sdk \
+            --client-secret=secret \
+            --platform-endpoint=localhost:8080 \
+            -i \
+            decrypt -f test.tdf 2>metadata > decrypted
+
+          if ! diff -q data decrypted; then
+            printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
+            exit 1
+          fi
+
+          if [ "$(< metadata)" != 'here is some metadata' ]; then
+            printf 'metadata is incorrect [%s]\n' "$(< metadata)"
+            exit 1
+          fi
         working-directory: cmdline
   ci:
     needs:
