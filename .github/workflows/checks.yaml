@@ -90,11 +90,9 @@ jobs:
             platform/protocol/go/go.sum
             platform/sdk/go.sum
       - run: go mod download
-        with:
-          working-directory: platform
+        working-directory: platform
       - run: go mod verify
-        with:
-          working-directory: platform
+        working-directory: platform
   ci:
     needs:
       - integration
