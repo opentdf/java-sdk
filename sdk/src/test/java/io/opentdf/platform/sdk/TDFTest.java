@@ -54,7 +54,8 @@ public class TDFTest {
     @Test
     void testSimpleTDFEncryptAndDecrypt() throws Exception {
         Config.TDFConfig config = Config.newTDFConfig(
-                Config.withKasInformation(getKASInfos())
+                Config.withKasInformation(getKASInfos()),
+                Config.withMetaData("here is some metadata")
         );
 
         String plainText = "this is extremely sensitive stuff!!!";
@@ -65,11 +66,13 @@ public class TDFTest {
         tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
 
         var unwrappedData = new ByteArrayOutputStream();
-        tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), unwrappedData, kas);
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
+        reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
                 .withFailMessage("extracted data does not match")
                 .isEqualTo(plainText);
+        assertThat(reader.getMetadata()).isEqualTo("here is some metadata");
     }
 
     @Test
@@ -90,7 +93,8 @@ public class TDFTest {
         var tdf = new TDF();
         tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
         var unwrappedData = new ByteArrayOutputStream();
-        tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), unwrappedData, kas);
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
+        reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toByteArray())
                 .withFailMessage("extracted data does not match")

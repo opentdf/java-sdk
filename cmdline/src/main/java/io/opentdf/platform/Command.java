@@ -15,6 +15,8 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -79,8 +81,14 @@ class Command {
         var sdk = buildSDK();
 
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
-            try (var out = new BufferedOutputStream(System.out)) {
-                new TDF().loadTDF(in, out, sdk.getServices().kas());
+            try (var stdout = new BufferedOutputStream(System.out)) {
+                try (var stderr = new PrintWriter(System.err)) {
+                    var reader = new TDF().loadTDF(in, sdk.getServices().kas());
+                    reader.readPayload(stdout);
+                    if (reader.getMetadata() != null && !reader.getMetadata().isBlank()) {
+                        stderr.write(reader.getMetadata());
+                    }
+                }
             }
         }
     }
