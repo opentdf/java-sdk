@@ -21,21 +21,17 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 public class NanoTDFTest {
 
-    public static final String kasPublicKey = """
-                -----BEGIN PUBLIC KEY-----
-                MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEC4Wmdb7smRiIeA/Zkua2TNj9kySE
-                8Q2MaJ0kQX9GFePqi5KNDVnjBxQrkHXSTGB7Z/SrRny9vxgo86FT+1aXMQ==
-                -----END PUBLIC KEY-----
-                """;
+    public static final String kasPublicKey = "-----BEGIN PUBLIC KEY-----\n" +
+            "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEC4Wmdb7smRiIeA/Zkua2TNj9kySE\n" +
+            "8Q2MaJ0kQX9GFePqi5KNDVnjBxQrkHXSTGB7Z/SrRny9vxgo86FT+1aXMQ==\n" +
+            "-----END PUBLIC KEY-----";
 
-    public static final String kasPrivateKey = """
-                -----BEGIN PRIVATE KEY-----
-                MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQg2Wgo3sPikn/fj9uU
-                /cU+F4I2rRyOit9/s3fNjHVLxgugCgYIKoZIzj0DAQehRANCAAQLhaZ1vuyZGIh4
-                D9mS5rZM2P2TJITxDYxonSRBf0YV4+qLko0NWeMHFCuQddJMYHtn9KtGfL2/GCjz
-                oVP7Vpcx
-                -----END PRIVATE KEY-----
-                """;
+    public static final String kasPrivateKey = "-----BEGIN PRIVATE KEY-----\n" +
+            "MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQg2Wgo3sPikn/fj9uU\n" +
+            "/cU+F4I2rRyOit9/s3fNjHVLxgugCgYIKoZIzj0DAQehRANCAAQLhaZ1vuyZGIh4\n" +
+            "D9mS5rZM2P2TJITxDYxonSRBf0YV4+qLko0NWeMHFCuQddJMYHtn9KtGfL2/GCjz\n" +
+            "oVP7Vpcx\n" +
+            "-----END PRIVATE KEY-----";
 
     private static SDK.KAS kas = new SDK.KAS() {
         @Override
@@ -105,10 +101,9 @@ public class NanoTDFTest {
         String plainText = "Virtru!!";
         ByteBuffer byteBuffer = ByteBuffer.wrap(plainText.getBytes());
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
-        FileOutputStream fileout = new FileOutputStream("src/test/resources/javasdknanotdf.ntdf");
 
         NanoTDF nanoTDF = new NanoTDF();
-        nanoTDF.createNanoTDF(byteBuffer, fileout, config, kas);
+        nanoTDF.createNanoTDF(byteBuffer, tdfOutputStream, config, kas);
 
         byte[] nanoTDFBytes = tdfOutputStream.toByteArray();
         ByteArrayOutputStream plainTextStream = new ByteArrayOutputStream();

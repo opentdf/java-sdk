@@ -23,37 +23,30 @@ public class ECKeyPairTest {
 
     public class ECKeys {
 
-        public static final String sdkPublicKey = """
-                -----BEGIN PUBLIC KEY-----
-                MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEXe/Hn2kGc/y1HG5QXDXxor3KbqsW
-                vFlGGlVDK1RD4qD1HlO8vaXb+JAqNsY31wgbcTNn2TxcV4KR2R7MO2Xgcg==
-                -----END PUBLIC KEY-----
-                """;
+        public static final String sdkPublicKey = "-----BEGIN PUBLIC KEY-----\n" +
+                "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEXe/Hn2kGc/y1HG5QXDXxor3KbqsW\n" +
+                "vFlGGlVDK1RD4qD1HlO8vaXb+JAqNsY31wgbcTNn2TxcV4KR2R7MO2Xgcg==\n" +
+                "-----END PUBLIC KEY-----";
 
-        public static final String sdkPrivateKey = """
-                -----BEGIN PRIVATE KEY-----
-                MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgKsp9nL8iG6Yd/qOX
-                DjuArDwjJWhOkHCAmucdwArx1TGgCgYIKoZIzj0DAQehRANCAARd78efaQZz/LUc
-                blBcNfGivcpuqxa8WUYaVUMrVEPioPUeU7y9pdv4kCo2xjfXCBtxM2fZPFxXgpHZ
-                Hsw7ZeBy
-                -----END PRIVATE KEY-----
-                """;
+        public static final String sdkPrivateKey = "-----BEGIN PRIVATE KEY-----\n" +
+                "MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgKsp9nL8iG6Yd/qOX\n" +
+                "DjuArDwjJWhOkHCAmucdwArx1TGgCgYIKoZIzj0DAQehRANCAARd78efaQZz/LUc\n" +
+                "blBcNfGivcpuqxa8WUYaVUMrVEPioPUeU7y9pdv4kCo2xjfXCBtxM2fZPFxXgpHZ\n" +
+                "Hsw7ZeBy\n" +
+                "-----END PRIVATE KEY-----";
 
-        public static final String kasPublicKey = """
-                -----BEGIN PUBLIC KEY-----
-                MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEC4Wmdb7smRiIeA/Zkua2TNj9kySE
-                8Q2MaJ0kQX9GFePqi5KNDVnjBxQrkHXSTGB7Z/SrRny9vxgo86FT+1aXMQ==
-                -----END PUBLIC KEY-----
-                """;
+        public static final String kasPublicKey = "----BEGIN PUBLIC KEY-----\n" +
+                "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEC4Wmdb7smRiIeA/Zkua2TNj9kySE\n" +
+                "8Q2MaJ0kQX9GFePqi5KNDVnjBxQrkHXSTGB7Z/SrRny9vxgo86FT+1aXMQ==\n" +
+                "-----END PUBLIC KEY-----";
 
-        public static final String kasPrivateKey = """
-                -----BEGIN PRIVATE KEY-----
-                MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQg2Wgo3sPikn/fj9uU
-                /cU+F4I2rRyOit9/s3fNjHVLxgugCgYIKoZIzj0DAQehRANCAAQLhaZ1vuyZGIh4
-                D9mS5rZM2P2TJITxDYxonSRBf0YV4+qLko0NWeMHFCuQddJMYHtn9KtGfL2/GCjz
-                oVP7Vpcx
-                -----END PRIVATE KEY-----
-                """;
+        public static final String kasPrivateKey = "-----BEGIN PRIVATE KEY-----\n" +
+                "MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQg2Wgo3sPikn/fj9uU\n" +
+                "/cU+F4I2rRyOit9/s3fNjHVLxgugCgYIKoZIzj0DAQehRANCAAQLhaZ1vuyZGIh4\n" +
+                "D9mS5rZM2P2TJITxDYxonSRBf0YV4+qLko0NWeMHFCuQddJMYHtn9KtGfL2/GCjz\n" +
+                "oVP7Vpcx\n" +
+                "-----END PRIVATE KEY-----";
+
         public static final String salt = "L1L";
     }
     @Test
@@ -97,16 +90,14 @@ public class ECKeyPairTest {
     @Test
     void extractPemPubKeyFromX509() throws CertificateException, IOException, NoSuchAlgorithmException,
             InvalidKeySpecException, NoSuchProviderException, InvalidAlgorithmParameterException, InvalidKeyException {
-        String x509ECPubKey = """
-                -----BEGIN CERTIFICATE-----
-                MIIBCzCBsgIJAK3Uxk7fP5oWMAoGCCqGSM49BAMCMA4xDDAKBgNVBAMMA2thczAe
-                Fw0yMzA0MjQxNzQ2MTVaFw0yNDA0MjMxNzQ2MTVaMA4xDDAKBgNVBAMMA2thczBZ
-                MBMGByqGSM49AgEGCCqGSM49AwEHA0IABL//OvkSC1ji2w7AUrj27BxN3K6hhN4B
-                YRb45lYoMsihIxhDmMDAZTgoaDyNJG59VrJE/yoM9KuiXV8a+82+OwwwCgYIKoZI
-                zj0EAwIDSAAwRQIhAItk5SmcWSg06tnOCEqTa6UsChaycX/cmAT8PTDRnaRcAiAl
-                Vr2EvlA2x5mWFE/+nDdxxzljYjLZuSDQMEI/J6u0/Q==
-                -----END CERTIFICATE-----
-                """;
+        String x509ECPubKey = "-----BEGIN CERTIFICATE-----\n" +
+                "MIIBCzCBsgIJAK3Uxk7fP5oWMAoGCCqGSM49BAMCMA4xDDAKBgNVBAMMA2thczAe\n" +
+                "Fw0yMzA0MjQxNzQ2MTVaFw0yNDA0MjMxNzQ2MTVaMA4xDDAKBgNVBAMMA2thczBZ\n" +
+                "MBMGByqGSM49AgEGCCqGSM49AwEHA0IABL//OvkSC1ji2w7AUrj27BxN3K6hhN4B\n" +
+                "YRb45lYoMsihIxhDmMDAZTgoaDyNJG59VrJE/yoM9KuiXV8a+82+OwwwCgYIKoZI\n" +
+                "zj0EAwIDSAAwRQIhAItk5SmcWSg06tnOCEqTa6UsChaycX/cmAT8PTDRnaRcAiAl\n" +
+                "Vr2EvlA2x5mWFE/+nDdxxzljYjLZuSDQMEI/J6u0/Q==\n" +
+                "-----END CERTIFICATE-----";
         String pubKey = ECKeyPair.getPEMPublicKeyFromX509Cert(x509ECPubKey);
         System.out.println(pubKey);
 
