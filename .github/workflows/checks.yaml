@@ -67,12 +67,12 @@ jobs:
           java-version: "11"
           distribution: "adopt"
           server-id: github
-      - name: Build java SDK
-        run: |
-          mvn --batch-mode clean install -DskipTests
-        env:
-          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
-          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+#      - name: Build java SDK
+#        run: |
+#          mvn --batch-mode clean install -DskipTests
+#        env:
+#          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+#          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
       - name: Check out platform
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
@@ -92,6 +92,11 @@ jobs:
       - run: go mod download
         working-directory: platform
       - run: go mod verify
+        working-directory: platform
+      - name: Create keys
+        run: |
+          .github/scripts/init-temp-keys.sh
+          cp opentdf-dev.yaml opentdf.yaml
         working-directory: platform
       - name: Trust the locally issued cert
         run: |
