@@ -97,7 +97,7 @@ jobs:
         run: |
           .github/scripts/init-temp-keys.sh
           cp opentdf-dev.yaml opentdf.yaml
-          chmod -R 777 ./keys
+          sudo chmod -R 777 ./keys
         working-directory: platform
       - name: Trust the locally issued cert
         run: |
@@ -110,7 +110,7 @@ jobs:
             -alias localhost-for-tests
         working-directory: platform/keys
       - name: Bring the services up
-        run: docker compose up
+        run: docker compose up -d --wait --wait-timeout 240
         working-directory: platform
       - name: Provision keycloak
         run: go run ./service provision keycloak
