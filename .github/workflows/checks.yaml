@@ -149,7 +149,14 @@ jobs:
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
             -i \
-            decrypt -f test.tdf 2>metadata > decrypted
+            decrypt -f test.tdf > decrypted
+
+          java -jar target/cmdline.jar \
+            --client-id=opentdf-sdk \
+            --client-secret=secret \
+            --platform-endpoint=localhost:8080 \
+            -i \
+            metadata -f test.tdf > metadata
 
           if ! diff -q data decrypted; then
             printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
