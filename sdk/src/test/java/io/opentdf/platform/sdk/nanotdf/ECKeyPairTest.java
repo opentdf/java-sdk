@@ -26,7 +26,7 @@ public class ECKeyPairTest {
         public static final String sdkPublicKey = "-----BEGIN PUBLIC KEY-----\n" +
                 "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEXe/Hn2kGc/y1HG5QXDXxor3KbqsW\n" +
                 "vFlGGlVDK1RD4qD1HlO8vaXb+JAqNsY31wgbcTNn2TxcV4KR2R7MO2Xgcg==\n" +
-                "-----END PUBLIC KEY-----";
+                "-----END PUBLIC KEY-----\n";
 
         public static final String sdkPrivateKey = "-----BEGIN PRIVATE KEY-----\n" +
                 "MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgKsp9nL8iG6Yd/qOX\n" +
@@ -35,7 +35,7 @@ public class ECKeyPairTest {
                 "Hsw7ZeBy\n" +
                 "-----END PRIVATE KEY-----";
 
-        public static final String kasPublicKey = "----BEGIN PUBLIC KEY-----\n" +
+        public static final String kasPublicKey = "-----BEGIN PUBLIC KEY-----\n" +
                 "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEC4Wmdb7smRiIeA/Zkua2TNj9kySE\n" +
                 "8Q2MaJ0kQX9GFePqi5KNDVnjBxQrkHXSTGB7Z/SrRny9vxgo86FT+1aXMQ==\n" +
                 "-----END PUBLIC KEY-----";
@@ -125,8 +125,7 @@ public class ECKeyPairTest {
     }
 
     @Test
-    void testECDH() throws IOException, CertificateException, NoSuchAlgorithmException, NoSuchProviderException,
-            InvalidKeyException, InvalidKeySpecException {
+    void testECDH()  {
         String expectedKey = "3KGgsptHbTsbxJtql6sHUcx255KcUhxdeJWKjmPMlcc=";
 
         // SDK side
@@ -157,8 +156,7 @@ public class ECKeyPairTest {
     }
 
     @Test
-    void testECDSA() throws InvalidAlgorithmParameterException, NoSuchAlgorithmException, NoSuchProviderException,
-            SignatureException, InvalidKeyException {
+    void testECDSA() {
 
         String plainText = "Virtru!";
         for (ECKeyPair.NanoTDFECCurve curve: ECKeyPair.NanoTDFECCurve.values()) {
