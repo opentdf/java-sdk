@@ -36,6 +36,10 @@ jobs:
     - name: Generate Jacoco coverage report
       run: mvn jacoco:report
 
+    - name: show files
+      run: |
+        - ls
+        - pwd
     - name: Upload coverage report
       uses: actions/upload-artifact@v4
       with:
