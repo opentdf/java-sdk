@@ -38,8 +38,8 @@ jobs:
 
     - name: show files
       run: |
-        - ls
-        - pwd
+         ls
+         pwd
     - name: Upload coverage report
       uses: actions/upload-artifact@v4
       with:
