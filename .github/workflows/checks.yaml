@@ -97,6 +97,7 @@ jobs:
         run: |
           .github/scripts/init-temp-keys.sh
           cp opentdf-dev.yaml opentdf.yaml
+          chmod -R 777 ./keys
         working-directory: platform
       - name: Trust the locally issued cert
         run: |
