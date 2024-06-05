@@ -18,7 +18,7 @@ import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 public class SDK {
     private final Services services;
 
-    interface KAS {
+    public interface KAS {
         String getPublicKey(Config.KASInfo kasInfo);
         String getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve);
         byte[] unwrap(Manifest.KeyAccess keyAccess, String policy);
@@ -26,7 +26,7 @@ public class SDK {
     }
 
     // TODO: add KAS
-    interface Services {
+    public interface Services {
         AttributesServiceFutureStub attributes();
         NamespaceServiceFutureStub namespaces();
         SubjectMappingServiceFutureStub subjectMappings();
@@ -70,5 +70,9 @@ public class SDK {
 
     SDK(Services services) {
         this.services = services;
+    }
+
+    public Services getServices(){
+        return this.services;
     }
 }

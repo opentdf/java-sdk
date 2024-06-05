@@ -11,17 +11,23 @@ import com.nimbusds.oauth2.sdk.auth.Secret;
 import com.nimbusds.oauth2.sdk.id.ClientID;
 import com.nimbusds.oauth2.sdk.id.Issuer;
 import com.nimbusds.openid.connect.sdk.op.OIDCProviderMetadata;
-import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
-import io.grpc.Status;
-import io.grpc.StatusRuntimeException;
+import io.grpc.*;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRequest;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceGrpc;
+import nl.altindag.ssl.SSLFactory;
+import nl.altindag.ssl.pem.util.PemUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.X509ExtendedTrustManager;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -32,6 +38,7 @@ public class SDKBuilder {
     private String platformEndpoint = null;
     private ClientAuthentication clientAuth = null;
     private Boolean usePlainText;
+    private SSLFactory sslFactory;
 
     private static final Logger logger = LoggerFactory.getLogger(SDKBuilder.class);
 
@@ -42,6 +49,47 @@ public class SDKBuilder {
         builder.platformEndpoint = null;
 
         return builder;
+    }
+
+    public SDKBuilder sslFactory(SSLFactory sslFactory) {
+        this.sslFactory = sslFactory;
+        return this;
+    }
+
+    /**
+     * Add SSL Context with trusted certs from certDirPath
+     * @param certsDirPath Path to a directory containing .pem or .crt trusted certs
+     * @return
+     */
+    public SDKBuilder sslFactoryFromDirectory(String certsDirPath)  throws Exception{
+        File certsDir = new File(certsDirPath);
+        File[] certFiles =
+                certsDir.listFiles((dir, name) -> name.endsWith(".pem") || name.endsWith(".crt"));
+        logger.info("Loading certificates from: " + certsDir.getAbsolutePath());
+        List<InputStream> certStreams = new ArrayList<>();
+        for (File certFile : certFiles) {
+            certStreams.add(new FileInputStream(certFile));
+        }
+        X509ExtendedTrustManager trustManager =
+                PemUtils.loadTrustMaterial(certStreams.toArray(new InputStream[0]));
+        this.sslFactory =
+                SSLFactory.builder().withDefaultTrustMaterial().withSystemTrustMaterial()
+                        .withTrustMaterial(trustManager).build();
+        return this;
+    }
+
+    /**
+     * Add SSL Context with default system trust material + certs contained in a Java keystore
+     * @param keystorePath Path to keystore
+     * @param keystorePassword Password to keystore
+     * @return
+     */
+    public SDKBuilder sslFactoryFromKeyStore(String keystorePath, String keystorePassword) {
+        this.sslFactory =
+                SSLFactory.builder().withDefaultTrustMaterial().withSystemTrustMaterial()
+                        .withTrustMaterial(Path.of(keystorePath), keystorePassword==null ?
+                                "".toCharArray() : keystorePassword.toCharArray()).build();
+        return this;
     }
 
     public SDKBuilder platformEndpoint(String platformEndpoint) {
@@ -104,12 +152,16 @@ public class SDKBuilder {
         Issuer issuer = new Issuer(platformIssuer);
         OIDCProviderMetadata providerMetadata;
         try {
-            providerMetadata = OIDCProviderMetadata.resolve(issuer);
+            providerMetadata = OIDCProviderMetadata.resolve(issuer, httpRequest -> {
+                if (sslFactory!=null) {
+                    httpRequest.setSSLSocketFactory(sslFactory.getSslSocketFactory());
+                }
+            });
         } catch (IOException | GeneralException e) {
             throw new SDKException("Error resolving the OIDC provider metadata", e);
         }
 
-        return new GRPCAuthInterceptor(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI());
+        return new GRPCAuthInterceptor(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI(), sslFactory);
     }
 
     SDK.Services buildServices() {
@@ -141,12 +193,21 @@ public class SDKBuilder {
      * @return {@type ManagedChannelBuilder<?>} configured with the SDK options
      */
     private ManagedChannelBuilder<?> getManagedChannelBuilder(String endpoint) {
-        ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder
-                .forTarget(endpoint);
+        ManagedChannelBuilder<?> channelBuilder;
+        if (sslFactory != null) {
+            channelBuilder = Grpc.newChannelBuilder(endpoint, TlsChannelCredentials.newBuilder()
+                    .trustManager(sslFactory.getTrustManager().get()).build());
+        }else{
+            channelBuilder = ManagedChannelBuilder.forTarget(endpoint);
+        }
 
         if (usePlainText) {
             channelBuilder = channelBuilder.usePlaintext();
         }
         return channelBuilder;
+    }
+
+    SSLFactory getSslFactory(){
+        return this.sslFactory;
     }
 }

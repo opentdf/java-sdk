@@ -1,28 +1,28 @@
 package io.opentdf.platform.sdk;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
 public class TDFWriter {
-    private ZipWriter archiveWriter;
-    private final OutputStream destination;
     public static final String TDF_PAYLOAD_FILE_NAME = "0.payload";
     public static final String TDF_MANIFEST_FILE_NAME = "0.manifest.json";
+    private final ZipWriter archiveWriter;
 
     public TDFWriter(OutputStream destination) {
-        this.destination = destination;
-        this.archiveWriter = new ZipWriter();
+        this.archiveWriter = new ZipWriter(destination);
     }
 
-    public void appendManifest(String manifest) {
-        this.archiveWriter = this.archiveWriter.file(TDF_MANIFEST_FILE_NAME, manifest.getBytes(StandardCharsets.UTF_8));
+    public void appendManifest(String manifest) throws IOException {
+        this.archiveWriter.data(TDF_MANIFEST_FILE_NAME, manifest.getBytes(StandardCharsets.UTF_8));
     }
 
-    public void appendPayload(byte[] data) {
-        this.archiveWriter = this.archiveWriter.file(TDF_PAYLOAD_FILE_NAME, data);
+    public OutputStream payload() throws IOException {
+        return this.archiveWriter.stream(TDF_PAYLOAD_FILE_NAME);
+
     }
 
     public long finish() throws IOException {
-        return this.archiveWriter.build(this.destination);
+        return this.archiveWriter.finish();
     }
 }
