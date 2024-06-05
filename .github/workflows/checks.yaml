@@ -108,7 +108,21 @@ jobs:
             -keystore $JAVA_HOME/lib/security/cacerts \
             -alias localhost-for-tests
         working-directory: platform/keys
-
+      - name: Bring the services up
+        run: docker compose up -d --wait --wait-timeout 240
+      - name: Provision keycloak
+        run: go run ./service provision keycloak
+      - name: Provision fixtures
+        run: go run ./service provision fixtures
+      - name: start server in background
+        uses: JarvusInnovations/background-action@2428e7b970a846423095c79d43f759abf979a635
+        with:
+          run: |
+            go run ./service start
+          wait-on: |
+            tcp:localhost:8080
+          log-output-if: true
+          wait-for: 90s
   ci:
     needs:
       - integration
