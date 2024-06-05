@@ -135,11 +135,14 @@ jobs:
           grpcurl -plaintext localhost:8080 kas.AccessService/PublicKey
       - name: Validate the SDK through the command line interface
         run: |
-          java -jar target/cmdline-0.1.0-SNAPSHOT-jar-with-dependencies.jar \
+          printf 'here is some data to encrypt' > data
+
+          java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
-            -i encrypt -f $(pwd)/encrypted.tdf >
+            -i encrypt -f data -m 'here is some metadata' > test.tdf
+
         working-directory: cmdline
   ci:
     needs:
