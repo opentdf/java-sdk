@@ -141,9 +141,8 @@ jobs:
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
-            --kas-url=localhost:8080 \
             -i \
-            encrypt -f data -m 'here is some metadata' > test.tdf
+            encrypt --kas-url=localhost:8080 -f data -m 'here is some metadata' > test.tdf
         working-directory: cmdline
   ci:
     needs:
