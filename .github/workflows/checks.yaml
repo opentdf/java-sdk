@@ -93,6 +93,17 @@ jobs:
         working-directory: platform
       - run: go mod verify
         working-directory: platform
+      - name: Trust the locally issued cert
+        run: |
+          keytool \
+            -importcert \
+            -storepass changeit \
+            -noprompt \
+            -file localhost.crt \
+            -keystore $JAVA_HOME/lib/security/cacerts \
+            -alias localhost-for-tests
+        working-directory: platform/keys
+
   ci:
     needs:
       - integration
