@@ -110,10 +110,13 @@ jobs:
         working-directory: platform/keys
       - name: Bring the services up
         run: docker compose up -d --wait --wait-timeout 240
+        working-directory: platform
       - name: Provision keycloak
         run: go run ./service provision keycloak
+        working-directory: platform
       - name: Provision fixtures
         run: go run ./service provision fixtures
+        working-directory: platform
       - name: start server in background
         uses: JarvusInnovations/background-action@2428e7b970a846423095c79d43f759abf979a635
         with:
@@ -123,6 +126,7 @@ jobs:
             tcp:localhost:8080
           log-output-if: true
           wait-for: 90s
+          working-directory: platform
   ci:
     needs:
       - integration
