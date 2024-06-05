@@ -54,7 +54,6 @@ jobs:
 
   integration:
     runs-on: ubuntu-22.04
-    if: always()
     steps:
       - name: Checkout Java SDK
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -128,6 +127,12 @@ jobs:
           log-output-if: true
           wait-for: 90s
           working-directory: platform
+      - name: Get grpcurl
+        run: go install github.com/fullstorydev/grpcurl/cmd/grpcurl@v1.8.9
+      - name: Make sure that the platform is up
+        run: |
+          grpcurl -plaintext localhost:8080 list && \
+          grpcurl -plaintext localhost:8080 kas.AccessService/PublicKey
   ci:
     needs:
       - integration
