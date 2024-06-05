@@ -30,7 +30,6 @@ jobs:
 
   mavenverify:
     runs-on: ubuntu-latest
-    if: always()
     needs:
       - pr
     steps:
@@ -52,8 +51,10 @@ jobs:
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
 
-  integration:
+  platform-integration:
     runs-on: ubuntu-22.04
+    needs:
+      - pr
     steps:
       - name: Checkout Java SDK
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -170,7 +171,7 @@ jobs:
         working-directory: cmdline
   ci:
     needs:
-      - integration
+      - platform-integration
       - mavenverify
       - pr
     runs-on: ubuntu-latest
