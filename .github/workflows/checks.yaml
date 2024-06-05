@@ -117,7 +117,7 @@ jobs:
       - name: Provision fixtures
         run: go run ./service provision fixtures
         working-directory: platform
-      - name: start server in background
+      - name: Start server in background
         uses: JarvusInnovations/background-action@2428e7b970a846423095c79d43f759abf979a635
         with:
           run: |
@@ -133,6 +133,14 @@ jobs:
         run: |
           grpcurl -plaintext localhost:8080 list && \
           grpcurl -plaintext localhost:8080 kas.AccessService/PublicKey
+      - name: Validate the SDK through the command line interface
+        run: |
+          java -jar target/cmdline-0.1.0-SNAPSHOT-jar-with-dependencies.jar \
+            --client-id=opentdf-sdk \
+            --client-secret=secret \
+            --platform-endpoint=localhost:8080 \
+            -i encrypt -f $(pwd)/encrypted.tdf >
+        working-directory: cmdline
   ci:
     needs:
       - integration

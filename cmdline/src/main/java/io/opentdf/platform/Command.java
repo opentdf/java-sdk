@@ -21,8 +21,10 @@ import java.nio.file.StandardOpenOption;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 @CommandLine.Command(name = "tdf")
 class Command {
@@ -42,15 +44,21 @@ class Command {
     @CommandLine.Command(name = "encrypt")
     void encrypt(
             @Option(names = {"-f", "--file"}, defaultValue = Option.NULL_VALUE) Optional<File> file,
-            @Option(names = {"-k", "--kas-url"}, required = true) List<String> kas) throws IOException {
+            @Option(names = {"-k", "--kas-url"}, required = true) List<String> kas,
+            @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata) throws IOException {
+
         var sdk = buildSDK();
         var kasInfos = kas.stream().map(k -> {
             var ki = new Config.KASInfo();
             ki.URL = k;
             return ki;
         }).toArray(Config.KASInfo[]::new);
-        var tdfConfig = Config.newTDFConfig(Config.withKasInformation(kasInfos));
 
+        List<Consumer<Config.TDFConfig>> configs = new ArrayList<>();
+        configs.add(Config.withKasInformation(kasInfos));
+        metadata.ifPresent(m -> configs.add(Config.withMetaData(m)));
+
+        var tdfConfig = Config.newTDFConfig(Config.withKasInformation(kasInfos));
         try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {
             try (var out = new BufferedOutputStream(System.out)) {
                 new TDF().createTDF(in, out, tdfConfig, sdk.getServices().kas());
