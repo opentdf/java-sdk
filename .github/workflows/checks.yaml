@@ -109,7 +109,7 @@ jobs:
             -alias localhost-for-tests
         working-directory: platform/keys
       - name: Bring the services up
-        run: docker compose up --wait --wait-timeout 240
+        run: docker compose up -d --wait --wait-timeout 240 && docker compose logs -f platform-keycloak-1
         working-directory: platform
       - name: Provision keycloak
         run: go run ./service provision keycloak
