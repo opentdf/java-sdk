@@ -3,10 +3,8 @@ package io.opentdf.platform.sdk;
 import io.opentdf.platform.sdk.nanotdf.*;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.util.*;
@@ -17,11 +15,6 @@ import com.google.gson.GsonBuilder;
 import org.bouncycastle.jce.interfaces.ECPublicKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.crypto.BadPaddingException;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.NoSuchPaddingException;
-
 public class NanoTDF {
 
     public static Logger logger = LoggerFactory.getLogger(NanoTDF.class);
@@ -54,9 +47,7 @@ public class NanoTDF {
     public int createNanoTDF(ByteBuffer data, OutputStream outputStream,
                              Config.NanoTDFConfig nanoTDFConfig,
                              SDK.KAS kas) throws IOException, NanoTDFMaxSizeLimit, InvalidNanoTDFConfig,
-            InvalidAlgorithmParameterException, NoSuchAlgorithmException, NoSuchProviderException, InvalidKeyException,
-            NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, SignatureException,
-            UnsupportedNanoTDFFeature {
+            NoSuchAlgorithmException, UnsupportedNanoTDFFeature {
 
         int nanoTDFSize = 0;
         Gson gson = new GsonBuilder().create();
@@ -75,13 +66,12 @@ public class NanoTDF {
         String kasPublicKeyAsPem = kasInfo.PublicKey;
         if (kasPublicKeyAsPem == null || kasPublicKeyAsPem.isEmpty()) {
             logger.info("no public key provided for KAS at {}, retrieving", url);
-            kasPublicKeyAsPem = kas.getPublicKey(kasInfo);
+            kasPublicKeyAsPem = kas.getECPublicKey(kasInfo, nanoTDFConfig.eccMode.getEllipticCurveType());
         }
 
         // Kas url resource locator
         ResourceLocator kasURL = new ResourceLocator(nanoTDFConfig.kasInfoList.get(0).URL);
         ECKeyPair keyPair = new ECKeyPair(nanoTDFConfig.eccMode.getCurveName(), ECKeyPair.ECAlgorithm.ECDSA);
-
 
         // Generate symmetric key
         ECPublicKey kasPublicKey = ECKeyPair.publicKeyFromPem(kasPublicKeyAsPem);
@@ -91,24 +81,29 @@ public class NanoTDF {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         byte[] hashOfSalt = digest.digest(MAGIC_NUMBER_AND_VERSION);
         byte[] key = ECKeyPair.calculateHKDF(hashOfSalt, symmetricKey);
+        logger.debug("createNanoTDF key is - {}", Base64.getEncoder().encodeToString(key));
 
         // Encrypt policy
         PolicyObject policyObject = createPolicyObject(nanoTDFConfig.attributes);
-        byte[] policyObjectAsStr = gson.toJson(policyObject).getBytes(StandardCharsets.UTF_8);
+        String policyObjectAsStr = gson.toJson(policyObject);
+
+        logger.debug("createNanoTDF policy object - {}", policyObjectAsStr);
 
         AesGcm gcm = new AesGcm(key);
+        byte[] policyObjectAsBytes = policyObjectAsStr.getBytes(StandardCharsets.UTF_8);
         int authTagSize = SymmetricAndPayloadConfig.sizeOfAuthTagForCipher(nanoTDFConfig.config.getCipherType());
-        byte[] encryptedPolicy = gcm.encrypt(kEmptyIV, authTagSize, policyObjectAsStr, 0, policyObjectAsStr.length);
+        byte[] encryptedPolicy = gcm.encrypt(kEmptyIV, authTagSize, policyObjectAsBytes, 0, policyObjectAsBytes.length);
 
         PolicyInfo policyInfo = new PolicyInfo();
-        byte[] encryptedPolicyWithoutIV = Arrays.copyOfRange(encryptedPolicy, kEmptyIV.length, (encryptedPolicy.length - kEmptyIV.length));
+        byte[] encryptedPolicyWithoutIV = Arrays.copyOfRange(encryptedPolicy, kEmptyIV.length, encryptedPolicy.length);
         policyInfo.setEmbeddedEncryptedTextPolicy(encryptedPolicyWithoutIV);
 
         if (nanoTDFConfig.eccMode.isECDSABindingEnabled()) {
             throw new UnsupportedNanoTDFFeature("ECDSA policy binding is not support");
         } else {
-            byte[] gmac = Arrays.copyOfRange(encryptedPolicyWithoutIV, encryptedPolicyWithoutIV.length - kNanoTDFGMACLength,
-                    encryptedPolicyWithoutIV.length);
+            byte[] hash = digest.digest(encryptedPolicyWithoutIV);
+            byte[] gmac = Arrays.copyOfRange(hash, hash.length - kNanoTDFGMACLength,
+                    hash.length);
             policyInfo.setPolicyBinding(gmac);
         }
 
@@ -129,6 +124,7 @@ public class NanoTDF {
         // Write header
         outputStream.write(bufForHeader.array());
         nanoTDFSize += headerSize;
+        logger.debug("createNanoTDF header length {}", headerSize);
 
         // Encrypt the data
         byte[] actualIV = new byte[kIvPadding + kNanoTDFIvSize];
@@ -140,10 +136,11 @@ public class NanoTDF {
 
         // Write the length of the payload as int24
         int cipherDataLengthWithoutPadding = cipherData.length - kIvPadding;
-        // int reversedInt = Integer.reverseBytes(cipherDataLengthWithoutPadding);
         byte[] bgIntAsBytes =  ByteBuffer.allocate(4).putInt(cipherDataLengthWithoutPadding).array();
         outputStream.write(bgIntAsBytes, 1, 3);
         nanoTDFSize += 3;
+
+        logger.debug("createNanoTDF payload length {}", cipherDataLengthWithoutPadding);
 
         // Write the payload
         outputStream.write(cipherData, kIvPadding, cipherDataLengthWithoutPadding);
@@ -153,104 +150,46 @@ public class NanoTDF {
     }
 
     public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream,
-                            SDK.KAS ka) {
+                            SDK.KAS kas) throws IOException {
 
+        Header header = new Header(nanoTDF);
 
+        // create base64 encoded
+        byte[] headerData = new byte[header.getTotalSize()];
+        header.writeIntoBuffer(ByteBuffer.wrap(headerData));
+        String base64HeaderData = Base64.getEncoder().encodeToString(headerData);
 
+        logger.debug("readNanoTDF header length {}", headerData.length);
 
-        /*
+        String kasUrl = header.getKasLocator().getResourceUrl();
 
-        	header, headerSize, err := NewNanoTDFHeaderFromReader(reader)
-	if err != nil {
-		return 0, err
-	}
+        byte[] key =  kas.unwrapNanoTDF(header.getECCMode().getEllipticCurveType(),
+                base64HeaderData,
+                kasUrl);
+        logger.debug("readNanoTDF key is {}", Base64.getEncoder().encodeToString(key));
 
-	_, err = reader.Seek(0, io.SeekStart)
-	if err != nil {
-		return 0, fmt.Errorf("readSeeker.Seek failed: %w", err)
-	}
+        byte[] payloadLengthBuf = new byte[4];
+        nanoTDF.get(payloadLengthBuf, 1, 3);
+        int payloadLength = ByteBuffer.wrap(payloadLengthBuf).getInt();
 
-	headerBuf := make([]byte, headerSize)
-	_, err = reader.Read(headerBuf)
-	if err != nil {
-		return 0, fmt.Errorf("readSeeker.Seek failed: %w", err)
-	}
+        logger.debug("readNanoTDF payload length {}, retrieving", payloadLength);
 
-	kasURL, err := header.kasURL.getURL()
-	if err != nil {
-		return 0, fmt.Errorf("readSeeker.Seek failed: %w", err)
-	}
+        // Read iv
+        byte[] iv = new byte[kNanoTDFIvSize];
+        nanoTDF.get(iv);
 
-	encodedHeader := ocrypto.Base64Encode(headerBuf)
+        // pad the IV with zero's
+        byte[] ivPadded = new byte[AesGcm.GCM_NONCE_LENGTH];
+        System.arraycopy(iv, 0, ivPadded, kIvPadding, iv.length);
 
-	rsaKeyPair, err := ocrypto.NewRSAKeyPair(tdf3KeySize)
-	if err != nil {
-		return 0, fmt.Errorf("ocrypto.NewRSAKeyPair failed: %w", err)
-	}
+        byte[] cipherData = new byte[payloadLength - kNanoTDFIvSize];
+        nanoTDF.get(cipherData);
 
-	client, err := newKASClient(s.dialOptions, s.tokenSource, rsaKeyPair)
-	if err != nil {
-		return 0, fmt.Errorf("newKASClient failed: %w", err)
-	}
+        int authTagSize = SymmetricAndPayloadConfig.sizeOfAuthTagForCipher(header.getPayloadConfig().getCipherType());
+        AesGcm gcm = new AesGcm(key);
+        byte[] plainData = gcm.decrypt(ivPadded, authTagSize, cipherData);
 
-	symmetricKey, err := client.unwrapNanoTDF(string(encodedHeader), kasURL)
-	if err != nil {
-		return 0, fmt.Errorf("readSeeker.Seek failed: %w", err)
-	}
-
-	encoded := ocrypto.Base64Encode(symmetricKey)
-	slog.Debug("ReadNanoTDF", slog.String("symmetricKey", string(encoded)))
-
-	const (
-		kPayloadLoadLengthBufLength = 4
-	)
-	payloadLengthBuf := make([]byte, kPayloadLoadLengthBufLength)
-	_, err = reader.Read(payloadLengthBuf[1:])
-
-	if err != nil {
-		return 0, fmt.Errorf(" io.Reader.Read failed :%w", err)
-	}
-
-	payloadLength := binary.BigEndian.Uint32(payloadLengthBuf)
-	slog.Debug("ReadNanoTDF", slog.Uint64("payloadLength", uint64(payloadLength)))
-
-	cipherDate := make([]byte, payloadLength)
-	_, err = reader.Read(cipherDate)
-	if err != nil {
-		return 0, fmt.Errorf("readSeeker.Seek failed: %w", err)
-	}
-
-	aesGcm, err := ocrypto.NewAESGcm(symmetricKey)
-	if err != nil {
-		return 0, fmt.Errorf("ocrypto.NewAESGcm failed:%w", err)
-	}
-
-	ivPadded := make([]byte, 0, ocrypto.GcmStandardNonceSize)
-	noncePadding := make([]byte, kIvPadding)
-	ivPadded = append(ivPadded, noncePadding...)
-	iv := cipherDate[:kNanoTDFIvSize]
-	ivPadded = append(ivPadded, iv...)
-
-	tagSize, err := SizeOfAuthTagForCipher(header.sigCfg.cipher)
-	if err != nil {
-		return 0, fmt.Errorf("SizeOfAuthTagForCipher failed:%w", err)
-	}
-
-	decryptedData, err := aesGcm.DecryptWithIVAndTagSize(ivPadded, cipherDate[kNanoTDFIvSize:], tagSize)
-	if err != nil {
-		return 0, err
-	}
-
-	writeLen, err := writer.Write(decryptedData)
-	if err != nil {
-		return 0, err
-	}
-	// print(payloadLength)
-	// print(string(decryptedData))
-
-	return uint32(writeLen), nil
-
-         */
+        outputStream.write(plainData);
     }
 
     PolicyObject createPolicyObject(List<String> attributes) {

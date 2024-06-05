@@ -33,7 +33,7 @@ class AesGcmTest {
         byte[] cipherText = aesGcm.encrypt(plaintext);
         cipherText[0] = (byte) (cipherText[0] ^ 0x1); // Modify the ciphertext
 
-        assertThrows(BadPaddingException.class, () -> aesGcm.decrypt(cipherText));
+        assertThrows(RuntimeException.class, () -> aesGcm.decrypt(cipherText));
     }
 
     @Test

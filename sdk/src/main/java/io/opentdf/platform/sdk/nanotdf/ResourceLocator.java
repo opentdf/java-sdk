@@ -67,8 +67,7 @@ public class ResourceLocator {
     public int writeIntoBuffer(ByteBuffer buffer) {
         int totalSize = getTotalSize();
         if (buffer.remaining() < totalSize) {
-           // throw new RuntimeException("Failed to write resource locator - invalid buffer size.");
-            buffer = ByteBuffer.allocate(totalSize);
+           throw new RuntimeException("Failed to write resource locator - invalid buffer size.");
         }
 
         int totalBytesWritten = 0;

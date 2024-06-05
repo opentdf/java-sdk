@@ -12,6 +12,7 @@ import org.bouncycastle.jce.interfaces.ECPublicKey;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec;
 import org.bouncycastle.math.ec.ECPoint;
+import org.bouncycastle.openssl.PEMException;
 import org.bouncycastle.openssl.PEMParser;
 import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
 import org.bouncycastle.util.io.pem.*;
@@ -56,21 +57,31 @@ public class ECKeyPair {
     private KeyPair keyPair;
     private String curveName;
 
-    public ECKeyPair() throws NoSuchAlgorithmException, NoSuchProviderException, InvalidAlgorithmParameterException {
+    public ECKeyPair() {
         this("secp256r1", ECAlgorithm.ECDH);
     }
 
-    public ECKeyPair(String curveName, ECAlgorithm algorithm) throws NoSuchAlgorithmException, InvalidAlgorithmParameterException,
-            NoSuchProviderException {
+    public ECKeyPair(String curveName, ECAlgorithm algorithm) {
         KeyPairGenerator generator;
-        if (algorithm == ECAlgorithm.ECDH) {
-            generator = KeyPairGenerator.getInstance("ECDH", "BC");
-        } else {
-            generator = KeyPairGenerator.getInstance("ECDSA", "BC");
+
+        try {
+            if (algorithm == ECAlgorithm.ECDH) {
+                generator = KeyPairGenerator.getInstance("ECDH", "BC");
+            } else {
+                generator = KeyPairGenerator.getInstance("ECDSA", "BC");
+            }
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        } catch (NoSuchProviderException e) {
+            throw new RuntimeException(e);
         }
 
         ECGenParameterSpec spec = new ECGenParameterSpec(curveName);
-        generator.initialize(spec);
+        try {
+            generator.initialize(spec);
+        } catch (InvalidAlgorithmParameterException e) {
+            throw new RuntimeException(e);
+        }
         this.keyPair = generator.generateKeyPair();
         this.curveName = curveName;
     }
@@ -101,21 +112,33 @@ public class ECKeyPair {
         }
     }
 
-    public String publicKeyInPEMFormat() throws IOException {
+    public String publicKeyInPEMFormat()  {
         StringWriter writer = new StringWriter();
         PemWriter pemWriter = new PemWriter(writer);
-        pemWriter.writeObject(new PemObject("PUBLIC KEY", this.keyPair.getPublic().getEncoded()));
-        pemWriter.flush();
-        pemWriter.close();
+
+        try {
+            pemWriter.writeObject(new PemObject("PUBLIC KEY", this.keyPair.getPublic().getEncoded()));
+            pemWriter.flush();
+            pemWriter.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
         return writer.toString();
     }
 
-    public String privateKeyInPEMFormat() throws IOException {
+    public String privateKeyInPEMFormat() {
         StringWriter writer = new StringWriter();
         PemWriter pemWriter = new PemWriter(writer);
-        pemWriter.writeObject(new PemObject("PRIVATE KEY", this.keyPair.getPrivate().getEncoded()));
-        pemWriter.flush();
-        pemWriter.close();
+
+        try {
+            pemWriter.writeObject(new PemObject("PRIVATE KEY", this.keyPair.getPrivate().getEncoded()));
+            pemWriter.flush();
+            pemWriter.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
         return writer.toString();
     }
 
@@ -131,77 +154,113 @@ public class ECKeyPair {
         return ((ECPublicKey)this.keyPair.getPublic()).getQ().getEncoded(true);
     }
 
-    public static String getPEMPublicKeyFromX509Cert(String pemInX509Format) throws CertificateException, IOException {
-        PEMParser parser = new PEMParser(new StringReader(pemInX509Format));
-        X509CertificateHolder x509CertificateHolder = (X509CertificateHolder) parser.readObject();
-        parser.close();
-        SubjectPublicKeyInfo publicKeyInfo = x509CertificateHolder.getSubjectPublicKeyInfo();
-        JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
-        ECPublicKey publicKey = (ECPublicKey)converter.getPublicKey(publicKeyInfo);
+    public static String getPEMPublicKeyFromX509Cert(String pemInX509Format) {
+        try {
+            PEMParser parser = new PEMParser(new StringReader(pemInX509Format));
+            X509CertificateHolder x509CertificateHolder = (X509CertificateHolder) parser.readObject();
+            parser.close();
+            SubjectPublicKeyInfo publicKeyInfo = x509CertificateHolder.getSubjectPublicKeyInfo();
+            JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
+            ECPublicKey publicKey = null;
+            try {
+                publicKey = (ECPublicKey)converter.getPublicKey(publicKeyInfo);
+            } catch (PEMException e) {
+                throw new RuntimeException(e);
+            }
 
-        // EC public key to pem formated.
-        StringWriter writer = new StringWriter();
-        PemWriter pemWriter = new PemWriter(writer);
-        pemWriter.writeObject(new PemObject("PUBLIC KEY", publicKey.getEncoded()));
-        pemWriter.flush();
-        pemWriter.close();
-        return writer.toString();
+            // EC public key to pem formated.
+            StringWriter writer = new StringWriter();
+            PemWriter pemWriter = new PemWriter(writer);
+
+            pemWriter.writeObject(new PemObject("PUBLIC KEY", publicKey.getEncoded()));
+            pemWriter.flush();
+            pemWriter.close();
+            return writer.toString();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    public static byte[] compressECPublickey(String pemECPubKey) throws NoSuchAlgorithmException,
-            IOException, InvalidKeySpecException, NoSuchProviderException {
-        KeyFactory ecKeyFac = KeyFactory.getInstance("EC", "BC");
-        PemReader pemReader = new PemReader(new StringReader(pemECPubKey));
-        PemObject pemObject = pemReader.readPemObject();
-        PublicKey pubKey = ecKeyFac.generatePublic(new X509EncodedKeySpec(pemObject.getContent()));
-        return ((ECPublicKey)pubKey).getQ().getEncoded(true);
+    public static byte[] compressECPublickey(String pemECPubKey) {
+        try {
+            KeyFactory ecKeyFac = KeyFactory.getInstance("EC", "BC");
+            PemReader pemReader = new PemReader(new StringReader(pemECPubKey));
+            PemObject pemObject = pemReader.readPemObject();
+            PublicKey pubKey = ecKeyFac.generatePublic(new X509EncodedKeySpec(pemObject.getContent()));
+            return ((ECPublicKey)pubKey).getQ().getEncoded(true);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (InvalidKeySpecException e) {
+            throw new RuntimeException(e);
+        }  catch (NoSuchProviderException e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    public static String publicKeyFromECPoint(byte[] ecPoint, String curveName) throws InvalidKeySpecException,
-            NoSuchAlgorithmException, NoSuchProviderException, IOException {
+    public static String publicKeyFromECPoint(byte[] ecPoint, String curveName)  {
+        try {
+            // Create EC Public key
+            ECNamedCurveParameterSpec ecSpec = ECNamedCurveTable.getParameterSpec(curveName);
+            ECPoint point = ecSpec.getCurve().decodePoint(ecPoint);
+            ECPublicKeySpec publicKeySpec = new ECPublicKeySpec(point, ecSpec);
+            KeyFactory keyFactory = KeyFactory.getInstance("ECDSA", "BC");
+            PublicKey publicKey = keyFactory.generatePublic(publicKeySpec);
 
-        // Create EC Public key
-        ECNamedCurveParameterSpec ecSpec = ECNamedCurveTable.getParameterSpec(curveName);
-        ECPoint point = ecSpec.getCurve().decodePoint(ecPoint);
-        ECPublicKeySpec publicKeySpec = new ECPublicKeySpec(point, ecSpec);
-        KeyFactory keyFactory = KeyFactory.getInstance("ECDSA", "BC");
-        PublicKey publicKey = keyFactory.generatePublic(publicKeySpec);
-
-        // EC Public keu to pem format.
-        StringWriter writer = new StringWriter();
-        PemWriter pemWriter = new PemWriter(writer);
-        pemWriter.writeObject(new PemObject("PUBLIC KEY", publicKey.getEncoded()));
-        pemWriter.flush();
-        pemWriter.close();
-        return writer.toString();
+            // EC Public keu to pem format.
+            StringWriter writer = new StringWriter();
+            PemWriter pemWriter = new PemWriter(writer);
+            pemWriter.writeObject(new PemObject("PUBLIC KEY", publicKey.getEncoded()));
+            pemWriter.flush();
+            pemWriter.close();
+            return writer.toString();
+        } catch (InvalidKeySpecException e) {
+            throw new RuntimeException(e);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        } catch (NoSuchProviderException e) {
+            throw new RuntimeException(e);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    public static ECPublicKey publicKeyFromPem(String pemEncoding) throws IOException {
-        PEMParser parser = new PEMParser(new StringReader(pemEncoding));
-        SubjectPublicKeyInfo publicKeyInfo = (SubjectPublicKeyInfo) parser.readObject();
-        parser.close();
+    public static ECPublicKey publicKeyFromPem(String pemEncoding) {
+        try {
+            PEMParser parser = new PEMParser(new StringReader(pemEncoding));
+            SubjectPublicKeyInfo publicKeyInfo = (SubjectPublicKeyInfo) parser.readObject();
+            parser.close();
 
-        JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
-        return (ECPublicKey) converter.getPublicKey(publicKeyInfo);
+            JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
+            return (ECPublicKey) converter.getPublicKey(publicKeyInfo);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    public static ECPrivateKey privateKeyFromPem(String pemEncoding)
-            throws IOException, CertificateException
-    {
-        PEMParser parser = new PEMParser(new StringReader(pemEncoding));
-        PrivateKeyInfo privateKeyInfo = (PrivateKeyInfo)parser.readObject();
-        parser.close();
+    public static ECPrivateKey privateKeyFromPem(String pemEncoding) {
+        try {
+            PEMParser parser = new PEMParser(new StringReader(pemEncoding));
+            PrivateKeyInfo privateKeyInfo = (PrivateKeyInfo)parser.readObject();
+            parser.close();
 
-        JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
-        return (ECPrivateKey) converter.getPrivateKey(privateKeyInfo);
+            JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
+            return (ECPrivateKey) converter.getPrivateKey(privateKeyInfo);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    public static byte[] computeECDHKey(ECPublicKey publicKey, ECPrivateKey privateKey) throws NoSuchAlgorithmException,
-            NoSuchProviderException, InvalidKeyException {
-        KeyAgreement aKeyAgree = KeyAgreement.getInstance("ECDH", "BC");
-        aKeyAgree.init(privateKey);
-        aKeyAgree.doPhase(publicKey, true);
-        return aKeyAgree.generateSecret();
+    public static byte[] computeECDHKey(ECPublicKey publicKey, ECPrivateKey privateKey) {
+        try {
+            KeyAgreement aKeyAgree = KeyAgreement.getInstance("ECDH", "BC");
+            aKeyAgree.init(privateKey);
+            aKeyAgree.doPhase(publicKey, true);
+            return aKeyAgree.generateSecret();
+        } catch (NoSuchAlgorithmException | NoSuchProviderException | InvalidKeyException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static byte[] calculateHKDF(byte[] salt, byte[] secret) {
@@ -214,19 +273,37 @@ public class ECKeyPair {
         return key;
     }
 
-    public static byte[] computeECDSASig(byte[] digest, ECPrivateKey privateKey) throws NoSuchAlgorithmException,
-            NoSuchProviderException, InvalidKeyException, SignatureException {
-        Signature ecdsaSign = Signature.getInstance("SHA256withECDSA", "BC");
-        ecdsaSign.initSign(privateKey);
-        ecdsaSign.update(digest);
-        return ecdsaSign.sign();
+    public static byte[] computeECDSASig(byte[] digest, ECPrivateKey privateKey) {
+        try {
+            Signature ecdsaSign = Signature.getInstance("SHA256withECDSA", "BC");
+            ecdsaSign.initSign(privateKey);
+            ecdsaSign.update(digest);
+            return ecdsaSign.sign();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        } catch (NoSuchProviderException e) {
+            throw new RuntimeException(e);
+        }  catch (InvalidKeyException e) {
+            throw new RuntimeException(e);
+        } catch (SignatureException e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    public static Boolean verifyECDSAig(byte[] digest, byte[] signature, ECPublicKey publicKey)
-            throws NoSuchAlgorithmException, NoSuchProviderException, InvalidKeyException, SignatureException {
-        Signature ecdsaVerify = Signature.getInstance("SHA256withECDSA", "BC");
-        ecdsaVerify.initVerify(publicKey);
-        ecdsaVerify.update(digest);
-        return ecdsaVerify.verify(signature);
+    public static Boolean verifyECDSAig(byte[] digest, byte[] signature, ECPublicKey publicKey) {
+        try {
+            Signature ecdsaVerify = Signature.getInstance("SHA256withECDSA", "BC");
+            ecdsaVerify.initVerify(publicKey);
+            ecdsaVerify.update(digest);
+            return ecdsaVerify.verify(signature);
+        }  catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        } catch (NoSuchProviderException e) {
+            throw new RuntimeException(e);
+        }  catch (InvalidKeyException e) {
+            throw new RuntimeException(e);
+        } catch (SignatureException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

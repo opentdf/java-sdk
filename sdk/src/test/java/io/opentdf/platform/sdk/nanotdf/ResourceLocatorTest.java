@@ -37,9 +37,9 @@ class ResourceLocatorTest {
     void creatingResourceLocatorFromBytes() {
         String url = "http://test.com";
         ResourceLocator original = new ResourceLocator(url);
-        ByteBuffer buffer = ByteBuffer.allocate(original.getTotalSize());
-        original.writeIntoBuffer(buffer);
-        locator = new ResourceLocator(buffer);
+        byte[] buffer = new byte[original.getTotalSize()];
+        original.writeIntoBuffer(ByteBuffer.wrap(buffer));
+        locator = new ResourceLocator(ByteBuffer.wrap(buffer));
         assertEquals(url, locator.getResourceUrl());
     }
 

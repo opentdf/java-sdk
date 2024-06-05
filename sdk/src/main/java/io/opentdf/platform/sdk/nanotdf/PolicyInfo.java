@@ -18,12 +18,16 @@ public class PolicyInfo {
         this.type = NanoTDFType.PolicyType.values()[buffer.get()];
         this.hasECDSABinding = eccMode.isECDSABindingEnabled();
 
-
-//        byte[] remainingBytes = new byte[buffer.remaining()];
-//        buffer.get(remainingBytes);
-
         if (this.type == NanoTDFType.PolicyType.REMOTE_POLICY) {
-            throw new RuntimeException("Embedded policy with key access is not supported.");
+
+            byte[] oneByte = new byte[1];
+            buffer.get(oneByte);
+
+            ResourceLocator policyUrl = new ResourceLocator(ByteBuffer.wrap(oneByte));
+            int policyUrlSize = policyUrl.getTotalSize();
+            this.body = new byte[policyUrlSize];
+            buffer = ByteBuffer.wrap(this.body);
+            policyUrl.writeIntoBuffer(buffer);
         } else {
             byte[] policyLengthBuf = new byte[Short.BYTES];
             buffer.get(policyLengthBuf);

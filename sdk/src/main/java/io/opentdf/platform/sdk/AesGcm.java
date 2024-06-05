@@ -73,18 +73,23 @@ public class AesGcm {
      * @param len input length
      * @return the encrypted text
      */
-    public byte[] encrypt(byte[] iv, int authTagLen, byte[] plaintext, int offset, int len) throws NoSuchPaddingException, NoSuchAlgorithmException,
-            InvalidAlgorithmParameterException, InvalidKeyException, BadPaddingException, IllegalBlockSizeException {
-        Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORM);
+    public byte[] encrypt(byte[] iv, int authTagLen, byte[] plaintext, int offset, int len) {
+        try {
+            Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORM);
 
-        GCMParameterSpec spec = new GCMParameterSpec(authTagLen * 8, iv);
-        cipher.init(Cipher.ENCRYPT_MODE, key, spec);
+            GCMParameterSpec spec = new GCMParameterSpec(authTagLen * 8, iv);
+            cipher.init(Cipher.ENCRYPT_MODE, key, spec);
 
-        byte[] cipherText = cipher.doFinal(plaintext, offset, len);
-        byte[] cipherTextWithNonce = new byte[iv.length + cipherText.length];
-        System.arraycopy(iv, 0, cipherTextWithNonce, 0, iv.length);
-        System.arraycopy(cipherText, 0, cipherTextWithNonce, iv.length, cipherText.length);
-        return cipherTextWithNonce;
+            byte[] cipherText = cipher.doFinal(plaintext, offset, len);
+            byte[] cipherTextWithNonce = new byte[iv.length + cipherText.length];
+            System.arraycopy(iv, 0, cipherTextWithNonce, 0, iv.length);
+            System.arraycopy(cipherText, 0, cipherTextWithNonce, iv.length, cipherText.length);
+            return cipherTextWithNonce;
+        } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
+            throw new RuntimeException("error gcm decrypt", e);
+        } catch (InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
+            throw new RuntimeException("error gcm decrypt", e);
+        }
     }
 
     /**
@@ -93,13 +98,39 @@ public class AesGcm {
      * @param cipherTextWithNonce the ciphertext with nonce to decrypt
      * @return the decrypted text
      */
-    public byte[] decrypt(byte[] cipherTextWithNonce) throws NoSuchPaddingException, NoSuchAlgorithmException,
-            InvalidAlgorithmParameterException, InvalidKeyException, BadPaddingException, IllegalBlockSizeException {
-        Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORM);
-        byte[] nonce = Arrays.copyOfRange(cipherTextWithNonce, 0, GCM_NONCE_LENGTH);
-        byte[] cipherText = Arrays.copyOfRange(cipherTextWithNonce, GCM_NONCE_LENGTH, cipherTextWithNonce.length);
-        GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, nonce);
-        cipher.init(Cipher.DECRYPT_MODE, key, spec);
-        return cipher.doFinal(cipherText);
+    public byte[] decrypt(byte[] cipherTextWithNonce) {
+        try {
+            Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORM);
+            byte[] nonce = Arrays.copyOfRange(cipherTextWithNonce, 0, GCM_NONCE_LENGTH);
+            byte[] cipherText = Arrays.copyOfRange(cipherTextWithNonce, GCM_NONCE_LENGTH, cipherTextWithNonce.length);
+            GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, nonce);
+            cipher.init(Cipher.DECRYPT_MODE, key, spec);
+            return cipher.doFinal(cipherText);
+        } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
+            throw new RuntimeException("error gcm decrypt", e);
+        } catch (InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
+            throw new RuntimeException("error gcm decrypt", e);
+        }
+    }
+
+    /**
+     * <p>decrypt.</p>
+     *
+     * @param iv the IV vector
+     * @param authTagLen the length of the auth tag
+     * @param cipherData the cipherData byte array to decrypt
+     * @return the decrypted data
+     */
+    public byte[] decrypt(byte[] iv, int authTagLen, byte[] cipherData) {
+        try {
+            Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORM);
+            GCMParameterSpec spec = new GCMParameterSpec(authTagLen * 8, iv);
+            cipher.init(Cipher.DECRYPT_MODE, key, spec);
+            return cipher.doFinal(cipherData);
+        } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
+            throw new RuntimeException("error gcm decrypt", e);
+        } catch (InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
+            throw new SDKException("error gcm decrypt", e);
+        }
     }
 }
