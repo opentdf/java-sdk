@@ -40,6 +40,8 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: coverage-report
-        path: target/site/jacoco/jacoco.xml
+        path: |
+          ${{ github.workspace }}/target/site/jacoco/jacoco.xml
+          ${{ github.workspace }}/target/site/jacoco/index.html
 
 
