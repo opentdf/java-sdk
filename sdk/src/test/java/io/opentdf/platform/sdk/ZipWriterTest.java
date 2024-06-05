@@ -3,10 +3,10 @@ package io.opentdf.platform.sdk;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipFile;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
-import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
+import javax.annotation.Nonnull;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -26,9 +26,9 @@ public class ZipWriterTest {
     @Test
     public void writesMultipleFilesToArchive() throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        var writer = new ZipWriter(out)
-                .file("file1∞®ƒ両†.txt", "Hello world!".getBytes(StandardCharsets.UTF_8))
-                .file("file2.txt", "Here are some more things to look at".getBytes(StandardCharsets.UTF_8));
+        var writer = new ZipWriter(out);
+        writer.data("file1∞®ƒ両†.txt", "Hello world!".getBytes(StandardCharsets.UTF_8));
+        writer.data("file2.txt", "Here are some more things to look at".getBytes(StandardCharsets.UTF_8));
 
         try (var entry = writer.stream("the streaming one")) {
             new ByteArrayInputStream("this is a long long stream".getBytes(StandardCharsets.UTF_8))
@@ -55,10 +55,10 @@ public class ZipWriterTest {
     public void createsNonZip64Archive() throws IOException {
         // when we create things using only byte arrays we create an archive that is non zip64
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        new ZipWriter(out)
-                .file("file1∞®ƒ両†.txt", "Hello world!".getBytes(StandardCharsets.UTF_8))
-                .file("file2.txt", "Here are some more things to look at".getBytes(StandardCharsets.UTF_8))
-                .finish();
+        var writer = new ZipWriter(out);
+        writer.data("file1∞®ƒ両†.txt", "Hello world!".getBytes(StandardCharsets.UTF_8));
+        writer.data("file2.txt", "Here are some more things to look at".getBytes(StandardCharsets.UTF_8));
+        writer.finish();
 
         SeekableByteChannel chan = new SeekableInMemoryByteChannel(out.toByteArray());
         ZipFile z = new ZipFile.Builder().setSeekableByteChannel(chan).get();
@@ -77,7 +77,7 @@ public class ZipWriterTest {
     public void testWritingLargeFile() throws IOException {
         var random = new Random();
         // create a file between 7 and 8 GB
-        long fileSize = 0 * (1L << 30) + (long)Math.floor(random.nextDouble() * (1L << 30));
+        long fileSize = 7 * (1L << 30) + (long)Math.floor(random.nextDouble() * (1L << 30));
         var testFile = File.createTempFile("big-file", "");
         testFile.deleteOnExit();
         try (var out = new FileOutputStream(testFile)) {
@@ -163,7 +163,7 @@ public class ZipWriterTest {
                 .isEqualTo(testFileCRC.getValue());
     }
 
-    @NotNull
+    @Nonnull
     private static ByteArrayOutputStream getDataStream(ZipFile z, ZipArchiveEntry entry) throws IOException {
         var entry1Data = new ByteArrayOutputStream();
         z.getInputStream(entry).transferTo(entry1Data);

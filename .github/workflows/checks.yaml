@@ -52,6 +52,9 @@ jobs:
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
 
+  integration:
+    steps:
+
   ci:
     needs:
       - mavenverify

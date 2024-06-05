@@ -28,6 +28,17 @@ import java.util.UUID;
 
 public class TDF {
 
+    private final long maximumSize;
+
+    public TDF() {
+        this(MAX_TDF_INPUT_SIZE);
+    }
+
+    // constructor for tests so that we can set a maximum size that's tractable for tests
+    TDF(long maximumInputSize) {
+        this.maximumSize = maximumInputSize;
+    }
+
     public static Logger logger = LoggerFactory.getLogger(TDF.class);
 
     private static final long MAX_TDF_INPUT_SIZE = 68719476736L;
@@ -329,7 +340,7 @@ public class TDF {
                 finished = nRead < 0;
                 totalSize += readThisLoop;
 
-                if (totalSize > MAX_TDF_INPUT_SIZE) {
+                if (totalSize > maximumSize) {
                     throw new DataSizeNotSupported("can't create tdf larger than 64gb");
                 }
                 byte[] cipherData = tdfObject.aesGcm.encrypt(readBuf, 0, readThisLoop);
