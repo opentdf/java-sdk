@@ -61,9 +61,14 @@ public class KASClient implements SDK.KAS, AutoCloseable {
         try {
             url = new URL(urlString);
         } catch (MalformedURLException e) {
+            // if there is no protocol then they either gave us
+            // a correct address or one we don't know how to fix
             return urlString;
         }
 
+        // otherwise we take the specified port or default
+        // based on whether the URL uses a scheme that
+        // implies TLS
         int port;
         if (url.getPort() == -1) {
             if ("http".equals(url.getProtocol())) {
