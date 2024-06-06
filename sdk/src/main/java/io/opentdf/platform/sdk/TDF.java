@@ -58,50 +58,57 @@ public class TDF {
     private static final String kTDFZipReference = "reference";
 
     private static final SecureRandom sRandom = new SecureRandom();
+    private static final Gson gson = new GsonBuilder().create();
 
-    public static class DataSizeNotSupported extends Exception {
+    public static class DataSizeNotSupported extends RuntimeException {
         public DataSizeNotSupported(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class KasInfoMissing extends Exception {
+    public static class KasInfoMissing extends RuntimeException {
         public KasInfoMissing(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class KasPublicKeyMissing extends Exception {
+    public static class KasPublicKeyMissing extends RuntimeException {
         public KasPublicKeyMissing(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class FailedToCreateGMAC extends Exception {
+    public static class InputStreamReadFailed extends RuntimeException {
+        public InputStreamReadFailed(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    public static class FailedToCreateGMAC extends RuntimeException {
         public FailedToCreateGMAC(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class NotValidateRootSignature extends Exception {
+    public static class NotValidateRootSignature extends RuntimeException {
         public NotValidateRootSignature(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class SegmentSizeMismatch extends Exception {
+    public static class SegmentSizeMismatch extends RuntimeException {
         public SegmentSizeMismatch(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class SegmentSignatureMismatch extends Exception {
+    public static class SegmentSignatureMismatch extends RuntimeException {
         public SegmentSignatureMismatch(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class TDFReadFailed extends Exception {
+    public static class TDFReadFailed extends RuntimeException {
         public TDFReadFailed(String errorMessage) {
             super(errorMessage);
         }
@@ -142,15 +149,13 @@ public class TDF {
             return policyObject;
         }
 
-        private static Base64.Encoder encoder = Base64.getEncoder();
-        private void prepareManifest(Config.TDFConfig tdfConfig) throws Exception {
-            Gson gson = new GsonBuilder().create();
-
+        private static final Base64.Encoder encoder = Base64.getEncoder();
+        private void prepareManifest(Config.TDFConfig tdfConfig) {
             manifest.encryptionInformation.keyAccessType = kSplitKeyType;
             manifest.encryptionInformation.keyAccessObj =  new ArrayList<>();
 
             PolicyObject policyObject = createPolicyObject(tdfConfig.attributes);
-            String base64PolicyObject  = Base64.getEncoder().encodeToString(gson.toJson(policyObject).getBytes(StandardCharsets.UTF_8));
+            String base64PolicyObject  = encoder.encodeToString(gson.toJson(policyObject).getBytes(StandardCharsets.UTF_8));
             List<byte[]> symKeys = new ArrayList<>();
 
             for (Config.KASInfo kasInfo: tdfConfig.kasInfoList) {
@@ -175,22 +180,19 @@ public class TDF {
                 AsymEncryption asymmetricEncrypt = new AsymEncryption(kasInfo.PublicKey);
                 byte[] wrappedKey = asymmetricEncrypt.encrypt(symKey);
 
-                keyAccess.wrappedKey = Base64.getEncoder().encodeToString(wrappedKey);
+                keyAccess.wrappedKey = encoder.encodeToString(wrappedKey);
 
                 // Add meta data
                 if(tdfConfig.metaData != null && !tdfConfig.metaData.trim().isEmpty()) {
                     AesGcm aesGcm = new AesGcm(symKey);
-                    byte[] ciphertext = aesGcm.encrypt(tdfConfig.metaData.getBytes(StandardCharsets.UTF_8));
-
-
-                    byte[] iv = new byte[AesGcm.GCM_NONCE_LENGTH];
-                    System.arraycopy(ciphertext, 0, iv, 0, iv.length);
+                    var encrypted = aesGcm.encrypt(tdfConfig.metaData.getBytes(StandardCharsets.UTF_8));
 
                     EncryptedMetadata encryptedMetadata = new EncryptedMetadata();
-                    encryptedMetadata.ciphertext = new String(ciphertext);
-                    encryptedMetadata.iv = new String(iv);
+                    encryptedMetadata.iv = encoder.encodeToString(encrypted.getIv());
+                    encryptedMetadata.ciphertext = encoder.encodeToString(encrypted.getCiphertext());
 
-                    keyAccess.encryptedMetadata = gson.toJson(encryptedMetadata);
+                    var metadata = gson.toJson(encryptedMetadata);
+                    keyAccess.encryptedMetadata = encoder.encodeToString(metadata.getBytes(StandardCharsets.UTF_8));
                 }
 
                 symKeys.add(symKey);
@@ -212,93 +214,61 @@ public class TDF {
     }
 
     private static final Base64.Decoder decoder = Base64.getDecoder();
-    private static class Reader {
-
-        private SDK.KAS kas;
-        private TDFReader tdfReader;
-        private Manifest manifest;
-        private String unencryptedMetadata;
-        private final byte[] payloadKey = new byte[GCM_KEY_SIZE];
-        private long payloadSize;
-        private AesGcm aesGcm;
-
-        Reader(SDK.KAS kas) {
-            this.kas = kas;
+    public static class Reader {
+        private final TDFReader tdfReader;
+        private final byte[] payloadKey;
+        private final Manifest manifest;
+        public String getMetadata() {
+            return unencryptedMetadata;
         }
 
-        private void doPayloadKeyUnwrap() throws IOException, InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException, FailedToCreateGMAC, NotValidateRootSignature, SegmentSizeMismatch {
-            for (Manifest.KeyAccess keyAccess: this.manifest.encryptionInformation.keyAccessObj) {
-                // Create KAS client
-                // Perform rewrap
-                byte[] wrappedKey = new byte[GCM_KEY_SIZE]; // Replace with kas client rewrap call
+        private final String unencryptedMetadata;
+        private final AesGcm aesGcm;
 
-                var unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy);
-                for (int index = 0; index < wrappedKey.length; index++) {
-                    this.payloadKey[index] ^= unwrappedKey[index];
+        Reader(TDFReader tdfReader, Manifest manifest, byte[] payloadKey, String unencryptedMetadata) {
+            this.tdfReader = tdfReader;
+            this.manifest = manifest;
+            this.aesGcm = new AesGcm(payloadKey);
+            this.payloadKey = payloadKey;
+            this.unencryptedMetadata = unencryptedMetadata;
+
+        }
+
+        public void readPayload(OutputStream outputStream) throws TDFReadFailed, NoSuchAlgorithmException, InvalidKeyException, FailedToCreateGMAC, SegmentSignatureMismatch, NoSuchPaddingException, InvalidAlgorithmParameterException, BadPaddingException, IllegalBlockSizeException, IOException {
+            for (Manifest.Segment segment: manifest.encryptionInformation.integrityInformation.segments) {
+                byte[] readBuf = new byte[(int)segment.encryptedSegmentSize];
+                int bytesRead = tdfReader.readPayloadBytes(readBuf);
+
+                if (readBuf.length != bytesRead) {
+                    throw new TDFReadFailed("failed to read payload");
                 }
 
-                if (keyAccess.encryptedMetadata != null && !keyAccess.encryptedMetadata.isEmpty()) {
-                    AesGcm aesGcm = new AesGcm(wrappedKey);
-
-                    String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata), "UTF-8");
-
-                    Gson gson = new GsonBuilder().create();
-                    EncryptedMetadata encryptedMetadata = gson.fromJson(decodedMetadata, EncryptedMetadata.class);
-
-                    String encodedCipherText = encryptedMetadata.ciphertext;
-                    byte[] cipherText = Base64.getDecoder().decode(encodedCipherText);
-                    this.unencryptedMetadata = new String(aesGcm.decrypt(cipherText), "UTF-8");
+                String segHashAlg = manifest.encryptionInformation.integrityInformation.segmentHashAlg;
+                Config.IntegrityAlgorithm sigAlg = Config.IntegrityAlgorithm.HS256;
+                if (segHashAlg.compareToIgnoreCase(kGmacIntegrityAlgorithm) == 0) {
+                    sigAlg = Config.IntegrityAlgorithm.GMAC;
                 }
+
+                String payloadSig = calculateSignature(readBuf, payloadKey, sigAlg);
+                byte[] payloadSigAsBytes = payloadSig.getBytes(StandardCharsets.UTF_8);
+                if (segment.hash.compareTo(Base64.getEncoder().encodeToString(payloadSigAsBytes)) != 0) {
+                    throw new SegmentSignatureMismatch("segment signature miss match");
+                }
+
+                byte[] writeBuf = aesGcm.decrypt(new AesGcm.Encrypted(readBuf));
+                outputStream.write(writeBuf);
             }
-
-            // Validate root signature
-            String rootAlgorithm = this.manifest.encryptionInformation.integrityInformation.rootSignature.algorithm;
-            String rootSignature = this.manifest.encryptionInformation.integrityInformation.rootSignature.signature;
-
-            ByteArrayOutputStream aggregateHash = new ByteArrayOutputStream();
-            for (Manifest.Segment segment: this.manifest.encryptionInformation.integrityInformation.segments) {
-                byte[] decodedHash = Base64.getDecoder().decode(segment.hash);
-                aggregateHash.write(decodedHash);
-            }
-
-            Config.IntegrityAlgorithm sigAlg = Config.IntegrityAlgorithm.HS256;
-            if (rootAlgorithm.compareToIgnoreCase(kGmacIntegrityAlgorithm) == 0) {
-                sigAlg = Config.IntegrityAlgorithm.GMAC;
-            }
-
-            String sig = TDF.calculateSignature(aggregateHash.toByteArray(), this.payloadKey, sigAlg);
-            String rootSigValue = Base64.getEncoder().encodeToString(sig.getBytes(StandardCharsets.UTF_8));
-            if (rootSignature.compareTo(rootSigValue) != 0) {
-                throw new NotValidateRootSignature("root signature validation failed");
-            }
-
-            int segmentSize = this.manifest.encryptionInformation.integrityInformation.segmentSizeDefault;
-            int encryptedSegSize = this.manifest.encryptionInformation.integrityInformation.encryptedSegmentSizeDefault;
-
-            if (segmentSize != encryptedSegSize - (kGcmIvSize + kAesBlockSize)) {
-                throw new SegmentSizeMismatch("mismatch encrypted segment size in manifest");
-            }
-
-            long payloadSize = 0;
-            for (Manifest.Segment segment: this.manifest.encryptionInformation.integrityInformation.segments) {
-                payloadSize += segment.segmentSize;
-            }
-
-            this.payloadSize = payloadSize;
-            this.aesGcm = new AesGcm(this.payloadKey);
         }
     }
 
-
-    private static String calculateSignature(byte[] data, byte[] secret, Config.IntegrityAlgorithm algorithm)
-            throws NoSuchAlgorithmException, InvalidKeyException, FailedToCreateGMAC {
+    private static String calculateSignature(byte[] data, byte[] secret, Config.IntegrityAlgorithm algorithm) {
         if (algorithm == Config.IntegrityAlgorithm.HS256) {
             byte[] hmac = CryptoUtils.CalculateSHA256Hmac(secret, data);
             return Hex.encodeHexString(hmac);
         }
 
         if (kGMACPayloadLength > data.length) {
-            throw new FailedToCreateGMAC("Dail to create gmac signature");
+            throw new FailedToCreateGMAC("fail to create gmac signature");
         }
 
         byte[] gmacPayload = Arrays.copyOfRange(data, data.length - kGMACPayloadLength, data.length);
@@ -307,7 +277,7 @@ public class TDF {
 
     public TDFObject createTDF(InputStream payload,
                                OutputStream outputStream,
-                               Config.TDFConfig tdfConfig, SDK.KAS kas) throws Exception {
+                               Config.TDFConfig tdfConfig, SDK.KAS kas) throws IOException {
         if (tdfConfig.kasInfoList.isEmpty()) {
             throw new KasInfoMissing("kas information is missing");
         }
@@ -339,7 +309,7 @@ public class TDF {
                 if (totalSize > maximumSize) {
                     throw new DataSizeNotSupported("can't create tdf larger than 64gb");
                 }
-                byte[] cipherData = tdfObject.aesGcm.encrypt(readBuf, 0, readThisLoop);
+                byte[] cipherData = tdfObject.aesGcm.encrypt(readBuf, 0, readThisLoop).asBytes();
                 payloadOutput.write(cipherData);
 
                 String segmentSig = calculateSignature(cipherData, tdfObject.payloadKey, tdfConfig.segmentIntegrityAlgorithm);
@@ -384,7 +354,6 @@ public class TDF {
         tdfObject.manifest.payload.url = TDFWriter.TDF_PAYLOAD_FILE_NAME;
         tdfObject.manifest.payload.isEncrypted = true;
 
-        Gson gson = new GsonBuilder().create();
         String manifestAsStr = gson.toJson(tdfObject.manifest);
 
         tdfWriter.appendManifest(manifestAsStr);
@@ -403,42 +372,69 @@ public class TDF {
         }
     }
 
-    public void loadTDF(SeekableByteChannel tdf, OutputStream outputStream, SDK.KAS kas) throws InvalidAlgorithmParameterException,
+    public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas) throws InvalidAlgorithmParameterException,
             NotValidateRootSignature, SegmentSizeMismatch, NoSuchPaddingException,
             IllegalBlockSizeException, IOException, NoSuchAlgorithmException,
-            BadPaddingException, InvalidKeyException, FailedToCreateGMAC, TDFReadFailed, SegmentSignatureMismatch {
-        Reader reader = new Reader(kas);
-        reader.tdfReader = new TDFReader(tdf);
-        String manifest = reader.tdfReader.manifest();
+            BadPaddingException, InvalidKeyException, FailedToCreateGMAC {
 
+        TDFReader tdfReader = new TDFReader(tdf);
+        String manifestJson = tdfReader.manifest();
+        Manifest manifest = gson.fromJson(manifestJson, Manifest.class);
+        byte[] payloadKey = new byte[GCM_KEY_SIZE];
+        String unencryptedMetadata = null;
 
-        Gson gson = new GsonBuilder().create();
-        reader.manifest = gson.fromJson(manifest, Manifest.class);
-
-        reader.doPayloadKeyUnwrap();
-
-        for (Manifest.Segment segment: reader.manifest.encryptionInformation.integrityInformation.segments) {
-            byte[] readBuf = new byte[(int)segment.encryptedSegmentSize];
-            int bytesRead = reader.tdfReader.readPayloadBytes(readBuf);
-
-            if (readBuf.length != bytesRead) {
-                throw new TDFReadFailed("failed to read payload");
+        for (Manifest.KeyAccess keyAccess: manifest.encryptionInformation.keyAccessObj) {
+            var unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy);
+            for (int index = 0; index < unwrappedKey.length; index++) {
+                payloadKey[index] ^= unwrappedKey[index];
             }
 
-            String segHashAlg = reader.manifest.encryptionInformation.integrityInformation.segmentHashAlg;
-            Config.IntegrityAlgorithm sigAlg = Config.IntegrityAlgorithm.HS256;
-            if (segHashAlg.compareToIgnoreCase(kGmacIntegrityAlgorithm) == 0) {
-                sigAlg = Config.IntegrityAlgorithm.GMAC;
-            }
+            if (keyAccess.encryptedMetadata != null && !keyAccess.encryptedMetadata.isEmpty()) {
+                AesGcm aesGcm = new AesGcm(unwrappedKey);
 
-            String payloadSig = calculateSignature(readBuf, reader.payloadKey, sigAlg);
-            byte[] payloadSigAsBytes = payloadSig.getBytes(StandardCharsets.UTF_8);
-            if (segment.hash.compareTo(Base64.getEncoder().encodeToString(payloadSigAsBytes)) != 0) {
-                throw new SegmentSignatureMismatch("segment signature miss match");
-            }
+                String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata), "UTF-8");
+                EncryptedMetadata encryptedMetadata = gson.fromJson(decodedMetadata, EncryptedMetadata.class);
 
-            byte[] writeBuf = reader.aesGcm.decrypt(readBuf);
-            outputStream.write(writeBuf);
+                var encryptedData = new AesGcm.Encrypted(
+                    decoder.decode(encryptedMetadata.iv),
+                    decoder.decode(encryptedMetadata.ciphertext)
+                );
+
+                byte[] decrypted = aesGcm.decrypt(encryptedData);
+                // this is a little bit weird... the last unencrypted metadata we get from a KAS is the one
+                // that we return to the user. This is OK because we can't have different metadata per-KAS
+                unencryptedMetadata = new String(decrypted, StandardCharsets.UTF_8);
+            }
         }
+
+        // Validate root signature
+        String rootAlgorithm = manifest.encryptionInformation.integrityInformation.rootSignature.algorithm;
+        String rootSignature = manifest.encryptionInformation.integrityInformation.rootSignature.signature;
+
+        ByteArrayOutputStream aggregateHash = new ByteArrayOutputStream();
+        for (Manifest.Segment segment: manifest.encryptionInformation.integrityInformation.segments) {
+            byte[] decodedHash = Base64.getDecoder().decode(segment.hash);
+            aggregateHash.write(decodedHash);
+        }
+
+        Config.IntegrityAlgorithm sigAlg = Config.IntegrityAlgorithm.HS256;
+        if (rootAlgorithm.compareToIgnoreCase(kGmacIntegrityAlgorithm) == 0) {
+            sigAlg = Config.IntegrityAlgorithm.GMAC;
+        }
+
+        String sig = calculateSignature(aggregateHash.toByteArray(), payloadKey, sigAlg);
+        String rootSigValue = Base64.getEncoder().encodeToString(sig.getBytes(StandardCharsets.UTF_8));
+        if (rootSignature.compareTo(rootSigValue) != 0) {
+            throw new NotValidateRootSignature("root signature validation failed");
+        }
+
+        int segmentSize = manifest.encryptionInformation.integrityInformation.segmentSizeDefault;
+        int encryptedSegSize = manifest.encryptionInformation.integrityInformation.encryptedSegmentSizeDefault;
+
+        if (segmentSize != encryptedSegSize - (kGcmIvSize + kAesBlockSize)) {
+            throw new SegmentSizeMismatch("mismatch encrypted segment size in manifest");
+        }
+
+        return new Reader(tdfReader, manifest, payloadKey, unencryptedMetadata);
     }
 }

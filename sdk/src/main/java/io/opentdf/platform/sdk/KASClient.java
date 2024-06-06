@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import static java.lang.String.format;
 
@@ -84,7 +83,7 @@ public class KASClient implements SDK.KAS, AutoCloseable {
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         var entries = new ArrayList<>(stubs.values());
         stubs.clear();
         for (var entry: entries) {

@@ -114,6 +114,7 @@ public class SDKBuilderTest {
 
         Server platformServicesServer = null;
         Server kasServer = null;
+        SDK.Services services = null;
         // we use the HTTP server for two things:
         // * it returns the OIDC configuration we use at bootstrapping time
         // * it fakes out being an IDP and returns an access token when need to retrieve an access token
@@ -223,7 +224,7 @@ public class SDKBuilderTest {
                         certificate()).build());
             }
 
-            SDK.Services services = servicesBuilder
+            services = servicesBuilder
                     .buildServices();
 
             assertThat(services).isNotNull();
@@ -287,6 +288,9 @@ public class SDKBuilderTest {
             }
             if (kasServer != null) {
                 kasServer.shutdownNow();
+            }
+            if (services != null) {
+                services.close();
             }
         }
     }

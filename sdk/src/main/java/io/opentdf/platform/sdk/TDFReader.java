@@ -45,7 +45,7 @@ public class TDFReader {
         return out.toString(StandardCharsets.UTF_8);
     }
 
-    public int readPayloadBytes(byte[] buf) {
+    int readPayloadBytes(byte[] buf) {
         int totalRead = 0;
         int nread;
         try {
