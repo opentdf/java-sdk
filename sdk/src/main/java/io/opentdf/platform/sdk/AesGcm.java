@@ -113,7 +113,6 @@ public class AesGcm {
         }
 
         return new Encrypted(nonce, cipherText);
-<<<<<<< HEAD
     }
 
     /**
