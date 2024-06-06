@@ -107,7 +107,6 @@ public class ZipWriterTest {
             }
         }
 
-
         var unzippedData = File.createTempFile("big-file-unzipped", "");
         unzippedData.deleteOnExit();
         try (var unzippedStream = new FileOutputStream(unzippedData)) {
