@@ -55,7 +55,7 @@ public class KASClient implements SDK.KAS, AutoCloseable {
                 .getPublicKey();
     }
 
-    String getAddress(String urlString) {
+    private String normalizeAddress(String urlString) {
         URL url;
         try {
             url = new URL(urlString);
@@ -142,7 +142,7 @@ public class KASClient implements SDK.KAS, AutoCloseable {
 
     // make this protected so we can test the address normalization logic
     synchronized AccessServiceGrpc.AccessServiceBlockingStub getStub(String url) {
-        var realAddress = getAddress(url);
+        var realAddress = normalizeAddress(url);
         if (!stubs.containsKey(realAddress)) {
             var channel = channelFactory.apply(realAddress);
             var stub = AccessServiceGrpc.newBlockingStub(channel);
