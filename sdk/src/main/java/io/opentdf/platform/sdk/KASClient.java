@@ -15,7 +15,6 @@ import io.opentdf.platform.kas.PublicKeyRequest;
 import io.opentdf.platform.kas.RewrapRequest;
 import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
-import org.bouncycastle.jce.interfaces.ECPublicKey;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
