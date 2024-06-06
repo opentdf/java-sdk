@@ -35,6 +35,10 @@ public class NanoTDFTest {
 
     private static SDK.KAS kas = new SDK.KAS() {
         @Override
+        public void close() throws Exception {
+        }
+
+        @Override
         public String getPublicKey(Config.KASInfo kasInfo) {
             return kasPublicKey;
         }
