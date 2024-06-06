@@ -1,6 +1,7 @@
 package io.opentdf.platform.sdk;
 
 import io.grpc.Channel;
+import io.grpc.ManagedChannel;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
 import io.opentdf.platform.policy.namespaces.NamespaceServiceGrpc;
@@ -15,10 +16,15 @@ import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
  * The SDK class represents a software development kit for interacting with the opentdf platform. It
  * provides various services and stubs for making API calls to the opentdf platform.
  */
-public class SDK {
+public class SDK implements AutoCloseable {
     private final Services services;
 
-    public interface KAS {
+    @Override
+    public void close() throws Exception {
+        services.close();
+    }
+
+    public interface KAS extends AutoCloseable {
         String getPublicKey(Config.KASInfo kasInfo);
         String getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve);
         byte[] unwrap(Manifest.KeyAccess keyAccess, String policy);
@@ -26,20 +32,26 @@ public class SDK {
     }
 
     // TODO: add KAS
-    public interface Services {
+    public interface Services extends AutoCloseable {
         AttributesServiceFutureStub attributes();
         NamespaceServiceFutureStub namespaces();
         SubjectMappingServiceFutureStub subjectMappings();
         ResourceMappingServiceFutureStub resourceMappings();
         KAS kas();
 
-        static Services newServices(Channel channel, KAS kas) {
+        static Services newServices(ManagedChannel channel, KAS kas) {
             var attributeService = AttributesServiceGrpc.newFutureStub(channel);
             var namespaceService = NamespaceServiceGrpc.newFutureStub(channel);
             var subjectMappingService = SubjectMappingServiceGrpc.newFutureStub(channel);
             var resourceMappingService = ResourceMappingServiceGrpc.newFutureStub(channel);
 
             return new Services() {
+                @Override
+                public void close() throws Exception {
+                    channel.shutdownNow();
+                    kas.close();
+                }
+
                 @Override
                 public AttributesServiceFutureStub attributes() {
                     return attributeService;
