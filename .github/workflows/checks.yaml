@@ -30,7 +30,6 @@ jobs:
 
   mavenverify:
     runs-on: ubuntu-latest
-    if: always()
     needs:
       - pr
     steps:
@@ -52,8 +51,127 @@ jobs:
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
 
+  platform-integration:
+    runs-on: ubuntu-22.04
+    needs:
+      - pr
+    steps:
+      - name: Checkout Java SDK
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      - uses: bufbuild/buf-setup-action@382440cdb8ec7bc25a68d7b4711163d95f7cc3aa
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up JDK
+        uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
+        with:
+          java-version: "11"
+          distribution: "adopt"
+          server-id: github
+      - name: Build java SDK
+        run: |
+          mvn --batch-mode clean install -DskipTests
+        env:
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+      - name: Check out platform
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          repository: opentdf/platform
+          ref: main
+          path: platform
+      - name: Set up go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491
+        with:
+          go-version: "1.22.3"
+          check-latest: false
+          cache-dependency-path: |
+            platform/service/go.sum
+            platform/examples/go.sum
+            platform/protocol/go/go.sum
+            platform/sdk/go.sum
+      - run: go mod download
+        working-directory: platform
+      - run: go mod verify
+        working-directory: platform
+      - name: Create keys
+        run: |
+          .github/scripts/init-temp-keys.sh
+          cp opentdf-dev.yaml opentdf.yaml
+          sudo chmod -R 777 ./keys
+        working-directory: platform
+      - name: Trust the locally issued cert
+        run: |
+          keytool \
+            -importcert \
+            -storepass changeit \
+            -noprompt \
+            -file localhost.crt \
+            -keystore $JAVA_HOME/lib/security/cacerts \
+            -alias localhost-for-tests
+        working-directory: platform/keys
+      - name: Bring the services up
+        run: docker compose up -d --wait --wait-timeout 240
+        working-directory: platform
+      - name: Provision keycloak
+        run: go run ./service provision keycloak
+        working-directory: platform
+      - name: Provision fixtures
+        run: go run ./service provision fixtures
+        working-directory: platform
+      - name: Start server in background
+        uses: JarvusInnovations/background-action@2428e7b970a846423095c79d43f759abf979a635
+        with:
+          run: |
+            go run ./service start
+          wait-on: |
+            tcp:localhost:8080
+          log-output-if: true
+          wait-for: 90s
+          working-directory: platform
+      - name: Get grpcurl
+        run: go install github.com/fullstorydev/grpcurl/cmd/grpcurl@v1.8.9
+      - name: Make sure that the platform is up
+        run: |
+          grpcurl -plaintext localhost:8080 list && \
+          grpcurl -plaintext localhost:8080 kas.AccessService/PublicKey
+      - name: Validate the SDK through the command line interface
+        run: |
+          printf 'here is some data to encrypt' > data
+
+          java -jar target/cmdline.jar \
+            --client-id=opentdf-sdk \
+            --client-secret=secret \
+            --platform-endpoint=localhost:8080 \
+            -i \
+            encrypt --kas-url=localhost:8080 -f data -m 'here is some metadata' > test.tdf
+
+          java -jar target/cmdline.jar \
+            --client-id=opentdf-sdk \
+            --client-secret=secret \
+            --platform-endpoint=localhost:8080 \
+            -i \
+            decrypt -f test.tdf > decrypted
+
+          java -jar target/cmdline.jar \
+            --client-id=opentdf-sdk \
+            --client-secret=secret \
+            --platform-endpoint=localhost:8080 \
+            -i \
+            metadata -f test.tdf > metadata
+
+          if ! diff -q data decrypted; then
+            printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
+            exit 1
+          fi
+
+          if [ "$(< metadata)" != 'here is some metadata' ]; then
+            printf 'metadata is incorrect [%s]\n' "$(< metadata)"
+            exit 1
+          fi
+        working-directory: cmdline
   ci:
     needs:
+      - platform-integration
       - mavenverify
       - pr
     runs-on: ubuntu-latest
