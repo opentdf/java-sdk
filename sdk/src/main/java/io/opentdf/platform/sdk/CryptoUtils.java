@@ -12,11 +12,19 @@ import java.util.Base64;
 public class CryptoUtils {
     private static final int KEYPAIR_SIZE = 2048;
 
-    public static byte[] CalculateSHA256Hmac(byte[] key, byte[] data) throws NoSuchAlgorithmException,
-            InvalidKeyException {
-        Mac sha256_HMAC = Mac.getInstance("HmacSHA256");
+    public static byte[] CalculateSHA256Hmac(byte[] key, byte[] data) {
+        Mac sha256_HMAC = null;
+        try {
+            sha256_HMAC = Mac.getInstance("HmacSHA256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new SDKException("error getting instance of hash", e);
+        }
         SecretKeySpec secret_key = new SecretKeySpec(key, "HmacSHA256");
-        sha256_HMAC.init(secret_key);
+        try {
+            sha256_HMAC.init(secret_key);
+        } catch (InvalidKeyException e) {
+            throw new SDKException("error creating hash", e);
+        }
 
         return sha256_HMAC.doFinal(data);
     }

@@ -28,7 +28,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 public class KASClient implements SDK.KAS, AutoCloseable {
 
@@ -181,7 +180,8 @@ public class KASClient implements SDK.KAS, AutoCloseable {
         byte[] key = ECKeyPair.calculateHKDF(hashOfSalt, symmetricKey);
 
         AesGcm gcm = new AesGcm(key);
-        return gcm.decrypt(wrappedKey);
+        AesGcm.Encrypted encrypted = new AesGcm.Encrypted(wrappedKey);
+        return gcm.decrypt(encrypted);
     }
 
     private final HashMap<String, CacheEntry> stubs = new HashMap<>();
