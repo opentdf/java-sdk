@@ -13,6 +13,8 @@ import io.opentdf.platform.kas.AccessServiceGrpc;
 import io.opentdf.platform.kas.PublicKeyRequest;
 import io.opentdf.platform.kas.RewrapRequest;
 
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -20,6 +22,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static java.lang.String.format;
 
 public class KASClient implements SDK.KAS, AutoCloseable {
 
@@ -50,6 +54,28 @@ public class KASClient implements SDK.KAS, AutoCloseable {
         return getStub(kasInfo.URL)
                 .publicKey(PublicKeyRequest.getDefaultInstance())
                 .getPublicKey();
+    }
+
+    String getAddress(String urlString) {
+        URL url;
+        try {
+            url = new URL(urlString);
+        } catch (MalformedURLException e) {
+            return urlString;
+        }
+
+        int port;
+        if (url.getPort() == -1) {
+            if ("http".equals(url.getProtocol())) {
+                port = 80;
+            } else {
+                port = 443;
+            }
+        } else {
+            port = url.getPort();
+        }
+
+        return format("%s:%d", url.getHost(), port);
     }
 
     @Override
@@ -104,21 +130,22 @@ public class KASClient implements SDK.KAS, AutoCloseable {
     private static class CacheEntry {
         final ManagedChannel channel;
         final AccessServiceGrpc.AccessServiceBlockingStub stub;
-
         private CacheEntry(ManagedChannel channel, AccessServiceGrpc.AccessServiceBlockingStub stub) {
             this.channel = channel;
             this.stub = stub;
         }
     }
 
-    private synchronized AccessServiceGrpc.AccessServiceBlockingStub getStub(String url) {
-        if (!stubs.containsKey(url)) {
-            var channel = channelFactory.apply(url);
+    // make this protected so we can test the address normalization logic
+    synchronized AccessServiceGrpc.AccessServiceBlockingStub getStub(String url) {
+        var realAddress = getAddress(url);
+        if (!stubs.containsKey(realAddress)) {
+            var channel = channelFactory.apply(realAddress);
             var stub = AccessServiceGrpc.newBlockingStub(channel);
-            stubs.put(url, new CacheEntry(channel, stub));
+            stubs.put(realAddress, new CacheEntry(channel, stub));
         }
 
-        return stubs.get(url).stub;
+        return stubs.get(realAddress).stub;
     }
 }
 
