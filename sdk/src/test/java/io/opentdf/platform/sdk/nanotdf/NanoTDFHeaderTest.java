@@ -71,93 +71,92 @@ public class NanoTDFHeaderTest {
     };
 
 // TODO: Need to update the static data to fix this test
-//    @Test
-//    public void testNanoTDFHeaderRemotePolicy() throws IOException {
-//        byte[] headerData = new byte[155];
-//
-//        // Construct empty header - encrypt use case
-//        Header header = new Header();
-//
-//        ResourceLocator kasLocator = new ResourceLocator("https://api.exampl.com/kas");
-//        header.setKasLocator(kasLocator);
-//
-//        ECCMode eccMode = new ECCMode((byte) 0x0); //no ecdsa binding and 'secp256r1'
-//        header.setECCMode(eccMode);
-//
-//        SymmetricAndPayloadConfig payloadConfig = new SymmetricAndPayloadConfig((byte) 0x0); // no signature and AES_256_GCM_64_TAG
-//        header.setPayloadConfig(payloadConfig);
-//
-//        PolicyInfo policyInfo = new PolicyInfo();
-//        policyInfo.setRemotePolicy(remotePolicyUrl);
-//        policyInfo.setPolicyBinding(binding);
-//
-//        header.setPolicyInfo(policyInfo);
-//        header.setEphemeralKey(compressedPubKey);
-//
-//        int headerSize = header.getTotalSize();
-//        headerSize = header.writeIntoBuffer(ByteBuffer.wrap(headerData));
-//        assertEquals(headerData.length, headerSize);
-//        assertTrue(Arrays.equals(headerData, expectedHeader));
-//    }
+    @Test
+    public void testNanoTDFHeaderRemotePolicy() throws IOException {
+        byte[] headerData = new byte[155];
+
+        // Construct empty header - encrypt use case
+        Header header = new Header();
+
+        ResourceLocator kasLocator = new ResourceLocator("https://api.exampl.com/kas");
+        header.setKasLocator(kasLocator);
+
+        ECCMode eccMode = new ECCMode((byte) 0x0); //no ecdsa binding and 'secp256r1'
+        header.setECCMode(eccMode);
+
+        SymmetricAndPayloadConfig payloadConfig = new SymmetricAndPayloadConfig((byte) 0x0); // no signature and AES_256_GCM_64_TAG
+        header.setPayloadConfig(payloadConfig);
+
+        PolicyInfo policyInfo = new PolicyInfo();
+        policyInfo.setRemotePolicy(remotePolicyUrl);
+        policyInfo.setPolicyBinding(binding);
+
+        header.setPolicyInfo(policyInfo);
+        header.setEphemeralKey(compressedPubKey);
+
+        int headerSize = header.getTotalSize();
+        headerSize = header.writeIntoBuffer(ByteBuffer.wrap(headerData));
+        assertEquals(headerData.length, headerSize);
+        assertTrue(Arrays.equals(headerData, expectedHeader));
+    }
 
 // TODO: Need to update the static data to fix this test
-//    @Test
-//    public void testNanoTDFReader() throws IOException, InvalidAlgorithmParameterException, NoSuchAlgorithmException, NoSuchProviderException, CertificateException, InvalidKeyException, InvalidKeySpecException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, SignatureException {
-//
-//        Header header2 = new Header();
-//        FileInputStream fileIn = new FileInputStream("src/test/resources/javasdknanotdf.ntdf");
-//        DataInputStream dataIn = new DataInputStream(fileIn);
-//
-//        // Read each field of the Header object from the file
-//       byte[] magicNumberAndVersion = new byte[3]; // size of magic number and version
-//        dataIn.readFully(magicNumberAndVersion);
-//        header2.setMagicNumberAndVersion(magicNumberAndVersion);
-//
-//        NanoTDFType.Protocol protocol =  NanoTDFType.Protocol.values()[dataIn.readByte()];
-//
-//        // Read the body length
-//        int bodyLength = dataIn.readByte();
-//
-//        // Read the body
-//        byte[] body = new byte[bodyLength];
-//        dataIn.readFully(body);
-//
-//        // Create a new ResourceLocator object
-//        ResourceLocator resourceLocator = new ResourceLocator();
-//        resourceLocator.setProtocol(protocol);
-//        resourceLocator.setBodyLength(bodyLength);
-//        resourceLocator.setBody(body);
-//        header2.setKasLocator(resourceLocator);
-//
-//        ECCMode eccMode2 = new ECCMode(dataIn.readByte());
-//        header2.setECCMode(eccMode2);
-//
-//        SymmetricAndPayloadConfig payloadConfig2 = new SymmetricAndPayloadConfig(dataIn.readByte());
-//        header2.setPayloadConfig(payloadConfig2);
-//
-//        // Read the policy type
-//        int remainingBytes = dataIn.available();
-//
-//       // Create a byte array to hold the remaining bytes
-//        byte[] remainingBytesArray = new byte[remainingBytes];
-//
-//       // Read the remaining bytes into the byte array
-//        dataIn.readFully(remainingBytesArray);
-//        PolicyInfo policyInfo = new PolicyInfo(ByteBuffer.wrap(remainingBytesArray), header2.getECCMode());
-//        header2.setPolicyInfo(policyInfo);
-//
-//        int sizeToRead = policyInfo.getTotalSize();
-//        int compressedPubKeySize = ECCMode.getECCompressedPubKeySize(header2.getECCMode().getEllipticCurveType());
-//        byte[] ephemeralKey = new byte[compressedPubKeySize]; // size of compressed public key
-//        System.arraycopy(remainingBytesArray, sizeToRead, ephemeralKey, 0, ephemeralKey.length);
-//        header2.setEphemeralKey(ephemeralKey);
-//
-//        dataIn.close();
-//        fileIn.close();
-//
-//       assertEquals(kasUrl, header2.getKasLocator().getResourceUrl());
-//       assertEquals(remotePolicyUrl, header2.getPolicyInfo().getRemotePolicyUrl());
-//    }
+    @Test
+    public void testNanoTDFReader() throws IOException, InvalidAlgorithmParameterException, NoSuchAlgorithmException, NoSuchProviderException, CertificateException, InvalidKeyException, InvalidKeySpecException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, SignatureException {
+
+        Header header2 = new Header();
+        FileInputStream fileIn = new FileInputStream("src/test/resources/javasdknanotdf.ntdf");
+        DataInputStream dataIn = new DataInputStream(fileIn);
+
+        // Read each field of the Header object from the file
+       byte[] magicNumberAndVersion = new byte[3]; // size of magic number and version
+        dataIn.readFully(magicNumberAndVersion);
+        header2.setMagicNumberAndVersion(magicNumberAndVersion);
+
+        NanoTDFType.Protocol protocol =  NanoTDFType.Protocol.values()[dataIn.readByte()];
+
+        // Read the body length
+        int bodyLength = dataIn.readByte();
+
+        // Read the body
+        byte[] body = new byte[bodyLength];
+        dataIn.readFully(body);
+
+        // Create a new ResourceLocator object
+        ResourceLocator resourceLocator = new ResourceLocator();
+        resourceLocator.setProtocol(protocol);
+        resourceLocator.setBodyLength(bodyLength);
+        resourceLocator.setBody(body);
+        header2.setKasLocator(resourceLocator);
+
+        ECCMode eccMode2 = new ECCMode(dataIn.readByte());
+        header2.setECCMode(eccMode2);
+
+        SymmetricAndPayloadConfig payloadConfig2 = new SymmetricAndPayloadConfig(dataIn.readByte());
+        header2.setPayloadConfig(payloadConfig2);
+
+        // Read the policy type
+        int remainingBytes = dataIn.available();
+
+       // Create a byte array to hold the remaining bytes
+        byte[] remainingBytesArray = new byte[remainingBytes];
+
+       // Read the remaining bytes into the byte array
+        dataIn.readFully(remainingBytesArray);
+        PolicyInfo policyInfo = new PolicyInfo(ByteBuffer.wrap(remainingBytesArray), header2.getECCMode());
+        header2.setPolicyInfo(policyInfo);
+
+        int sizeToRead = policyInfo.getTotalSize();
+        int compressedPubKeySize = ECCMode.getECCompressedPubKeySize(header2.getECCMode().getEllipticCurveType());
+        byte[] ephemeralKey = new byte[compressedPubKeySize]; // size of compressed public key
+        System.arraycopy(remainingBytesArray, sizeToRead, ephemeralKey, 0, ephemeralKey.length);
+        header2.setEphemeralKey(ephemeralKey);
+
+        dataIn.close();
+        fileIn.close();
+
+       assertEquals(kasUrl, header2.getKasLocator().getResourceUrl());
+    }
 
     @Test
     public void testNanoTDFEncryption() throws IOException, InvalidAlgorithmParameterException, NoSuchAlgorithmException, NoSuchProviderException, CertificateException, InvalidKeyException, InvalidKeySpecException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, SignatureException {

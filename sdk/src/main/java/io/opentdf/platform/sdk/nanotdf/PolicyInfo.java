@@ -93,7 +93,8 @@ public class PolicyInfo {
 
         // Remote policy - The body is resource locator.
         if (type == NanoTDFType.PolicyType.REMOTE_POLICY) {
-            throw new RuntimeException("Embedded policy with key access is not supported.");
+            buffer.put(body);
+            totalBytesWritten += body.length;
         } else { // Embedded Policy
 
             // Embedded policy layout

@@ -129,12 +129,16 @@ public class Config {
 
     public static Consumer<NanoTDFConfig> withEllipticCurve(String curve) {
         NanoTDFType.ECCurve ecCurve;
-        if (curve.compareToIgnoreCase(NanoTDFType.ECCurve.SECP384R1.toString()) == 0) {
+        if (curve == null || curve.isEmpty()) {
+            ecCurve = NanoTDFType.ECCurve.SECP256R1; // default curve
+        } else if (curve.compareToIgnoreCase(NanoTDFType.ECCurve.SECP384R1.toString()) == 0) {
             ecCurve = NanoTDFType.ECCurve.SECP384R1;
         } else if (curve.compareToIgnoreCase(NanoTDFType.ECCurve.SECP521R1.toString()) == 0) {
             ecCurve = NanoTDFType.ECCurve.SECP521R1;
-        } else {
+        } else if (curve.compareToIgnoreCase(NanoTDFType.ECCurve.SECP256R1.toString()) == 0) {
             ecCurve = NanoTDFType.ECCurve.SECP256R1;
+        } else {
+            throw new IllegalArgumentException("The supplied curve string " + curve + " is not recognized.");
         }
         return (NanoTDFConfig config) -> config.eccMode.setEllipticCurve(ecCurve);
     }
