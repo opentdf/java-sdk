@@ -34,7 +34,8 @@ public class TDFE2ETest {
         tdf.createTDF(plainTextInputStream, tdfOutputStream, config, sdk.kas());
 
         var unwrappedData = new java.io.ByteArrayOutputStream();
-        tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), unwrappedData, sdk.kas());
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), sdk.kas());
+        reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8)).isEqualTo("text");
     }

@@ -18,8 +18,8 @@ class AesGcmTest {
         AesGcm aesGcm = new AesGcm(key);
         byte[] plaintext = "Virtru, JavaSDK!".getBytes();
 
-        byte[] cipherText = aesGcm.encrypt(plaintext);
-        byte[] decryptedText = aesGcm.decrypt(cipherText);
+        var encrypted = aesGcm.encrypt(plaintext);
+        byte[] decryptedText = aesGcm.decrypt(encrypted);
 
         assertArrayEquals(plaintext, decryptedText);
     }
@@ -30,10 +30,11 @@ class AesGcmTest {
         AesGcm aesGcm = new AesGcm(key);
         byte[] plaintext = "Virtru, JavaSDK!".getBytes();
 
-        byte[] cipherText = aesGcm.encrypt(plaintext);
-        cipherText[0] = (byte) (cipherText[0] ^ 0x1); // Modify the ciphertext
+        var encrypted = aesGcm.encrypt(plaintext);
+        var bytes = encrypted.asBytes();
+        bytes[12] = (byte) (bytes[12]^1);
 
-        assertThrows(BadPaddingException.class, () -> aesGcm.decrypt(cipherText));
+        assertThrows(BadPaddingException.class, () -> aesGcm.decrypt(new AesGcm.Encrypted(bytes)));
     }
 
     @Test

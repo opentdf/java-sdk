@@ -24,6 +24,7 @@ import java.security.interfaces.RSAPublicKey;
 import java.text.ParseException;
 import java.util.Base64;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 import static io.opentdf.platform.sdk.SDKBuilderTest.getRandomPort;
@@ -134,6 +135,29 @@ public class KASClientTest {
                 rewrapServer.shutdownNow();
             }
         }
+    }
+
+    @Test
+    public void testAddressNormalization() {
+        var lastAddress = new AtomicReference<String>();
+        var dpopKeypair = CryptoUtils.generateRSAKeypair();
+        var dpopKey = new RSAKey.Builder((RSAPublicKey)dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate()).build();
+        var kasClient = new KASClient(addr -> {
+            lastAddress.set(addr);
+            return ManagedChannelBuilder.forTarget(addr).build();
+        }, dpopKey);
+
+        var stub = kasClient.getStub("http://localhost:8080");
+        assertThat(lastAddress.get()).isEqualTo("localhost:8080");
+        var otherStub = kasClient.getStub("https://localhost:8080");
+        assertThat(lastAddress.get()).isEqualTo("localhost:8080");
+        assertThat(stub).isSameAs(otherStub);
+
+        kasClient.getStub("https://example.org");
+        assertThat(lastAddress.get()).isEqualTo("example.org:443");
+
+        kasClient.getStub("http://example.org");
+        assertThat(lastAddress.get()).isEqualTo("example.org:80");
     }
 
     private static Server startServer(AccessServiceGrpc.AccessServiceImplBase accessService) throws IOException {
