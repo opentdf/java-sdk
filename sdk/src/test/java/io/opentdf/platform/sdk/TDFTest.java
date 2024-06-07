@@ -1,5 +1,8 @@
 package io.opentdf.platform.sdk;
 
+
+import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
+import org.apache.commons.compress.utils.Lists;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -42,6 +45,16 @@ public class TDFTest {
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
+        }
+
+        @Override
+        public String getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
+            return null;
+        }
+
+        @Override
+        public byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL) {
+            return null;
         }
     };
 

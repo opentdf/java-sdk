@@ -1,6 +1,7 @@
 package io.opentdf.platform.sdk;
 
 import com.google.gson.Gson;
+import com.google.gson.annotations.SerializedName;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -12,7 +13,11 @@ import io.grpc.ManagedChannel;
 import io.opentdf.platform.kas.AccessServiceGrpc;
 import io.opentdf.platform.kas.PublicKeyRequest;
 import io.opentdf.platform.kas.RewrapRequest;
+import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
+import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.time.Duration;
@@ -46,6 +51,13 @@ public class KASClient implements SDK.KAS, AutoCloseable {
         var encryptionKeypair = CryptoUtils.generateRSAKeypair();
         decryptor = new AsymDecryption(encryptionKeypair.getPrivate());
         publicKeyPEM = CryptoUtils.getRSAPublicKeyPEM(encryptionKeypair.getPublic());
+    }
+
+    @Override
+    public String getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
+        return getStub(kasInfo.URL)
+                .publicKey(PublicKeyRequest.newBuilder().setAlgorithm(String.format("ec:%s", curve.toString())).build())
+                .getPublicKey();
     }
 
     @Override
@@ -97,6 +109,19 @@ public class KASClient implements SDK.KAS, AutoCloseable {
         Manifest.KeyAccess keyAccess;
     }
 
+    static class NanoTDFKeyAccess {
+        String header;
+        String type;
+        String url;
+        String protocol;
+    }
+
+    static class NanoTDFRewrapRequestBody {
+        String algorithm;
+        String clientPublicKey;
+        NanoTDFKeyAccess keyAccess;
+    }
+
     private static final Gson gson = new Gson();
 
     @Override
@@ -128,6 +153,62 @@ public class KASClient implements SDK.KAS, AutoCloseable {
         var response = getStub(keyAccess.url).rewrap(request);
         var wrappedKey = response.getEntityWrappedKey().toByteArray();
         return decryptor.decrypt(wrappedKey);
+    }
+
+    public byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL)  {
+        ECKeyPair keyPair = new ECKeyPair(curve.toString(), ECKeyPair.ECAlgorithm.ECDH);
+
+        NanoTDFKeyAccess keyAccess = new NanoTDFKeyAccess();
+        keyAccess.header = header;
+        keyAccess.type = "remote";
+        keyAccess.url = kasURL;
+        keyAccess.protocol = "kas";
+
+        NanoTDFRewrapRequestBody body = new NanoTDFRewrapRequestBody();
+        body.algorithm = String.format("ec:%s", curve.toString());
+        body.clientPublicKey =  keyPair.publicKeyInPEMFormat();
+        body.keyAccess = keyAccess;
+
+        var requestBody = gson.toJson(body);
+        var claims = new JWTClaimsSet.Builder()
+                .claim("requestBody", requestBody)
+                .issueTime(Date.from(Instant.now()))
+                .expirationTime(Date.from(Instant.now().plus(Duration.ofMinutes(1))))
+                .build();
+
+        var jws = new JWSHeader.Builder(JWSAlgorithm.RS256).build();
+        SignedJWT jwt = new SignedJWT(jws, claims);
+        try {
+            jwt.sign(signer);
+        } catch (JOSEException e) {
+            throw new SDKException("error signing KAS request", e);
+        }
+
+        var request = RewrapRequest
+                .newBuilder()
+                .setSignedRequestToken(jwt.serialize())
+                .build();
+
+        var response = getStub(keyAccess.url).rewrap(request);
+        var wrappedKey = response.getEntityWrappedKey().toByteArray();
+
+        // Generate symmetric key
+        byte[] symmetricKey = ECKeyPair.computeECDHKey(ECKeyPair.publicKeyFromPem(response.getSessionPublicKey()),
+                keyPair.getPrivateKey());
+
+        // Generate HKDF key
+        MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new SDKException("error creating SHA-256 message digest", e);
+        }
+        byte[] hashOfSalt = digest.digest(NanoTDF.MAGIC_NUMBER_AND_VERSION);
+        byte[] key = ECKeyPair.calculateHKDF(hashOfSalt, symmetricKey);
+
+        AesGcm gcm = new AesGcm(key);
+        AesGcm.Encrypted encrypted = new AesGcm.Encrypted(wrappedKey);
+        return gcm.decrypt(encrypted);
     }
 
     private final HashMap<String, CacheEntry> stubs = new HashMap<>();

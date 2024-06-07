@@ -10,6 +10,7 @@ import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceGrpc;
 import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceGrpc.ResourceMappingServiceFutureStub;
 import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc;
 import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc.SubjectMappingServiceFutureStub;
+import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 
 /**
  * The SDK class represents a software development kit for interacting with the opentdf platform. It
@@ -25,7 +26,9 @@ public class SDK implements AutoCloseable {
 
     public interface KAS extends AutoCloseable {
         String getPublicKey(Config.KASInfo kasInfo);
+        String getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve);
         byte[] unwrap(Manifest.KeyAccess keyAccess, String policy);
+        byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL);
     }
 
     // TODO: add KAS

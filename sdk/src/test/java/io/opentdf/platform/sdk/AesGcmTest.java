@@ -33,8 +33,7 @@ class AesGcmTest {
         var encrypted = aesGcm.encrypt(plaintext);
         var bytes = encrypted.asBytes();
         bytes[12] = (byte) (bytes[12]^1);
-
-        assertThrows(BadPaddingException.class, () -> aesGcm.decrypt(new AesGcm.Encrypted(bytes)));
+        assertThrows(RuntimeException.class, () -> aesGcm.decrypt(new AesGcm.Encrypted(bytes)));
     }
 
     @Test

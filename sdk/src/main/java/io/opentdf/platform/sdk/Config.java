@@ -1,5 +1,9 @@
 package io.opentdf.platform.sdk;
 
+import io.opentdf.platform.sdk.nanotdf.ECCMode;
+import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
+import io.opentdf.platform.sdk.nanotdf.SymmetricAndPayloadConfig;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -78,5 +82,68 @@ public class Config {
 
     public static Consumer<TDFConfig> withSegmentSize(int size) {
         return (TDFConfig config) -> config.defaultSegmentSize = size;
+    }
+
+    public static class NanoTDFConfig {
+        public ECCMode eccMode;
+        public NanoTDFType.Cipher cipher;
+        public SymmetricAndPayloadConfig config;
+        public List<String> attributes;
+        public List<KASInfo> kasInfoList;
+
+        public NanoTDFConfig() {
+            this.eccMode = new ECCMode();
+            this.eccMode.setEllipticCurve(NanoTDFType.ECCurve.SECP256R1);
+            this.eccMode.setECDSABinding(false);
+
+            this.cipher = NanoTDFType.Cipher.AES_256_GCM_96_TAG;
+
+            this.config = new SymmetricAndPayloadConfig();
+            this.config.setHasSignature(false);
+            this.config.setSymmetricCipherType(NanoTDFType.Cipher.AES_256_GCM_96_TAG);
+
+            this.attributes = new ArrayList<>();
+            this.kasInfoList = new ArrayList<>();
+        }
+    }
+
+    public static NanoTDFConfig newNanoTDFConfig(Consumer<NanoTDFConfig>... options) {
+        NanoTDFConfig config = new NanoTDFConfig();
+        for (Consumer<NanoTDFConfig> option : options) {
+            option.accept(config);
+        }
+        return config;
+    }
+
+    public static Consumer<NanoTDFConfig> witDataAttributes(String... attributes) {
+        return (NanoTDFConfig config) -> {
+            Collections.addAll(config.attributes, attributes);
+        };
+    }
+
+    public static Consumer<NanoTDFConfig> withNanoKasInformation(KASInfo... kasInfoList) {
+        return (NanoTDFConfig config) -> {
+            Collections.addAll(config.kasInfoList, kasInfoList);
+        };
+    }
+
+    public static Consumer<NanoTDFConfig> withEllipticCurve(String curve) {
+        NanoTDFType.ECCurve ecCurve;
+        if (curve == null || curve.isEmpty()) {
+            ecCurve = NanoTDFType.ECCurve.SECP256R1; // default curve
+        } else if (curve.compareToIgnoreCase(NanoTDFType.ECCurve.SECP384R1.toString()) == 0) {
+            ecCurve = NanoTDFType.ECCurve.SECP384R1;
+        } else if (curve.compareToIgnoreCase(NanoTDFType.ECCurve.SECP521R1.toString()) == 0) {
+            ecCurve = NanoTDFType.ECCurve.SECP521R1;
+        } else if (curve.compareToIgnoreCase(NanoTDFType.ECCurve.SECP256R1.toString()) == 0) {
+            ecCurve = NanoTDFType.ECCurve.SECP256R1;
+        } else {
+            throw new IllegalArgumentException("The supplied curve string " + curve + " is not recognized.");
+        }
+        return (NanoTDFConfig config) -> config.eccMode.setEllipticCurve(ecCurve);
+    }
+
+    public static Consumer<NanoTDFConfig> WithECDSAPolicyBinding() {
+        return (NanoTDFConfig config) -> config.eccMode.setECDSABinding(false);
     }
 }
