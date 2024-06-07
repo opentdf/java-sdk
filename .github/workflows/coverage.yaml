@@ -34,7 +34,7 @@ jobs:
       run: mvn test
 
     - name: Generate Jacoco coverage report
-      run: mvn jacoco:report
+      run: mvn jacoco:report -DreportOutputDirectory=${{ github.workspace }}/target/site/jacoco
 
     - name: show files
       run: |
