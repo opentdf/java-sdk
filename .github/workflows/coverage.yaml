@@ -34,18 +34,14 @@ jobs:
       run: mvn test jacoco:prepare-agent
 
     - name: Generate Jacoco coverage report
-      run: mvn jacoco:report -DreportOutputDirectory=${{ github.workspace }}/target/site/jacoco
+      run: mvn jacoco:report
 
-    - name: show files
-      run: |
-         ls
-         pwd
     - name: Upload coverage report
       uses: actions/upload-artifact@v4
       with:
         name: coverage-report
         path: |
-          ${{ github.workspace }}/target/site/jacoco/jacoco.xml
-          ${{ github.workspace }}/target/site/jacoco/index.html
+          ${{ github.workspace }}/sdk/target/site/jacoco/jacoco.xml
+          ${{ github.workspace }}/sdk/target/site/jacoco/index.html
 
 
