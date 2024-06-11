@@ -177,16 +177,16 @@ jobs:
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
-            --platform-endpoint=http://localhost:8080 \
+            --platform-endpoint=localhost:8080 \
             -i \
             encryptnano --kas-url=http://localhost:8080 -f data -m 'here is some metadata' > nano.ntdf
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
-            --platform-endpoint=http://localhost:8080 \
+            --platform-endpoint=localhost:8080 \
             -i \
-            decryptnano -f nano.nntdf > decrypted
+            decryptnano -f nano.ntdf > decrypted
           
           if ! diff -q data decrypted; then
             printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
