@@ -1,8 +1,6 @@
 package io.opentdf.platform;
 
-import io.opentdf.platform.sdk.Config;
-import io.opentdf.platform.sdk.SDK;
-import io.opentdf.platform.sdk.SDKBuilder;
+import io.opentdf.platform.sdk.*;
 import io.opentdf.platform.sdk.TDF;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
@@ -18,6 +16,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -95,6 +94,45 @@ class Command {
             try (var stdout = new PrintWriter(System.out)) {
                 var reader = new TDF().loadTDF(in, sdk.getServices().kas());
                 stdout.write(reader.getMetadata() == null ? "" : reader.getMetadata());
+            }
+        }
+    }
+
+    @CommandLine.Command(name = "encryptnano")
+    void createNanoTDF(
+            @Option(names = {"-f", "--file"}, defaultValue = Option.NULL_VALUE) Optional<File> file,
+            @Option(names = {"-k", "--kas-url"}, required = true) List<String> kas,
+            @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata) throws Exception {
+
+        var sdk = buildSDK();
+        var kasInfos = kas.stream().map(k -> {
+            var ki = new Config.KASInfo();
+            ki.URL = k;
+            return ki;
+        }).toArray(Config.KASInfo[]::new);
+
+        List<Consumer<Config.NanoTDFConfig>> configs = new ArrayList<>();
+        configs.add(Config.withNanoKasInformation(kasInfos));
+
+        var nanoTDFConfig = Config.newNanoTDFConfig(configs.toArray(Consumer[]::new));
+        try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {
+            try (var out = new BufferedOutputStream(System.out)) {
+                NanoTDF ntdf = new NanoTDF();
+                ntdf.createNanoTDF(ByteBuffer.wrap(in.readAllBytes()), out, nanoTDFConfig, sdk.getServices().kas());
+            }
+        }
+    }
+
+    @CommandLine.Command(name = "decryptnano")
+    void readNanoTDF(@Option(names = {"-f", "--file"}, required = true) Path nanoTDFPath) throws Exception {
+        var sdk = buildSDK();
+        try (var in = FileChannel.open(nanoTDFPath, StandardOpenOption.READ)) {
+            try (var stdout = new BufferedOutputStream(System.out)) {
+                NanoTDF ntdf = new NanoTDF();
+                ByteBuffer buffer = ByteBuffer.allocate((int) in.size());
+                in.read(buffer);
+                buffer.flip();
+                ntdf.readNanoTDF(buffer, stdout, sdk.getServices().kas());
             }
         }
     }

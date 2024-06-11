@@ -169,6 +169,29 @@ jobs:
             exit 1
           fi
         working-directory: cmdline
+      - name: Encrypt/Decrypt NanoTDF
+        run: |
+          echo 'here is some data to encrypt' > data
+
+          java -jar target/cmdline.jar \
+            --client-id=opentdf-sdk \
+            --client-secret=secret \
+            --platform-endpoint=localhost:8080 \
+            -i \
+            encryptnano --kas-url=localhost:8080 -f data -m 'here is some metadata' > nano.ntdf
+
+          java -jar target/cmdline.jar \
+            --client-id=opentdf-sdk \
+            --client-secret=secret \
+            --platform-endpoint=localhost:8080 \
+            -i \
+            decryptnano -f nano.nntdf > decrypted
+          
+          if ! diff -q data decrypted; then
+            printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
+            exit 1
+          fi
+        working-directory: cmdline
   ci:
     needs:
       - platform-integration
