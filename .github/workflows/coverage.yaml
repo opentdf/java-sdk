@@ -41,7 +41,6 @@ jobs:
       with:
         name: coverage-report
         path: |
-          ${{ github.workspace }}/sdk/target/site/jacoco/jacoco.xml
-          ${{ github.workspace }}/sdk/target/site/jacoco/index.html
+          ${{ github.workspace }}/sdk/target/site/jacoco/
 
 
