@@ -19,13 +19,16 @@ public class SDK implements AutoCloseable {
     private final Services services;
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         services.close();
     }
 
     public interface KAS extends AutoCloseable {
         String getPublicKey(Config.KASInfo kasInfo);
         byte[] unwrap(Manifest.KeyAccess keyAccess, String policy);
+
+        @Override
+        void close();
     }
 
     // TODO: add KAS
@@ -36,6 +39,9 @@ public class SDK implements AutoCloseable {
         ResourceMappingServiceFutureStub resourceMappings();
         KAS kas();
 
+        @Override
+        void close();
+
         static Services newServices(ManagedChannel channel, KAS kas) {
             var attributeService = AttributesServiceGrpc.newFutureStub(channel);
             var namespaceService = NamespaceServiceGrpc.newFutureStub(channel);
@@ -44,7 +50,7 @@ public class SDK implements AutoCloseable {
 
             return new Services() {
                 @Override
-                public void close() throws Exception {
+                public void close() {
                     channel.shutdownNow();
                     kas.close();
                 }

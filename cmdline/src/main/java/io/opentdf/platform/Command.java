@@ -12,12 +12,10 @@ import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -50,7 +48,6 @@ class Command {
             @Option(names = {"-k", "--kas-url"}, required = true) List<String> kas,
             @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata) throws IOException {
 
-        var sdk = buildSDK();
         var kasInfos = kas.stream().map(k -> {
             var ki = new Config.KASInfo();
             ki.URL = k;
@@ -60,11 +57,13 @@ class Command {
         List<Consumer<Config.TDFConfig>> configs = new ArrayList<>();
         configs.add(Config.withKasInformation(kasInfos));
         metadata.map(Config::withMetaData).ifPresent(configs::add);
-
         var tdfConfig = Config.newTDFConfig(configs.toArray(Consumer[]::new));
-        try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {
-            try (var out = new BufferedOutputStream(System.out)) {
-                new TDF().createTDF(in, out, tdfConfig, sdk.getServices().kas());
+
+        try (var sdk = buildSDK()) {
+            try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {
+                try (var out = new BufferedOutputStream(System.out)) {
+                    new TDF().createTDF(in, out, tdfConfig, sdk.getServices().kas());
+                }
             }
         }
     }
@@ -79,22 +78,23 @@ class Command {
 
     @CommandLine.Command(name = "decrypt")
     void decrypt(@Option(names = {"-f", "--file"}, required = true) Path tdfPath) throws IOException, InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
-        var sdk = buildSDK();
-        try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
-            try (var stdout = new BufferedOutputStream(System.out)) {
+        try (var sdk = buildSDK()) {
+            try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
+                try (var stdout = new BufferedOutputStream(System.out)) {
                     var reader = new TDF().loadTDF(in, sdk.getServices().kas());
                     reader.readPayload(stdout);
                 }
+            }
         }
     }
     @CommandLine.Command(name = "metadata")
     void readMetadata(@Option(names = {"-f", "--file"}, required = true) Path tdfPath) throws IOException, InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
-        var sdk = buildSDK();
-
-        try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
-            try (var stdout = new PrintWriter(System.out)) {
-                var reader = new TDF().loadTDF(in, sdk.getServices().kas());
-                stdout.write(reader.getMetadata() == null ? "" : reader.getMetadata());
+        try (var sdk = buildSDK()) {
+            try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
+                try (var stdout = new PrintWriter(System.out)) {
+                    var reader = new TDF().loadTDF(in, sdk.getServices().kas());
+                    stdout.write(reader.getMetadata() == null ? "" : reader.getMetadata());
+                }
             }
         }
     }

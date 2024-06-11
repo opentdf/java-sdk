@@ -86,7 +86,7 @@ public class ZipWriterTest {
                 random.nextBytes(buf);
                 out.write(buf);
             }
-            buf = new byte[(int)(fileSize % 2048)];
+            buf = new byte[(int)(fileSize % buf.length)];
             random.nextBytes(buf);
             out.write(buf);
         }
@@ -125,15 +125,19 @@ public class ZipWriterTest {
         var buf = new byte[2048];
         var unzippedCRC = new CRC32();
         try (var inputStream = new FileInputStream(unzippedData)) {
-            var read = inputStream.read(buf);
-            unzippedCRC.update(buf, 0, read);
+            int read;
+            while ((read=inputStream.read(buf)) >= 0) {
+                unzippedCRC.update(buf, 0, read);
+            }
         }
         unzippedData.delete();
 
         var testFileCRC = new CRC32();
         try (var inputStream = new FileInputStream(testFile)) {
-            var read = inputStream.read(buf);
-            testFileCRC.update(buf, 0, read);
+            int read;
+            while ((read=inputStream.read(buf)) >= 0) {
+                testFileCRC.update(buf, 0, read);
+            }
         }
         testFile.delete();
 
@@ -153,8 +157,10 @@ public class ZipWriterTest {
 
         var ourTestFileCRC = new CRC32();
         try (var inputStream = new FileInputStream(ourUnzippedData)) {
-            var read = inputStream.read(buf);
-            ourTestFileCRC.update(buf, 0, read);
+            int read;
+            while ((read=inputStream.read(buf)) >= 0) {
+                ourTestFileCRC.update(buf, 0, read);
+            }
         }
 
         assertThat(ourTestFileCRC.getValue())
