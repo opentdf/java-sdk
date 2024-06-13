@@ -6,6 +6,7 @@ import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.crypto.generators.HKDFBytesGenerator;
 import org.bouncycastle.crypto.params.HKDFParameters;
+import org.bouncycastle.jcajce.provider.asymmetric.ec.KeyPairGeneratorSpi;
 import org.bouncycastle.jce.ECNamedCurveTable;
 import org.bouncycastle.jce.interfaces.ECPrivateKey;
 import org.bouncycastle.jce.interfaces.ECPublicKey;
@@ -37,6 +38,8 @@ public class ECKeyPair {
         ECDSA
     }
 
+    private static final BouncyCastleProvider BOUNCY_CASTLE_PROVIDER = new BouncyCastleProvider();
+
     public enum NanoTDFECCurve {
         SECP256R1("secp256r1"),
         PRIME256V1("prime256v1"),
@@ -65,14 +68,13 @@ public class ECKeyPair {
         KeyPairGenerator generator;
 
         try {
+            // Should this just use the algorithm vs use ECDH only for ECDH and ECDSA for everything else.
             if (algorithm == ECAlgorithm.ECDH) {
-                generator = KeyPairGenerator.getInstance("ECDH", "BC");
+                generator = KeyPairGeneratorSpi.getInstance(ECAlgorithm.ECDH.name(), BOUNCY_CASTLE_PROVIDER);
             } else {
-                generator = KeyPairGenerator.getInstance("ECDSA", "BC");
+                generator = KeyPairGeneratorSpi.getInstance(ECAlgorithm.ECDSA.name(), BOUNCY_CASTLE_PROVIDER);
             }
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
-        } catch (NoSuchProviderException e) {
             throw new RuntimeException(e);
         }
 
@@ -160,7 +162,7 @@ public class ECKeyPair {
             X509CertificateHolder x509CertificateHolder = (X509CertificateHolder) parser.readObject();
             parser.close();
             SubjectPublicKeyInfo publicKeyInfo = x509CertificateHolder.getSubjectPublicKeyInfo();
-            JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
+            JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider(BOUNCY_CASTLE_PROVIDER);
             ECPublicKey publicKey = null;
             try {
                 publicKey = (ECPublicKey)converter.getPublicKey(publicKeyInfo);
@@ -232,7 +234,7 @@ public class ECKeyPair {
             SubjectPublicKeyInfo publicKeyInfo = (SubjectPublicKeyInfo) parser.readObject();
             parser.close();
 
-            JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
+            JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider(BOUNCY_CASTLE_PROVIDER);
             return (ECPublicKey) converter.getPublicKey(publicKeyInfo);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -245,7 +247,7 @@ public class ECKeyPair {
             PrivateKeyInfo privateKeyInfo = (PrivateKeyInfo)parser.readObject();
             parser.close();
 
-            JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
+            JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider(BOUNCY_CASTLE_PROVIDER);;
             return (ECPrivateKey) converter.getPrivateKey(privateKeyInfo);
         } catch (IOException e) {
             throw new RuntimeException(e);
