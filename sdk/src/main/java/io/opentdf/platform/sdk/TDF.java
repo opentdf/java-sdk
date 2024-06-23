@@ -3,7 +3,18 @@ package io.opentdf.platform.sdk;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.nimbusds.jose.*;
+import com.nimbusds.jose.crypto.MACVerifier;
+import com.nimbusds.jose.crypto.RSASSAVerifier;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
+import com.nimbusds.jose.crypto.RSASSASigner;
+import com.nimbusds.jose.crypto.MACSigner;
+import com.nimbusds.jose.jwk.RSAKey;
+import io.opentdf.platform.kas.RewrapRequest;
 import org.apache.commons.codec.binary.Hex;
+import org.bouncycastle.pqc.crypto.lms.HSSSigner;
+import org.erdtman.jcs.JsonCanonicalizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,15 +27,11 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.List;
-import java.util.UUID;
+import java.security.*;
+import java.text.ParseException;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.*;
 
 public class TDF {
 
@@ -51,11 +58,13 @@ public class TDF {
     private static final String kGCMCipherAlgorithm = "AES-256-GCM";
     private static final int kGMACPayloadLength = 16;
     private static final String kGmacIntegrityAlgorithm = "GMAC";
+    private static final String kSha256Hash = "SHA256";
 
     private static final String kHmacIntegrityAlgorithm = "HS256";
     private static final String kDefaultMimeType = "application/octet-stream";
     private static final String kTDFAsZip = "zip";
     private static final String kTDFZipReference = "reference";
+    private static final String kAssertionHash = "assertionHash";
 
     private static final SecureRandom sRandom = new SecureRandom();
     private static final Gson gson = new GsonBuilder().create();
@@ -277,7 +286,7 @@ public class TDF {
 
     public TDFObject createTDF(InputStream payload,
                                OutputStream outputStream,
-                               Config.TDFConfig tdfConfig, SDK.KAS kas) throws IOException {
+                               Config.TDFConfig tdfConfig, SDK.KAS kas) throws IOException, JOSEException {
         if (tdfConfig.kasInfoList.isEmpty()) {
             throw new KasInfoMissing("kas information is missing");
         }
@@ -292,6 +301,13 @@ public class TDF {
 
         StringBuilder aggregateHash = new StringBuilder();
         byte[] readBuf = new byte[tdfConfig.defaultSegmentSize];
+
+        MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new SDKException("error creating SHA-256 message digest", e);
+        }
 
         tdfObject.manifest.encryptionInformation.integrityInformation.segments = new ArrayList<>();
         long totalSize = 0;
@@ -352,8 +368,40 @@ public class TDF {
         tdfObject.manifest.payload.protocol = kTDFAsZip;
         tdfObject.manifest.payload.type = kTDFZipReference;
         tdfObject.manifest.payload.url = TDFWriter.TDF_PAYLOAD_FILE_NAME;
-        tdfObject.manifest.payload.isEncrypted = true;
+        tdfObject.manifest.payload.isEncrypted = tdfConfig.enableEncryption;
 
+        List<Assertion> signedAssertions = new ArrayList<>();;
+        for (var assertion: tdfConfig.assertionList) {
+            if (!Objects.equals(assertion.type, Assertion.Type.HandlingAssertion.toString())) {
+                continue;
+            }
+
+            var assertionAsJson = gson.toJson(assertion);
+            JsonCanonicalizer jc = new JsonCanonicalizer(assertionAsJson);
+            var hashOfAssertion = Hex.encodeHexString(digest.digest(jc.getEncodedUTF8()));
+            var completeHash = aggregateHash + hashOfAssertion;
+            var encodedHash = Base64.getEncoder().encodeToString(completeHash.getBytes());
+
+            var claims = new JWTClaimsSet.Builder()
+                    .claim(kAssertionHash, encodedHash)
+                    .build();
+            var jws = new JWSHeader.Builder(JWSAlgorithm.HS256).build();
+            var signer = new MACSigner(tdfObject.aesGcm.getKey());
+            SignedJWT jwt = new SignedJWT(jws, claims);
+            try {
+                jwt.sign(signer);
+            } catch (JOSEException e) {
+                throw new SDKException("error signing assertion", e);
+            }
+
+            assertion.binding = new Assertion.Binding();
+            assertion.binding.method = Assertion.BindingMethod.JWT.toString();
+            assertion.binding.signature = jwt.serialize();
+
+            signedAssertions.add(assertion);
+        }
+
+        tdfObject.manifest.assertions = signedAssertions;
         String manifestAsStr = gson.toJson(tdfObject.manifest);
 
         tdfWriter.appendManifest(manifestAsStr);
@@ -372,10 +420,8 @@ public class TDF {
         }
     }
 
-    public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas) throws InvalidAlgorithmParameterException,
-            NotValidateRootSignature, SegmentSizeMismatch, NoSuchPaddingException,
-            IllegalBlockSizeException, IOException, NoSuchAlgorithmException,
-            BadPaddingException, InvalidKeyException, FailedToCreateGMAC {
+    public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas) throws NotValidateRootSignature, SegmentSizeMismatch,
+            IOException, FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException {
 
         TDFReader tdfReader = new TDFReader(tdf);
         String manifestJson = tdfReader.manifest();
@@ -433,6 +479,35 @@ public class TDF {
 
         if (segmentSize != encryptedSegSize - (kGcmIvSize + kAesBlockSize)) {
             throw new SegmentSizeMismatch("mismatch encrypted segment size in manifest");
+        }
+
+        MessageDigest digest =  MessageDigest.getInstance("SHA-256");
+        // Validate assertions
+        for (var assertion: manifest.assertions) {
+            if (!Objects.equals(assertion.type, Assertion.Type.HandlingAssertion.toString())) {
+                continue;
+            }
+
+            var binding = assertion.binding;
+            assertion.binding = null;
+
+            SignedJWT signedJWT = SignedJWT.parse(binding.signature);
+            var assertionHash = signedJWT.getJWTClaimsSet().getStringClaim(kAssertionHash);
+
+            var assertionAsJson = gson.toJson(assertion);
+            JsonCanonicalizer jc = new JsonCanonicalizer(assertionAsJson);
+            var hashOfAssertion = Hex.encodeHexString(digest.digest(jc.getEncodedUTF8()));
+            var completeHash = aggregateHash + hashOfAssertion;
+            var encodedHash = Base64.getEncoder().encodeToString(completeHash.getBytes());
+
+            if (!Objects.equals(assertionHash, encodedHash)) {
+                throw new SDKException("Failed integrity check on assertion hash");
+            }
+
+            var verifier = new MACVerifier(payloadKey);
+            if (!signedJWT.verify(verifier)) {
+                throw new SDKException("Unable to verify assertion signature");
+            }
         }
 
         return new Reader(tdfReader, manifest, payloadKey, unencryptedMetadata);

@@ -38,11 +38,13 @@ public class Config {
         public TDFFormat tdfFormat;
         public String tdfPublicKey;
         public String tdfPrivateKey;
+        public String assertionSigningKey;
         public String metaData;
         public IntegrityAlgorithm integrityAlgorithm;
         public IntegrityAlgorithm segmentIntegrityAlgorithm;
         public List<String> attributes;
         public List<KASInfo> kasInfoList;
+        public List<Assertion> assertionList;
 
         public TDFConfig() {
             this.defaultSegmentSize = DEFAULT_SEGMENT_SIZE;
@@ -52,6 +54,7 @@ public class Config {
             this.segmentIntegrityAlgorithm = IntegrityAlgorithm.GMAC;
             this.attributes = new ArrayList<>();
             this.kasInfoList = new ArrayList<>();
+            this.assertionList = new ArrayList<>();
         }
     }
 
@@ -74,6 +77,16 @@ public class Config {
         return (TDFConfig config) -> {
             Collections.addAll(config.kasInfoList, kasInfoList);
         };
+    }
+
+    public static Consumer<TDFConfig> WithAssertions(Assertion... assertionList) {
+        return (TDFConfig config) -> {
+            Collections.addAll(config.assertionList, assertionList);
+        };
+    }
+
+    public static Consumer<TDFConfig> WithAssertion(Assertion assertion) {
+        return (TDFConfig config) -> config.assertionList.add(assertion);
     }
 
     public static Consumer<TDFConfig> withMetaData(String metaData) {

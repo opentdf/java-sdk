@@ -2,7 +2,6 @@ package io.opentdf.platform.sdk;
 
 
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
-import org.apache.commons.compress.utils.Lists;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -69,9 +68,19 @@ public class TDFTest {
 
     @Test
     void testSimpleTDFEncryptAndDecrypt() throws Exception {
+        var assertion1 = new Assertion();
+        assertion1.id = "assertion1";
+        assertion1.type = Assertion.Type.HandlingAssertion.toString();
+        assertion1.scope = Assertion.Scope.TrustedDataObj.toString();
+        assertion1.appliesToState = Assertion.AppliesToState.Unencrypted.toString();
+        assertion1.statement = new Assertion.Statement();
+        assertion1.statement.format = Assertion.StatementFormat.Base64BinaryStatement.toString();
+        assertion1.statement.value = "ICAgIDxlZGoOkVkaD4=";
+
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withKasInformation(getKASInfos()),
-                Config.withMetaData("here is some metadata")
+                Config.withMetaData("here is some metadata"),
+                Config.WithAssertion(assertion1)
         );
 
         String plainText = "this is extremely sensitive stuff!!!";
