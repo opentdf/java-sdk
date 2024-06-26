@@ -4,6 +4,8 @@ import io.opentdf.platform.sdk.nanotdf.ECCMode;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import io.opentdf.platform.sdk.nanotdf.SymmetricAndPayloadConfig;
 
+import com.nimbusds.jose.jwk.RSAKey;
+import java.security.Key;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -32,19 +34,36 @@ public class Config {
         public String PublicKey;
     }
 
+    public static class AssertionConfig {
+        public enum KeyType {
+            RS256,
+            HS256PayloadKey,
+            HS256UserDefined;
+        }
+
+        public RSAKey rs256PrivateKeyForSigning;
+        public RSAKey rs256PublicKeyForVerifying;
+        public byte[] hs256SymmetricKey;
+        public KeyType keyType;
+
+        public AssertionConfig() {
+            this.keyType = KeyType.HS256PayloadKey;
+        }
+    }
+
     public static class TDFConfig {
         public int defaultSegmentSize;
         public boolean enableEncryption;
         public TDFFormat tdfFormat;
         public String tdfPublicKey;
         public String tdfPrivateKey;
-        public String assertionSigningKey;
         public String metaData;
         public IntegrityAlgorithm integrityAlgorithm;
         public IntegrityAlgorithm segmentIntegrityAlgorithm;
         public List<String> attributes;
         public List<KASInfo> kasInfoList;
         public List<Assertion> assertionList;
+        public AssertionConfig assertionConfig;
 
         public TDFConfig() {
             this.defaultSegmentSize = DEFAULT_SEGMENT_SIZE;
@@ -93,8 +112,16 @@ public class Config {
         return (TDFConfig config) -> config.metaData = metaData;
     }
 
+    public static Consumer<TDFConfig> withAssertionConfig(AssertionConfig assertionConfig) {
+        return (TDFConfig config) -> config.assertionConfig = assertionConfig;
+    }
+
     public static Consumer<TDFConfig> withSegmentSize(int size) {
         return (TDFConfig config) -> config.defaultSegmentSize = size;
+    }
+
+    public static Consumer<TDFConfig> withDisableEncryption() {
+        return (TDFConfig config) -> config.enableEncryption = false;
     }
 
     public static class NanoTDFConfig {

@@ -6,7 +6,7 @@ public class Assertion {
         HandlingAssertion("Handling"),
         BaseAssertion("Base");
 
-        private String type;
+        private final String type;
 
         Type(String assertionType) {
             this.type = assertionType;
@@ -23,15 +23,10 @@ public class Assertion {
         Payload("PAYL"),
         Explicit("EXPLICIT");
 
-        private String scope;
+        private final String scope;
 
         Scope(String scope) {
             this.scope = scope;
-        }
-
-        @Override
-        public String toString() {
-            return scope;
         }
     }
 
@@ -39,15 +34,10 @@ public class Assertion {
         Encrypted("encrypted"),
         Unencrypted("unencrypted");
 
-        private String state;
+        private final String state;
 
         AppliesToState(String state) {
             this.state = state;
-        }
-
-        @Override
-        public String toString() {
-            return state;
         }
     }
 
@@ -65,11 +55,6 @@ public class Assertion {
         StatementFormat(String format) {
             this.format = format;
         }
-
-        @Override
-        public String toString() {
-            return format;
-        }
     }
 
 
@@ -80,11 +65,6 @@ public class Assertion {
 
         BindingMethod(String method) {
             this.method = method;
-        }
-
-        @Override
-        public String toString() {
-            return method;
         }
     }
 

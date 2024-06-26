@@ -1,6 +1,7 @@
 package io.opentdf.platform.sdk;
 
 
+import com.nimbusds.jose.jwk.RSAKey;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
@@ -13,6 +14,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
+import java.security.interfaces.RSAPublicKey;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Random;
@@ -91,13 +93,91 @@ public class TDFTest {
         tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
 
         var unwrappedData = new ByteArrayOutputStream();
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), new Config.AssertionConfig(), kas);
         reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
                 .withFailMessage("extracted data does not match")
                 .isEqualTo(plainText);
         assertThat(reader.getMetadata()).isEqualTo("here is some metadata");
+    }
+
+    @Test
+    void testSimpleTDFWithAssertionWithRS256() throws Exception {
+
+        var assertion = new Assertion();
+        assertion.id = "assertion1";
+        assertion.type = Assertion.Type.HandlingAssertion.name();
+        assertion.scope = Assertion.Scope.TrustedDataObj.name();
+        assertion.appliesToState = Assertion.AppliesToState.Unencrypted.name();
+        assertion.statement = new Assertion.Statement();
+        assertion.statement.format = Assertion.StatementFormat.Base64BinaryStatement.name();
+        assertion.statement.value = "ICAgIDxlZGoOkVkaD4=";
+
+        var keypair = CryptoUtils.generateRSAKeypair();
+        Config.AssertionConfig assertionConfig = new Config.AssertionConfig();
+        assertionConfig.keyType = Config.AssertionConfig.KeyType.RS256;
+        assertionConfig.rs256PrivateKeyForSigning = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).privateKey(keypair.getPrivate()).build();
+        assertionConfig.rs256PublicKeyForVerifying = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).build();
+
+        Config.TDFConfig config = Config.newTDFConfig(
+                Config.withKasInformation(getKASInfos()),
+                Config.WithAssertion(assertion),
+                Config.withAssertionConfig(assertionConfig),
+                Config.withDisableEncryption()
+        );
+
+        String plainText = "this is extremely sensitive stuff!!!";
+        InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+
+        TDF tdf = new TDF();
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
+
+        var unwrappedData = new ByteArrayOutputStream();
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), assertionConfig, kas);
+        reader.readPayload(unwrappedData);
+
+        assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
+                .withFailMessage("extracted data does not match")
+                .isEqualTo(plainText);
+    }
+
+    @Test
+    void testSimpleTDFWithAssertionWithHS256() throws Exception {
+
+        var assertion = new Assertion();
+        assertion.id = "assertion1";
+        assertion.type = Assertion.Type.HandlingAssertion.name();
+        assertion.scope = Assertion.Scope.TrustedDataObj.name();
+        assertion.appliesToState = Assertion.AppliesToState.Unencrypted.name();
+        assertion.statement = new Assertion.Statement();
+        assertion.statement.format = Assertion.StatementFormat.Base64BinaryStatement.name();
+        assertion.statement.value = "ICAgIDxlZGoOkVkaD4=";
+
+        Config.AssertionConfig assertionConfig = new Config.AssertionConfig();
+        assertionConfig.keyType = Config.AssertionConfig.KeyType.HS256PayloadKey;
+
+        Config.TDFConfig config = Config.newTDFConfig(
+                Config.withKasInformation(getKASInfos()),
+                Config.WithAssertion(assertion),
+                Config.withAssertionConfig(assertionConfig)
+        );
+
+        String plainText = "this is extremely sensitive stuff!!!";
+        InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+
+        TDF tdf = new TDF();
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
+
+        var unwrappedData = new ByteArrayOutputStream();
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), assertionConfig, kas);
+        reader.readPayload(unwrappedData);
+
+        assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
+                .withFailMessage("extracted data does not match")
+                .isEqualTo(plainText);
     }
 
     @Test
@@ -118,7 +198,8 @@ public class TDFTest {
         var tdf = new TDF();
         tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
         var unwrappedData = new ByteArrayOutputStream();
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()),
+                new Config.AssertionConfig(), kas);
         reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toByteArray())

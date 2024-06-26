@@ -12,6 +12,7 @@ import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jose.jwk.RSAKey;
 import io.opentdf.platform.kas.RewrapRequest;
+import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
 import org.bouncycastle.pqc.crypto.lms.HSSSigner;
 import org.erdtman.jcs.JsonCanonicalizer;
@@ -71,6 +72,12 @@ public class TDF {
 
     public static class DataSizeNotSupported extends RuntimeException {
         public DataSizeNotSupported(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    public static class FailedToCreateEncodedTDF extends RuntimeException {
+        public FailedToCreateEncodedTDF(String errorMessage) {
             super(errorMessage);
         }
     }
@@ -243,7 +250,11 @@ public class TDF {
 
         }
 
-        public void readPayload(OutputStream outputStream) throws TDFReadFailed, NoSuchAlgorithmException, InvalidKeyException, FailedToCreateGMAC, SegmentSignatureMismatch, NoSuchPaddingException, InvalidAlgorithmParameterException, BadPaddingException, IllegalBlockSizeException, IOException {
+        public void readPayload(OutputStream outputStream) throws TDFReadFailed,
+                FailedToCreateGMAC, SegmentSignatureMismatch, IOException, NoSuchAlgorithmException {
+
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+
             for (Manifest.Segment segment: manifest.encryptionInformation.integrityInformation.segments) {
                 byte[] readBuf = new byte[(int)segment.encryptedSegmentSize];
                 int bytesRead = tdfReader.readPayloadBytes(readBuf);
@@ -252,20 +263,31 @@ public class TDF {
                     throw new TDFReadFailed("failed to read payload");
                 }
 
-                String segHashAlg = manifest.encryptionInformation.integrityInformation.segmentHashAlg;
-                Config.IntegrityAlgorithm sigAlg = Config.IntegrityAlgorithm.HS256;
-                if (segHashAlg.compareToIgnoreCase(kGmacIntegrityAlgorithm) == 0) {
-                    sigAlg = Config.IntegrityAlgorithm.GMAC;
-                }
+                if (manifest.payload.isEncrypted) {
+                    String segHashAlg = manifest.encryptionInformation.integrityInformation.segmentHashAlg;
+                    Config.IntegrityAlgorithm sigAlg = Config.IntegrityAlgorithm.HS256;
+                    if (segHashAlg.compareToIgnoreCase(kGmacIntegrityAlgorithm) == 0) {
+                        sigAlg = Config.IntegrityAlgorithm.GMAC;
+                    }
 
-                String payloadSig = calculateSignature(readBuf, payloadKey, sigAlg);
-                byte[] payloadSigAsBytes = payloadSig.getBytes(StandardCharsets.UTF_8);
-                if (segment.hash.compareTo(Base64.getEncoder().encodeToString(payloadSigAsBytes)) != 0) {
-                    throw new SegmentSignatureMismatch("segment signature miss match");
-                }
+                    var payloadSig = calculateSignature(readBuf, payloadKey, sigAlg);
+                    byte[] payloadSigAsBytes = payloadSig.getBytes(StandardCharsets.UTF_8);
 
-                byte[] writeBuf = aesGcm.decrypt(new AesGcm.Encrypted(readBuf));
-                outputStream.write(writeBuf);
+                    if (segment.hash.compareTo(Base64.getEncoder().encodeToString(payloadSigAsBytes)) != 0) {
+                        throw new SegmentSignatureMismatch("segment signature miss match");
+                    }
+
+                    byte[] writeBuf = aesGcm.decrypt(new AesGcm.Encrypted(readBuf));
+                    outputStream.write(writeBuf);
+
+                } else {
+                    String segmentSig = Hex.encodeHexString(digest.digest(readBuf));
+                    if (segment.hash.compareTo(segmentSig) != 0) {
+                        throw new SegmentSignatureMismatch("segment signature miss match");
+                    }
+
+                    outputStream.write(readBuf);
+                }
             }
         }
     }
@@ -309,6 +331,14 @@ public class TDF {
             throw new SDKException("error creating SHA-256 message digest", e);
         }
 
+        if (!tdfConfig.enableEncryption && tdfConfig.assertionList.isEmpty()) {
+            throw new FailedToCreateEncodedTDF("can't create encoded tdf without assertions");
+        }
+
+        if (!tdfConfig.enableEncryption && tdfConfig.assertionConfig.keyType != Config.AssertionConfig.KeyType.RS256) {
+            throw new FailedToCreateEncodedTDF("can't create encoded tdf without RS256 assertion key");
+        }
+
         tdfObject.manifest.encryptionInformation.integrityInformation.segments = new ArrayList<>();
         long totalSize = 0;
         boolean finished;
@@ -325,14 +355,27 @@ public class TDF {
                 if (totalSize > maximumSize) {
                     throw new DataSizeNotSupported("can't create tdf larger than 64gb");
                 }
-                byte[] cipherData = tdfObject.aesGcm.encrypt(readBuf, 0, readThisLoop).asBytes();
-                payloadOutput.write(cipherData);
 
-                String segmentSig = calculateSignature(cipherData, tdfObject.payloadKey, tdfConfig.segmentIntegrityAlgorithm);
+                byte[] cipherData;
+                String segmentSig;
+                Manifest.Segment segmentInfo = new Manifest.Segment();
+                if (tdfConfig.enableEncryption) {
+                    // encrypt
+                    cipherData = tdfObject.aesGcm.encrypt(readBuf, 0, readThisLoop).asBytes();
+                    payloadOutput.write(cipherData);
+
+                    segmentSig = calculateSignature(cipherData, tdfObject.payloadKey, tdfConfig.segmentIntegrityAlgorithm);
+                    segmentInfo.hash = Base64.getEncoder().encodeToString(segmentSig.getBytes(StandardCharsets.UTF_8));
+                } else {
+                    // no encrypt, copy the data to payload file
+                    cipherData = Arrays.copyOfRange(readBuf, 0, readThisLoop);
+                    payloadOutput.write(cipherData);
+
+                    segmentSig = Hex.encodeHexString(digest.digest(cipherData));
+                    segmentInfo.hash = segmentSig;
+                }
 
                 aggregateHash.append(segmentSig);
-                Manifest.Segment segmentInfo = new Manifest.Segment();
-                segmentInfo.hash = Base64.getEncoder().encodeToString(segmentSig.getBytes(StandardCharsets.UTF_8));
                 segmentInfo.segmentSize = readThisLoop;
                 segmentInfo.encryptedSegmentSize = cipherData.length;
 
@@ -341,24 +384,36 @@ public class TDF {
         }
 
         Manifest.RootSignature rootSignature = new Manifest.RootSignature();
-        String rootSig = calculateSignature(aggregateHash.toString().getBytes(),
-                tdfObject.payloadKey, tdfConfig.integrityAlgorithm);
-        rootSignature.signature = Base64.getEncoder().encodeToString(rootSig.getBytes(StandardCharsets.UTF_8));
 
-        String alg = kGmacIntegrityAlgorithm;
-        if (tdfConfig.integrityAlgorithm == Config.IntegrityAlgorithm.HS256) {
-            alg = kHmacIntegrityAlgorithm;
+        if (tdfConfig.enableEncryption) {
+            String rootSig = calculateSignature(aggregateHash.toString().getBytes(),
+                    tdfObject.payloadKey, tdfConfig.integrityAlgorithm);
+            rootSignature.signature = Base64.getEncoder().encodeToString(rootSig.getBytes(StandardCharsets.UTF_8));
+
+            String alg = kGmacIntegrityAlgorithm;
+            if (tdfConfig.integrityAlgorithm == Config.IntegrityAlgorithm.HS256) {
+                alg = kHmacIntegrityAlgorithm;
+            }
+            rootSignature.algorithm = alg;
+
+        } else {
+            rootSignature.signature = Base64.getEncoder().encodeToString(digest.digest(aggregateHash.toString().getBytes()));
+            rootSignature.algorithm = kSha256Hash;
         }
-        rootSignature.algorithm = alg;
-        tdfObject.manifest.encryptionInformation.integrityInformation.rootSignature = rootSignature;
 
+        tdfObject.manifest.encryptionInformation.integrityInformation.rootSignature = rootSignature;
         tdfObject.manifest.encryptionInformation.integrityInformation.segmentSizeDefault = tdfConfig.defaultSegmentSize;
         tdfObject.manifest.encryptionInformation.integrityInformation.encryptedSegmentSizeDefault = (int)encryptedSegmentSize;
 
-        tdfObject.manifest.encryptionInformation.integrityInformation.segmentHashAlg = kGmacIntegrityAlgorithm;
-        if (tdfConfig.segmentIntegrityAlgorithm == Config.IntegrityAlgorithm.HS256) {
-            tdfObject.manifest.encryptionInformation.integrityInformation.segmentHashAlg = kHmacIntegrityAlgorithm;
+        if (tdfConfig.enableEncryption) {
+            tdfObject.manifest.encryptionInformation.integrityInformation.segmentHashAlg = kGmacIntegrityAlgorithm;
+            if (tdfConfig.segmentIntegrityAlgorithm == Config.IntegrityAlgorithm.HS256) {
+                tdfObject.manifest.encryptionInformation.integrityInformation.segmentHashAlg = kHmacIntegrityAlgorithm;
+            }
+        } else {
+            tdfObject.manifest.encryptionInformation.integrityInformation.segmentHashAlg = kSha256Hash;
         }
+
 
         tdfObject.manifest.encryptionInformation.method.IsStreamable = true;
 
@@ -372,7 +427,7 @@ public class TDF {
 
         List<Assertion> signedAssertions = new ArrayList<>();;
         for (var assertion: tdfConfig.assertionList) {
-            if (!Objects.equals(assertion.type, Assertion.Type.HandlingAssertion.toString())) {
+            if (!Objects.equals(assertion.type, Assertion.Type.HandlingAssertion.name())) {
                 continue;
             }
 
@@ -385,8 +440,20 @@ public class TDF {
             var claims = new JWTClaimsSet.Builder()
                     .claim(kAssertionHash, encodedHash)
                     .build();
-            var jws = new JWSHeader.Builder(JWSAlgorithm.HS256).build();
-            var signer = new MACSigner(tdfObject.aesGcm.getKey());
+
+            JWSHeader jws;
+            JWSSigner signer;
+            if (tdfConfig.assertionConfig.keyType == Config.AssertionConfig.KeyType.RS256) {
+                jws = new JWSHeader.Builder(JWSAlgorithm.RS256).build();
+                signer = new RSASSASigner(tdfConfig.assertionConfig.rs256PrivateKeyForSigning);
+            } else if (tdfConfig.assertionConfig.keyType == Config.AssertionConfig.KeyType.HS256UserDefined) {
+                jws = new JWSHeader.Builder(JWSAlgorithm.HS256).build();
+                signer = new MACSigner(tdfConfig.assertionConfig.hs256SymmetricKey);
+            } else {
+                jws = new JWSHeader.Builder(JWSAlgorithm.HS256).build();
+                signer = new MACSigner(tdfObject.aesGcm.getKey());
+            }
+
             SignedJWT jwt = new SignedJWT(jws, claims);
             try {
                 jwt.sign(signer);
@@ -395,7 +462,7 @@ public class TDF {
             }
 
             assertion.binding = new Assertion.Binding();
-            assertion.binding.method = Assertion.BindingMethod.JWT.toString();
+            assertion.binding.method = Assertion.BindingMethod.JWT.name();
             assertion.binding.signature = jwt.serialize();
 
             signedAssertions.add(assertion);
@@ -420,8 +487,8 @@ public class TDF {
         }
     }
 
-    public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas) throws NotValidateRootSignature, SegmentSizeMismatch,
-            IOException, FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException {
+    public Reader loadTDF(SeekableByteChannel tdf, Config.AssertionConfig assertionConfig, SDK.KAS kas) throws NotValidateRootSignature, SegmentSizeMismatch,
+            IOException, FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException, DecoderException {
 
         TDFReader tdfReader = new TDFReader(tdf);
         String manifestJson = tdfReader.manifest();
@@ -429,27 +496,31 @@ public class TDF {
         byte[] payloadKey = new byte[GCM_KEY_SIZE];
         String unencryptedMetadata = null;
 
-        for (Manifest.KeyAccess keyAccess: manifest.encryptionInformation.keyAccessObj) {
-            var unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy);
-            for (int index = 0; index < unwrappedKey.length; index++) {
-                payloadKey[index] ^= unwrappedKey[index];
-            }
+        MessageDigest digest =  MessageDigest.getInstance("SHA-256");
 
-            if (keyAccess.encryptedMetadata != null && !keyAccess.encryptedMetadata.isEmpty()) {
-                AesGcm aesGcm = new AesGcm(unwrappedKey);
+        if (manifest.payload.isEncrypted) {
+            for (Manifest.KeyAccess keyAccess: manifest.encryptionInformation.keyAccessObj) {
+                var unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy);
+                for (int index = 0; index < unwrappedKey.length; index++) {
+                    payloadKey[index] ^= unwrappedKey[index];
+                }
 
-                String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata), "UTF-8");
-                EncryptedMetadata encryptedMetadata = gson.fromJson(decodedMetadata, EncryptedMetadata.class);
+                if (keyAccess.encryptedMetadata != null && !keyAccess.encryptedMetadata.isEmpty()) {
+                    AesGcm aesGcm = new AesGcm(unwrappedKey);
 
-                var encryptedData = new AesGcm.Encrypted(
-                    decoder.decode(encryptedMetadata.iv),
-                    decoder.decode(encryptedMetadata.ciphertext)
-                );
+                    String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata), "UTF-8");
+                    EncryptedMetadata encryptedMetadata = gson.fromJson(decodedMetadata, EncryptedMetadata.class);
 
-                byte[] decrypted = aesGcm.decrypt(encryptedData);
-                // this is a little bit weird... the last unencrypted metadata we get from a KAS is the one
-                // that we return to the user. This is OK because we can't have different metadata per-KAS
-                unencryptedMetadata = new String(decrypted, StandardCharsets.UTF_8);
+                    var encryptedData = new AesGcm.Encrypted(
+                            decoder.decode(encryptedMetadata.iv),
+                            decoder.decode(encryptedMetadata.ciphertext)
+                    );
+
+                    byte[] decrypted = aesGcm.decrypt(encryptedData);
+                    // this is a little bit weird... the last unencrypted metadata we get from a KAS is the one
+                    // that we return to the user. This is OK because we can't have different metadata per-KAS
+                    unencryptedMetadata = new String(decrypted, StandardCharsets.UTF_8);
+                }
             }
         }
 
@@ -459,17 +530,29 @@ public class TDF {
 
         ByteArrayOutputStream aggregateHash = new ByteArrayOutputStream();
         for (Manifest.Segment segment: manifest.encryptionInformation.integrityInformation.segments) {
-            byte[] decodedHash = Base64.getDecoder().decode(segment.hash);
-            aggregateHash.write(decodedHash);
+            if (manifest.payload.isEncrypted) {
+                byte[] decodedHash = Base64.getDecoder().decode(segment.hash);
+                aggregateHash.write(decodedHash);
+            } else {
+                aggregateHash.write(segment.hash.getBytes());
+            }
         }
 
-        Config.IntegrityAlgorithm sigAlg = Config.IntegrityAlgorithm.HS256;
-        if (rootAlgorithm.compareToIgnoreCase(kGmacIntegrityAlgorithm) == 0) {
-            sigAlg = Config.IntegrityAlgorithm.GMAC;
+        String rootSigValue;
+        if (manifest.payload.isEncrypted) {
+            Config.IntegrityAlgorithm sigAlg = Config.IntegrityAlgorithm.HS256;
+            if (rootAlgorithm.compareToIgnoreCase(kGmacIntegrityAlgorithm) == 0) {
+                sigAlg = Config.IntegrityAlgorithm.GMAC;
+            }
+
+            var sig = calculateSignature(aggregateHash.toByteArray(), payloadKey, sigAlg);
+            rootSigValue = Base64.getEncoder().encodeToString(sig.getBytes(StandardCharsets.UTF_8));
+
+        }
+        else {
+            rootSigValue = Base64.getEncoder().encodeToString(digest.digest(aggregateHash.toString().getBytes()));
         }
 
-        String sig = calculateSignature(aggregateHash.toByteArray(), payloadKey, sigAlg);
-        String rootSigValue = Base64.getEncoder().encodeToString(sig.getBytes(StandardCharsets.UTF_8));
         if (rootSignature.compareTo(rootSigValue) != 0) {
             throw new NotValidateRootSignature("root signature validation failed");
         }
@@ -481,10 +564,9 @@ public class TDF {
             throw new SegmentSizeMismatch("mismatch encrypted segment size in manifest");
         }
 
-        MessageDigest digest =  MessageDigest.getInstance("SHA-256");
         // Validate assertions
         for (var assertion: manifest.assertions) {
-            if (!Objects.equals(assertion.type, Assertion.Type.HandlingAssertion.toString())) {
+            if (!Objects.equals(assertion.type, Assertion.Type.HandlingAssertion.name())) {
                 continue;
             }
 
@@ -504,7 +586,15 @@ public class TDF {
                 throw new SDKException("Failed integrity check on assertion hash");
             }
 
-            var verifier = new MACVerifier(payloadKey);
+            JWSVerifier verifier;
+            if (assertionConfig.keyType == Config.AssertionConfig.KeyType.RS256) {
+                verifier = new RSASSAVerifier(assertionConfig.rs256PublicKeyForVerifying);
+            } else if (assertionConfig.keyType == Config.AssertionConfig.KeyType.HS256UserDefined) {
+                verifier = new MACVerifier(assertionConfig.hs256SymmetricKey);
+            } else {
+                verifier = new MACVerifier(payloadKey);
+            }
+
             if (!signedJWT.verify(verifier)) {
                 throw new SDKException("Unable to verify assertion signature");
             }

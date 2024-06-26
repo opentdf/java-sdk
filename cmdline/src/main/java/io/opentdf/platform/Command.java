@@ -3,6 +3,7 @@ package io.opentdf.platform;
 import com.nimbusds.jose.JOSEException;
 import io.opentdf.platform.sdk.*;
 import io.opentdf.platform.sdk.TDF;
+import org.apache.commons.codec.DecoderException;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 
@@ -83,23 +84,23 @@ class Command {
     void decrypt(@Option(names = {"-f", "--file"}, required = true) Path tdfPath) throws IOException,
             InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException,
             BadPaddingException, InvalidKeyException, TDF.FailedToCreateGMAC,
-            JOSEException, ParseException, NoSuchAlgorithmException {
+            JOSEException, ParseException, NoSuchAlgorithmException, DecoderException {
         var sdk = buildSDK();
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
             try (var stdout = new BufferedOutputStream(System.out)) {
-                    var reader = new TDF().loadTDF(in, sdk.getServices().kas());
+                    var reader = new TDF().loadTDF(in, new Config.AssertionConfig(), sdk.getServices().kas());
                     reader.readPayload(stdout);
                 }
         }
     }
     @CommandLine.Command(name = "metadata")
     void readMetadata(@Option(names = {"-f", "--file"}, required = true) Path tdfPath) throws IOException,
-            TDF.FailedToCreateGMAC, JOSEException, NoSuchAlgorithmException, ParseException {
+            TDF.FailedToCreateGMAC, JOSEException, NoSuchAlgorithmException, ParseException, DecoderException {
         var sdk = buildSDK();
 
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
             try (var stdout = new PrintWriter(System.out)) {
-                var reader = new TDF().loadTDF(in, sdk.getServices().kas());
+                var reader = new TDF().loadTDF(in, new Config.AssertionConfig(), sdk.getServices().kas());
                 stdout.write(reader.getMetadata() == null ? "" : reader.getMetadata());
             }
         }
