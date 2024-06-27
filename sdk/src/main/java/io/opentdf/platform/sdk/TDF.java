@@ -170,6 +170,7 @@ public class TDF {
                 Manifest.KeyAccess keyAccess = new Manifest.KeyAccess();
                 keyAccess.keyType = kWrapped;
                 keyAccess.url = kasInfo.URL;
+                keyAccess.kid = kasInfo.KID;
                 keyAccess.protocol = kKasProtocol;
 
                 // Add policyBinding
@@ -369,6 +370,7 @@ public class TDF {
             }
             logger.info("no public key provided for KAS at {}, retrieving", kasInfo.URL);
             kasInfo.PublicKey = kas.getPublicKey(kasInfo);
+            kasInfo.KID = kas.getKid(kasInfo);
         }
     }
 

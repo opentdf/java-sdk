@@ -26,6 +26,7 @@ public class SDK implements AutoCloseable {
 
     public interface KAS extends AutoCloseable {
         String getPublicKey(Config.KASInfo kasInfo);
+        String getKid(Config.KASInfo kasInfo);
         String getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve);
         byte[] unwrap(Manifest.KeyAccess keyAccess, String policy);
         byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL);

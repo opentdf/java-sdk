@@ -36,6 +36,11 @@ public class TDFTest {
         }
 
         @Override
+        public String getKid(Config.KASInfo kasInfo) {
+            return "r1";
+        }
+
+        @Override
         public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy) {
             int index = Integer.parseInt(keyAccess.url);
             var decryptor = new AsymDecryption(keypairs.get(index).getPrivate());

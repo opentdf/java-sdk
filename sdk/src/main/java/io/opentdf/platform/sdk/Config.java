@@ -30,6 +30,7 @@ public class Config {
     public static class KASInfo {
         public String URL;
         public String PublicKey;
+        public String KID;
     }
 
     public static class TDFConfig {
