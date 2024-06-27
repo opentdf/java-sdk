@@ -4,6 +4,8 @@ import io.opentdf.platform.sdk.nanotdf.ECCMode;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import io.opentdf.platform.sdk.nanotdf.SymmetricAndPayloadConfig;
 
+import com.nimbusds.jose.jwk.RSAKey;
+import java.security.Key;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -33,6 +35,23 @@ public class Config {
         public String KID;
     }
 
+    public static class AssertionConfig {
+        public enum KeyType {
+            RS256,
+            HS256PayloadKey,
+            HS256UserDefined;
+        }
+
+        public RSAKey rs256PrivateKeyForSigning;
+        public RSAKey rs256PublicKeyForVerifying;
+        public byte[] hs256SymmetricKey;
+        public KeyType keyType;
+
+        public AssertionConfig() {
+            this.keyType = KeyType.HS256PayloadKey;
+        }
+    }
+
     public static class TDFConfig {
         public int defaultSegmentSize;
         public boolean enableEncryption;
@@ -44,6 +63,8 @@ public class Config {
         public IntegrityAlgorithm segmentIntegrityAlgorithm;
         public List<String> attributes;
         public List<KASInfo> kasInfoList;
+        public List<Assertion> assertionList;
+        public AssertionConfig assertionConfig;
 
         public TDFConfig() {
             this.defaultSegmentSize = DEFAULT_SEGMENT_SIZE;
@@ -53,6 +74,7 @@ public class Config {
             this.segmentIntegrityAlgorithm = IntegrityAlgorithm.GMAC;
             this.attributes = new ArrayList<>();
             this.kasInfoList = new ArrayList<>();
+            this.assertionList = new ArrayList<>();
         }
     }
 
@@ -77,12 +99,30 @@ public class Config {
         };
     }
 
+    public static Consumer<TDFConfig> WithAssertions(Assertion... assertionList) {
+        return (TDFConfig config) -> {
+            Collections.addAll(config.assertionList, assertionList);
+        };
+    }
+
+    public static Consumer<TDFConfig> WithAssertion(Assertion assertion) {
+        return (TDFConfig config) -> config.assertionList.add(assertion);
+    }
+
     public static Consumer<TDFConfig> withMetaData(String metaData) {
         return (TDFConfig config) -> config.metaData = metaData;
     }
 
+    public static Consumer<TDFConfig> withAssertionConfig(AssertionConfig assertionConfig) {
+        return (TDFConfig config) -> config.assertionConfig = assertionConfig;
+    }
+
     public static Consumer<TDFConfig> withSegmentSize(int size) {
         return (TDFConfig config) -> config.defaultSegmentSize = size;
+    }
+
+    public static Consumer<TDFConfig> withDisableEncryption() {
+        return (TDFConfig config) -> config.enableEncryption = false;
     }
 
     public static class NanoTDFConfig {

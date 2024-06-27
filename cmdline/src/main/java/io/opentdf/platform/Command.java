@@ -1,7 +1,9 @@
 package io.opentdf.platform;
 
+import com.nimbusds.jose.JOSEException;
 import io.opentdf.platform.sdk.*;
 import io.opentdf.platform.sdk.TDF;
+import org.apache.commons.codec.DecoderException;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 
@@ -23,6 +25,7 @@ import java.nio.file.StandardOpenOption;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -47,7 +50,8 @@ class Command {
     void encrypt(
             @Option(names = {"-f", "--file"}, defaultValue = Option.NULL_VALUE) Optional<File> file,
             @Option(names = {"-k", "--kas-url"}, required = true) List<String> kas,
-            @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata) throws IOException {
+            @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata) throws
+            IOException, JOSEException {
 
         var sdk = buildSDK();
         var kasInfos = kas.stream().map(k -> {
@@ -77,22 +81,26 @@ class Command {
     }
 
     @CommandLine.Command(name = "decrypt")
-    void decrypt(@Option(names = {"-f", "--file"}, required = true) Path tdfPath) throws IOException, InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
+    void decrypt(@Option(names = {"-f", "--file"}, required = true) Path tdfPath) throws IOException,
+            InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException,
+            BadPaddingException, InvalidKeyException, TDF.FailedToCreateGMAC,
+            JOSEException, ParseException, NoSuchAlgorithmException, DecoderException {
         var sdk = buildSDK();
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
             try (var stdout = new BufferedOutputStream(System.out)) {
-                    var reader = new TDF().loadTDF(in, sdk.getServices().kas());
+                    var reader = new TDF().loadTDF(in, new Config.AssertionConfig(), sdk.getServices().kas());
                     reader.readPayload(stdout);
                 }
         }
     }
     @CommandLine.Command(name = "metadata")
-    void readMetadata(@Option(names = {"-f", "--file"}, required = true) Path tdfPath) throws IOException, InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
+    void readMetadata(@Option(names = {"-f", "--file"}, required = true) Path tdfPath) throws IOException,
+            TDF.FailedToCreateGMAC, JOSEException, NoSuchAlgorithmException, ParseException, DecoderException {
         var sdk = buildSDK();
 
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
             try (var stdout = new PrintWriter(System.out)) {
-                var reader = new TDF().loadTDF(in, sdk.getServices().kas());
+                var reader = new TDF().loadTDF(in, new Config.AssertionConfig(), sdk.getServices().kas());
                 stdout.write(reader.getMetadata() == null ? "" : reader.getMetadata());
             }
         }

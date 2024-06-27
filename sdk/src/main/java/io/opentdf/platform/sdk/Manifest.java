@@ -54,13 +54,15 @@ public class Manifest {
         public IntegrityInformation integrityInformation;
     }
 
-    static  public class Payload {
+    static public class Payload {
         public String type;
         public String url;
         public String protocol;
         public String mimeType;
         public Boolean isEncrypted;
     }
+
     public EncryptionInformation encryptionInformation;
     public Payload payload;
+    public  List<Assertion> assertions;
 }
