@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/opentdf/java-sdk/compare/v0.1.0...v0.2.0) (2024-06-27)
+
+
+### Features
+
+* support key id in ztdf key access object ([#84](https://github.com/opentdf/java-sdk/issues/84)) ([862460a](https://github.com/opentdf/java-sdk/commit/862460a16875693a421bbe57983bb829a49866bb))
+
+
+### Documentation
+
+* **sdk:** Adds brief usage code sample ([#26](https://github.com/opentdf/java-sdk/issues/26)) ([79215c7](https://github.com/opentdf/java-sdk/commit/79215c7b1ff694914df438491a40662803462dc6))
+
 ## 0.1.0 (2024-06-13)
 
 
