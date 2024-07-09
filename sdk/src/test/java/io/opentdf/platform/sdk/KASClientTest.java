@@ -71,6 +71,39 @@ public class KASClientTest {
     }
 
     @Test
+    void testGettingKid() throws IOException {
+        AccessServiceGrpc.AccessServiceImplBase accessService = new AccessServiceGrpc.AccessServiceImplBase() {
+            @Override
+            public void publicKey(PublicKeyRequest request, StreamObserver<PublicKeyResponse> responseObserver) {
+                var response = PublicKeyResponse.newBuilder().setKid("r1").build();
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+            }
+        };
+
+        Server server = null;
+        try {
+            server = startServer(accessService);
+            Function<String, ManagedChannel> channelFactory = (String url) -> ManagedChannelBuilder
+                    .forTarget(url)
+                    .usePlaintext()
+                    .build();
+
+            var keypair = CryptoUtils.generateRSAKeypair();
+            var dpopKey = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).privateKey(keypair.getPrivate()).build();
+            try (var kas = new KASClient(channelFactory, dpopKey)) {
+                Config.KASInfo kasInfo = new Config.KASInfo();
+                kasInfo.URL = "localhost:" + server.getPort();
+                assertThat(kas.getKid(kasInfo)).isEqualTo("r1");
+            }
+        } finally {
+            if (server != null) {
+                server.shutdownNow();
+            }
+        }
+    }
+
+    @Test
     void testCallingRewrap() throws IOException {
         var dpopKeypair = CryptoUtils.generateRSAKeypair();
         var dpopKey = new RSAKey.Builder((RSAPublicKey)dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate()).build();

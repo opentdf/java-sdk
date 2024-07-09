@@ -44,6 +44,11 @@ public class NanoTDFTest {
         }
 
         @Override
+        public String getKid(Config.KASInfo kasInfo) {
+            return "r1";
+        }
+
+        @Override
         public String getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
             return kasPublicKey;
         }

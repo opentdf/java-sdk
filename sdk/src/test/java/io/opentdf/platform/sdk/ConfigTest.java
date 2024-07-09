@@ -32,6 +32,7 @@ class ConfigTest {
         Config.KASInfo kasInfo = new Config.KASInfo();
         kasInfo.URL = "http://example.com";
         kasInfo.PublicKey = "publicKey";
+        kasInfo.KID = "r1";
         Config.TDFConfig config = Config.newTDFConfig(Config.withKasInformation(kasInfo));
         assertEquals(1, config.kasInfoList.size());
         assertEquals(kasInfo, config.kasInfoList.get(0));

@@ -67,6 +67,13 @@ public class KASClient implements SDK.KAS, AutoCloseable {
                 .getPublicKey();
     }
 
+    @Override
+    public String getKid(Config.KASInfo kasInfo) {
+        return getStub(kasInfo.URL)
+                .publicKey(PublicKeyRequest.getDefaultInstance())
+                .getKid();
+    }
+
     private String normalizeAddress(String urlString) {
         URL url;
         try {

@@ -34,6 +34,7 @@ public class Manifest {
         public String wrappedKey;
         public String policyBinding;
         public String encryptedMetadata;
+        public String kid;
     }
 
     static public class Method {
