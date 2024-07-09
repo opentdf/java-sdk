@@ -1,7 +1,8 @@
 package io.opentdf.platform.sdk;
 
-import io.grpc.Channel;
 import io.grpc.ManagedChannel;
+import io.opentdf.platform.authorization.AuthorizationServiceGrpc;
+import io.opentdf.platform.authorization.AuthorizationServiceGrpc.AuthorizationServiceFutureStub;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
 import io.opentdf.platform.policy.namespaces.NamespaceServiceGrpc;
@@ -34,6 +35,7 @@ public class SDK implements AutoCloseable {
 
     // TODO: add KAS
     public interface Services extends AutoCloseable {
+        AuthorizationServiceFutureStub authorization();
         AttributesServiceFutureStub attributes();
         NamespaceServiceFutureStub namespaces();
         SubjectMappingServiceFutureStub subjectMappings();
@@ -45,6 +47,7 @@ public class SDK implements AutoCloseable {
             var namespaceService = NamespaceServiceGrpc.newFutureStub(channel);
             var subjectMappingService = SubjectMappingServiceGrpc.newFutureStub(channel);
             var resourceMappingService = ResourceMappingServiceGrpc.newFutureStub(channel);
+            var authorizationService = AuthorizationServiceGrpc.newFutureStub(channel);
 
             return new Services() {
                 @Override
@@ -71,6 +74,11 @@ public class SDK implements AutoCloseable {
                 @Override
                 public ResourceMappingServiceFutureStub resourceMappings() {
                     return resourceMappingService;
+                }
+
+                @Override
+                public AuthorizationServiceFutureStub authorization() {
+                    return authorizationService;
                 }
 
                 @Override
