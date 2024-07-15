@@ -2,11 +2,7 @@ package io.opentdf.platform.sdk;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import java.security.InvalidKeyException;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
-import java.security.PublicKey;
+import java.security.*;
 import java.util.Base64;
 
 public class CryptoUtils {
@@ -49,4 +45,16 @@ public class CryptoUtils {
                 Base64.getMimeEncoder().encodeToString(publicKey.getEncoded()) +
                 "\r\n-----END PUBLIC KEY-----";
     }
+
+    public static String getRSAPrivateKeyPEM(PrivateKey privateKey) {
+        if (!"RSA".equals(privateKey.getAlgorithm())) {
+            throw new IllegalArgumentException("can't get private key PEM for algorithm [" + privateKey.getAlgorithm() + "]");
+        }
+
+        return "-----BEGIN PRIVATE KEY-----\r\n" +
+                Base64.getMimeEncoder().encodeToString(privateKey.getEncoded()) +
+                "\r\n-----END PRIVATE KEY-----";
+    }
+
+
 }

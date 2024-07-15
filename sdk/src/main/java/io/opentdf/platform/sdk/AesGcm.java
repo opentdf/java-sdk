@@ -19,6 +19,16 @@ public class AesGcm {
 
     private final SecretKey key;
 
+
+    /**
+     * <p>Return symmetric key</p>
+     *
+     * @return
+     */
+    public byte[] getKey() {
+        return key.getEncoded();
+    }
+
     public static class Encrypted {
         private final byte[] iv;
         private final byte[] ciphertext;
