@@ -49,7 +49,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class SDKBuilderTest {
 
-    final String EXAMPLE_COM_PEM = "-----BEGIN CERTIFICATE-----\n" +
+    final String EXAMPLE_COM_PEM= "-----BEGIN CERTIFICATE-----\n" +
             "MIIBqTCCARKgAwIBAgIIT0xFd/5uogEwDQYJKoZIhvcNAQEFBQAwFjEUMBIGA1UEAxMLZXhhbXBs\n" +
             "ZS5jb20wIBcNMTcwMTIwMTczOTIwWhgPOTk5OTEyMzEyMzU5NTlaMBYxFDASBgNVBAMTC2V4YW1w\n" +
             "bGUuY29tMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC2Tl2MdaUFmjAaYwmEwgEVRfVqwJO4\n" +
