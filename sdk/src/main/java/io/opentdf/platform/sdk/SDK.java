@@ -33,19 +33,28 @@ public class SDK implements AutoCloseable {
 
     public interface KAS extends AutoCloseable {
         String getPublicKey(Config.KASInfo kasInfo);
+
         String getKid(Config.KASInfo kasInfo);
+
         String getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve);
+
         byte[] unwrap(Manifest.KeyAccess keyAccess, String policy);
+
         byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL);
     }
 
     // TODO: add KAS
     public interface Services extends AutoCloseable {
         AuthorizationServiceFutureStub authorization();
+
         AttributesServiceFutureStub attributes();
+
         NamespaceServiceFutureStub namespaces();
+
         SubjectMappingServiceFutureStub subjectMappings();
+
         ResourceMappingServiceFutureStub resourceMappings();
+
         KAS kas();
 
         static Services newServices(ManagedChannel channel, KAS kas) {
@@ -109,7 +118,7 @@ public class SDK implements AutoCloseable {
         this.authInterceptor = authInterceptor;
     }
 
-    public Services getServices(){
+    public Services getServices() {
         return this.services;
     }
 }

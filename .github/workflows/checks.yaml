@@ -30,8 +30,6 @@ jobs:
 
   mavenverify:
     runs-on: ubuntu-latest
-    needs:
-      - pr
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       - uses: bufbuild/buf-setup-action@382440cdb8ec7bc25a68d7b4711163d95f7cc3aa
@@ -53,8 +51,6 @@ jobs:
 
   platform-integration:
     runs-on: ubuntu-22.04
-    needs:
-      - pr
     steps:
       - name: Checkout Java SDK
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11

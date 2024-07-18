@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.0](https://github.com/opentdf/java-sdk/compare/v0.1.0...v0.2.0) (2024-07-15)
+
+
+### Features
+
+* **sdk:** the authorization service is needed for use by gateway ([#85](https://github.com/opentdf/java-sdk/issues/85)) ([73cac82](https://github.com/opentdf/java-sdk/commit/73cac825e0367d502d542cf0eae30a6ac38f6a00))
+* support key id in ztdf key access object ([#84](https://github.com/opentdf/java-sdk/issues/84)) ([862460a](https://github.com/opentdf/java-sdk/commit/862460a16875693a421bbe57983bb829a49866bb))
+
+
+### Bug Fixes
+
+* **sdk:** assertion support in tdf3 ([#82](https://github.com/opentdf/java-sdk/issues/82)) ([c299dbd](https://github.com/opentdf/java-sdk/commit/c299dbdcb0c714a4c69faf24c60e2da58a68e99e))
+
+
+### Documentation
+
+* **sdk:** Adds brief usage code sample ([#26](https://github.com/opentdf/java-sdk/issues/26)) ([79215c7](https://github.com/opentdf/java-sdk/commit/79215c7b1ff694914df438491a40662803462dc6))
+
 ## 0.1.0 (2024-06-13)
 
 
