@@ -46,15 +46,10 @@ public class SDK implements AutoCloseable {
     // TODO: add KAS
     public interface Services extends AutoCloseable {
         AuthorizationServiceFutureStub authorization();
-
         AttributesServiceFutureStub attributes();
-
         NamespaceServiceFutureStub namespaces();
-
         SubjectMappingServiceFutureStub subjectMappings();
-
         ResourceMappingServiceFutureStub resourceMappings();
-
         KAS kas();
 
         static Services newServices(ManagedChannel channel, KAS kas) {
