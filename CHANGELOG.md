@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/opentdf/java-sdk/compare/v0.2.0...v0.3.0) (2024-07-18)
+
+
+### Features
+
+* **sdk:** expose GRPC auth service components ([#92](https://github.com/opentdf/java-sdk/issues/92)) ([2595cc5](https://github.com/opentdf/java-sdk/commit/2595cc57f65b1757d60e4ae04814f85bc340c2e6))
+
+
+### Bug Fixes
+
+* **sdk:** give a test framework test scope ([#90](https://github.com/opentdf/java-sdk/issues/90)) ([b99de43](https://github.com/opentdf/java-sdk/commit/b99de43461b96c05b6997999a4187bfad8927b44))
+
 ## [0.2.0](https://github.com/opentdf/java-sdk/compare/v0.1.0...v0.2.0) (2024-07-15)
 
 
