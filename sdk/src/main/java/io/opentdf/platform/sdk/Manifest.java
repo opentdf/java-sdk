@@ -25,6 +25,11 @@ public class Manifest {
         public int encryptedSegmentSizeDefault;
         public List<Segment> segments;
     }
+    
+    static public class PolicyBinding {
+        public String alg;
+        public String hash;
+    }
 
     static public class KeyAccess {
         @SerializedName(value = "type")
@@ -32,7 +37,7 @@ public class Manifest {
         public String url;
         public String protocol;
         public String wrappedKey;
-        public String policyBinding;
+        public PolicyBinding policyBinding;
         public String encryptedMetadata;
         public String kid;
     }
@@ -42,6 +47,8 @@ public class Manifest {
         public String iv;
         public Boolean IsStreamable;
     }
+
+    
 
     static public class EncryptionInformation {
         @SerializedName(value = "type")
