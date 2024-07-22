@@ -192,7 +192,7 @@ public class TDF {
                 // Add policyBinding
                 var hexBinding = Hex.encodeHexString(CryptoUtils.CalculateSHA256Hmac(symKey, base64PolicyObject.getBytes(StandardCharsets.UTF_8)));
                 keyAccess.policyBinding = new Manifest.PolicyBinding();
-                keyAccess.policyBinding.alg = "HS256";
+                keyAccess.policyBinding.alg = kHmacIntegrityAlgorithm;
                 keyAccess.policyBinding.hash = encoder.encodeToString(hexBinding.getBytes(StandardCharsets.UTF_8));;
 
                 // Wrap the key with kas public key
