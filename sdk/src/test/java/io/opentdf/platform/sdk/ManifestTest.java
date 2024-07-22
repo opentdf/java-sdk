@@ -73,7 +73,8 @@ String kManifestJsonFromTDF = "{\n" +
         List<Manifest.KeyAccess> keyAccess = manifest.encryptionInformation.keyAccessObj;
         assertEquals(keyAccess.get(0).keyType, "wrapped");
         assertEquals(keyAccess.get(0).protocol, "kas");
-
+        assertEquals(keyAccess.get(0).policyBinding.alg, "HS256");
+        assertEquals(keyAccess.get(0).policyBinding.hash, "YTgzNThhNzc5NWRhMjdjYThlYjk4ZmNmODliNzc2Y2E5ZmZiZDExZDQ3OTM5ODFjZTRjNmE3MmVjOTUzZTFlMA==");
         assertEquals(manifest.encryptionInformation.method.algorithm, "AES-256-GCM");
         assertEquals(manifest.encryptionInformation.integrityInformation.rootSignature.algorithm, "HS256");
         assertEquals(manifest.encryptionInformation.integrityInformation.segmentHashAlg, "GMAC");
