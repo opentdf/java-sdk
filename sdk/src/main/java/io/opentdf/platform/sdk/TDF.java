@@ -68,6 +68,20 @@ public class TDF {
     private static final String kAssertionHash = "assertionHash";
 
     private static final SecureRandom sRandom = new SecureRandom();
+
+    public class PolicyBindingDeserializer implements JsonDeserializer<Object> {
+        @Override
+        public Object deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+            if (json.isJsonObject()) {
+                return context.deserialize(json, PolicyBinding.class);
+            } else if (json.isJsonPrimitive() && json.getAsJsonPrimitive().isString()) {
+                return json.getAsString();
+            } else {
+                throw new JsonParseException("Unexpected type for policyBinding");
+            }
+        }
+    }
+    gsonBuilder.registerTypeAdapter(Object.class, new PolicyBindingDeserializer());
     private static final Gson gson = new GsonBuilder().create();
 
     public static class DataSizeNotSupported extends RuntimeException {
