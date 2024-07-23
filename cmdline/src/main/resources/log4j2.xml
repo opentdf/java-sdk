@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration status="WARN">
     <appenders>
-        <Console name="Console" target="SYSTEM_OUT">
+        <Console name="Console" target="SYSTEM_ERR">
             <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
         </Console>
     </appenders>
@@ -9,5 +9,8 @@
         <root level="trace">
             <appender-ref ref="Console"/>
         </root>
+        <Logger name="io.grpc.netty" level="error" additivity="false">
+            <AppenderRef ref="Console" />
+        </Logger>
     </loggers>
 </configuration>
