@@ -3,6 +3,10 @@ package io.opentdf.platform.sdk;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParseException;
 import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
@@ -26,6 +30,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Type;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
@@ -69,11 +74,11 @@ public class TDF {
 
     private static final SecureRandom sRandom = new SecureRandom();
 
-    public class PolicyBindingDeserializer implements JsonDeserializer<Object> {
+    public static class PolicyBindingDeserializer implements JsonDeserializer<Object> {
         @Override
         public Object deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
             if (json.isJsonObject()) {
-                return context.deserialize(json, PolicyBinding.class);
+                return context.deserialize(json, Manifest.PolicyBinding.class);
             } else if (json.isJsonPrimitive() && json.getAsJsonPrimitive().isString()) {
                 return json.getAsString();
             } else {
@@ -81,9 +86,20 @@ public class TDF {
             }
         }
     }
+<<<<<<< HEAD
     private static final Gson gson = new GsonBuilder()
         .registerTypeAdapter(Object.class, new PolicyBindingDeserializer())
         .create();
+=======
+
+    private static final Gson gson;
+
+    static {
+        gson = new GsonBuilder()
+                .registerTypeAdapter(Object.class, new PolicyBindingDeserializer())
+                .create();
+    }
+>>>>>>> 9ac737567160941b7fbeeaa3912ad6cd14456a41
 
     public static class DataSizeNotSupported extends RuntimeException {
         public DataSizeNotSupported(String errorMessage) {
@@ -206,9 +222,10 @@ public class TDF {
 
                 // Add policyBinding
                 var hexBinding = Hex.encodeHexString(CryptoUtils.CalculateSHA256Hmac(symKey, base64PolicyObject.getBytes(StandardCharsets.UTF_8)));
-                keyAccess.policyBinding = new Manifest.PolicyBinding();
-                keyAccess.policyBinding.alg = kHmacIntegrityAlgorithm;
-                keyAccess.policyBinding.hash = encoder.encodeToString(hexBinding.getBytes(StandardCharsets.UTF_8));;
+                var policyBinding = new Manifest.PolicyBinding();
+                policyBinding.alg = kHmacIntegrityAlgorithm;
+                policyBinding.hash = encoder.encodeToString(hexBinding.getBytes(StandardCharsets.UTF_8));;
+                keyAccess.policyBinding = policyBinding;
 
                 // Wrap the key with kas public key
                 AsymEncryption asymmetricEncrypt = new AsymEncryption(kasInfo.PublicKey);
