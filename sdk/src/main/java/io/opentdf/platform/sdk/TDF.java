@@ -88,6 +88,7 @@ public class TDF {
     }
 
     private static final Gson gson = new Gson();
+
     public static class DataSizeNotSupported extends RuntimeException {
         public DataSizeNotSupported(String errorMessage) {
             super(errorMessage);
