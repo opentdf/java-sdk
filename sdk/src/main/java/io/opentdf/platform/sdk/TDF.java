@@ -87,14 +87,7 @@ public class TDF {
         }
     }
 
-    private static final Gson gson;
-
-    static {
-        gson = new GsonBuilder()
-                .registerTypeAdapter(Object.class, new PolicyBindingDeserializer())
-                .create();
-    }
-
+    private static final Gson gson = new Gson();
     public static class DataSizeNotSupported extends RuntimeException {
         public DataSizeNotSupported(String errorMessage) {
             super(errorMessage);

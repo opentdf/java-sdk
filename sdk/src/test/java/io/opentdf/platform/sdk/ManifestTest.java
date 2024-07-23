@@ -58,9 +58,7 @@ String kManifestJsonFromTDF = "{\n" +
                 "  }\n" +
                 "}";
 
-        GsonBuilder gsonBuilder = new GsonBuilder();
-        Gson gson = gsonBuilder.setPrettyPrinting().create();
-        Manifest manifest = gson.fromJson(kManifestJsonFromTDF, Manifest.class);
+        Manifest manifest = new Gson().fromJson(kManifestJsonFromTDF, Manifest.class);
 
         // Test payload
         assertEquals(manifest.payload.url, "0.payload");
@@ -73,7 +71,7 @@ String kManifestJsonFromTDF = "{\n" +
         List<Manifest.KeyAccess> keyAccess = manifest.encryptionInformation.keyAccessObj;
         assertEquals(keyAccess.get(0).keyType, "wrapped");
         assertEquals(keyAccess.get(0).protocol, "kas");
-        assertEquals(keyAccess.get(0).policyBinding.getClass(), Manifest.PolicyBinding.class);
+        assertEquals(Manifest.PolicyBinding.class, keyAccess.get(0).policyBinding.getClass());
         var policyBinding = (Manifest.PolicyBinding)keyAccess.get(0).policyBinding;
         assertEquals(policyBinding.alg, "HS256");
         assertEquals(policyBinding.hash, "YTgzNThhNzc5NWRhMjdjYThlYjk4ZmNmODliNzc2Y2E5ZmZiZDExZDQ3OTM5ODFjZTRjNmE3MmVjOTUzZTFlMA==");
@@ -81,9 +79,6 @@ String kManifestJsonFromTDF = "{\n" +
         assertEquals(manifest.encryptionInformation.integrityInformation.rootSignature.algorithm, "HS256");
         assertEquals(manifest.encryptionInformation.integrityInformation.segmentHashAlg, "GMAC");
         assertEquals(manifest.encryptionInformation.integrityInformation.segments.get(0).segmentSize, 1048576);
-
-        System.out.println(gson.toJson(manifest));
-
 
         Manifest.Payload payload = new Manifest.Payload();
         payload.protocol = "zip";
@@ -94,7 +89,5 @@ String kManifestJsonFromTDF = "{\n" +
         Manifest newManifest = new Manifest();
         newManifest.payload = payload;
         newManifest.encryptionInformation = encryptionInformation;
-
-        System.out.println(gson.toJson(newManifest));
     }
 }

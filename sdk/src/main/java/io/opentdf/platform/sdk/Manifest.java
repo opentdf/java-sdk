@@ -1,5 +1,6 @@
 package io.opentdf.platform.sdk;
 
+import com.google.gson.annotations.JsonAdapter;
 import com.google.gson.annotations.SerializedName;
 
 import java.util.List;
@@ -37,7 +38,9 @@ public class Manifest {
         public String url;
         public String protocol;
         public String wrappedKey;
+        @JsonAdapter(TDF.PolicyBindingDeserializer.class)
         public Object policyBinding;
+
         public String encryptedMetadata;
         public String kid;
     }
