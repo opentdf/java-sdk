@@ -2,6 +2,7 @@ package io.opentdf.platform.sdk;
 
 import com.google.gson.annotations.SerializedName;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class Manifest {
@@ -64,5 +65,5 @@ public class Manifest {
 
     public EncryptionInformation encryptionInformation;
     public Payload payload;
-    public  List<Assertion> assertions;
+    public  List<Assertion> assertions = new ArrayList<>();
 }
