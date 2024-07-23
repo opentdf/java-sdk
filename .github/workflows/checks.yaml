@@ -141,7 +141,7 @@ jobs:
             -i \
             encrypt --kas-url=localhost:8080 -f data -m 'here is some metadata' > test.tdf
 
-          base64 -b0 < test.tdf
+          base64 -w0 < test.tdf
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
