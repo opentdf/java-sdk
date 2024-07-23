@@ -189,9 +189,17 @@ jobs:
             exit 1
           fi
         working-directory: cmdline
+
+  platform-xtest:
+    needs: platform-integration
+    uses: opentdf/tests/.github/workflows/xtest.yml@feat/go-js-cross-sdk-testing
+    with:
+      java-ref: ${{ github.ref }}
+  
   ci:
     needs:
       - platform-integration
+      - platform-xtest
       - mavenverify
       - pr
     runs-on: ubuntu-latest
