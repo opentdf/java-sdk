@@ -2,17 +2,20 @@ package io.opentdf.platform.sdk;
 
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
+import io.grpc.ClientInterceptor;
 import io.grpc.Metadata;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import io.opentdf.platform.kas.AccessServiceGrpc;
 import io.opentdf.platform.kas.RewrapRequest;
 import io.opentdf.platform.kas.RewrapResponse;
 import io.opentdf.platform.policy.namespaces.GetNamespaceRequest;
+import io.opentdf.platform.policy.namespaces.GetNamespaceResponse;
 import io.opentdf.platform.policy.namespaces.NamespaceServiceGrpc;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRequest;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
@@ -37,16 +40,16 @@ import java.security.KeyStore;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 
 
-
 public class SDKBuilderTest {
 
-    final String EXAMPLE_COM_PEM="-----BEGIN CERTIFICATE-----\n" +
+    final String EXAMPLE_COM_PEM= "-----BEGIN CERTIFICATE-----\n" +
             "MIIBqTCCARKgAwIBAgIIT0xFd/5uogEwDQYJKoZIhvcNAQEFBQAwFjEUMBIGA1UEAxMLZXhhbXBs\n" +
             "ZS5jb20wIBcNMTcwMTIwMTczOTIwWhgPOTk5OTEyMzEyMzU5NTlaMBYxFDASBgNVBAMTC2V4YW1w\n" +
             "bGUuY29tMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC2Tl2MdaUFmjAaYwmEwgEVRfVqwJO4\n" +
@@ -224,8 +227,12 @@ public class SDKBuilderTest {
                         certificate()).build());
             }
 
-            services = servicesBuilder
-                    .buildServices();
+            var servicesAndComponents = servicesBuilder.buildServices();
+            if (useSSL) {
+                assertThat(servicesAndComponents.trustManager).isNotNull();
+            }
+            assertThat(servicesAndComponents.interceptor).isNotNull();
+            services = servicesAndComponents.services;
 
             assertThat(services).isNotNull();
 
@@ -292,6 +299,77 @@ public class SDKBuilderTest {
             if (services != null) {
                 services.close();
             }
+        }
+    }
+
+    /**
+     * If auth is disabled then the `platform_issuer` isn't returned during bootstrapping. The SDK
+     * should still function without auth if auth is disabled on the server
+     * @throws IOException
+     */
+    @Test
+    public void testSdkWithNoIssuerMakesRequests() throws IOException {
+        WellKnownServiceGrpc.WellKnownServiceImplBase wellKnownService = new WellKnownServiceGrpc.WellKnownServiceImplBase() {
+            @Override
+            public void getWellKnownConfiguration(GetWellKnownConfigurationRequest request, StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
+                // don't return a platform issuer
+                responseObserver.onNext(GetWellKnownConfigurationResponse.getDefaultInstance());
+                responseObserver.onCompleted();
+            }
+        };
+
+        var authHeader = new AtomicReference<String>(null);
+        var getNsCalled = new AtomicReference<Boolean>(false);
+
+        var platformServices = ServerBuilder
+                .forPort(getRandomPort())
+                .directExecutor()
+                .intercept(new ServerInterceptor() {
+                    @Override
+                    public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
+                        authHeader.set(
+                                headers.get(Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER))
+                        );
+                        return next.startCall(call, headers);
+                    }
+                })
+                .addService(wellKnownService)
+                .addService(new NamespaceServiceGrpc.NamespaceServiceImplBase() {
+                    @Override
+                    public void getNamespace(GetNamespaceRequest request, StreamObserver<GetNamespaceResponse> responseObserver) {
+                        getNsCalled.set(true);
+                        responseObserver.onNext(GetNamespaceResponse.getDefaultInstance());
+                        responseObserver.onCompleted();
+                    }
+                })
+                .build();
+
+        SDK sdk;
+        try {
+            platformServices.start();
+
+            sdk = SDKBuilder.newBuilder()
+                    .clientSecret("user", "password")
+                    .platformEndpoint("localhost:" + platformServices.getPort())
+                    .useInsecurePlaintextConnection(true)
+                    .build();
+            assertThat(sdk.getAuthInterceptor()).isEmpty();
+
+
+            try {
+                sdk.getServices().namespaces().getNamespace(GetNamespaceRequest.getDefaultInstance()).get();
+            } catch (StatusRuntimeException ignored) {
+            } catch (ExecutionException e) {
+                throw new RuntimeException(e);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(e);
+            }
+
+            assertThat(getNsCalled.get()).isTrue();
+            assertThat(authHeader.get()).isNullOrEmpty();
+        } finally {
+            platformServices.shutdownNow();
         }
     }
 

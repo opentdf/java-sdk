@@ -20,6 +20,7 @@ import nl.altindag.ssl.pem.util.PemUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509ExtendedTrustManager;
 import java.io.File;
 import java.io.FileInputStream;
@@ -29,6 +30,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * A builder class for creating instances of the SDK class.
@@ -145,8 +147,9 @@ public class SDKBuilder {
                     .getFieldsOrThrow(PLATFORM_ISSUER)
                     .getStringValue();
 
-        } catch (StatusRuntimeException e) {
-            throw new SDKException("Error getting the issuer from the platform", e);
+        } catch (IllegalArgumentException e) {
+            logger.warn("no `platform_issuer` found in well known configuration. requests from the SDK will be unauthenticated", e);
+            return null;
         }
 
         Issuer issuer = new Issuer(platformIssuer);
@@ -164,7 +167,20 @@ public class SDKBuilder {
         return new GRPCAuthInterceptor(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI(), sslFactory);
     }
 
-    SDK.Services buildServices() {
+    static class ServicesAndInternals {
+        final ClientInterceptor interceptor;
+        final TrustManager trustManager;
+
+        final SDK.Services services;
+
+        ServicesAndInternals(ClientInterceptor interceptor, TrustManager trustManager, SDK.Services services) {
+            this.interceptor = interceptor;
+            this.trustManager = trustManager;
+            this.services = services;
+        }
+    }
+
+    ServicesAndInternals buildServices() {
         RSAKey dpopKey;
         try {
             dpopKey = new RSAKeyGenerator(2048)
@@ -176,13 +192,27 @@ public class SDKBuilder {
         }
 
         var authInterceptor = getGrpcAuthInterceptor(dpopKey);
-        var channel = getManagedChannelBuilder(platformEndpoint).intercept(authInterceptor).build();
-        var client = new KASClient(endpoint -> getManagedChannelBuilder(endpoint).intercept(authInterceptor).build(), dpopKey);
-        return SDK.Services.newServices(channel, client);
+        ManagedChannel channel;
+        Function<String, ManagedChannel> managedChannelFactory;
+        if (authInterceptor == null) {
+            channel = getManagedChannelBuilder(platformEndpoint).build();
+            managedChannelFactory = (String endpoint) -> getManagedChannelBuilder(endpoint).build();
+
+        } else {
+            channel = getManagedChannelBuilder(platformEndpoint).intercept(authInterceptor).build();
+            managedChannelFactory = (String endpoint) -> getManagedChannelBuilder(endpoint).intercept(authInterceptor).build();
+        }
+        var client = new KASClient(managedChannelFactory, dpopKey);
+        return new ServicesAndInternals(
+                authInterceptor,
+                sslFactory == null ? null : sslFactory.getTrustManager().orElse(null),
+                SDK.Services.newServices(channel, client)
+        );
     }
 
     public SDK build() {
-        return new SDK(buildServices());
+        var services = buildServices();
+        return new SDK(services.services, services.trustManager, services.interceptor);
     }
 
     /**

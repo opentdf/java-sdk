@@ -22,7 +22,9 @@ public class TDFE2ETest {
                 .clientSecret("opentdf-sdk", "secret")
                 .useInsecurePlaintextConnection(true)
                 .platformEndpoint("localhost:8080")
-                .buildServices();
+                .buildServices()
+                .services;
+
 
         var kasInfo = new Config.KASInfo();
         kasInfo.URL = "localhost:8080";
@@ -50,7 +52,8 @@ public class TDFE2ETest {
                 .clientSecret("opentdf-sdk", "secret")
                 .useInsecurePlaintextConnection(true)
                 .platformEndpoint("localhost:8080")
-                .buildServices();
+                .buildServices()
+                .services;
 
         var kasInfo = new Config.KASInfo();
         kasInfo.URL = "http://localhost:8080";

@@ -1,5 +1,6 @@
 package io.opentdf.platform.sdk;
 
+import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
 import io.opentdf.platform.authorization.AuthorizationServiceGrpc;
 import io.opentdf.platform.authorization.AuthorizationServiceGrpc.AuthorizationServiceFutureStub;
@@ -13,12 +14,17 @@ import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc;
 import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc.SubjectMappingServiceFutureStub;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 
+import javax.net.ssl.TrustManager;
+import java.util.Optional;
+
 /**
  * The SDK class represents a software development kit for interacting with the opentdf platform. It
  * provides various services and stubs for making API calls to the opentdf platform.
  */
 public class SDK implements AutoCloseable {
     private final Services services;
+    private final TrustManager trustManager;
+    private final ClientInterceptor authInterceptor;
 
     @Override
     public void close() throws Exception {
@@ -89,11 +95,21 @@ public class SDK implements AutoCloseable {
         }
     }
 
-    SDK(Services services) {
-        this.services = services;
+    public Optional<TrustManager> getTrustManager() {
+        return Optional.ofNullable(trustManager);
     }
 
-    public Services getServices(){
+    public Optional<ClientInterceptor> getAuthInterceptor() {
+        return Optional.ofNullable(authInterceptor);
+    }
+
+    SDK(Services services, TrustManager trustManager, ClientInterceptor authInterceptor) {
+        this.services = services;
+        this.trustManager = trustManager;
+        this.authInterceptor = authInterceptor;
+    }
+
+    public Services getServices() {
         return this.services;
     }
 }
