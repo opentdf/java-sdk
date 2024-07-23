@@ -50,6 +50,11 @@
             <version>4.7.6</version>
         </dependency>
         <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>1.5.6</version>
+        </dependency>
+        <dependency>
             <groupId>io.opentdf.platform</groupId>
             <artifactId>sdk</artifactId>
             <version>0.3.0</version><!-- {x-version-update:java-sdk:current} -->
