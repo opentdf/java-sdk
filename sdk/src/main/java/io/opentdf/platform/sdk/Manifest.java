@@ -37,7 +37,7 @@ public class Manifest {
         public String url;
         public String protocol;
         public String wrappedKey;
-        public Object policyBinding;
+        public PolicyBinding policyBinding;
         public String encryptedMetadata;
         public String kid;
     }
