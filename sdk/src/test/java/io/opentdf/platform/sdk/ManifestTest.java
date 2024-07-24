@@ -13,8 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ManifestTest {
     @Test
-    void testManifestMarshalAndUnMarshal()  {
-String kManifestJsonFromTDF = "{\n" +
+    void testManifestMarshalAndUnMarshal() {
+        String kManifestJsonFromTDF = "{\n" +
                 "  \"encryptionInformation\": {\n" +
                 "    \"integrityInformation\": {\n" +
                 "      \"encryptedSegmentSizeDefault\": 1048604,\n" +
@@ -61,8 +61,8 @@ String kManifestJsonFromTDF = "{\n" +
                 "  }\n" +
                 "}";
 
-            Gson gson = new Gson();
-            Manifest manifest = gson.fromJson(kManifestJsonFromTDF, Manifest.class);
+        Gson gson = new Gson();
+        Manifest manifest = gson.fromJson(kManifestJsonFromTDF, Manifest.class);
 
         // Test payload
         assertEquals(manifest.payload.url, "0.payload");
@@ -76,7 +76,7 @@ String kManifestJsonFromTDF = "{\n" +
         assertEquals(keyAccess.get(0).keyType, "wrapped");
         assertEquals(keyAccess.get(0).protocol, "kas");
         assertEquals(Manifest.PolicyBinding.class, keyAccess.get(0).policyBinding.getClass());
-        var policyBinding = (Manifest.PolicyBinding)keyAccess.get(0).policyBinding;
+        var policyBinding = (Manifest.PolicyBinding) keyAccess.get(0).policyBinding;
         assertEquals(policyBinding.alg, "HS256");
         assertEquals(policyBinding.hash, "YTgzNThhNzc5NWRhMjdjYThlYjk4ZmNmODliNzc2Y2E5ZmZiZDExZDQ3OTM5ODFjZTRjNmE3MmVjOTUzZTFlMA==");
         assertEquals(manifest.encryptionInformation.method.algorithm, "AES-256-GCM");
