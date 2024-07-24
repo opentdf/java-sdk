@@ -4,7 +4,10 @@ import org.junit.jupiter.api.Test;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -58,7 +61,8 @@ String kManifestJsonFromTDF = "{\n" +
                 "  }\n" +
                 "}";
 
-        Manifest manifest = new Gson().fromJson(kManifestJsonFromTDF, Manifest.class);
+            Gson gson = new Gson();
+            Manifest manifest = gson.fromJson(kManifestJsonFromTDF, Manifest.class);
 
         // Test payload
         assertEquals(manifest.payload.url, "0.payload");
@@ -80,14 +84,9 @@ String kManifestJsonFromTDF = "{\n" +
         assertEquals(manifest.encryptionInformation.integrityInformation.segmentHashAlg, "GMAC");
         assertEquals(manifest.encryptionInformation.integrityInformation.segments.get(0).segmentSize, 1048576);
 
-        Manifest.Payload payload = new Manifest.Payload();
-        payload.protocol = "zip";
+        var serialized = gson.toJson(manifest);
+        var deserializedAgain = gson.fromJson(serialized, Manifest.class);
 
-        Manifest.EncryptionInformation encryptionInformation = manifest.encryptionInformation;
-        encryptionInformation.policy = "updated policy";
-
-        Manifest newManifest = new Manifest();
-        newManifest.payload = payload;
-        newManifest.encryptionInformation = encryptionInformation;
+        assertEquals(manifest, deserializedAgain, "something changed when we deserialized -> serialized -> deserialized");
     }
 }

@@ -2,11 +2,12 @@ package io.opentdf.platform.sdk;
 
 
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonDeserializer;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParseException;
+import com.google.gson.JsonSerializationContext;
+import com.google.gson.JsonSerializer;
 import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
@@ -14,18 +15,12 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.crypto.MACSigner;
-import com.nimbusds.jose.jwk.RSAKey;
-import io.opentdf.platform.kas.RewrapRequest;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
-import org.bouncycastle.pqc.crypto.lms.HSSSigner;
 import org.erdtman.jcs.JsonCanonicalizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.crypto.BadPaddingException;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.NoSuchPaddingException;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -35,8 +30,6 @@ import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.text.ParseException;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.*;
 
 public class TDF {
@@ -73,19 +66,6 @@ public class TDF {
     private static final String kAssertionHash = "assertionHash";
 
     private static final SecureRandom sRandom = new SecureRandom();
-
-    public static class PolicyBindingDeserializer implements JsonDeserializer<Object> {
-        @Override
-        public Object deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
-            if (json.isJsonObject()) {
-                return context.deserialize(json, Manifest.PolicyBinding.class);
-            } else if (json.isJsonPrimitive() && json.getAsJsonPrimitive().isString()) {
-                return json.getAsString();
-            } else {
-                throw new JsonParseException("Unexpected type for policyBinding");
-            }
-        }
-    }
 
     private static final Gson gson = new Gson();
 
