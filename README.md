@@ -10,7 +10,9 @@ It will be available from maven central as:
     </dependency>
 ```
 
+## Running the Java SDK
 
+The OpenTDF Java SDK relies on the backend services of the [OpenTDF Platform](https://github.com/opentdf/platform). To get the two up and running together, follow the steps in the platform-integration action in [.github/workflows/checks.yaml](https://github.com/opentdf/java-sdk/blob/main/.github/workflows/checks.yaml).
 
 ## SDK Usage
 
