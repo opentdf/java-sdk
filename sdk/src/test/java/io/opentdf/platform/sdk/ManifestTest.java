@@ -61,7 +61,9 @@ public class ManifestTest {
                 "  }\n" +
                 "}";
 
-        Gson gson = new Gson();
+        GsonBuilder gsonBuilder = new GsonBuilder();
+        Gson gson = gsonBuilder.setPrettyPrinting().create();
+
         Manifest manifest = gson.fromJson(kManifestJsonFromTDF, Manifest.class);
 
         // Test payload
