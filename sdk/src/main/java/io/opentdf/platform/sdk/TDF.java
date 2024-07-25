@@ -2,7 +2,12 @@ package io.opentdf.platform.sdk;
 
 
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonSerializationContext;
+import com.google.gson.JsonSerializer;
 import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
@@ -10,28 +15,21 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.crypto.MACSigner;
-import com.nimbusds.jose.jwk.RSAKey;
-import io.opentdf.platform.kas.RewrapRequest;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
-import org.bouncycastle.pqc.crypto.lms.HSSSigner;
 import org.erdtman.jcs.JsonCanonicalizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.crypto.BadPaddingException;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.NoSuchPaddingException;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Type;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.text.ParseException;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.*;
 
 public class TDF {
@@ -68,7 +66,8 @@ public class TDF {
     private static final String kAssertionHash = "assertionHash";
 
     private static final SecureRandom sRandom = new SecureRandom();
-    private static final Gson gson = new GsonBuilder().create();
+
+    private static final Gson gson = new Gson();
 
     public static class DataSizeNotSupported extends RuntimeException {
         public DataSizeNotSupported(String errorMessage) {
@@ -191,7 +190,10 @@ public class TDF {
 
                 // Add policyBinding
                 var hexBinding = Hex.encodeHexString(CryptoUtils.CalculateSHA256Hmac(symKey, base64PolicyObject.getBytes(StandardCharsets.UTF_8)));
-                keyAccess.policyBinding = encoder.encodeToString(hexBinding.getBytes(StandardCharsets.UTF_8));
+                var policyBinding = new Manifest.PolicyBinding();
+                policyBinding.alg = kHmacIntegrityAlgorithm;
+                policyBinding.hash = encoder.encodeToString(hexBinding.getBytes(StandardCharsets.UTF_8));
+                keyAccess.policyBinding = policyBinding;
 
                 // Wrap the key with kas public key
                 AsymEncryption asymmetricEncrypt = new AsymEncryption(kasInfo.PublicKey);
@@ -206,7 +208,7 @@ public class TDF {
 
                     EncryptedMetadata encryptedMetadata = new EncryptedMetadata();
                     encryptedMetadata.iv = encoder.encodeToString(encrypted.getIv());
-                    encryptedMetadata.ciphertext = encoder.encodeToString(encrypted.getCiphertext());
+                    encryptedMetadata.ciphertext = encoder.encodeToString(encrypted.asBytes());
 
                     var metadata = gson.toJson(encryptedMetadata);
                     keyAccess.encryptedMetadata = encoder.encodeToString(metadata.getBytes(StandardCharsets.UTF_8));
@@ -514,7 +516,6 @@ public class TDF {
                     EncryptedMetadata encryptedMetadata = gson.fromJson(decodedMetadata, EncryptedMetadata.class);
 
                     var encryptedData = new AesGcm.Encrypted(
-                            decoder.decode(encryptedMetadata.iv),
                             decoder.decode(encryptedMetadata.ciphertext)
                     );
 

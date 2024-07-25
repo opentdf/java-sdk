@@ -16,7 +16,7 @@ public class TDFWriterTest {
     @Test
     void simpleTDFCreate() throws IOException {
 
-        String kManifestJsonFromTDF = "{\n" +
+String kManifestJsonFromTDF = "{\n" +
                 "  \"encryptionInformation\": {\n" +
                 "    \"integrityInformation\": {\n" +
                 "      \"encryptedSegmentSizeDefault\": 1048604,\n" +
@@ -36,7 +36,10 @@ public class TDFWriterTest {
                 "    },\n" +
                 "    \"keyAccess\": [\n" +
                 "      {\n" +
-                "        \"policyBinding\": \"YTgzNThhNzc5NWRhMjdjYThlYjk4ZmNmODliNzc2Y2E5ZmZiZDExZDQ3OTM5ODFjZTRjNmE3MmVjOTUzZTFlMA==\",\n" +
+                "        \"policyBinding\": {\n" +
+                "          \"alg\": \"HS256\",\n" +
+                "          \"hash\": \"YTgzNThhNzc5NWRhMjdjYThlYjk4ZmNmODliNzc2Y2E5ZmZiZDExZDQ3OTM5ODFjZTRjNmE3MmVjOTUzZTFlMA==\"\n" +
+                "        },\n" +
                 "        \"protocol\": \"kas\",\n" +
                 "        \"type\": \"wrapped\",\n" +
                 "        \"url\": \"http://localhost:65432/kas\",\n" +
