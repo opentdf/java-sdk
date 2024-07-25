@@ -208,7 +208,7 @@ public class TDF {
 
                     EncryptedMetadata encryptedMetadata = new EncryptedMetadata();
                     encryptedMetadata.iv = encoder.encodeToString(encrypted.getIv());
-                    encryptedMetadata.ciphertext = encoder.encodeToString(encrypted.getCiphertext());
+                    encryptedMetadata.ciphertext = encoder.encodeToString(encrypted.asBytes());
 
                     var metadata = gson.toJson(encryptedMetadata);
                     keyAccess.encryptedMetadata = encoder.encodeToString(metadata.getBytes(StandardCharsets.UTF_8));
@@ -516,7 +516,6 @@ public class TDF {
                     EncryptedMetadata encryptedMetadata = gson.fromJson(decodedMetadata, EncryptedMetadata.class);
 
                     var encryptedData = new AesGcm.Encrypted(
-                            decoder.decode(encryptedMetadata.iv),
                             decoder.decode(encryptedMetadata.ciphertext)
                     );
 
