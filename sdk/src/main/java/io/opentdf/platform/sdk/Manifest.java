@@ -10,6 +10,7 @@ import com.google.gson.annotations.JsonAdapter;
 import com.google.gson.annotations.SerializedName;
 
 import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -216,5 +217,5 @@ public class Manifest {
 
     public EncryptionInformation encryptionInformation;
     public Payload payload;
-    public  List<Assertion> assertions;
+    public  List<Assertion> assertions = new ArrayList<>();
 }
