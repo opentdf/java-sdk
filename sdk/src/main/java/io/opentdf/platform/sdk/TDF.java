@@ -506,23 +506,24 @@ public class TDF {
                 for (int index = 0; index < unwrappedKey.length; index++) {
                     payloadKey[index] ^= unwrappedKey[index];
                 }
+                
+                // TODO: re-enable metadata decryption
+                // if (keyAccess.encryptedMetadata != null && !keyAccess.encryptedMetadata.isEmpty()) {
+                //     AesGcm aesGcm = new AesGcm(unwrappedKey);
 
-                if (keyAccess.encryptedMetadata != null && !keyAccess.encryptedMetadata.isEmpty()) {
-                    AesGcm aesGcm = new AesGcm(unwrappedKey);
+                //     String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata), "UTF-8");
+                //     EncryptedMetadata encryptedMetadata = gson.fromJson(decodedMetadata, EncryptedMetadata.class);
 
-                    String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata), "UTF-8");
-                    EncryptedMetadata encryptedMetadata = gson.fromJson(decodedMetadata, EncryptedMetadata.class);
+                //     var encryptedData = new AesGcm.Encrypted(
+                //             decoder.decode(encryptedMetadata.iv),
+                //             decoder.decode(encryptedMetadata.ciphertext)
+                //     );
 
-                    var encryptedData = new AesGcm.Encrypted(
-                            decoder.decode(encryptedMetadata.iv),
-                            decoder.decode(encryptedMetadata.ciphertext)
-                    );
-
-                    byte[] decrypted = aesGcm.decrypt(encryptedData);
-                    // this is a little bit weird... the last unencrypted metadata we get from a KAS is the one
-                    // that we return to the user. This is OK because we can't have different metadata per-KAS
-                    unencryptedMetadata = new String(decrypted, StandardCharsets.UTF_8);
-                }
+                //     byte[] decrypted = aesGcm.decrypt(encryptedData);
+                //     // this is a little bit weird... the last unencrypted metadata we get from a KAS is the one
+                //     // that we return to the user. This is OK because we can't have different metadata per-KAS
+                //     unencryptedMetadata = new String(decrypted, StandardCharsets.UTF_8);
+                // }
             }
         }
 

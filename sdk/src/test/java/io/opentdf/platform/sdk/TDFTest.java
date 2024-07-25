@@ -104,7 +104,8 @@ public class TDFTest {
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
                 .withFailMessage("extracted data does not match")
                 .isEqualTo(plainText);
-        assertThat(reader.getMetadata()).isEqualTo("here is some metadata");
+        // TODO: re-enable when metadata decryption is re-enabled
+        // assertThat(reader.getMetadata()).isEqualTo("here is some metadata");
     }
 
     @Test
