@@ -1,16 +1,17 @@
 package io.opentdf.platform.sdk.nanotdf;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
-import org.checkerframework.checker.signature.qual.Identifier;
+import java.util.Objects;
 
 public class ResourceLocator {
+    private static final String HTTP = "http://";
+    private static final String HTTPS = "https://";
+
     private NanoTDFType.Protocol protocol;
     private int bodyLength;
     private byte[] body;
     private NanoTDFType.IdentifierType identifierType;
-    private int identiferLength;
-    private byte[] identifer;
+    private byte[] identifier;
 
     public ResourceLocator() {
     }
@@ -20,9 +21,9 @@ public class ResourceLocator {
     }
 
     public ResourceLocator(String resourceUrl, String identifier) {
-        if (resourceUrl.startsWith("http://")) {
+        if (resourceUrl.startsWith(HTTP)) {
             this.protocol = NanoTDFType.Protocol.HTTP;
-        } else if (resourceUrl.startsWith("https://")) {
+        } else if (resourceUrl.startsWith(HTTPS)) {
             this.protocol = NanoTDFType.Protocol.HTTPS;
         } else {
             throw new RuntimeException("Unsupported protocol for resource locator");
@@ -33,34 +34,18 @@ public class ResourceLocator {
         // identifier
         if (identifier == null) {
             this.identifierType = NanoTDFType.IdentifierType.NONE;
-            this.identiferLength = 0;
-            this.identifer = new byte[0];
+            this.identifier = new byte[0];
         } else {
-            this.identifer = identifier.getBytes();
-            int identifierLength = this.identifer.length;
-            switch (identifierLength) {
+            this.identifier = identifier.getBytes();
+            switch (this.identifier.length) {
                 case 0:
-                    this.identifierType = NanoTDFType.IdentifierType.NONE;
-                    this.identiferLength = 0;
-                    this.identifer = new byte[identiferLength];
-                    break;
                 case 2:
-                    this.identifierType = NanoTDFType.IdentifierType.TWO_BYTES;
-                    this.identiferLength = 2;
-                    this.identifer = new byte[identiferLength];
-                    break;
                 case 8:
-                    this.identifierType = NanoTDFType.IdentifierType.EIGHT_BYTES;
-                    this.identiferLength = 8;
-                    this.identifer = new byte[identiferLength];
-                    break;
                 case 32:
-                    this.identifierType = NanoTDFType.IdentifierType.THIRTY_TWO_BYTES;
-                    this.identiferLength = 32;
-                    this.identifer = new byte[identiferLength];
+                    this.identifierType = NanoTDFType.IdentifierType.values()[this.identifier.length / 8];
                     break;
                 default:
-                    throw new IllegalArgumentException("Invalid identifier length: " + identifierLength);
+                    throw new IllegalArgumentException("Invalid identifier length: " + this.identifier.length);
             }
         }
     }
@@ -78,23 +63,19 @@ public class ResourceLocator {
         this.identifierType = NanoTDFType.IdentifierType.values()[identifierNibble];
         switch (this.identifierType) {
             case NONE:
-                this.identiferLength = 0;
-                this.identifer = new byte[identiferLength];
+                this.identifier = new byte[0];
                 break;
             case TWO_BYTES:
-                this.identiferLength = 2;
-                this.identifer = new byte[identiferLength];
-                buffer.get(this.identifer);
+                this.identifier = new byte[2];
+                buffer.get(this.identifier);
                 break;
             case EIGHT_BYTES:
-                this.identiferLength = 8;
-                this.identifer = new byte[identiferLength];
-                buffer.get(this.identifer);
+                this.identifier = new byte[8];
+                buffer.get(this.identifier);
                 break;
             case THIRTY_TWO_BYTES:
-                this.identiferLength = 32;
-                this.identifer = new byte[identiferLength];
-                buffer.get(this.identifer);
+                this.identifier = new byte[32];
+                buffer.get(this.identifier);
                 break;
             default:
                 throw new IllegalArgumentException("Unexpected identifier type: " + identifierType);
@@ -116,13 +97,10 @@ public class ResourceLocator {
     public String getResourceUrl() {
         StringBuilder sb = new StringBuilder();
 
-        switch (this.protocol) {
-            case HTTP:
-                sb.append("http://");
-                break;
-            case HTTPS:
-                sb.append("https://");
-                break;
+        if (Objects.requireNonNull(this.protocol) == NanoTDFType.Protocol.HTTP) {
+            sb.append(HTTP);
+        } else if (this.protocol == NanoTDFType.Protocol.HTTPS) {
+            sb.append(HTTPS);
         }
 
         sb.append(new String(this.body));
@@ -131,7 +109,7 @@ public class ResourceLocator {
     }
 
     public int getTotalSize() {
-        return 1 + 1 + this.body.length;
+        return 1 + 1 + this.body.length + this.identifier.length;
     }
 
     public int writeIntoBuffer(ByteBuffer buffer) {
@@ -146,11 +124,11 @@ public class ResourceLocator {
         buffer.put((byte) protocol.ordinal());
         totalBytesWritten += 1; // size of byte
 
-        // Write the url body length;
+        // Write the url body length
         buffer.put((byte)bodyLength);
         totalBytesWritten += 1;
 
-        // Write the url body;
+        // Write the url body
         buffer.put(body);
         totalBytesWritten += body.length;
 
