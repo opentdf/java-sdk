@@ -25,10 +25,6 @@ public class NanoTDFType {
     }
     // ResourceLocator Identifier
     public enum IdentifierType {
-//        NoIdentifier            protocolHeader = 0 << 4
-//        TwoByteIdentifier       protocolHeader = 1 << 4
-//        EightByteIdentifier     protocolHeader = 2 << 4
-//        ThirtyTwoByteIdentifier protocolHeader = 3 << 4
         NONE,
         TWO_BYTES,
         EIGHT_BYTES,

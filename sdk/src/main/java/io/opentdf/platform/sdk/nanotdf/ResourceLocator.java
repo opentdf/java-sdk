@@ -17,7 +17,7 @@ public class ResourceLocator {
     }
 
     public ResourceLocator(String resourceUrl) {
-        new ResourceLocator(resourceUrl, null);
+        this(resourceUrl, null);
     }
 
     public ResourceLocator(String resourceUrl, String identifier) {
@@ -52,8 +52,8 @@ public class ResourceLocator {
 
     public ResourceLocator(ByteBuffer buffer) {
         final byte protocolWithIdentifier = buffer.get();
-        int protocolNibble = (protocolWithIdentifier & 0xF0) >> 4;
-        int identifierNibble = protocolWithIdentifier & 0x0F;
+        int protocolNibble = protocolWithIdentifier & 0x0F;
+        int identifierNibble = (protocolWithIdentifier & 0xF0) >> 4;
         this.protocol = NanoTDFType.Protocol.values()[protocolNibble];
         // body
         this.bodyLength = buffer.get();
@@ -133,5 +133,9 @@ public class ResourceLocator {
         totalBytesWritten += body.length;
 
         return totalBytesWritten;
+    }
+
+    public byte[] getIdentifier() {
+        return this.identifier;
     }
 }
