@@ -3,6 +3,13 @@ package io.opentdf.platform.sdk.nanotdf;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
+/**
+ * The ResourceLocator class represents a resource locator containing a
+ * protocol, body, and identifier. It provides methods to set and retrieve
+ * the protocol, body, and identifier, as well as to get the resource URL and
+ * the total size of the resource locator. It also provides methods to write
+ * the resource locator into a ByteBuffer and obtain the identifier.
+ */
 public class ResourceLocator {
     private static final String HTTP = "http://";
     private static final String HTTPS = "https://";
@@ -20,13 +27,23 @@ public class ResourceLocator {
         this(resourceUrl, null);
     }
 
+    /**
+     * ResourceLocator represents a locator for a resource.
+     * It takes a resource URL and an identifier as parameters and initializes the object.
+     * The resource URL is used to determine the protocol and the body.
+     * The identifier is used to determine the identifier type and the identifier value.
+     *
+     * @param resourceUrl the URL of the resource
+     * @param identifier the identifier of the resource (optional, can be null)
+     * @throws IllegalArgumentException if the resource URL has an unsupported protocol or if the identifier length is unsupported
+     */
     public ResourceLocator(String resourceUrl, String identifier) {
         if (resourceUrl.startsWith(HTTP)) {
             this.protocol = NanoTDFType.Protocol.HTTP;
         } else if (resourceUrl.startsWith(HTTPS)) {
             this.protocol = NanoTDFType.Protocol.HTTPS;
         } else {
-            throw new RuntimeException("Unsupported protocol for resource locator");
+            throw new IllegalArgumentException("Unsupported protocol for resource locator");
         }
         // body
         this.body = resourceUrl.substring(resourceUrl.indexOf("://") + 3).getBytes();
@@ -37,15 +54,17 @@ public class ResourceLocator {
             this.identifier = new byte[0];
         } else {
             this.identifier = identifier.getBytes();
-            switch (this.identifier.length) {
-                case 0:
-                case 2:
-                case 8:
-                case 32:
-                    this.identifierType = NanoTDFType.IdentifierType.values()[this.identifier.length / 8];
-                    break;
-                default:
-                    throw new IllegalArgumentException("Invalid identifier length: " + this.identifier.length);
+            int identifierLen = this.identifier.length;
+            if (identifierLen == 0) {
+                this.identifierType = NanoTDFType.IdentifierType.NONE;
+            } else if (identifierLen <= 2) {
+                this.identifierType = NanoTDFType.IdentifierType.TWO_BYTES;
+            } else if (identifierLen <= 8) {
+                this.identifierType = NanoTDFType.IdentifierType.EIGHT_BYTES;
+            } else if (identifierLen <= 32) {
+                this.identifierType = NanoTDFType.IdentifierType.THIRTY_TWO_BYTES;
+            } else {
+                throw new IllegalArgumentException("Unsupported identifier length: " + identifierLen);
             }
         }
     }
@@ -112,6 +131,13 @@ public class ResourceLocator {
         return 1 + 1 + this.body.length + this.identifier.length;
     }
 
+    /**
+     * Writes the resource locator into the provided ByteBuffer.
+     *
+     * @param buffer the ByteBuffer to write into
+     * @return the number of bytes written
+     * @throws RuntimeException if the buffer size is insufficient to write the resource locator
+     */
     public int writeIntoBuffer(ByteBuffer buffer) {
         int totalSize = getTotalSize();
         if (buffer.remaining() < totalSize) {
@@ -121,8 +147,13 @@ public class ResourceLocator {
         int totalBytesWritten = 0;
 
         // Write the protocol type.
-        buffer.put((byte) protocol.ordinal());
-        totalBytesWritten += 1; // size of byte
+        if (identifierType == NanoTDFType.IdentifierType.NONE) {
+            buffer.put((byte) protocol.ordinal());
+            totalBytesWritten += 1; // size of byte
+        } else {
+            buffer.put((byte) (identifierType.ordinal() << 4 | protocol.ordinal()));
+            totalBytesWritten += 1;
+        }
 
         // Write the url body length
         buffer.put((byte)bodyLength);
@@ -131,6 +162,12 @@ public class ResourceLocator {
         // Write the url body
         buffer.put(body);
         totalBytesWritten += body.length;
+
+        // Write the identifier
+        if (identifierType != NanoTDFType.IdentifierType.NONE) {
+            buffer.put(identifier);
+            totalBytesWritten += identifier.length;
+        }
 
         return totalBytesWritten;
     }
