@@ -18,10 +18,21 @@ public class NanoTDFType {
             return name;
         }
     }
-
+    // ResourceLocator Protocol
     public enum Protocol {
         HTTP,
         HTTPS
+    }
+    // ResourceLocator Identifier
+    public enum IdentifierType {
+//        NoIdentifier            protocolHeader = 0 << 4
+//        TwoByteIdentifier       protocolHeader = 1 << 4
+//        EightByteIdentifier     protocolHeader = 2 << 4
+//        ThirtyTwoByteIdentifier protocolHeader = 3 << 4
+        NONE,
+        TWO_BYTES,
+        EIGHT_BYTES,
+        THIRTY_TWO_BYTES
     }
 
     public enum PolicyType {
