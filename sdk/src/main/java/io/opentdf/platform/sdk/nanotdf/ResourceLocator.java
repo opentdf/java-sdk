@@ -25,7 +25,10 @@ public class ResourceLocator {
     }
 
     public ResourceLocator(ByteBuffer buffer) {
-        this.protocol = NanoTDFType.Protocol.values()[buffer.get()];
+        // Get the first byte and mask it with 0xF to keep only the first four bits
+        byte protocolByte = buffer.get();
+        int protocolIndex = protocolByte & 0xF;
+        this.protocol = NanoTDFType.Protocol.values()[protocolIndex];
         this.bodyLength = buffer.get();
         this.body = new byte[this.bodyLength];
         buffer.get(this.body);
