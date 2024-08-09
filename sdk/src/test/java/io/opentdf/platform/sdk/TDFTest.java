@@ -279,7 +279,7 @@ public class TDFTest {
         tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
 
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), new Config.AssertionConfig(), kas);
-        assertThat(reader.getManifest().payload).isEqualTo(mimeType);
+        assertThat(reader.getManifest().payload.mimeType).isEqualTo(mimeType);
     }
 
     @Nonnull
