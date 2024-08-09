@@ -1,8 +1,13 @@
 package io.opentdf.platform.sdk.nanotdf;
 
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import java.nio.ByteBuffer;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class ResourceLocatorTest {
@@ -49,5 +54,41 @@ class ResourceLocatorTest {
         locator = new ResourceLocator(url);
         ByteBuffer buffer = ByteBuffer.allocate(1); // Buffer with insufficient size
         assertThrows(RuntimeException.class, () -> locator.writeIntoBuffer(buffer));
+    }
+
+    @ParameterizedTest
+    @MethodSource("provideUrlsAndIdentifiers")
+    void creatingResourceLocatorWithDifferentIdentifiers(String url, String identifier) {
+        locator = new ResourceLocator(url, identifier);
+        assertEquals(url, locator.getResourceUrl());
+        assertArrayEquals(identifier.getBytes(), locator.getIdentifier());
+    }
+
+    private static Stream<Arguments> provideUrlsAndIdentifiers() {
+        return Stream.of(
+                Arguments.of("http://test.com", "0"),
+                Arguments.of("http://test.com", "e0"),
+                Arguments.of("http://test.com", "e0e0e0e0"),
+                Arguments.of("https://test.com", "e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0")
+        );
+    }
+
+    @Test
+    void creatingResourceLocatorUnexpectedIdentifierType() {
+        String url = "http://test.com";
+        String identifier = "unexpectedIdentifierunexpectedIdentifier";
+        assertThrows(IllegalArgumentException.class, () -> new ResourceLocator(url, identifier));
+    }
+
+    @Test
+    void creatingResourceLocatorFromBufferWithIdentifier() {
+        String url = "http://test.com";
+        String identifier = "e0";
+        ResourceLocator original = new ResourceLocator(url, identifier);
+        byte[] buffer = new byte[original.getTotalSize()];
+        original.writeIntoBuffer(ByteBuffer.wrap(buffer));
+        locator = new ResourceLocator(ByteBuffer.wrap(buffer));
+        assertEquals(url, locator.getResourceUrl());
+        assertArrayEquals(identifier.getBytes(), locator.getIdentifier());
     }
 }
