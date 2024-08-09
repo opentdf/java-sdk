@@ -16,6 +16,7 @@ public class Config {
     public static final int TDF3_KEY_SIZE = 2048;
     public static final int DEFAULT_SEGMENT_SIZE = 2 * 1024 * 1024; // 2mb
     public static final String KAS_PUBLIC_KEY_PATH = "/kas_public_key";
+    public static final String DEFAULT_MIME_TYPE = "application/octet-stream";
 
     public enum TDFFormat {
         JSONFormat,
@@ -76,6 +77,7 @@ public class Config {
             this.attributes = new ArrayList<>();
             this.kasInfoList = new ArrayList<>();
             this.assertionList = new ArrayList<>();
+            this.mimeType = DEFAULT_MIME_TYPE;
         }
     }
 
