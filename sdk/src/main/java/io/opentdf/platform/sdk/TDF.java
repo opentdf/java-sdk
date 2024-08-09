@@ -241,6 +241,10 @@ public class TDF {
             return unencryptedMetadata;
         }
 
+        public Manifest getManifest() {
+            return manifest;
+        }
+
         private final String unencryptedMetadata;
         private final AesGcm aesGcm;
 
@@ -422,7 +426,7 @@ public class TDF {
 
         // Add payload info
         tdfObject.manifest.payload = new Manifest.Payload();
-        tdfObject.manifest.payload.mimeType = kDefaultMimeType;
+        tdfObject.manifest.payload.mimeType = tdfConfig.mimeType.isEmpty() ? kDefaultMimeType : tdfConfig.mimeType;
         tdfObject.manifest.payload.protocol = kTDFAsZip;
         tdfObject.manifest.payload.type = kTDFZipReference;
         tdfObject.manifest.payload.url = TDFWriter.TDF_PAYLOAD_FILE_NAME;

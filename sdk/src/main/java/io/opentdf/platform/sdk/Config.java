@@ -65,6 +65,7 @@ public class Config {
         public List<KASInfo> kasInfoList;
         public List<Assertion> assertionList;
         public AssertionConfig assertionConfig;
+        public String mimeType;
 
         public TDFConfig() {
             this.defaultSegmentSize = DEFAULT_SEGMENT_SIZE;
@@ -123,6 +124,10 @@ public class Config {
 
     public static Consumer<TDFConfig> withDisableEncryption() {
         return (TDFConfig config) -> config.enableEncryption = false;
+    }
+
+    public static Consumer<TDFConfig> withMimeType(String mimeType) {
+        return (TDFConfig config) -> config.mimeType = mimeType;
     }
 
     public static class NanoTDFConfig {
