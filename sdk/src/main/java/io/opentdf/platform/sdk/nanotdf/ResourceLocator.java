@@ -70,6 +70,7 @@ public class ResourceLocator {
     }
 
     public ResourceLocator(ByteBuffer buffer) {
+        // Get the first byte and mask it with 0xF to keep only the first four bits
         final byte protocolWithIdentifier = buffer.get();
         int protocolNibble = protocolWithIdentifier & 0x0F;
         int identifierNibble = (protocolWithIdentifier & 0xF0) >> 4;
