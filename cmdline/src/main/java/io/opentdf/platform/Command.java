@@ -84,7 +84,7 @@ class Command {
     void decrypt(@Option(names = {"-f", "--file"}, required = true) Path tdfPath) throws IOException,
             InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException,
             BadPaddingException, InvalidKeyException, TDF.FailedToCreateGMAC,
-            JOSEException, ParseException, NoSuchAlgorithmException, DecoderException {
+            JOSEException, ParseException, NoSuchAlgorithmException, DecoderException, Exception {
         var sdk = buildSDK();
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
             try (var stdout = new BufferedOutputStream(System.out)) {
@@ -95,7 +95,7 @@ class Command {
     }
     @CommandLine.Command(name = "metadata")
     void readMetadata(@Option(names = {"-f", "--file"}, required = true) Path tdfPath) throws IOException,
-            TDF.FailedToCreateGMAC, JOSEException, NoSuchAlgorithmException, ParseException, DecoderException {
+            TDF.FailedToCreateGMAC, JOSEException, NoSuchAlgorithmException, ParseException, DecoderException, Exception {
         var sdk = buildSDK();
 
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
