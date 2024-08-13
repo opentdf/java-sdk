@@ -15,6 +15,8 @@ import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc.Subje
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 
 import javax.net.ssl.TrustManager;
+import java.io.IOException;
+import java.nio.channels.SeekableByteChannel;
 import java.util.Optional;
 
 /**
@@ -111,5 +113,17 @@ public class SDK implements AutoCloseable {
 
     public Services getServices() {
         return this.services;
+    }
+
+    public boolean mightBeTDF(SeekableByteChannel channel) throws IOException {
+        var zipReader = new ZipReader(channel);
+        var entries = zipReader.getEntries();
+        if (entries.size() != 2) {
+            return false;
+        }
+        if (entries.stream().noneMatch(e -> "manifest.json".equals(e.getName()))) {
+            return false;
+        }
+        return entries.stream().anyMatch(e -> "0.manifest".equals(e.getName()));
     }
 }
