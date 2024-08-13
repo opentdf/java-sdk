@@ -13,6 +13,8 @@ import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceGrpc.Res
 import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc;
 import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc.SubjectMappingServiceFutureStub;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.TrustManager;
 import java.io.IOException;
@@ -27,6 +29,8 @@ public class SDK implements AutoCloseable {
     private final Services services;
     private final TrustManager trustManager;
     private final ClientInterceptor authInterceptor;
+
+    private static final Logger log = LoggerFactory.getLogger(SDK.class);
 
     @Override
     public void close() throws Exception {
@@ -115,15 +119,24 @@ public class SDK implements AutoCloseable {
         return this.services;
     }
 
-    public boolean mightBeTDF(SeekableByteChannel channel) throws IOException {
-        var zipReader = new ZipReader(channel);
+    /**
+     * Checks to see if this has the structure of a Z-TDF in that it is a zip file containing
+     * a `manifest.json` and a `0.payload`
+     * @param channel A channel containing the bytes of the potential Z-TDF
+     * @return `true` if
+     */
+    public static boolean mightBeZTDF(SeekableByteChannel channel) {
+        ZipReader zipReader;
+        try {
+            zipReader = new ZipReader(channel);
+        } catch (IOException | InvalidZipException e) {
+            return false;
+        }
         var entries = zipReader.getEntries();
         if (entries.size() != 2) {
             return false;
         }
-        if (entries.stream().noneMatch(e -> "manifest.json".equals(e.getName()))) {
-            return false;
-        }
-        return entries.stream().anyMatch(e -> "0.manifest".equals(e.getName()));
+        return entries.stream().anyMatch(e -> "0.manifest.json".equals(e.getName()))
+                && entries.stream().anyMatch(e -> "0.payload".equals(e.getName()));
     }
 }
