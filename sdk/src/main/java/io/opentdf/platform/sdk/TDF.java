@@ -527,7 +527,7 @@ public class TDF {
                     unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy);
                 } else {
                     knownSplits.put(ss.splitID, true);
-                    if (foundSplits.get(ss.splitID)){
+                    if (foundSplits.get(ss.splitID) != null){
                         continue;
                     }
                     try {
