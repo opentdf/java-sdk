@@ -49,4 +49,11 @@ class ConfigTest {
         Config.TDFConfig config = Config.newTDFConfig(Config.withSegmentSize(1024));
         assertEquals(1024, config.defaultSegmentSize);
     }
+
+    @Test
+    void withMimeType_shouldSetMimeType() {
+        final String mimeType = "application/pdf";
+        Config.TDFConfig config = Config.newTDFConfig(Config.withMimeType(mimeType));
+        assertEquals(mimeType, config.mimeType);
+    }
 }

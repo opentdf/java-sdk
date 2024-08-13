@@ -4,13 +4,16 @@ import org.junit.jupiter.api.Test;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ManifestTest {
     @Test
-    void testManifestMarshalAndUnMarshal()  {
+    void testManifestMarshalAndUnMarshal() {
         String kManifestJsonFromTDF = "{\n" +
                 "  \"encryptionInformation\": {\n" +
                 "    \"integrityInformation\": {\n" +
@@ -31,7 +34,10 @@ public class ManifestTest {
                 "    },\n" +
                 "    \"keyAccess\": [\n" +
                 "      {\n" +
-                "        \"policyBinding\": \"YTgzNThhNzc5NWRhMjdjYThlYjk4ZmNmODliNzc2Y2E5ZmZiZDExZDQ3OTM5ODFjZTRjNmE3MmVjOTUzZTFlMA==\",\n" +
+                "        \"policyBinding\": {\n" +
+                "          \"alg\": \"HS256\",\n" +
+                "          \"hash\": \"YTgzNThhNzc5NWRhMjdjYThlYjk4ZmNmODliNzc2Y2E5ZmZiZDExZDQ3OTM5ODFjZTRjNmE3MmVjOTUzZTFlMA==\"\n" +
+                "        },\n" +
                 "        \"protocol\": \"kas\",\n" +
                 "        \"type\": \"wrapped\",\n" +
                 "        \"url\": \"http://localhost:65432/kas\",\n" +
@@ -70,25 +76,18 @@ public class ManifestTest {
         List<Manifest.KeyAccess> keyAccess = manifest.encryptionInformation.keyAccessObj;
         assertEquals(keyAccess.get(0).keyType, "wrapped");
         assertEquals(keyAccess.get(0).protocol, "kas");
-
+        assertEquals(Manifest.PolicyBinding.class, keyAccess.get(0).policyBinding.getClass());
+        var policyBinding = (Manifest.PolicyBinding) keyAccess.get(0).policyBinding;
+        assertEquals(policyBinding.alg, "HS256");
+        assertEquals(policyBinding.hash, "YTgzNThhNzc5NWRhMjdjYThlYjk4ZmNmODliNzc2Y2E5ZmZiZDExZDQ3OTM5ODFjZTRjNmE3MmVjOTUzZTFlMA==");
         assertEquals(manifest.encryptionInformation.method.algorithm, "AES-256-GCM");
         assertEquals(manifest.encryptionInformation.integrityInformation.rootSignature.algorithm, "HS256");
         assertEquals(manifest.encryptionInformation.integrityInformation.segmentHashAlg, "GMAC");
         assertEquals(manifest.encryptionInformation.integrityInformation.segments.get(0).segmentSize, 1048576);
 
-        System.out.println(gson.toJson(manifest));
+        var serialized = gson.toJson(manifest);
+        var deserializedAgain = gson.fromJson(serialized, Manifest.class);
 
-
-        Manifest.Payload payload = new Manifest.Payload();
-        payload.protocol = "zip";
-
-        Manifest.EncryptionInformation encryptionInformation = manifest.encryptionInformation;
-        encryptionInformation.policy = "updated policy";
-
-        Manifest newManifest = new Manifest();
-        newManifest.payload = payload;
-        newManifest.encryptionInformation = encryptionInformation;
-
-        System.out.println(gson.toJson(newManifest));
+        assertEquals(manifest, deserializedAgain, "something changed when we deserialized -> serialized -> deserialized");
     }
 }

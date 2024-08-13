@@ -189,9 +189,20 @@ jobs:
             exit 1
           fi
         working-directory: cmdline
+
+  platform-xtest:
+    permissions:
+      contents: read
+      packages: read
+    needs: platform-integration
+    uses: opentdf/tests/.github/workflows/xtest.yml@main
+    with:
+      java-ref: ${{ github.ref }}
+  
   ci:
     needs:
       - platform-integration
+      - platform-xtest
       - mavenverify
       - pr
     runs-on: ubuntu-latest
