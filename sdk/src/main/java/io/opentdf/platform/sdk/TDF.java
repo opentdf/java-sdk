@@ -515,7 +515,9 @@ public class TDF {
         Map<String, Boolean> knownSplits = new HashMap<>();
         Map<String, Boolean> foundSplits = new HashMap<>();
         Map<Config.SplitStep, Exception> skippedSplits = new HashMap<>();
-        boolean mixedSplits = manifest.encryptionInformation.keyAccessObj.size() > 1 && !manifest.encryptionInformation.keyAccessObj.get(0).sid.isEmpty();
+        boolean mixedSplits = manifest.encryptionInformation.keyAccessObj.size() > 1 &&
+         (manifest.encryptionInformation.keyAccessObj.get(0).sid != null) &&
+          !manifest.encryptionInformation.keyAccessObj.get(0).sid.isEmpty();
 
         MessageDigest digest =  MessageDigest.getInstance("SHA-256");
 
