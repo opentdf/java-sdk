@@ -13,6 +13,9 @@ import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+
+import io.opentdf.platform.sdk.Config.SplitStep;
+
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.crypto.MACSigner;
 import org.apache.commons.codec.DecoderException;
@@ -495,22 +498,44 @@ public class TDF {
     }
 
     public Reader loadTDF(SeekableByteChannel tdf, Config.AssertionConfig assertionConfig, SDK.KAS kas) throws NotValidateRootSignature, SegmentSizeMismatch,
-            IOException, FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException, DecoderException {
+            IOException, FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException, DecoderException, Exception {
 
         TDFReader tdfReader = new TDFReader(tdf);
         String manifestJson = tdfReader.manifest();
         Manifest manifest = gson.fromJson(manifestJson, Manifest.class);
         byte[] payloadKey = new byte[GCM_KEY_SIZE];
         String unencryptedMetadata = null;
+        
+        Map<String, Boolean> knownSplits = new HashMap<>();
+        Map<String, Boolean> foundSplits = new HashMap<>();
+        Map<Config.SplitStep, Exception> skippedSplits = new HashMap<>();
+        boolean mixedSplits = manifest.encryptionInformation.keyAccessObj.size() > 1 && !manifest.encryptionInformation.keyAccessObj.get(0).sid.isEmpty();
 
         MessageDigest digest =  MessageDigest.getInstance("SHA-256");
 
         if (manifest.payload.isEncrypted) {
             for (Manifest.KeyAccess keyAccess: manifest.encryptionInformation.keyAccessObj) {
-                var unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy);
+                Config.SplitStep ss = new Config.SplitStep(keyAccess.url, keyAccess.sid);
+                byte[] unwrappedKey;
+                if (!mixedSplits) {
+                    unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy);
+                } else {
+                    knownSplits.put(ss.splitID, true);
+                    if (foundSplits.get(ss.splitID)){
+                        continue;
+                    }
+                    try {
+                        unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy);
+                    } catch (Exception e) {
+                        skippedSplits.put(ss, e);
+                        continue;
+                    }
+                }
+                
                 for (int index = 0; index < unwrappedKey.length; index++) {
                     payloadKey[index] ^= unwrappedKey[index];
                 }
+                foundSplits.put(ss.splitID, true);
 
                 if (keyAccess.encryptedMetadata != null && !keyAccess.encryptedMetadata.isEmpty()) {
                     AesGcm aesGcm = new AesGcm(unwrappedKey);
@@ -527,6 +552,22 @@ public class TDF {
                     // that we return to the user. This is OK because we can't have different metadata per-KAS
                     unencryptedMetadata = new String(decrypted, StandardCharsets.UTF_8);
                 }
+            }
+
+            if (mixedSplits && knownSplits.size() > foundSplits.size()) {
+                List<Exception> exceptionList = new ArrayList<>(skippedSplits.size() + 1);
+                exceptionList.add(new Exception("splitKey.unable to reconstruct split key: " + skippedSplits));
+                
+                for (Map.Entry<SplitStep, Exception> entry : skippedSplits.entrySet()) {
+                    exceptionList.add(entry.getValue());
+                }
+                
+                StringBuilder combinedMessage = new StringBuilder();
+                for (Exception e : exceptionList) {
+                    combinedMessage.append(e.getMessage()).append("\n");
+                }
+                
+                throw new Exception(combinedMessage.toString());
             }
         }
 
