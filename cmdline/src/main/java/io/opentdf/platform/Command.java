@@ -3,6 +3,8 @@ package io.opentdf.platform;
 import com.nimbusds.jose.JOSEException;
 import io.opentdf.platform.sdk.*;
 import io.opentdf.platform.sdk.TDF;
+import io.opentdf.platform.sdk.TDF.SplitKeyException;
+
 import org.apache.commons.codec.DecoderException;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
@@ -84,7 +86,7 @@ class Command {
     void decrypt(@Option(names = {"-f", "--file"}, required = true) Path tdfPath) throws IOException,
             InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException,
             BadPaddingException, InvalidKeyException, TDF.FailedToCreateGMAC,
-            JOSEException, ParseException, NoSuchAlgorithmException, DecoderException, Exception {
+            JOSEException, ParseException, NoSuchAlgorithmException, DecoderException, SplitKeyException {
         var sdk = buildSDK();
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
             try (var stdout = new BufferedOutputStream(System.out)) {
@@ -95,7 +97,7 @@ class Command {
     }
     @CommandLine.Command(name = "metadata")
     void readMetadata(@Option(names = {"-f", "--file"}, required = true) Path tdfPath) throws IOException,
-            TDF.FailedToCreateGMAC, JOSEException, NoSuchAlgorithmException, ParseException, DecoderException, Exception {
+            TDF.FailedToCreateGMAC, JOSEException, NoSuchAlgorithmException, ParseException, DecoderException, SplitKeyException {
         var sdk = buildSDK();
 
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {

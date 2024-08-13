@@ -71,6 +71,12 @@ public class TDF {
 
     private static final Gson gson = new Gson();
 
+    public class SplitKeyException extends Exception { 
+        public SplitKeyException(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
     public static class DataSizeNotSupported extends RuntimeException {
         public DataSizeNotSupported(String errorMessage) {
             super(errorMessage);
@@ -498,7 +504,7 @@ public class TDF {
     }
 
     public Reader loadTDF(SeekableByteChannel tdf, Config.AssertionConfig assertionConfig, SDK.KAS kas) throws NotValidateRootSignature, SegmentSizeMismatch,
-            IOException, FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException, DecoderException, Exception {
+            IOException, FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException, DecoderException, SplitKeyException {
 
         TDFReader tdfReader = new TDFReader(tdf);
         String manifestJson = tdfReader.manifest();
@@ -567,7 +573,7 @@ public class TDF {
                     combinedMessage.append(e.getMessage()).append("\n");
                 }
                 
-                throw new Exception(combinedMessage.toString());
+                throw new SplitKeyException(combinedMessage.toString());
             }
         }
 
