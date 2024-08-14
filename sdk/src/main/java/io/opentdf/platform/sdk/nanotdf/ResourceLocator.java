@@ -23,7 +23,7 @@ public class ResourceLocator {
     public ResourceLocator() {
     }
 
-    public ResourceLocator(String resourceUrl) {
+    public ResourceLocator(final String resourceUrl) {
         this(resourceUrl, null);
     }
 
@@ -37,7 +37,7 @@ public class ResourceLocator {
      * @param identifier the identifier of the resource (optional, can be null)
      * @throws IllegalArgumentException if the resource URL has an unsupported protocol or if the identifier length is unsupported
      */
-    public ResourceLocator(String resourceUrl, String identifier) {
+    public ResourceLocator(final String resourceUrl, final String identifier) {
         if (resourceUrl.startsWith(HTTP)) {
             this.protocol = NanoTDFType.Protocol.HTTP;
         } else if (resourceUrl.startsWith(HTTPS)) {
@@ -51,18 +51,24 @@ public class ResourceLocator {
         // identifier
         if (identifier == null) {
             this.identifierType = NanoTDFType.IdentifierType.NONE;
-            this.identifier = new byte[0];
+            this.identifier = new byte[NanoTDFType.IdentifierType.NONE.getLength()];
         } else {
-            this.identifier = identifier.getBytes();
-            int identifierLen = this.identifier.length;
+            int identifierLen = identifier.getBytes().length;
             if (identifierLen == 0) {
                 this.identifierType = NanoTDFType.IdentifierType.NONE;
+                this.identifier = new byte[NanoTDFType.IdentifierType.NONE.getLength()];
             } else if (identifierLen <= 2) {
                 this.identifierType = NanoTDFType.IdentifierType.TWO_BYTES;
+                this.identifier = new byte[NanoTDFType.IdentifierType.TWO_BYTES.getLength()];
+                System.arraycopy(identifier.getBytes(), 0, this.identifier, 0, identifierLen);
             } else if (identifierLen <= 8) {
                 this.identifierType = NanoTDFType.IdentifierType.EIGHT_BYTES;
+                this.identifier = new byte[NanoTDFType.IdentifierType.EIGHT_BYTES.getLength()];
+                System.arraycopy(identifier.getBytes(), 0, this.identifier, 0, identifierLen);
             } else if (identifierLen <= 32) {
                 this.identifierType = NanoTDFType.IdentifierType.THIRTY_TWO_BYTES;
+                this.identifier = new byte[NanoTDFType.IdentifierType.THIRTY_TWO_BYTES.getLength()];
+                System.arraycopy(identifier.getBytes(), 0, this.identifier, 0, identifierLen);
             } else {
                 throw new IllegalArgumentException("Unsupported identifier length: " + identifierLen);
             }
@@ -99,6 +105,35 @@ public class ResourceLocator {
                 break;
             default:
                 throw new IllegalArgumentException("Unexpected identifier type: " + identifierType);
+        }
+    }
+
+    public void setIdentifier(String identifier) {
+        if (identifier == null) {
+            this.identifierType = NanoTDFType.IdentifierType.NONE;
+            this.identifier = new byte[0];
+        } else {
+            byte[] identifierBytes = identifier.getBytes();
+            int identifierLen = identifierBytes.length;
+
+            if (identifierLen == 0) {
+                this.identifierType = NanoTDFType.IdentifierType.NONE;
+                this.identifier = new byte[0];
+            } else if (identifierLen <= 2) {
+                this.identifierType = NanoTDFType.IdentifierType.TWO_BYTES;
+                this.identifier = new byte[2];
+                System.arraycopy(identifierBytes, 0, this.identifier, 0, identifierLen);
+            } else if (identifierLen <= 8) {
+                this.identifierType = NanoTDFType.IdentifierType.EIGHT_BYTES;
+                this.identifier = new byte[8];
+                System.arraycopy(identifierBytes, 0, this.identifier, 0, identifierLen);
+            } else if (identifierLen <= 32) {
+                this.identifierType = NanoTDFType.IdentifierType.THIRTY_TWO_BYTES;
+                this.identifier = new byte[32];
+                System.arraycopy(identifierBytes, 0, this.identifier, 0, identifierLen);
+            } else {
+                throw new IllegalArgumentException("Unsupported identifier length: " + identifierLen);
+            }
         }
     }
 
@@ -175,5 +210,16 @@ public class ResourceLocator {
 
     public byte[] getIdentifier() {
         return this.identifier;
+    }
+
+    // getIdentifierString removes potential padding
+    public String getIdentifierString() {
+            int actualLength = 0;
+            for (int i = 0; i < this.identifier.length; i++) {
+                if (this.identifier[i] != 0) {
+                    actualLength = i + 1;
+                }
+            }
+            return new String(this.identifier, 0, actualLength);
     }
 }
