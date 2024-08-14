@@ -51,7 +51,7 @@ class Command {
     @CommandLine.Command(name = "encrypt")
     void encrypt(
             @Option(names = {"-f", "--file"}, defaultValue = Option.NULL_VALUE) Optional<File> file,
-            @Option(names = {"-k", "--kas-url"}, required = true) List<String> kas,
+            @Option(names = {"-k", "--kas-url"}, required = true, split = ",") List<String> kas,
             @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata) throws
             IOException, JOSEException {
 

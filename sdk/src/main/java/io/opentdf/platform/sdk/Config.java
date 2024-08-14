@@ -77,6 +77,7 @@ public class Config {
         public List<Assertion> assertionList;
         public AssertionConfig assertionConfig;
         public String mimeType;
+        public List<SplitStep> splitPlan;
 
         public TDFConfig() {
             this.defaultSegmentSize = DEFAULT_SEGMENT_SIZE;
@@ -88,6 +89,7 @@ public class Config {
             this.kasInfoList = new ArrayList<>();
             this.assertionList = new ArrayList<>();
             this.mimeType = DEFAULT_MIME_TYPE;
+            this.splitPlan = new ArrayList<>();
         }
     }
 

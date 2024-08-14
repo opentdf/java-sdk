@@ -14,8 +14,6 @@ import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 
-import io.opentdf.platform.sdk.Config.SplitStep;
-
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.crypto.MACSigner;
 import org.apache.commons.codec.DecoderException;
@@ -173,57 +171,111 @@ public class TDF {
         }
 
         private static final Base64.Encoder encoder = Base64.getEncoder();
-        private void prepareManifest(Config.TDFConfig tdfConfig) {
+        private void prepareManifest(Config.TDFConfig tdfConfig, SDK.KAS kas) {
             manifest.encryptionInformation.keyAccessType = kSplitKeyType;
             manifest.encryptionInformation.keyAccessObj =  new ArrayList<>();
 
             PolicyObject policyObject = createPolicyObject(tdfConfig.attributes);
             String base64PolicyObject  = encoder.encodeToString(gson.toJson(policyObject).getBytes(StandardCharsets.UTF_8));
             List<byte[]> symKeys = new ArrayList<>();
-
-            for (Config.KASInfo kasInfo: tdfConfig.kasInfoList) {
-                if (kasInfo.PublicKey == null || kasInfo.PublicKey.isEmpty()) {
-                    throw new KasPublicKeyMissing("Kas public key is missing in kas information list");
+            Map<String, Config.KASInfo> latestKASInfo = new HashMap<>();
+            if (tdfConfig.splitPlan.isEmpty()) {
+                // Default split plan: Split keys across all KASes
+                List<Config.SplitStep> splitPlan = new ArrayList<>(tdfConfig.kasInfoList.size());
+                for (Config.KASInfo kasInfo : tdfConfig.kasInfoList) {
+                    Config.SplitStep step = new Config.SplitStep(kasInfo.URL, "");
+                    if (tdfConfig.kasInfoList.size() > 1) {
+                        step.splitID = String.format("s-%d", splitPlan.size());
+                    }
+                    splitPlan.add(step);
+                    if (kasInfo.PublicKey != null && !kasInfo.PublicKey.isEmpty()) {
+                        latestKASInfo.put(kasInfo.URL, kasInfo);
+                    }
                 }
+                tdfConfig.splitPlan = splitPlan;
+            }
 
+            // Seed anything passed in manually
+            for (Config.KASInfo kasInfo: tdfConfig.kasInfoList) {
+                if (kasInfo.PublicKey != null && !kasInfo.PublicKey.isEmpty()) {
+                    latestKASInfo.put(kasInfo.URL, kasInfo);
+                }
+            }
+
+            // split plan: restructure by conjunctions
+            Map<String, List<Config.KASInfo>> conjunction = new HashMap<>();
+            List<String> splitIDs = new ArrayList<>();
+
+            for (Config.SplitStep splitInfo : tdfConfig.splitPlan) {
+                // Public key was passed in with kasInfoList
+                // TODO First look up in attribute information / add to split plan?
+                Config.KASInfo ki = latestKASInfo.get(splitInfo.kas);
+                if (ki == null || ki.PublicKey == null || ki.PublicKey.isBlank()) {
+                    logger.info("no public key provided for KAS at {}, retrieving", splitInfo.kas);
+                    var getKI = new Config.KASInfo();
+                    getKI.URL = splitInfo.kas;
+                    getKI.PublicKey = kas.getPublicKey(getKI);
+                    getKI.KID = kas.getKid(getKI);
+                    latestKASInfo.put(splitInfo.kas, getKI);
+                    ki = getKI;
+                }
+                if (conjunction.containsKey(splitInfo.splitID)) {
+                    conjunction.get(splitInfo.splitID).add(ki);
+                } else {
+                    List<Config.KASInfo> newList = new ArrayList<>();
+                    newList.add(ki);
+                    conjunction.put(splitInfo.splitID, newList);
+                    splitIDs.add(splitInfo.splitID);
+                }
+            }
+
+            for (String splitID: splitIDs) {
                 // Symmetric key
                 byte[] symKey = new byte[GCM_KEY_SIZE];
                 sRandom.nextBytes(symKey);
-
-                Manifest.KeyAccess keyAccess = new Manifest.KeyAccess();
-                keyAccess.keyType = kWrapped;
-                keyAccess.url = kasInfo.URL;
-                keyAccess.kid = kasInfo.KID;
-                keyAccess.protocol = kKasProtocol;
+                symKeys.add(symKey);
 
                 // Add policyBinding
                 var hexBinding = Hex.encodeHexString(CryptoUtils.CalculateSHA256Hmac(symKey, base64PolicyObject.getBytes(StandardCharsets.UTF_8)));
                 var policyBinding = new Manifest.PolicyBinding();
                 policyBinding.alg = kHmacIntegrityAlgorithm;
                 policyBinding.hash = encoder.encodeToString(hexBinding.getBytes(StandardCharsets.UTF_8));
-                keyAccess.policyBinding = policyBinding;
-
-                // Wrap the key with kas public key
-                AsymEncryption asymmetricEncrypt = new AsymEncryption(kasInfo.PublicKey);
-                byte[] wrappedKey = asymmetricEncrypt.encrypt(symKey);
-
-                keyAccess.wrappedKey = encoder.encodeToString(wrappedKey);
+                
 
                 // Add meta data
+                var encryptedMetadata = new String();
                 if(tdfConfig.metaData != null && !tdfConfig.metaData.trim().isEmpty()) {
                     AesGcm aesGcm = new AesGcm(symKey);
                     var encrypted = aesGcm.encrypt(tdfConfig.metaData.getBytes(StandardCharsets.UTF_8));
 
-                    EncryptedMetadata encryptedMetadata = new EncryptedMetadata();
-                    encryptedMetadata.iv = encoder.encodeToString(encrypted.getIv());
-                    encryptedMetadata.ciphertext = encoder.encodeToString(encrypted.asBytes());
+                    EncryptedMetadata em = new EncryptedMetadata();
+                    em.iv = encoder.encodeToString(encrypted.getIv());
+                    em.ciphertext = encoder.encodeToString(encrypted.asBytes());
 
-                    var metadata = gson.toJson(encryptedMetadata);
-                    keyAccess.encryptedMetadata = encoder.encodeToString(metadata.getBytes(StandardCharsets.UTF_8));
+                    var metadata = gson.toJson(em);
+                    encryptedMetadata = encoder.encodeToString(metadata.getBytes(StandardCharsets.UTF_8));
                 }
 
-                symKeys.add(symKey);
-                manifest.encryptionInformation.keyAccessObj.add(keyAccess);
+                for (Config.KASInfo kasInfo: conjunction.get(splitID)){
+                    if (kasInfo.PublicKey == null || kasInfo.PublicKey.isEmpty()) {
+                        throw new KasPublicKeyMissing("Kas public key is missing in kas information list");
+                    }
+
+                    // Wrap the key with kas public key
+                    AsymEncryption asymmetricEncrypt = new AsymEncryption(kasInfo.PublicKey);
+                    byte[] wrappedKey = asymmetricEncrypt.encrypt(symKey);
+
+                    Manifest.KeyAccess keyAccess = new Manifest.KeyAccess();
+                    keyAccess.keyType = kWrapped;
+                    keyAccess.url = kasInfo.URL;
+                    keyAccess.kid = kasInfo.KID;
+                    keyAccess.protocol = kKasProtocol;
+                    keyAccess.policyBinding = policyBinding;
+                    keyAccess.wrappedKey = encoder.encodeToString(wrappedKey);
+                    keyAccess.encryptedMetadata = encryptedMetadata;
+
+                    manifest.encryptionInformation.keyAccessObj.add(keyAccess);
+                }
             }
 
             manifest.encryptionInformation.policy = base64PolicyObject;
@@ -328,10 +380,8 @@ public class TDF {
             throw new KasInfoMissing("kas information is missing");
         }
 
-        fillInPublicKeyInfo(tdfConfig.kasInfoList, kas);
-
         TDFObject tdfObject = new TDFObject();
-        tdfObject.prepareManifest(tdfConfig);
+        tdfObject.prepareManifest(tdfConfig, kas);
 
         long encryptedSegmentSize = tdfConfig.defaultSegmentSize + kGcmIvSize + kAesBlockSize;
         TDFWriter tdfWriter = new TDFWriter(outputStream);
@@ -492,17 +542,6 @@ public class TDF {
         return tdfObject;
     }
 
-    private void fillInPublicKeyInfo(List<Config.KASInfo> kasInfoList, SDK.KAS kas) {
-        for (var kasInfo: kasInfoList) {
-            if (kasInfo.PublicKey != null && !kasInfo.PublicKey.isBlank()) {
-                continue;
-            }
-            logger.info("no public key provided for KAS at {}, retrieving", kasInfo.URL);
-            kasInfo.PublicKey = kas.getPublicKey(kasInfo);
-            kasInfo.KID = kas.getKid(kasInfo);
-        }
-    }
-
     public Reader loadTDF(SeekableByteChannel tdf, Config.AssertionConfig assertionConfig, SDK.KAS kas) throws NotValidateRootSignature, SegmentSizeMismatch,
             IOException, FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException, DecoderException, SplitKeyException {
 
@@ -566,7 +605,7 @@ public class TDF {
                 List<Exception> exceptionList = new ArrayList<>(skippedSplits.size() + 1);
                 exceptionList.add(new Exception("splitKey.unable to reconstruct split key: " + skippedSplits));
                 
-                for (Map.Entry<SplitStep, Exception> entry : skippedSplits.entrySet()) {
+                for (Map.Entry<Config.SplitStep, Exception> entry : skippedSplits.entrySet()) {
                     exceptionList.add(entry.getValue());
                 }
                 
