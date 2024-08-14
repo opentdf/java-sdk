@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0](https://github.com/opentdf/java-sdk/compare/v0.3.0...v0.4.0) (2024-08-09)
+
+
+### Features
+
+* **ci:** Add xtest workflow trigger ([#96](https://github.com/opentdf/java-sdk/issues/96)) ([bc54b63](https://github.com/opentdf/java-sdk/commit/bc54b636c183c99d86a10e566aa33455879ac084))
+* **core:** NanoTDF resource locator protocol bit mask ([#107](https://github.com/opentdf/java-sdk/issues/107)) ([159d2f1](https://github.com/opentdf/java-sdk/commit/159d2f1c5cb4bb3f1257dc5a15a61789211d6848))
+* **sdk:** add mime type. ([#108](https://github.com/opentdf/java-sdk/issues/108)) ([6c4a27b](https://github.com/opentdf/java-sdk/commit/6c4a27b0c608e198b41c395491aff837e883c77b))
+
+
+### Bug Fixes
+
+* make sure we do not deserialize null ([#97](https://github.com/opentdf/java-sdk/issues/97)) ([9579c42](https://github.com/opentdf/java-sdk/commit/9579c427eb26d1020585fdd359551e4e0685a85a))
+* policy-binding new structure ([#95](https://github.com/opentdf/java-sdk/issues/95)) ([b10a61e](https://github.com/opentdf/java-sdk/commit/b10a61ecb30c6cbf2f6cf190a249269b824bf5d3))
+
 ## [0.3.0](https://github.com/opentdf/java-sdk/compare/v0.2.0...v0.3.0) (2024-07-18)
 
 
