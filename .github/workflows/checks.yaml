@@ -199,7 +199,7 @@ jobs:
               | (.mode = ["kas"])
               | (.sdk_config = {"endpoint":"http://localhost:8080","plaintext":true,"client_id":"opentdf","client_secret":"secret"})
             '
-            && .github/scripts/watch.sh opentdf-beta.yaml ./opentdf --config-file ./opentdf-beta.yaml start
+            && go run ./service --config-file ./opentdf-beta.yaml start
           wait-on: |
             tcp:localhost:8282
           log-output-if: true
@@ -207,7 +207,6 @@ jobs:
           working-directory: platform
       - name: Make sure that the second platform is up
         run: |
-          grpcurl -plaintext localhost:8282 list && \
           grpcurl -plaintext localhost:8282 kas.AccessService/PublicKey
       - name: Validate multikas through the command line interface
         run: |
