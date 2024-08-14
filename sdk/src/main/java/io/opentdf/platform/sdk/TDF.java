@@ -69,7 +69,7 @@ public class TDF {
 
     private static final Gson gson = new Gson();
 
-    public class SplitKeyException extends Exception { 
+    public class SplitKeyException extends IOException { 
         public SplitKeyException(String errorMessage) {
             super(errorMessage);
         }
@@ -543,7 +543,7 @@ public class TDF {
     }
 
     public Reader loadTDF(SeekableByteChannel tdf, Config.AssertionConfig assertionConfig, SDK.KAS kas) throws NotValidateRootSignature, SegmentSizeMismatch,
-            IOException, FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException, DecoderException, SplitKeyException {
+            IOException, FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException, DecoderException {
 
         TDFReader tdfReader = new TDFReader(tdf);
         String manifestJson = tdfReader.manifest();
@@ -551,8 +551,8 @@ public class TDF {
         byte[] payloadKey = new byte[GCM_KEY_SIZE];
         String unencryptedMetadata = null;
         
-        Map<String, Boolean> knownSplits = new HashMap<>();
-        Map<String, Boolean> foundSplits = new HashMap<>();
+        Set<String> knownSplits = new HashSet<String>();
+        Set<String> foundSplits = new HashSet<String>();;
         Map<Config.SplitStep, Exception> skippedSplits = new HashMap<>();
         boolean mixedSplits = manifest.encryptionInformation.keyAccessObj.size() > 1 &&
          (manifest.encryptionInformation.keyAccessObj.get(0).sid != null) &&
@@ -567,8 +567,8 @@ public class TDF {
                 if (!mixedSplits) {
                     unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy);
                 } else {
-                    knownSplits.put(ss.splitID, true);
-                    if (foundSplits.get(ss.splitID) != null){
+                    knownSplits.add(unencryptedMetadata);
+                    if (foundSplits.contains(ss.splitID)){
                         continue;
                     }
                     try {
@@ -582,7 +582,7 @@ public class TDF {
                 for (int index = 0; index < unwrappedKey.length; index++) {
                     payloadKey[index] ^= unwrappedKey[index];
                 }
-                foundSplits.put(ss.splitID, true);
+                foundSplits.add(ss.splitID);
 
                 if (keyAccess.encryptedMetadata != null && !keyAccess.encryptedMetadata.isEmpty()) {
                     AesGcm aesGcm = new AesGcm(unwrappedKey);
