@@ -1,20 +1,35 @@
 package io.opentdf.platform.sdk;
 
-import com.google.gson.JsonDeserializationContext;
-import com.google.gson.JsonDeserializer;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParseException;
-import com.google.gson.JsonSerializationContext;
-import com.google.gson.JsonSerializer;
+import com.google.gson.*;
 import com.google.gson.annotations.JsonAdapter;
 import com.google.gson.annotations.SerializedName;
+import com.nimbusds.jose.*;
+import com.nimbusds.jose.crypto.MACSigner;
+import com.nimbusds.jose.crypto.MACVerifier;
+import com.nimbusds.jose.crypto.RSASSASigner;
+import com.nimbusds.jose.crypto.RSASSAVerifier;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
+import org.apache.commons.codec.binary.Hex;
+import org.erdtman.jcs.JsonCanonicalizer;
 
+import java.io.IOException;
 import java.lang.reflect.Type;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.interfaces.RSAPublicKey;
+import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
 
 public class Manifest {
+
+    private static final String kAssertionHash = "assertionHash";
+    private static final String kAssertionSignature = "assertionSig";
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -214,6 +229,163 @@ public class Manifest {
             return Objects.hash(type, url, protocol, mimeType, isEncrypted);
         }
     }
+
+    static public class Binding {
+        public String method;
+        public String signature;
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Binding binding = (Binding) o;
+            return Objects.equals(method, binding.method) && Objects.equals(signature, binding.signature);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(method, signature);
+        }
+    }
+
+    static public class Assertion {
+        public String id;
+        public String type;
+        public String scope;
+        public String appliesToState;
+        public AssertionConfig.Statement statement;
+        public Binding binding;
+
+        static public class HashValues {
+            private final String assertionHash;
+            private final String signature;
+
+            public HashValues(String assertionHash, String signature) {
+                this.assertionHash = assertionHash;
+                this.signature = signature;
+            }
+
+            public String getAssertionHash() { return assertionHash; }
+            public String getSignature() { return signature; }
+        }
+
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Assertion that = (Assertion) o;
+            return Objects.equals(id, that.id) && Objects.equals(type, that.type) &&
+                    Objects.equals(scope, that.scope) && Objects.equals(appliesToState, that.appliesToState) &&
+                    Objects.equals(statement, that.statement) && Objects.equals(binding, that.binding);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(id, type, scope, appliesToState, statement, binding);
+        }
+
+        public String hash() throws IOException {
+            Gson gson = new Gson();
+            MessageDigest digest;
+            try {
+                digest = MessageDigest.getInstance("SHA-256");
+            } catch (NoSuchAlgorithmException e) {
+                throw new SDKException("error creating SHA-256 message digest", e);
+            }
+
+            var assertionAsJson = gson.toJson(this);
+            JsonCanonicalizer jc = new JsonCanonicalizer(assertionAsJson);
+            return Hex.encodeHexString(digest.digest(jc.getEncodedUTF8()));
+        }
+
+        // Sign signs the assertion with the given hash and signature using the key.
+        // It returns an error if the signing fails.
+        // The assertion binding is updated with the method and the signature.
+        public void sign(HashValues hashValues, AssertionConfig.AssertionKey assertionKey) throws KeyLengthException {
+            var claims = new JWTClaimsSet.Builder()
+                    .claim(kAssertionHash, hashValues.assertionHash)
+                    .claim(kAssertionSignature, hashValues.signature)
+                    .build();
+
+            JWSHeader jws;
+            JWSSigner signer;
+            if (assertionKey.alg == AssertionConfig.AssertionKeyAlg.RS256) {
+                jws = new JWSHeader.Builder(JWSAlgorithm.RS256).build();
+                signer = new RSASSASigner((PrivateKey) assertionKey.key);
+            } else if (assertionKey.alg == AssertionConfig.AssertionKeyAlg.HS256) {
+                jws = new JWSHeader.Builder(JWSAlgorithm.HS256).build();
+                signer = new MACSigner((byte[])assertionKey.key);
+            } else {
+                throw new SDKException("unknown assertion key algorithm, error signing assertion");
+            }
+
+            SignedJWT jwt = new SignedJWT(jws, claims);
+            try {
+                jwt.sign(signer);
+            } catch (JOSEException e) {
+                throw new SDKException("error signing assertion", e);
+            }
+
+            this.binding = new Binding();
+            this.binding.method = AssertionConfig.BindingMethod.JWS.name();
+            this.binding.signature = jwt.serialize();
+        }
+
+        public Assertion.HashValues verify(AssertionConfig.AssertionKey assertionKey) throws ParseException, IOException, JOSEException {
+            var binding = this.binding;
+            this.binding = null;
+
+            SignedJWT signedJWT = SignedJWT.parse(binding.signature);
+            JWSVerifier verifier;
+            if (assertionKey.alg == AssertionConfig.AssertionKeyAlg.RS256) {
+                verifier = new RSASSAVerifier((RSAPublicKey)assertionKey.key);
+            } else if (assertionKey.alg == AssertionConfig.AssertionKeyAlg.HS256) {
+                verifier = new MACVerifier((byte[])assertionKey.key);
+            } else {
+                throw new SDKException("Unknown verify key, unable to verify assertion signature");
+            }
+
+            if (!signedJWT.verify(verifier)) {
+                throw new SDKException("Unable to verify assertion signature");
+            }
+
+            var assertionHash = signedJWT.getJWTClaimsSet().getStringClaim(kAssertionHash);
+            var signature = signedJWT.getJWTClaimsSet().getStringClaim(kAssertionSignature);
+
+            return new HashValues(assertionHash, signature);
+        }
+    }
+
+        // Verify checks the binding signature of the assertion and
+// returns the hash and the signature. It returns an error if the verification fails.
+//        func (a Assertion) Verify(key AssertionKey) (string, string, error) {
+//            tok, err := jwt.Parse([]byte(a.Binding.Signature),
+//                    jwt.WithKey(jwa.KeyAlgorithmFrom(key.Alg.String()), key.Key),
+//	)
+//            if err != nil {
+//                return "", "", err
+//            }
+//            hashClaim, found := tok.Get(kAssertionHash)
+//            if !found {
+//                return "", "", fmt.Errorf("hash claim not found")
+//            }
+//            hash, ok := hashClaim.(string)
+//            if !ok {
+//                return "", "", fmt.Errorf("hash claim is not a string")
+//            }
+//
+//            sigClaim, found := tok.Get(kAssertionSignature)
+//            if !found {
+//                return "", "", fmt.Errorf("signature claim not found")
+//            }
+//            sig, ok := sigClaim.(string)
+//            if !ok {
+//                return "", "", fmt.Errorf("signature claim is not a string")
+//            }
+//            return hash, sig, nil
+//        }
+//    }
 
     public EncryptionInformation encryptionInformation;
     public Payload payload;
