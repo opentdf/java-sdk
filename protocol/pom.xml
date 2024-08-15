@@ -6,11 +6,11 @@
     <groupId>io.opentdf.platform</groupId>
     <name>protocol</name>
     <artifactId>protocol</artifactId>
-    <version>0.4.0</version><!-- {x-version-update:java-sdk:current} -->
+    <version>0.5.0-SNAPSHOT</version><!-- {x-version-update:java-sdk:current} -->
     <parent>
         <artifactId>sdk-pom</artifactId>
         <groupId>io.opentdf.platform</groupId>
-        <version>0.4.0</version><!-- {x-version-update:java-sdk:current} -->
+        <version>0.5.0-SNAPSHOT</version><!-- {x-version-update:java-sdk:current} -->
     </parent>
     <packaging>jar</packaging>
     <dependencies>
