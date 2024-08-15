@@ -17,7 +17,7 @@ class SDKTest {
         try (var ztdf = SDKTest.class.getClassLoader().getResourceAsStream("sample.txt.tdf")) {
             assert ztdf != null;
             var chan = new SeekableInMemoryByteChannel(ztdf.readAllBytes());
-            assertThat(SDK.mightBeZTDF(chan)).isTrue();
+            assertThat(SDK.isTDF(chan)).isTrue();
         }
     }
 
@@ -65,7 +65,7 @@ class SDKTest {
             }
         };
 
-        assertThat(SDK.mightBeZTDF(chan)).isFalse();
+        assertThat(SDK.isTDF(chan)).isFalse();
     }
 
     @Test
@@ -73,6 +73,6 @@ class SDKTest {
         var tdf = new byte[2023];
         new Random().nextBytes(tdf);
 
-        assertThat(SDK.mightBeZTDF(new SeekableInMemoryByteChannel(tdf))).isFalse();
+        assertThat(SDK.isTDF(new SeekableInMemoryByteChannel(tdf))).isFalse();
     }
 }

@@ -125,7 +125,7 @@ public class SDK implements AutoCloseable {
      * @param channel A channel containing the bytes of the potential Z-TDF
      * @return `true` if
      */
-    public static boolean mightBeZTDF(SeekableByteChannel channel) {
+    public static boolean isTDF(SeekableByteChannel channel) {
         ZipReader zipReader;
         try {
             zipReader = new ZipReader(channel);
