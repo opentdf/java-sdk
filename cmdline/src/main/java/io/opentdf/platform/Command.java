@@ -50,7 +50,8 @@ class Command {
     void encrypt(
             @Option(names = {"-f", "--file"}, defaultValue = Option.NULL_VALUE) Optional<File> file,
             @Option(names = {"-k", "--kas-url"}, required = true) List<String> kas,
-            @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata) throws
+            @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata,
+            @Option(names = {"--mime-type"}, defaultValue = Option.NULL_VALUE) Optional<String> mimeType) throws
             IOException, JOSEException {
 
         var sdk = buildSDK();
@@ -63,6 +64,7 @@ class Command {
         List<Consumer<Config.TDFConfig>> configs = new ArrayList<>();
         configs.add(Config.withKasInformation(kasInfos));
         metadata.map(Config::withMetaData).ifPresent(configs::add);
+        mimeType.map(Config::withMimeType).ifPresent(configs::add);
 
         var tdfConfig = Config.newTDFConfig(configs.toArray(Consumer[]::new));
         try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {

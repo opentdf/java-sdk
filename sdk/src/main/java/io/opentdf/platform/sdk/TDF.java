@@ -60,7 +60,6 @@ public class TDF {
     private static final String kSha256Hash = "SHA256";
 
     private static final String kHmacIntegrityAlgorithm = "HS256";
-    private static final String kDefaultMimeType = "application/octet-stream";
     private static final String kTDFAsZip = "zip";
     private static final String kTDFZipReference = "reference";
     private static final String kAssertionHash = "assertionHash";
@@ -239,6 +238,10 @@ public class TDF {
         private final Manifest manifest;
         public String getMetadata() {
             return unencryptedMetadata;
+        }
+
+        public Manifest getManifest() {
+            return manifest;
         }
 
         private final String unencryptedMetadata;
@@ -422,7 +425,7 @@ public class TDF {
 
         // Add payload info
         tdfObject.manifest.payload = new Manifest.Payload();
-        tdfObject.manifest.payload.mimeType = kDefaultMimeType;
+        tdfObject.manifest.payload.mimeType = tdfConfig.mimeType;
         tdfObject.manifest.payload.protocol = kTDFAsZip;
         tdfObject.manifest.payload.type = kTDFZipReference;
         tdfObject.manifest.payload.url = TDFWriter.TDF_PAYLOAD_FILE_NAME;

@@ -2,6 +2,8 @@ package io.opentdf.platform.sdk;
 
 
 import com.nimbusds.jose.jwk.RSAKey;
+
+import io.opentdf.platform.sdk.TDF.TDFObject;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
@@ -99,6 +101,8 @@ public class TDFTest {
 
         var unwrappedData = new ByteArrayOutputStream();
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), new Config.AssertionConfig(), kas);
+        assertThat(reader.getManifest().payload.mimeType).isEqualTo("application/octet-stream");
+
         reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
@@ -255,6 +259,27 @@ public class TDFTest {
         assertThat(numReturned.get())
                 .withFailMessage("test returned the wrong number of bytes")
                 .isEqualTo(maxSize + 1);
+    }
+
+    @Test
+    public void testCreateTDFWithMimeType() throws Exception {
+
+        final String mimeType = "application/pdf";
+
+        Config.TDFConfig config = Config.newTDFConfig(
+                Config.withKasInformation(getKASInfos()),
+                Config.withMimeType(mimeType)
+        );
+
+        String plainText = "this is extremely sensitive stuff!!!";
+        InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+
+        TDF tdf = new TDF();
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
+
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), new Config.AssertionConfig(), kas);
+        assertThat(reader.getManifest().payload.mimeType).isEqualTo(mimeType);
     }
 
     @Nonnull
