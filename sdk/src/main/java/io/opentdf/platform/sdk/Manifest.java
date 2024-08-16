@@ -299,61 +299,98 @@ public class Manifest {
             return Hex.encodeHexString(digest.digest(jc.getEncodedUTF8()));
         }
 
-        // Sign signs the assertion with the given hash and signature using the key.
+        // Sign the assertion with the given hash and signature using the key.
         // It returns an error if the signing fails.
         // The assertion binding is updated with the method and the signature.
-        public void sign(HashValues hashValues, AssertionConfig.AssertionKey assertionKey) throws KeyLengthException {
-            var claims = new JWTClaimsSet.Builder()
+        public void sign(final HashValues hashValues, final AssertionConfig.AssertionKey assertionKey) throws KeyLengthException {
+            // Build JWT claims
+            final JWTClaimsSet claims = new JWTClaimsSet.Builder()
                     .claim(kAssertionHash, hashValues.assertionHash)
                     .claim(kAssertionSignature, hashValues.signature)
                     .build();
 
-            JWSHeader jws;
-            JWSSigner signer;
-            if (assertionKey.alg == AssertionConfig.AssertionKeyAlg.RS256) {
-                jws = new JWSHeader.Builder(JWSAlgorithm.RS256).build();
-                signer = new RSASSASigner((PrivateKey) assertionKey.key);
-            } else if (assertionKey.alg == AssertionConfig.AssertionKeyAlg.HS256) {
-                jws = new JWSHeader.Builder(JWSAlgorithm.HS256).build();
-                signer = new MACSigner((byte[])assertionKey.key);
-            } else {
-                throw new SDKException("unknown assertion key algorithm, error signing assertion");
-            }
+            // Prepare for signing
+            SignedJWT signedJWT = createSignedJWT(claims, assertionKey);
 
-            SignedJWT jwt = new SignedJWT(jws, claims);
             try {
-                jwt.sign(signer);
+                // Sign the JWT
+                signedJWT.sign(createSigner(assertionKey));
             } catch (JOSEException e) {
-                throw new SDKException("error signing assertion", e);
+                throw new SDKException("Error signing assertion", e);
             }
 
+            // Store the binding and signature
             this.binding = new Binding();
             this.binding.method = AssertionConfig.BindingMethod.JWS.name();
-            this.binding.signature = jwt.serialize();
+            this.binding.signature = signedJWT.serialize();
         }
 
-        public Assertion.HashValues verify(AssertionConfig.AssertionKey assertionKey) throws ParseException, IOException, JOSEException {
-            var binding = this.binding;
-            this.binding = null;
-
-            SignedJWT signedJWT = SignedJWT.parse(binding.signature);
-            JWSVerifier verifier;
-            if (assertionKey.alg == AssertionConfig.AssertionKeyAlg.RS256) {
-                verifier = new RSASSAVerifier((RSAPublicKey)assertionKey.key);
-            } else if (assertionKey.alg == AssertionConfig.AssertionKeyAlg.HS256) {
-                verifier = new MACVerifier((byte[])assertionKey.key);
-            } else {
-                throw new SDKException("Unknown verify key, unable to verify assertion signature");
+        // Checks the binding signature of the assertion and
+        // returns the hash and the signature. It returns an error if the verification fails.
+        public Assertion.HashValues verify(AssertionConfig.AssertionKey assertionKey) throws ParseException, JOSEException {
+            if (binding == null) {
+                throw new SDKException("Binding is null in assertion");
             }
+
+            String signatureString = binding.signature;
+            binding = null; // Clear the binding after use
+
+            SignedJWT signedJWT = SignedJWT.parse(signatureString);
+            JWSVerifier verifier = createVerifier(assertionKey);
 
             if (!signedJWT.verify(verifier)) {
                 throw new SDKException("Unable to verify assertion signature");
             }
 
-            var assertionHash = signedJWT.getJWTClaimsSet().getStringClaim(kAssertionHash);
-            var signature = signedJWT.getJWTClaimsSet().getStringClaim(kAssertionSignature);
+            JWTClaimsSet claimsSet = signedJWT.getJWTClaimsSet();
+            String assertionHash = claimsSet.getStringClaim("assertionHash");
+            String signature = claimsSet.getStringClaim("assertionSignature");
 
-            return new HashValues(assertionHash, signature);
+            return new Assertion.HashValues(assertionHash, signature);
+        }
+
+        private SignedJWT createSignedJWT(final JWTClaimsSet claims, final AssertionConfig.AssertionKey assertionKey) throws SDKException {
+            final JWSHeader jwsHeader;
+            switch (assertionKey.alg) {
+                case RS256:
+                    jwsHeader = new JWSHeader.Builder(JWSAlgorithm.RS256).build();
+                    break;
+                case HS256:
+                    jwsHeader = new JWSHeader.Builder(JWSAlgorithm.HS256).build();
+                    break;
+                default:
+                    throw new SDKException("Unknown assertion key algorithm, error signing assertion");
+            }
+
+            return new SignedJWT(jwsHeader, claims);
+        }
+
+        private JWSSigner createSigner(final AssertionConfig.AssertionKey assertionKey) throws SDKException, KeyLengthException {
+            switch (assertionKey.alg) {
+                case RS256:
+                    if (!(assertionKey.key instanceof PrivateKey)) {
+                        throw new SDKException("Expected PrivateKey for RS256 algorithm");
+                    }
+                    return new RSASSASigner((PrivateKey) assertionKey.key);
+                case HS256:
+                    if (!(assertionKey.key instanceof byte[])) {
+                        throw new SDKException("Expected byte[] key for HS256 algorithm");
+                    }
+                    return new MACSigner((byte[]) assertionKey.key);
+                default:
+                    throw new SDKException("Unknown signing algorithm: " + assertionKey.alg);
+            }
+        }
+
+        private JWSVerifier createVerifier(AssertionConfig.AssertionKey assertionKey) throws JOSEException {
+            switch (assertionKey.alg) {
+                case RS256:
+                    return new RSASSAVerifier((RSAPublicKey) assertionKey.key);
+                case HS256:
+                    return new MACVerifier((byte[]) assertionKey.key);
+                default:
+                    throw new SDKException("Unknown verify key, unable to verify assertion signature");
+            }
         }
     }
 
