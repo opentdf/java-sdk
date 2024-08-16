@@ -343,8 +343,8 @@ public class Manifest {
             }
 
             JWTClaimsSet claimsSet = signedJWT.getJWTClaimsSet();
-            String assertionHash = claimsSet.getStringClaim("assertionHash");
-            String signature = claimsSet.getStringClaim("assertionSignature");
+            String assertionHash = claimsSet.getStringClaim(kAssertionHash);
+            String signature = claimsSet.getStringClaim(kAssertionSignature);
 
             return new Assertion.HashValues(assertionHash, signature);
         }
