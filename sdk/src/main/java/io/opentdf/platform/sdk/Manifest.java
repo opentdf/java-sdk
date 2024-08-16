@@ -357,36 +357,6 @@ public class Manifest {
         }
     }
 
-        // Verify checks the binding signature of the assertion and
-// returns the hash and the signature. It returns an error if the verification fails.
-//        func (a Assertion) Verify(key AssertionKey) (string, string, error) {
-//            tok, err := jwt.Parse([]byte(a.Binding.Signature),
-//                    jwt.WithKey(jwa.KeyAlgorithmFrom(key.Alg.String()), key.Key),
-//	)
-//            if err != nil {
-//                return "", "", err
-//            }
-//            hashClaim, found := tok.Get(kAssertionHash)
-//            if !found {
-//                return "", "", fmt.Errorf("hash claim not found")
-//            }
-//            hash, ok := hashClaim.(string)
-//            if !ok {
-//                return "", "", fmt.Errorf("hash claim is not a string")
-//            }
-//
-//            sigClaim, found := tok.Get(kAssertionSignature)
-//            if !found {
-//                return "", "", fmt.Errorf("signature claim not found")
-//            }
-//            sig, ok := sigClaim.(string)
-//            if !ok {
-//                return "", "", fmt.Errorf("signature claim is not a string")
-//            }
-//            return hash, sig, nil
-//        }
-//    }
-
     public EncryptionInformation encryptionInformation;
     public Payload payload;
     public  List<Assertion> assertions = new ArrayList<>();
