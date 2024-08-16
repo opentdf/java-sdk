@@ -224,7 +224,7 @@ public class SDKBuilder {
      */
     private ManagedChannelBuilder<?> getManagedChannelBuilder(String endpoint) {
         ManagedChannelBuilder<?> channelBuilder;
-        if (sslFactory != null) {
+        if (sslFactory != null && !usePlainText) {
             channelBuilder = Grpc.newChannelBuilder(endpoint, TlsChannelCredentials.newBuilder()
                     .trustManager(sslFactory.getTrustManager().get()).build());
         }else{

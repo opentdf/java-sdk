@@ -7,7 +7,7 @@ public class NanoTDFType {
         SECP521R1("secp384r1"),
         SECP256K1("secp256k1");
 
-        private String name;
+        private final String name;
 
         ECCurve(String curveName) {
             this.name = curveName;
@@ -18,10 +18,24 @@ public class NanoTDFType {
             return name;
         }
     }
-
+    // ResourceLocator Protocol
     public enum Protocol {
         HTTP,
         HTTPS
+    }
+    // ResourceLocator Identifier
+    public enum IdentifierType {
+        NONE(0),
+        TWO_BYTES(2),
+        EIGHT_BYTES(8),
+        THIRTY_TWO_BYTES(32);
+        private final int length;
+        IdentifierType(int length) {
+            this.length = length;
+        }
+        public int getLength() {
+            return length;
+        }
     }
 
     public enum PolicyType {
