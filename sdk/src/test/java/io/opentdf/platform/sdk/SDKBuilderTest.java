@@ -2,7 +2,6 @@ package io.opentdf.platform.sdk;
 
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
-import io.grpc.ClientInterceptor;
 import io.grpc.Metadata;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
@@ -89,17 +88,23 @@ public class SDKBuilderTest {
 
     }
 
+
+    @Test
+    public void testPlatformPlainTextAndIDPWithSSL() throws Exception{
+        sdkServicesSetup(false, true);
+    }
+
     @Test
     void testSDKServicesWithTruststore() throws Exception{
-        sdkServicesSetup(true);
+        sdkServicesSetup(true, true);
     }
 
     @Test
     void testCreatingSDKServicesPlainText() throws Exception {
-        sdkServicesSetup(false);
+        sdkServicesSetup(false, false);
     }
 
-    void sdkServicesSetup(boolean useSSL) throws Exception{
+    void sdkServicesSetup(boolean useSSLPlatform, boolean useSSLIDP) throws Exception{
 
         HeldCertificate rootCertificate = new HeldCertificate.Builder()
                 .certificateAuthority(0)
@@ -122,7 +127,7 @@ public class SDKBuilderTest {
         // * it returns the OIDC configuration we use at bootstrapping time
         // * it fakes out being an IDP and returns an access token when need to retrieve an access token
         try (MockWebServer httpServer = new MockWebServer()) {
-            if (useSSL){
+            if (useSSLIDP){
                 httpServer.useHttps(serverHandshakeCertificates.sslSocketFactory(), false);
             }
             String oidcConfig;
@@ -179,7 +184,7 @@ public class SDKBuilderTest {
                             return next.startCall(call, headers);
                         }
                     });
-            if (useSSL){
+            if (useSSLPlatform){
                  platformServicesServerBuilder = platformServicesServerBuilder.useTransportSecurity(
                         new ByteArrayInputStream(serverCertificate.certificatePem().getBytes()),
                         new ByteArrayInputStream(serverCertificate.privateKeyPkcs8Pem().getBytes()));
@@ -207,7 +212,7 @@ public class SDKBuilderTest {
                         }
                     });
 
-            if(useSSL){
+            if(useSSLPlatform){
                 kasServerBuilder = kasServerBuilder.useTransportSecurity(
                         new ByteArrayInputStream(serverCertificate.certificatePem().getBytes()),
                         new ByteArrayInputStream(serverCertificate.privateKeyPkcs8Pem().getBytes()));
@@ -220,15 +225,16 @@ public class SDKBuilderTest {
                     .clientSecret("client-id", "client-secret")
                     .platformEndpoint("localhost:" + platformServicesServer.getPort());
 
-            if(!useSSL) {
+            if(!useSSLPlatform) {
                 servicesBuilder = servicesBuilder.useInsecurePlaintextConnection(true);
-            }else{
+            }
+            if (useSSLPlatform || useSSLIDP){
                 servicesBuilder = servicesBuilder.sslFactory(SSLFactory.builder().withTrustMaterial(rootCertificate.
                         certificate()).build());
             }
 
             var servicesAndComponents = servicesBuilder.buildServices();
-            if (useSSL) {
+            if (useSSLPlatform || useSSLIDP) {
                 assertThat(servicesAndComponents.trustManager).isNotNull();
             }
             assertThat(servicesAndComponents.interceptor).isNotNull();
