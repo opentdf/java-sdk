@@ -1,12 +1,5 @@
 package io.opentdf.platform.sdk;
 
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
-
-import org.junit.jupiter.api.Test;
-
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Server;
@@ -20,8 +13,15 @@ import io.opentdf.platform.policy.Namespace;
 import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.policy.AttributeRuleTypeEnum;
 
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
+import org.junit.jupiter.api.Test;
+
 import static io.opentdf.platform.sdk.SDKBuilderTest.getRandomPort;
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 
 public class AttributeClientTest {
