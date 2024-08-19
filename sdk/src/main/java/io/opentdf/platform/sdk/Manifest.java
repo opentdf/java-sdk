@@ -1,20 +1,35 @@
 package io.opentdf.platform.sdk;
 
-import com.google.gson.JsonDeserializationContext;
-import com.google.gson.JsonDeserializer;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParseException;
-import com.google.gson.JsonSerializationContext;
-import com.google.gson.JsonSerializer;
+import com.google.gson.*;
 import com.google.gson.annotations.JsonAdapter;
 import com.google.gson.annotations.SerializedName;
+import com.nimbusds.jose.*;
+import com.nimbusds.jose.crypto.MACSigner;
+import com.nimbusds.jose.crypto.MACVerifier;
+import com.nimbusds.jose.crypto.RSASSASigner;
+import com.nimbusds.jose.crypto.RSASSAVerifier;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
+import org.apache.commons.codec.binary.Hex;
+import org.erdtman.jcs.JsonCanonicalizer;
 
+import java.io.IOException;
 import java.lang.reflect.Type;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.interfaces.RSAPublicKey;
+import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
 
 public class Manifest {
+
+    private static final String kAssertionHash = "assertionHash";
+    private static final String kAssertionSignature = "assertionSig";
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -213,6 +228,170 @@ public class Manifest {
         @Override
         public int hashCode() {
             return Objects.hash(type, url, protocol, mimeType, isEncrypted);
+        }
+    }
+
+    static public class Binding {
+        public String method;
+        public String signature;
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Binding binding = (Binding) o;
+            return Objects.equals(method, binding.method) && Objects.equals(signature, binding.signature);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(method, signature);
+        }
+    }
+
+    static public class Assertion {
+        public String id;
+        public String type;
+        public String scope;
+        public String appliesToState;
+        public AssertionConfig.Statement statement;
+        public Binding binding;
+
+        static public class HashValues {
+            private final String assertionHash;
+            private final String signature;
+
+            public HashValues(String assertionHash, String signature) {
+                this.assertionHash = assertionHash;
+                this.signature = signature;
+            }
+
+            public String getAssertionHash() { return assertionHash; }
+            public String getSignature() { return signature; }
+        }
+
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Assertion that = (Assertion) o;
+            return Objects.equals(id, that.id) && Objects.equals(type, that.type) &&
+                    Objects.equals(scope, that.scope) && Objects.equals(appliesToState, that.appliesToState) &&
+                    Objects.equals(statement, that.statement) && Objects.equals(binding, that.binding);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(id, type, scope, appliesToState, statement, binding);
+        }
+
+        public String hash() throws IOException {
+            Gson gson = new Gson();
+            MessageDigest digest;
+            try {
+                digest = MessageDigest.getInstance("SHA-256");
+            } catch (NoSuchAlgorithmException e) {
+                throw new SDKException("error creating SHA-256 message digest", e);
+            }
+
+            var assertionAsJson = gson.toJson(this);
+            JsonCanonicalizer jc = new JsonCanonicalizer(assertionAsJson);
+            return Hex.encodeHexString(digest.digest(jc.getEncodedUTF8()));
+        }
+
+        // Sign the assertion with the given hash and signature using the key.
+        // It returns an error if the signing fails.
+        // The assertion binding is updated with the method and the signature.
+        public void sign(final HashValues hashValues, final AssertionConfig.AssertionKey assertionKey) throws KeyLengthException {
+            // Build JWT claims
+            final JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                    .claim(kAssertionHash, hashValues.assertionHash)
+                    .claim(kAssertionSignature, hashValues.signature)
+                    .build();
+
+            // Prepare for signing
+            SignedJWT signedJWT = createSignedJWT(claims, assertionKey);
+
+            try {
+                // Sign the JWT
+                signedJWT.sign(createSigner(assertionKey));
+            } catch (JOSEException e) {
+                throw new SDKException("Error signing assertion", e);
+            }
+
+            // Store the binding and signature
+            this.binding = new Binding();
+            this.binding.method = AssertionConfig.BindingMethod.JWS.name();
+            this.binding.signature = signedJWT.serialize();
+        }
+
+        // Checks the binding signature of the assertion and
+        // returns the hash and the signature. It returns an error if the verification fails.
+        public Assertion.HashValues verify(AssertionConfig.AssertionKey assertionKey) throws ParseException, JOSEException {
+            if (binding == null) {
+                throw new SDKException("Binding is null in assertion");
+            }
+
+            String signatureString = binding.signature;
+            binding = null; // Clear the binding after use
+
+            SignedJWT signedJWT = SignedJWT.parse(signatureString);
+            JWSVerifier verifier = createVerifier(assertionKey);
+
+            if (!signedJWT.verify(verifier)) {
+                throw new SDKException("Unable to verify assertion signature");
+            }
+
+            JWTClaimsSet claimsSet = signedJWT.getJWTClaimsSet();
+            String assertionHash = claimsSet.getStringClaim(kAssertionHash);
+            String signature = claimsSet.getStringClaim(kAssertionSignature);
+
+            return new Assertion.HashValues(assertionHash, signature);
+        }
+
+        private SignedJWT createSignedJWT(final JWTClaimsSet claims, final AssertionConfig.AssertionKey assertionKey) throws SDKException {
+            final JWSHeader jwsHeader;
+            switch (assertionKey.alg) {
+                case RS256:
+                    jwsHeader = new JWSHeader.Builder(JWSAlgorithm.RS256).build();
+                    break;
+                case HS256:
+                    jwsHeader = new JWSHeader.Builder(JWSAlgorithm.HS256).build();
+                    break;
+                default:
+                    throw new SDKException("Unknown assertion key algorithm, error signing assertion");
+            }
+
+            return new SignedJWT(jwsHeader, claims);
+        }
+
+        private JWSSigner createSigner(final AssertionConfig.AssertionKey assertionKey) throws SDKException, KeyLengthException {
+            switch (assertionKey.alg) {
+                case RS256:
+                    if (!(assertionKey.key instanceof PrivateKey)) {
+                        throw new SDKException("Expected PrivateKey for RS256 algorithm");
+                    }
+                    return new RSASSASigner((PrivateKey) assertionKey.key);
+                case HS256:
+                    if (!(assertionKey.key instanceof byte[])) {
+                        throw new SDKException("Expected byte[] key for HS256 algorithm");
+                    }
+                    return new MACSigner((byte[]) assertionKey.key);
+                default:
+                    throw new SDKException("Unknown signing algorithm: " + assertionKey.alg);
+            }
+        }
+
+        private JWSVerifier createVerifier(AssertionConfig.AssertionKey assertionKey) throws JOSEException {
+            switch (assertionKey.alg) {
+                case RS256:
+                    return new RSASSAVerifier((RSAPublicKey) assertionKey.key);
+                case HS256:
+                    return new MACVerifier((byte[]) assertionKey.key);
+                default:
+                    throw new SDKException("Unknown verify key, unable to verify assertion signature");
+            }
         }
     }
 

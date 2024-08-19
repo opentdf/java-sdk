@@ -4,11 +4,7 @@ import io.opentdf.platform.sdk.nanotdf.ECCMode;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import io.opentdf.platform.sdk.nanotdf.SymmetricAndPayloadConfig;
 
-import com.nimbusds.jose.jwk.RSAKey;
-import java.security.Key;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.function.Consumer;
 
 public class Config {
@@ -36,21 +32,41 @@ public class Config {
         public String KID;
     }
 
-    public static class AssertionConfig {
-        public enum KeyType {
-            RS256,
-            HS256PayloadKey,
-            HS256UserDefined;
+
+    public static class AssertionVerificationKeys {
+        public AssertionConfig.AssertionKey defaultKey;
+        public Map<String, AssertionConfig.AssertionKey> keys = new HashMap<>();
+
+        Boolean isEmpty() {
+            return this.defaultKey == null && this.keys.isEmpty();
         }
 
-        public RSAKey rs256PrivateKeyForSigning;
-        public RSAKey rs256PublicKeyForVerifying;
-        public byte[] hs256SymmetricKey;
-        public KeyType keyType;
+        AssertionConfig.AssertionKey getKey(String key) {
+            var assertionKey = keys.get(key);
+            if (assertionKey != null) {
+                return assertionKey;
+            }
 
-        public AssertionConfig() {
-            this.keyType = KeyType.HS256PayloadKey;
+            return defaultKey;
         }
+    }
+
+    public static class TDFReaderConfig {
+        // Optional Map of Assertion Verification Keys
+        AssertionVerificationKeys assertionVerificationKeys;
+    }
+
+    @SafeVarargs
+    public static TDFReaderConfig newTDFReaderConfig(Consumer<TDFReaderConfig>... options) {
+        TDFReaderConfig config = new TDFReaderConfig();
+        for (Consumer<TDFReaderConfig> option : options) {
+            option.accept(config);
+        }
+        return config;
+    }
+
+    public static Consumer<TDFReaderConfig> withAssertionVerificationKeys(AssertionVerificationKeys assertionVerificationKeys) {
+        return (TDFReaderConfig config) -> config.assertionVerificationKeys = assertionVerificationKeys;
     }
 
     public static class SplitStep {
@@ -74,8 +90,7 @@ public class Config {
         public IntegrityAlgorithm segmentIntegrityAlgorithm;
         public List<String> attributes;
         public List<KASInfo> kasInfoList;
-        public List<Assertion> assertionList;
-        public AssertionConfig assertionConfig;
+        public List<io.opentdf.platform.sdk.AssertionConfig> assertionConfigList;
         public String mimeType;
         public List<SplitStep> splitPlan;
 
@@ -87,7 +102,7 @@ public class Config {
             this.segmentIntegrityAlgorithm = IntegrityAlgorithm.GMAC;
             this.attributes = new ArrayList<>();
             this.kasInfoList = new ArrayList<>();
-            this.assertionList = new ArrayList<>();
+            this.assertionConfigList = new ArrayList<>();
             this.mimeType = DEFAULT_MIME_TYPE;
             this.splitPlan = new ArrayList<>();
         }
@@ -114,31 +129,23 @@ public class Config {
         };
     }
 
-    public static Consumer<TDFConfig> WithAssertions(Assertion... assertionList) {
+    public static Consumer<TDFConfig> withAssertionConfig(io.opentdf.platform.sdk.AssertionConfig... assertionList) {
         return (TDFConfig config) -> {
-            Collections.addAll(config.assertionList, assertionList);
+            Collections.addAll(config.assertionConfigList, assertionList);
         };
-    }
-
-    public static Consumer<TDFConfig> WithAssertion(Assertion assertion) {
-        return (TDFConfig config) -> config.assertionList.add(assertion);
     }
 
     public static Consumer<TDFConfig> withMetaData(String metaData) {
         return (TDFConfig config) -> config.metaData = metaData;
     }
 
-    public static Consumer<TDFConfig> withAssertionConfig(AssertionConfig assertionConfig) {
-        return (TDFConfig config) -> config.assertionConfig = assertionConfig;
-    }
-
     public static Consumer<TDFConfig> withSegmentSize(int size) {
         return (TDFConfig config) -> config.defaultSegmentSize = size;
     }
 
-    public static Consumer<TDFConfig> withDisableEncryption() {
-        return (TDFConfig config) -> config.enableEncryption = false;
-    }
+//    public static Consumer<TDFConfig> withDisableEncryption() {
+//        return (TDFConfig config) -> config.enableEncryption = false;
+//    }
 
     public static Consumer<TDFConfig> withMimeType(String mimeType) {
         return (TDFConfig config) -> config.mimeType = mimeType;
