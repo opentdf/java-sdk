@@ -182,10 +182,11 @@ public class TDF {
             if (tdfConfig.splitPlan.isEmpty()) {
                 // Default split plan: Split keys across all KASes
                 List<Config.SplitStep> splitPlan = new ArrayList<>(tdfConfig.kasInfoList.size());
+                int i = 0;
                 for (Config.KASInfo kasInfo : tdfConfig.kasInfoList) {
                     Config.SplitStep step = new Config.SplitStep(kasInfo.URL, "");
                     if (tdfConfig.kasInfoList.size() > 1) {
-                        step.splitID = String.format("s-%d", splitPlan.size());
+                        step.splitID = String.format("s-%d", i++);
                     }
                     splitPlan.add(step);
                     if (kasInfo.PublicKey != null && !kasInfo.PublicKey.isEmpty()) {
