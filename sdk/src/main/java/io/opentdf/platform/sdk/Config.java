@@ -4,8 +4,6 @@ import io.opentdf.platform.sdk.nanotdf.ECCMode;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import io.opentdf.platform.sdk.nanotdf.SymmetricAndPayloadConfig;
 
-import com.nimbusds.jose.jwk.RSAKey;
-
 import java.util.*;
 import java.util.function.Consumer;
 
@@ -59,7 +57,7 @@ public class Config {
     }
 
     @SafeVarargs
-    public static TDFReaderConfig newTTDFReaderConfig(Consumer<TDFReaderConfig>... options) {
+    public static TDFReaderConfig newTDFReaderConfig(Consumer<TDFReaderConfig>... options) {
         TDFReaderConfig config = new TDFReaderConfig();
         for (Consumer<TDFReaderConfig> option : options) {
             option.accept(config);
@@ -67,7 +65,7 @@ public class Config {
         return config;
     }
 
-    public static Consumer<TDFReaderConfig> WithAssertionVerificationKeys(AssertionVerificationKeys assertionVerificationKeys) {
+    public static Consumer<TDFReaderConfig> withAssertionVerificationKeys(AssertionVerificationKeys assertionVerificationKeys) {
         return (TDFReaderConfig config) -> config.assertionVerificationKeys = assertionVerificationKeys;
     }
 
