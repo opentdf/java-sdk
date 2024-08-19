@@ -139,7 +139,7 @@ jobs:
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
             -i \
-            encrypt --kas-url=localhost:8080 --mime-type=text/plain -f data -m 'here is some metadata' > test.tdf
+            encrypt --kas-url=localhost:8080 --mime-type=text/plain --attr https://example.com/attr/attr1/value/value1 -f data -m 'here is some metadata' > test.tdf
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
@@ -175,7 +175,7 @@ jobs:
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
             -i \
-            encryptnano --kas-url=http://localhost:8080 -f data -m 'here is some metadata' > nano.ntdf
+            encryptnano --kas-url=http://localhost:8080 --attr https://example.com/attr/attr1/value/value1 -f data -m 'here is some metadata' > nano.ntdf
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
