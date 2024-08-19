@@ -20,10 +20,13 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class AutoconfigureTest {
 
@@ -72,31 +75,43 @@ public class AutoconfigureTest {
         rel2usa = new Autoconfigure.AttributeValueFQN("https://virtru.com/attr/Releasable%20To/value/USA");
     }
 
-    private String spongeCase(String s) {
-        String regex = "^(https?://[\\w./]+/attr/)([^/]*)(/value/)?(\\S*)?$";
-        if (s.matches(regex)) {
-            String[] parts = s.split(regex);
-            String prefix = parts[1];
-            String main = parts[2];
-            String suffix = parts[3] != null ? parts[3] : "";
-            String value = parts[4] != null ? parts[4] : "";
+    private static String spongeCase(String s) {
+        final Pattern PATTERN = Pattern.compile("^(https?://[\\w./]+/attr/)([^/]*)(/value/)?(\\S*)?$");
+        Matcher matcher = PATTERN.matcher(s);
 
-            StringBuilder sb = new StringBuilder();
-            sb.append(prefix);
-            for (int i = 0; i < main.length(); i++) {
-                sb.append(i % 2 == 0 ? Character.toLowerCase(main.charAt(i)) : Character.toUpperCase(main.charAt(i)));
-            }
-            sb.append(suffix);
-            for (int i = 0; i < value.length(); i++) {
-                sb.append(i % 2 == 0 ? Character.toLowerCase(value.charAt(i)) : Character.toUpperCase(value.charAt(i)));
-            }
-            return sb.toString();
-        } else {
-            throw new IllegalArgumentException("Invalid URL format");
+        if (!matcher.matches()) {
+            throw new IllegalArgumentException("Invalid input string");
         }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(matcher.group(1));
+
+        String n = matcher.group(2);
+        for (int i = 0; i < n.length(); i++) {
+            String sub = n.substring(i, i + 1);
+            if ((i & 1) == 1) {
+                sb.append(sub.toUpperCase());
+            } else {
+                sb.append(sub);
+            }
+        }
+
+        if (matcher.group(3) != null) {
+            sb.append(matcher.group(3));
+            String v = matcher.group(4);
+            for (int i = 0; i < v.length(); i++) {
+                String sub = v.substring(i, i + 1);
+                if ((i & 1) == 1) {
+                    sb.append(sub);
+                } else {
+                    sb.append(sub.toUpperCase());
+                }
+            }
+        }
+        return sb.toString();
     }
 
-    private List<Value> valuesToPolicy(AttributeValueFQN... p)  {
+    private List<Value> valuesToPolicy(AttributeValueFQN... p) throws AutoConfigureException {
         return List.of(p).stream()
             .map(t -> {
                 try {
@@ -126,27 +141,31 @@ public class AutoconfigureTest {
 
     private Attribute mockAttributeFor(Autoconfigure.AttributeNameFQN fqn) {
         String key = fqn.getKey();
-        switch (key) {
-            case "CLS":
+        if (key.equals(CLS.getKey())){
                 return Attribute.newBuilder().setId("CLS").setNamespace(
                     Namespace.newBuilder().setId("v").setName("virtru.com").setFqn("https://virtru.com").build())
                     .setName("Classification").setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_HIERARCHY).setFqn(fqn.toString()).build();
-            case "N2K":
-                return Attribute.newBuilder().setId("N2K").setNamespace(
+        }
+        else if (key.equals(N2K.getKey())) {
+            return Attribute.newBuilder().setId("N2K").setNamespace(
                     Namespace.newBuilder().setId("v").setName("virtru.com").setFqn("https://virtru.com").build())
                     .setName("Need to Know").setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ALL_OF).setFqn(fqn.toString()).build();
-            case "REL":
+        }
+        else if (key.equals(REL.getKey())) {
             return Attribute.newBuilder().setId("REL").setNamespace(
                     Namespace.newBuilder().setId("v").setName("virtru.com").setFqn("https://virtru.com").build())
                     .setName("Releasable To").setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ANY_OF).setFqn(fqn.toString()).build();
-            default:
-                return null;
+        }
+        else {
+            return null;
         }
     }
 
     private Value mockValueFor(Autoconfigure.AttributeValueFQN fqn) throws AutoConfigureException {
         Autoconfigure.AttributeNameFQN an = fqn.prefix();
+        System.out.println(an);
         Attribute a = mockAttributeFor(an);
+        System.out.println(a);
         String v = fqn.value();
         Value p = Value.newBuilder()
         .setId(a.getId() + ":" + v)
@@ -155,25 +174,23 @@ public class AutoconfigureTest {
         .setFqn(fqn.toString())
         .build();
 
-        switch (an.getKey()) {
-            case "N2K":
-                switch (v.toUpperCase()) {
-                    case "INT":
-                        p = p.toBuilder().setGrants(0, KeyAccessServer.newBuilder().setUri(KAS_UK).build()).build();
-                        break;
-                    case "HCS":
-                        p = p.toBuilder().setGrants(0, KeyAccessServer.newBuilder().setUri(KAS_US_HCS).build()).build();
-                        break;
-                    case "SI":
-                        p = p.toBuilder().setGrants(0, KeyAccessServer.newBuilder().setUri(KAS_US_SA).build()).build();
-                        break;
-                }
-                break;
-
-            case "REL":
+        if (an.getKey().equals(N2K.getKey())){
+            switch (v.toUpperCase()) {
+                case "INT":
+                    p = p.toBuilder().addGrants(KeyAccessServer.newBuilder().setUri(KAS_UK).build()).build();
+                    break;
+                case "HCS":
+                    p = p.toBuilder().addGrants(KeyAccessServer.newBuilder().setUri(KAS_US_HCS).build()).build();
+                    break;
+                case "SI":
+                    p = p.toBuilder().addGrants(KeyAccessServer.newBuilder().setUri(KAS_US_SA).build()).build();
+                    break;
+            }
+        }
+        else if (an.getKey().equals(REL.getKey())) {
                 switch (v.toUpperCase()) {
                     case "FVEY":
-                        p = p.toBuilder().setGrants(0, KeyAccessServer.newBuilder().setUri(KAS_AU).build())
+                        p = p.toBuilder().addGrants(KeyAccessServer.newBuilder().setUri(KAS_AU).build())
                         .addGrants(1, KeyAccessServer.newBuilder().setUri(KAS_CA).build())
                         .addGrants(1, KeyAccessServer.newBuilder().setUri(KAS_UK).build())
                         .addGrants(1, KeyAccessServer.newBuilder().setUri(KAS_NZ).build())
@@ -181,31 +198,29 @@ public class AutoconfigureTest {
                         .build();
                         break;
                     case "AUS":
-                        p = p.toBuilder().setGrants(0, KeyAccessServer.newBuilder().setUri(KAS_AU).build())
+                        p = p.toBuilder().addGrants(KeyAccessServer.newBuilder().setUri(KAS_AU).build())
                         .build();
                         break;
                     case "CAN":
-                        p = p.toBuilder().setGrants(0, KeyAccessServer.newBuilder().setUri(KAS_CA).build())
+                        p = p.toBuilder().addGrants(0, KeyAccessServer.newBuilder().setUri(KAS_CA).build())
                         .build();
                         break;
                     case "GBR":
-                        p = p.toBuilder().setGrants(0, KeyAccessServer.newBuilder().setUri(KAS_UK).build())
+                        p = p.toBuilder().addGrants(KeyAccessServer.newBuilder().setUri(KAS_UK).build())
                         .build();
                         break;
                     case "NZL":
-                        p = p.toBuilder().setGrants(0, KeyAccessServer.newBuilder().setUri(KAS_NZ).build())
+                        p = p.toBuilder().addGrants(KeyAccessServer.newBuilder().setUri(KAS_NZ).build())
                         .build();
                         break;
                     case "USA":
-                        p = p.toBuilder().setGrants(0, KeyAccessServer.newBuilder().setUri(KAS_US).build())
+                        p = p.toBuilder().addGrants(KeyAccessServer.newBuilder().setUri(KAS_US).build())
                         .build();
                         break;
                 }
-                break;
-
-            case "CLS":
-                // defaults only
-                break;
+        }
+        else if (an.getKey().equals(CLS.getKey())){
+            // defaults only
         }
         return p;
     }
@@ -236,7 +251,7 @@ public class AutoconfigureTest {
             new TestCase("with value", "http://e/attr/a/value/b")
         )) {
             assertThatThrownBy(() -> new Autoconfigure.AttributeNameFQN(tc.getU()))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(AutoConfigureException.class);
         }
     }
 
@@ -273,8 +288,8 @@ public class AutoconfigureTest {
 
         for (TestCase tc : testCases) {
             assertThatThrownBy(() -> new AttributeValueFQN(tc.getU()))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Invalid URL format");
+                .isInstanceOf(AutoConfigureException.class)
+                .hasMessageContaining("invalid type");
         }
     }
 
@@ -289,13 +304,14 @@ public class AutoconfigureTest {
         );
 
         for (ConfigurationTestCase tc : testCases) {
+            System.out.println(tc.name);
             assertDoesNotThrow(() -> {
                 List<Value> v = valuesToPolicy(tc.getPolicy().toArray(new AttributeValueFQN[0]));
                 Granter grants = Autoconfigure.newGranterFromAttributes(v.toArray(new Value[0]));
                 assertThat(grants).isNotNull();
                 assertThat(grants.getGrants()).hasSize(tc.getSize());
                 assertThat(policyToStringKeys(tc.getPolicy())).containsAll(grants.getGrants().keySet());
-                Set<String> actualKases = Collections.emptySet();  ;
+                Set<String> actualKases = new HashSet<>();
                 for (Autoconfigure.KeyAccessGrant g : grants.getGrants().values()) {
                     assertThat(g).isNotNull();
                     for (String k : g.kases){
@@ -389,7 +405,7 @@ public class AutoconfigureTest {
                 assertThat(actualAB.toString().toLowerCase()).isEqualTo(tc.getAts().toLowerCase());
 
                 BooleanKeyExpression actualKeyed = reasoner.insertKeysForAttribute(actualAB);
-                assertThat(actualKeyed).isEqualTo(tc.getKeyed());
+                assertThat(actualKeyed.toString()).isEqualTo(tc.getKeyed());
 
                 String reduced = actualKeyed.reduce().toString();
                 assertThat(reduced).isEqualTo(tc.getReduced());
@@ -402,29 +418,6 @@ public class AutoconfigureTest {
         }
     }
 
-    // @Test
-    // public void testSpongeCase() {
-    //     for (TestCase tc : List.of(
-    //         new TestCase("attr", "http://a/attr/b", "http://a/attr/b"),
-    //         new TestCase("value", "http://a/attr/b/value/c", "http://a/attr/b/Value/C"),
-    //         new TestCase("with value", "http://a/attr/b/value/c/d", "http://a/attr/b/Value/C/D")
-    //     )) {
-    //         String s = spongeCase(tc.getU());
-    //         assertThat(s).isEqualTo(tc.getExpected());
-    //     }
-    // }
-
-    // @Test
-    // public void testMessUp() throws AutoConfigureException {
-    //     for (TestCase tc : List.of(
-    //         new TestCase("n2k", n2kInt, "https://virtru.com/attr/need%20to%20know/value/iNt"),
-    //         new TestCase("cls", clsS, "https://virtru.com/attr/Classification/value/sEcReT"),
-    //         new TestCase("rel", rel2usa, "https://virtru.com/attr/Releasable%20To/value/uSa")
-    //     )) {
-    //         Autoconfigure.AttributeValueFQN v = messUpV(tc.getA());
-    //         assertThat(v.toString()).isEqualTo(tc.getExpected());
-    //     }
-    // }
 
     private static class TestCase {
         private final String n;

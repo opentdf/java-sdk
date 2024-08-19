@@ -545,7 +545,8 @@ public class Autoconfigure {
                             if (k.getKas().equals("emptyTerm")) {  // Assuming "emptyTerm" is a constant in Java
                                 continue;
                             }
-                            Disjunction terms = (Disjunction) List.of(k.getKas());
+                            Disjunction terms = new Disjunction();
+                            terms.add(k.getKas());
                             if (!within(conjunction, terms)) {
                                 conjunction.add(terms);
                             }
@@ -604,15 +605,6 @@ public class Autoconfigure {
                 }
                 return true;
             }
-        
-            public boolean within(List<Disjunction> list, Disjunction e) {
-                for (Disjunction v : list) {
-                    if (e.equals(v)) {
-                        return true;
-                    }
-                }
-                return false;
-            }
         }
 
         public static boolean within(List<Disjunction> list, Disjunction e) {
@@ -626,7 +618,7 @@ public class Autoconfigure {
 
         public static Disjunction sortedNoDupes(List<PublicKeyInfo> l) {
             Set<String> set = new HashSet<>();
-            List<String> list = new ArrayList<>();
+            Disjunction list = new Disjunction();
 
             for (PublicKeyInfo e : l) {
                 String kas = e.getKas();
@@ -637,7 +629,7 @@ public class Autoconfigure {
             }
 
             Collections.sort(list);
-            return (Disjunction) list;
+            return list;
         }
 
         public static String ruleToOperator(AttributeRuleTypeEnum e) {
