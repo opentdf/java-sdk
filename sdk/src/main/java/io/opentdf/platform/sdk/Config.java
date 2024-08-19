@@ -53,16 +53,6 @@ public class Config {
         }
     }
 
-    public static class SplitStep {
-        public String kas;
-        public String splitID;
-
-        public SplitStep(String kas, String sid) {
-            this.kas = kas;
-            this.splitID = sid;
-          }
-    }
-
     public static class TDFConfig {
         public int defaultSegmentSize;
         public boolean enableEncryption;
@@ -77,7 +67,7 @@ public class Config {
         public List<Assertion> assertionList;
         public AssertionConfig assertionConfig;
         public String mimeType;
-        public List<SplitStep> splitPlan;
+        public List<Autoconfigure.SplitStep> splitPlan;
 
         public TDFConfig() {
             this.defaultSegmentSize = DEFAULT_SEGMENT_SIZE;

@@ -181,9 +181,9 @@ public class TDF {
             Map<String, Config.KASInfo> latestKASInfo = new HashMap<>();
             if (tdfConfig.splitPlan.isEmpty()) {
                 // Default split plan: Split keys across all KASes
-                List<Config.SplitStep> splitPlan = new ArrayList<>(tdfConfig.kasInfoList.size());
+                List<Autoconfigure.SplitStep> splitPlan = new ArrayList<>(tdfConfig.kasInfoList.size());
                 for (Config.KASInfo kasInfo : tdfConfig.kasInfoList) {
-                    Config.SplitStep step = new Config.SplitStep(kasInfo.URL, "");
+                    Autoconfigure.SplitStep step = new Autoconfigure.SplitStep(kasInfo.URL, "");
                     if (tdfConfig.kasInfoList.size() > 1) {
                         step.splitID = String.format("s-%d", splitPlan.size());
                     }
@@ -206,7 +206,7 @@ public class TDF {
             Map<String, List<Config.KASInfo>> conjunction = new HashMap<>();
             List<String> splitIDs = new ArrayList<>();
 
-            for (Config.SplitStep splitInfo : tdfConfig.splitPlan) {
+            for (Autoconfigure.SplitStep splitInfo : tdfConfig.splitPlan) {
                 // Public key was passed in with kasInfoList
                 // TODO First look up in attribute information / add to split plan?
                 Config.KASInfo ki = latestKASInfo.get(splitInfo.kas);
@@ -553,7 +553,7 @@ public class TDF {
         
         Set<String> knownSplits = new HashSet<String>();
         Set<String> foundSplits = new HashSet<String>();;
-        Map<Config.SplitStep, Exception> skippedSplits = new HashMap<>();
+        Map<Autoconfigure.SplitStep, Exception> skippedSplits = new HashMap<>();
         boolean mixedSplits = manifest.encryptionInformation.keyAccessObj.size() > 1 &&
          (manifest.encryptionInformation.keyAccessObj.get(0).sid != null) &&
           !manifest.encryptionInformation.keyAccessObj.get(0).sid.isEmpty();
@@ -562,7 +562,7 @@ public class TDF {
 
         if (manifest.payload.isEncrypted) {
             for (Manifest.KeyAccess keyAccess: manifest.encryptionInformation.keyAccessObj) {
-                Config.SplitStep ss = new Config.SplitStep(keyAccess.url, keyAccess.sid);
+                Autoconfigure.SplitStep ss = new Autoconfigure.SplitStep(keyAccess.url, keyAccess.sid);
                 byte[] unwrappedKey;
                 if (!mixedSplits) {
                     unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy);
@@ -605,7 +605,7 @@ public class TDF {
                 List<Exception> exceptionList = new ArrayList<>(skippedSplits.size() + 1);
                 exceptionList.add(new Exception("splitKey.unable to reconstruct split key: " + skippedSplits));
                 
-                for (Map.Entry<Config.SplitStep, Exception> entry : skippedSplits.entrySet()) {
+                for (Map.Entry<Autoconfigure.SplitStep, Exception> entry : skippedSplits.entrySet()) {
                     exceptionList.add(entry.getValue());
                 }
                 
