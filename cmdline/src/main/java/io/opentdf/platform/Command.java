@@ -53,7 +53,8 @@ class Command {
             @Option(names = {"-f", "--file"}, defaultValue = Option.NULL_VALUE) Optional<File> file,
             @Option(names = {"-k", "--kas-url"}, required = true, split = ",") List<String> kas,
             @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata,
-            @Option(names = {"-a", "--attr"}, split = ",", defaultValue = Option.NULL_VALUE) Optional<List<String>> attributes,
+            // cant split on optional parameters
+            @Option(names = {"-a", "--attr"}, defaultValue = Option.NULL_VALUE) Optional<String> attributes,
             @Option(names = {"--mime-type"}, defaultValue = Option.NULL_VALUE) Optional<String> mimeType) throws
             IOException, JOSEException {
 
@@ -68,9 +69,8 @@ class Command {
         configs.add(Config.withKasInformation(kasInfos));
         metadata.map(Config::withMetaData).ifPresent(configs::add);
         mimeType.map(Config::withMimeType).ifPresent(configs::add);
-        attributes.ifPresent(attrList -> {
-            // Convert List<String> to String[]
-            String[] attrArray = attrList.toArray(new String[0]);
+        attributes.ifPresent(attr -> {
+            String[] attrArray = attr.split(",");
             configs.add(Config.withDataAttributes(attrArray));
         });
 
@@ -121,7 +121,7 @@ class Command {
             @Option(names = {"-f", "--file"}, defaultValue = Option.NULL_VALUE) Optional<File> file,
             @Option(names = {"-k", "--kas-url"}, required = true) List<String> kas,
             @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata,
-            @Option(names = {"-a", "--attr"}, split = ",", defaultValue = Option.NULL_VALUE) Optional<List<String>> attributes) throws Exception {
+            @Option(names = {"-a", "--attr"}, defaultValue = Option.NULL_VALUE) Optional<String> attributes) throws Exception {
 
         var sdk = buildSDK();
         var kasInfos = kas.stream().map(k -> {
@@ -132,9 +132,8 @@ class Command {
 
         List<Consumer<Config.NanoTDFConfig>> configs = new ArrayList<>();
         configs.add(Config.withNanoKasInformation(kasInfos));
-        attributes.ifPresent(attrList -> {
-            // Convert List<String> to String[]
-            String[] attrArray = attrList.toArray(new String[0]);
+        attributes.ifPresent(attr -> {
+            String[] attrArray = attr.split(",");
             configs.add(Config.witDataAttributes(attrArray));
         });
 
