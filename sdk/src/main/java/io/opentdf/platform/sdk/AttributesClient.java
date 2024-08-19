@@ -36,6 +36,7 @@ public class AttributesClient implements SDK.AttributesService {
         for (var entry: entries) {
             entry.channel.shutdownNow();
         }
+        this.channel.shutdownNow();
     }
 
     private String normalizeAddress(String urlString) {
