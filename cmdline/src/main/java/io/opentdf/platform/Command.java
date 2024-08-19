@@ -70,8 +70,7 @@ class Command {
         metadata.map(Config::withMetaData).ifPresent(configs::add);
         mimeType.map(Config::withMimeType).ifPresent(configs::add);
         attributes.ifPresent(attr -> {
-            String[] attrArray = attr.split(",");
-            configs.add(Config.withDataAttributes(attrArray));
+            configs.add(Config.withDataAttributes(attr.split(",")));
         });
 
         var tdfConfig = Config.newTDFConfig(configs.toArray(Consumer[]::new));
@@ -133,8 +132,7 @@ class Command {
         List<Consumer<Config.NanoTDFConfig>> configs = new ArrayList<>();
         configs.add(Config.withNanoKasInformation(kasInfos));
         attributes.ifPresent(attr -> {
-            String[] attrArray = attr.split(",");
-            configs.add(Config.witDataAttributes(attrArray));
+            configs.add(Config.witDataAttributes(attr.split(",")));
         });
 
         var nanoTDFConfig = Config.newNanoTDFConfig(configs.toArray(Consumer[]::new));
