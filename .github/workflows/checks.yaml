@@ -190,6 +190,60 @@ jobs:
           fi
         working-directory: cmdline
 
+      - uses: JarvusInnovations/background-action@2428e7b970a846423095c79d43f759abf979a635
+        name: start another KAS server in background
+        with:
+          run: >
+            <opentdf.yaml >opentdf-beta.yaml yq e '
+              (.server.port = 8282)
+              | (.mode = ["kas"])
+              | (.sdk_config = {"endpoint":"http://localhost:8080","plaintext":true,"client_id":"opentdf","client_secret":"secret"})
+            '
+            && go run ./service --config-file ./opentdf-beta.yaml start
+          wait-on: |
+            tcp:localhost:8282
+          log-output-if: true
+          wait-for: 90s
+          working-directory: platform
+      - name: Make sure that the second platform is up
+        run: |
+          grpcurl -plaintext localhost:8282 kas.AccessService/PublicKey
+      - name: Validate multikas through the command line interface
+        run: |
+          printf 'here is some data to encrypt' > data
+
+          java -jar target/cmdline.jar \
+            --client-id=opentdf-sdk \
+            --client-secret=secret \
+            --platform-endpoint=localhost:8080 \
+            -i \
+            encrypt --kas-url=localhost:8080,localhost:8282 -f data -m 'here is some metadata' > test.tdf
+
+          java -jar target/cmdline.jar \
+            --client-id=opentdf-sdk \
+            --client-secret=secret \
+            --platform-endpoint=localhost:8080 \
+            -i \
+            decrypt -f test.tdf > decrypted
+
+          java -jar target/cmdline.jar \
+            --client-id=opentdf-sdk \
+            --client-secret=secret \
+            --platform-endpoint=localhost:8080 \
+            -i \
+            metadata -f test.tdf > metadata
+
+          if ! diff -q data decrypted; then
+            printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
+            exit 1
+          fi
+
+          if [ "$(< metadata)" != 'here is some metadata' ]; then
+            printf 'metadata is incorrect [%s]\n' "$(< metadata)"
+            exit 1
+          fi
+        working-directory: cmdline
+
   platform-xtest:
     permissions:
       contents: read

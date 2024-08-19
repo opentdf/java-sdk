@@ -3,6 +3,7 @@ package io.opentdf.platform;
 import com.nimbusds.jose.JOSEException;
 import io.opentdf.platform.sdk.*;
 import io.opentdf.platform.sdk.TDF;
+
 import org.apache.commons.codec.DecoderException;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
@@ -49,7 +50,7 @@ class Command {
     @CommandLine.Command(name = "encrypt")
     void encrypt(
             @Option(names = {"-f", "--file"}, defaultValue = Option.NULL_VALUE) Optional<File> file,
-            @Option(names = {"-k", "--kas-url"}, required = true) List<String> kas,
+            @Option(names = {"-k", "--kas-url"}, required = true, split = ",") List<String> kas,
             @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata,
             @Option(names = {"--mime-type"}, defaultValue = Option.NULL_VALUE) Optional<String> mimeType) throws
             IOException, JOSEException {

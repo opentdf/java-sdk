@@ -69,6 +69,16 @@ public class Config {
         return (TDFReaderConfig config) -> config.assertionVerificationKeys = assertionVerificationKeys;
     }
 
+    public static class SplitStep {
+        public String kas;
+        public String splitID;
+
+        public SplitStep(String kas, String sid) {
+            this.kas = kas;
+            this.splitID = sid;
+          }
+    }
+
     public static class TDFConfig {
         public int defaultSegmentSize;
         public boolean enableEncryption;
@@ -82,6 +92,7 @@ public class Config {
         public List<KASInfo> kasInfoList;
         public List<io.opentdf.platform.sdk.AssertionConfig> assertionConfigList;
         public String mimeType;
+        public List<SplitStep> splitPlan;
 
         public TDFConfig() {
             this.defaultSegmentSize = DEFAULT_SEGMENT_SIZE;
@@ -93,6 +104,7 @@ public class Config {
             this.kasInfoList = new ArrayList<>();
             this.assertionConfigList = new ArrayList<>();
             this.mimeType = DEFAULT_MIME_TYPE;
+            this.splitPlan = new ArrayList<>();
         }
     }
 

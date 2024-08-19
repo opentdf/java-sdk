@@ -149,6 +149,7 @@ public class Manifest {
 
         public String encryptedMetadata;
         public String kid;
+        public String sid;
 
         @Override
         public boolean equals(Object o) {
