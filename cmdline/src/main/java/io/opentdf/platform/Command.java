@@ -53,7 +53,7 @@ class Command {
             @Option(names = {"-f", "--file"}, defaultValue = Option.NULL_VALUE) Optional<File> file,
             @Option(names = {"-k", "--kas-url"}, required = true, split = ",") List<String> kas,
             @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata,
-            @Option(names = {"-a", "--attr"}, split = ",") Optional<List<String>> attributes,
+            @Option(names = {"-a", "--attr"}, split = ",", defaultValue = Option.NULL_VALUE) Optional<List<String>> attributes,
             @Option(names = {"--mime-type"}, defaultValue = Option.NULL_VALUE) Optional<String> mimeType) throws
             IOException, JOSEException {
 
@@ -121,7 +121,7 @@ class Command {
             @Option(names = {"-f", "--file"}, defaultValue = Option.NULL_VALUE) Optional<File> file,
             @Option(names = {"-k", "--kas-url"}, required = true) List<String> kas,
             @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata,
-            @Option(names = {"-a", "--attr"}, split = ",") Optional<List<String>> attributes) throws Exception {
+            @Option(names = {"-a", "--attr"}, split = ",", defaultValue = Option.NULL_VALUE) Optional<List<String>> attributes) throws Exception {
 
         var sdk = buildSDK();
         var kasInfos = kas.stream().map(k -> {
