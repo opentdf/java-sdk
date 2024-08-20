@@ -5,7 +5,6 @@ import io.grpc.ManagedChannel;
 import io.opentdf.platform.authorization.AuthorizationServiceGrpc;
 import io.opentdf.platform.authorization.AuthorizationServiceGrpc.AuthorizationServiceFutureStub;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
-import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
 import io.opentdf.platform.policy.namespaces.NamespaceServiceGrpc;
 import io.opentdf.platform.policy.namespaces.NamespaceServiceGrpc.NamespaceServiceFutureStub;
@@ -14,9 +13,6 @@ import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceGrpc.Res
 import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc;
 import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc.SubjectMappingServiceFutureStub;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
-import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
-
-import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,20 +45,17 @@ public class SDK implements AutoCloseable {
         byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL);
     }
 
-    public interface AttributesService extends AutoCloseable {
-        GetAttributeValuesByFqnsResponse getAttributeValuesByFqn(GetAttributeValuesByFqnsRequest request);
-    }
-
     // TODO: add KAS
     public interface Services extends AutoCloseable {
         AuthorizationServiceFutureStub authorization();
-        AttributesService attributes();
+        AttributesServiceFutureStub attributes();
         NamespaceServiceFutureStub namespaces();
         SubjectMappingServiceFutureStub subjectMappings();
         ResourceMappingServiceFutureStub resourceMappings();
         KAS kas();
 
-        static Services newServices(ManagedChannel channel, KAS kas, AttributesService attributeService) {
+        static Services newServices(ManagedChannel channel, KAS kas) {
+            var attributeService = AttributesServiceGrpc.newFutureStub(channel);
             var namespaceService = NamespaceServiceGrpc.newFutureStub(channel);
             var subjectMappingService = SubjectMappingServiceGrpc.newFutureStub(channel);
             var resourceMappingService = ResourceMappingServiceGrpc.newFutureStub(channel);
@@ -72,12 +65,11 @@ public class SDK implements AutoCloseable {
                 @Override
                 public void close() throws Exception {
                     channel.shutdownNow();
-                    attributeService.close();
                     kas.close();
                 }
 
                 @Override
-                public AttributesService attributes() {
+                public AttributesServiceFutureStub attributes() {
                     return attributeService;
                 }
 
