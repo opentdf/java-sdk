@@ -52,6 +52,8 @@ class Command {
             @Option(names = {"-f", "--file"}, defaultValue = Option.NULL_VALUE) Optional<File> file,
             @Option(names = {"-k", "--kas-url"}, required = true, split = ",") List<String> kas,
             @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata,
+            // cant split on optional parameters
+            @Option(names = {"-a", "--attr"}, defaultValue = Option.NULL_VALUE) Optional<String> attributes,
             @Option(names = {"--mime-type"}, defaultValue = Option.NULL_VALUE) Optional<String> mimeType) throws
             IOException, JOSEException {
 
@@ -66,6 +68,9 @@ class Command {
         configs.add(Config.withKasInformation(kasInfos));
         metadata.map(Config::withMetaData).ifPresent(configs::add);
         mimeType.map(Config::withMimeType).ifPresent(configs::add);
+        attributes.ifPresent(attr -> {
+            configs.add(Config.withDataAttributes(attr.split(",")));
+        });
 
         var tdfConfig = Config.newTDFConfig(configs.toArray(Consumer[]::new));
         try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {
@@ -113,7 +118,8 @@ class Command {
     void createNanoTDF(
             @Option(names = {"-f", "--file"}, defaultValue = Option.NULL_VALUE) Optional<File> file,
             @Option(names = {"-k", "--kas-url"}, required = true) List<String> kas,
-            @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata) throws Exception {
+            @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata,
+            @Option(names = {"-a", "--attr"}, defaultValue = Option.NULL_VALUE) Optional<String> attributes) throws Exception {
 
         var sdk = buildSDK();
         var kasInfos = kas.stream().map(k -> {
@@ -124,6 +130,9 @@ class Command {
 
         List<Consumer<Config.NanoTDFConfig>> configs = new ArrayList<>();
         configs.add(Config.withNanoKasInformation(kasInfos));
+        attributes.ifPresent(attr -> {
+            configs.add(Config.witDataAttributes(attr.split(",")));
+        });
 
         var nanoTDFConfig = Config.newNanoTDFConfig(configs.toArray(Consumer[]::new));
         try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {
