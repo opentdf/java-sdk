@@ -2,8 +2,6 @@ name: "Checks"
 
 on:
   pull_request:
-    branches:
-      - main
   push:
     branches:
       - main
@@ -139,7 +137,7 @@ jobs:
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
             -i \
-            encrypt --kas-url=localhost:8080 --mime-type=text/plain --attr https://example.com/attr/attr1/value/value1 -f data -m 'here is some metadata' > test.tdf
+            encrypt --kas-url=localhost:8080 --mime-type=text/plain --attr https://example.com/attr/attr1/value/value1 --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \

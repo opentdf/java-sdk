@@ -35,7 +35,7 @@ public class TDFE2ETest {
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
         TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, sdk.kas());
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, sdk.kas(), sdk.attributes());
 
         var unwrappedData = new java.io.ByteArrayOutputStream();
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), sdk.kas());

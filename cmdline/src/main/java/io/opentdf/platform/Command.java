@@ -13,12 +13,10 @@ import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
@@ -31,7 +29,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
-import java.util.stream.Stream;
 
 @CommandLine.Command(name = "tdf")
 class Command {
@@ -55,6 +52,7 @@ class Command {
             @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata,
             // cant split on optional parameters
             @Option(names = {"-a", "--attr"}, defaultValue = Option.NULL_VALUE) Optional<String> attributes,
+            @Option(names = {"-c", "--autoconfigure"}, defaultValue = Option.NULL_VALUE) Optional<Boolean> autoconfigure,
             @Option(names = {"--mime-type"}, defaultValue = Option.NULL_VALUE) Optional<String> mimeType) throws
             IOException, JOSEException {
 
@@ -68,15 +66,17 @@ class Command {
         List<Consumer<Config.TDFConfig>> configs = new ArrayList<>();
         configs.add(Config.withKasInformation(kasInfos));
         metadata.map(Config::withMetaData).ifPresent(configs::add);
+        autoconfigure.map(Config::withAutoconfigure).ifPresent(configs::add);
         mimeType.map(Config::withMimeType).ifPresent(configs::add);
-        attributes.ifPresent(attr -> {
-            configs.add(Config.withDataAttributes(attr.split(",")));
-        });
-
+        if (attributes.isPresent()){
+            configs.add(Config.withDataAttributes(attributes.get().split(",")));
+        }
         var tdfConfig = Config.newTDFConfig(configs.toArray(Consumer[]::new));
         try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {
             try (var out = new BufferedOutputStream(System.out)) {
-                new TDF().createTDF(in, out, tdfConfig, sdk.getServices().kas());
+                new TDF().createTDF(in, out, tdfConfig, 
+                sdk.getServices().kas(), 
+                sdk.getServices().attributes());
             }
         }
     }

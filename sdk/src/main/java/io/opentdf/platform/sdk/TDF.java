@@ -8,6 +8,12 @@ import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 
+import io.opentdf.platform.policy.Value;
+
+import io.opentdf.platform.sdk.Config.TDFConfig;
+import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
+import io.opentdf.platform.sdk.Config.KASInfo;
+
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.crypto.MACSigner;
 import org.apache.commons.codec.DecoderException;
@@ -148,16 +154,16 @@ public class TDF {
             this.size = 0;
         }
 
-        PolicyObject createPolicyObject(List<String> attributes) {
+        PolicyObject createPolicyObject(List<Autoconfigure.AttributeValueFQN> attributes) {
             PolicyObject policyObject = new PolicyObject();
             policyObject.body = new PolicyObject.Body();
             policyObject.uuid = UUID.randomUUID().toString();
             policyObject.body.dataAttributes = new ArrayList<>();
             policyObject.body.dissem = new ArrayList<>();
 
-            for (String attribute: attributes) {
+            for (Autoconfigure.AttributeValueFQN attribute: attributes) {
                 PolicyObject.AttributeObject attributeObject = new PolicyObject.AttributeObject();
-                attributeObject.attribute = attribute;
+                attributeObject.attribute = attribute.toString();
                 policyObject.body.dataAttributes.add(attributeObject);
             }
             return policyObject;
@@ -172,7 +178,7 @@ public class TDF {
             String base64PolicyObject  = encoder.encodeToString(gson.toJson(policyObject).getBytes(StandardCharsets.UTF_8));
             List<byte[]> symKeys = new ArrayList<>();
             Map<String, Config.KASInfo> latestKASInfo = new HashMap<>();
-            if (tdfConfig.splitPlan.isEmpty()) {
+            if (tdfConfig.splitPlan == null || tdfConfig.splitPlan.isEmpty()) {
                 // Default split plan: Split keys across all KASes
                 List<Autoconfigure.SplitStep> splitPlan = new ArrayList<>(tdfConfig.kasInfoList.size());
                 int i = 0;
@@ -267,6 +273,7 @@ public class TDF {
                     keyAccess.policyBinding = policyBinding;
                     keyAccess.wrappedKey = encoder.encodeToString(wrappedKey);
                     keyAccess.encryptedMetadata = encryptedMetadata;
+                    keyAccess.sid = splitID;
 
                     manifest.encryptionInformation.keyAccessObj.add(keyAccess);
                 }
@@ -369,9 +376,30 @@ public class TDF {
 
     public TDFObject createTDF(InputStream payload,
                                OutputStream outputStream,
-                               Config.TDFConfig tdfConfig, SDK.KAS kas) throws IOException, JOSEException {
-        if (tdfConfig.kasInfoList.isEmpty()) {
-            throw new KasInfoMissing("kas information is missing");
+                               Config.TDFConfig tdfConfig, SDK.KAS kas, SDK.AttributesService attrService) throws IOException, JOSEException {
+
+        if (tdfConfig.autoconfigure) {
+            Autoconfigure.Granter granter = new Autoconfigure.Granter(new ArrayList<>());
+            if (tdfConfig.attributeValues != null && !tdfConfig.attributeValues.isEmpty()) {
+                granter = Autoconfigure.newGranterFromAttributes(tdfConfig.attributeValues.toArray(new Value[0]));
+            } else if (tdfConfig.attributes != null && !tdfConfig.attributes.isEmpty()) {
+                granter = Autoconfigure.newGranterFromService(attrService, tdfConfig.attributes.toArray(new AttributeValueFQN[0]));
+            }
+        
+            if (granter == null) {
+                throw new AutoConfigureException("Failed to create Granter"); // Replace with appropriate error handling
+            }
+        
+            List<String> dk = defaultKases(tdfConfig);
+            tdfConfig.splitPlan = granter.plan(dk, () -> UUID.randomUUID().toString());
+        
+            if (tdfConfig.splitPlan == null) {
+                throw new AutoConfigureException("Failed to generate Split Plan"); // Replace with appropriate error handling
+            }
+        }
+
+        if (tdfConfig.kasInfoList.isEmpty() && (tdfConfig.splitPlan==null || tdfConfig.splitPlan.isEmpty())) {
+            throw new KasInfoMissing("kas information is missing, no key access template specified or inferred");
         }
 
         TDFObject tdfObject = new TDFObject();
@@ -493,6 +521,23 @@ public class TDF {
         tdfObject.size = tdfWriter.finish();
 
         return tdfObject;
+    }
+
+    public List<String> defaultKases(TDFConfig config) {
+        List<String> allk = new ArrayList<>();
+        List<String> defk = new ArrayList<>();
+
+        for (KASInfo kasInfo : config.kasInfoList) {
+            if (kasInfo.Default != null && kasInfo.Default) {
+                defk.add(kasInfo.URL);
+            } else if (defk.isEmpty()) {
+                allk.add(kasInfo.URL);
+            }
+        }
+        if (defk.isEmpty()) {
+            return allk;
+        }
+        return defk;
     }
 
     private void fillInPublicKeyInfo(List<Config.KASInfo> kasInfoList, SDK.KAS kas) {

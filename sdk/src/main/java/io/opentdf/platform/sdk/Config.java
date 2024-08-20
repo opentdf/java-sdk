@@ -1,8 +1,11 @@
 package io.opentdf.platform.sdk;
 
+import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
 import io.opentdf.platform.sdk.nanotdf.ECCMode;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import io.opentdf.platform.sdk.nanotdf.SymmetricAndPayloadConfig;
+
+import io.opentdf.platform.policy.Value;
 
 import java.util.*;
 import java.util.function.Consumer;
@@ -30,6 +33,7 @@ public class Config {
         public String URL;
         public String PublicKey;
         public String KID;
+        public Boolean Default;
     }
 
 
@@ -70,6 +74,7 @@ public class Config {
     }
 
     public static class TDFConfig {
+        public Boolean autoconfigure;
         public int defaultSegmentSize;
         public boolean enableEncryption;
         public TDFFormat tdfFormat;
@@ -78,13 +83,15 @@ public class Config {
         public String metaData;
         public IntegrityAlgorithm integrityAlgorithm;
         public IntegrityAlgorithm segmentIntegrityAlgorithm;
-        public List<String> attributes;
+        public List<Autoconfigure.AttributeValueFQN> attributes;
+        public List<Value> attributeValues;
         public List<KASInfo> kasInfoList;
         public List<io.opentdf.platform.sdk.AssertionConfig> assertionConfigList;
         public String mimeType;
         public List<Autoconfigure.SplitStep> splitPlan;
 
         public TDFConfig() {
+            this.autoconfigure = true;
             this.defaultSegmentSize = DEFAULT_SEGMENT_SIZE;
             this.enableEncryption = true;
             this.tdfFormat = TDFFormat.JSONFormat;
@@ -107,15 +114,59 @@ public class Config {
         return config;
     }
 
-    public static Consumer<TDFConfig> withDataAttributes(String... attributes) {
+    public static Consumer<TDFConfig> withDataAttributes(String... attributes) throws AutoConfigureException {
+        List<Autoconfigure.AttributeValueFQN> attrValFqns = new ArrayList<Autoconfigure.AttributeValueFQN>();
+        for (String a : attributes){
+            Autoconfigure.AttributeValueFQN attrValFqn = new Autoconfigure.AttributeValueFQN(a);
+            attrValFqns.add(attrValFqn);
+        }
         return (TDFConfig config) -> {
-            Collections.addAll(config.attributes, attributes);
+            config.attributeValues = null;
+            config.attributes.addAll(attrValFqns);
+        };
+    }
+
+    public static Consumer<TDFConfig> withDataAttributeValues(String... attributes) throws AutoConfigureException {
+        List<Autoconfigure.AttributeValueFQN> attrValFqns = new ArrayList<Autoconfigure.AttributeValueFQN>();
+        for (String a : attributes){
+            Autoconfigure.AttributeValueFQN attrValFqn = new Autoconfigure.AttributeValueFQN(a);
+            attrValFqns.add(attrValFqn);
+        }
+        return (TDFConfig config) -> {
+            config.attributeValues = null;
+            config.attributes.addAll(attrValFqns);
+        };
+    }
+
+    // WithDataAttributeValues appends the given data attributes to the bound policy.
+    // Unlike `WithDataAttributes`, this will not trigger an attribute definition lookup
+    // during autoconfigure. That is, to use autoconfigure in an 'offline' context,
+    // you must first store the relevant attribute information locally and load
+    // it to the `CreateTDF` method with this option.
+    public static Consumer<TDFConfig> withDataAttributeValues(Value... attributes) throws AutoConfigureException {
+        List<Autoconfigure.AttributeValueFQN> attrValFqns = new ArrayList<Autoconfigure.AttributeValueFQN>();
+        List<Value> attrVals = new ArrayList<Value>();
+        for (Value a : attributes) {
+            attrVals.add(a);
+            AttributeValueFQN afqn = new Autoconfigure.AttributeValueFQN(a.getFqn());
+            attrValFqns.add(afqn);
+        }
+        return (TDFConfig config) -> {
+            config.attributes.addAll(attrValFqns);
+            config.attributeValues.addAll(attrVals);
         };
     }
 
     public static Consumer<TDFConfig> withKasInformation(KASInfo... kasInfoList) {
         return (TDFConfig config) -> {
             Collections.addAll(config.kasInfoList, kasInfoList);
+        };
+    }
+
+    public static Consumer<TDFConfig> withSplitPlan(Autoconfigure.SplitStep... p) {
+        return (TDFConfig config) -> {
+            config.splitPlan = new ArrayList<>(Arrays.asList(p));
+            config.autoconfigure = false;
         };
     }
 
@@ -131,6 +182,13 @@ public class Config {
 
     public static Consumer<TDFConfig> withSegmentSize(int size) {
         return (TDFConfig config) -> config.defaultSegmentSize = size;
+    }
+
+    public static Consumer<TDFConfig> withAutoconfigure(boolean enable) {
+        return (TDFConfig config) -> {
+            config.autoconfigure = enable;
+            config.splitPlan = null;
+        };
     }
 
 //    public static Consumer<TDFConfig> withDisableEncryption() {
