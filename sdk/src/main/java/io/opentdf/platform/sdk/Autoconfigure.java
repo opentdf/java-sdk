@@ -1,5 +1,6 @@
 package io.opentdf.platform.sdk;
 
+import java.io.IOException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -31,7 +32,7 @@ import io.opentdf.platform.policy.AttributeValueSelector;
 import io.opentdf.platform.policy.AttributeRuleTypeEnum;
 
 // Error handling class
-class AutoConfigureException extends Exception {
+class AutoConfigureException extends IOException {
     public AutoConfigureException(String message) {
         super(message);
     }
@@ -165,6 +166,20 @@ public class Autoconfigure {
         public String toString() {
             return url;
         }
+        
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null || !(obj instanceof AttributeValueFQN)) {
+                return false;
+            }
+            AttributeValueFQN afqn = (AttributeValueFQN) obj;
+            if ((this.url.equals(afqn.url)) && (this.key.equals(afqn.key))){
+                return true;
+            }
+            return false;
+        }
 
         public String getKey() {
             return key;
@@ -273,7 +288,7 @@ public class Autoconfigure {
         }
 
 
-        public List<SplitStep> plan(List<String> defaultKas, Supplier<String> genSplitID) throws Exception {
+        public List<SplitStep> plan(List<String> defaultKas, Supplier<String> genSplitID) throws AutoConfigureException {
             AttributeBooleanExpression b = constructAttributeBoolean();
             BooleanKeyExpression k = insertKeysForAttribute(b);
             if (k == null) {
@@ -307,7 +322,7 @@ public class Autoconfigure {
             return steps;
         }
 
-        public BooleanKeyExpression insertKeysForAttribute(AttributeBooleanExpression e) throws Exception {
+        public BooleanKeyExpression insertKeysForAttribute(AttributeBooleanExpression e) throws AutoConfigureException {
             List<KeyClause> kcs = new ArrayList<>(e.must.size());
     
             for (SingleAttributeClause clause : e.must) {
@@ -316,7 +331,7 @@ public class Autoconfigure {
                 for (AttributeValueFQN term : clause.values) {
                     KeyAccessGrant grant = byAttribute(term);
                     if (grant == null) {
-                        throw new Exception(String.format("no definition or grant found for [%s]", term));
+                        throw new AutoConfigureException(String.format("no definition or grant found for [%s]", term));
                     }
     
                     List<String> kases = grant.kases;
@@ -660,7 +675,7 @@ public class Autoconfigure {
     }
 
     // Gets a list of directory of KAS grants for a list of attribute FQNs
-    public static Granter newGranterFromService(SDK.AttributesService as, AttributeValueFQN... fqns) throws Exception {
+    public static Granter newGranterFromService(SDK.AttributesService as, AttributeValueFQN... fqns) throws AutoConfigureException {
         String[] fqnsStr = new String[fqns.length];
         for (int i = 0; i < fqns.length; i++) {
             fqnsStr[i] = fqns[i].toString();
@@ -704,7 +719,7 @@ public class Autoconfigure {
     // Given a policy (list of data attributes or tags),
     // get a set of grants from attribute values to KASes.
     // Unlike `NewGranterFromService`, this works offline.
-    public static Granter newGranterFromAttributes(Value... attrs) throws Exception {
+    public static Granter newGranterFromAttributes(Value... attrs) throws AutoConfigureException {
         List<AttributeValueFQN> policyList = new ArrayList<>(attrs.length);
         Map<String, KeyAccessGrant> grantsMap = new HashMap<>();
 
@@ -721,7 +736,7 @@ public class Autoconfigure {
             grants.policy.add(fqn);
             Attribute def = v.getAttribute();
             if (def == null) {
-                throw new Exception("No associated definition with value [" + fqn.toString() + "]");
+                throw new AutoConfigureException("No associated definition with value [" + fqn.toString() + "]");
             }
 
             grants.addAllGrants(fqn, def.getGrantsList(), def);

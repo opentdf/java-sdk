@@ -7,6 +7,8 @@ import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jose.jwk.RSAKey;
 
+import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
+import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
@@ -69,6 +71,15 @@ public class TDFTest {
             return null;
         }
     };
+    private static SDK.AttributesService attrServ = new SDK.AttributesService() {
+        @Override
+        public void close() {}
+
+        @Override
+        public GetAttributeValuesByFqnsResponse getAttributeValuesByFqn(GetAttributeValuesByFqnsRequest request) {
+            return GetAttributeValuesByFqnsResponse.newBuilder().build();
+        }
+    };
 
     private static ArrayList<KeyPair> keypairs = new ArrayList<>();
 
@@ -97,6 +108,7 @@ public class TDFTest {
         assertion1.assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, key);
 
         Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
                 Config.withMetaData("here is some metadata"),
                 Config.withAssertionConfig(assertion1)
@@ -107,7 +119,7 @@ public class TDFTest {
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
         TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attrServ);
 
         var assertionVerificationKeys = new Config.AssertionVerificationKeys();
         assertionVerificationKeys.defaultKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, key);
@@ -142,6 +154,7 @@ public class TDFTest {
                 keypair.getPrivate());
 
         Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
                 Config.withAssertionConfig(assertionConfig)
         );
@@ -151,7 +164,7 @@ public class TDFTest {
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
         TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attrServ);
 
         var assertionVerificationKeys = new Config.AssertionVerificationKeys();
         assertionVerificationKeys.keys.put(assertion1Id,
@@ -181,6 +194,7 @@ public class TDFTest {
         assertionConfig1.statement.value = "ICAgIDxlZGoOkVkaD4=";
 
         Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
                 Config.withAssertionConfig(assertionConfig1)
         );
@@ -190,7 +204,7 @@ public class TDFTest {
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
         TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attrServ);
 
         var unwrappedData = new ByteArrayOutputStream();
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
@@ -206,6 +220,7 @@ public class TDFTest {
         var random = new Random();
 
         Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
                 // use a random segment size that makes sure that we will use multiple segments
                 Config.withSegmentSize(1 + random.nextInt(20))
@@ -217,7 +232,7 @@ public class TDFTest {
         var plainTextInputStream = new ByteArrayInputStream(data);
         var tdfOutputStream = new ByteArrayOutputStream();
         var tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attrServ);
         var unwrappedData = new ByteArrayOutputStream();
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
         reader.readPayload(unwrappedData);
@@ -262,10 +277,11 @@ public class TDFTest {
 
         var tdf = new TDF(maxSize);
         var tdfConfig = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
                 Config.withSegmentSize(1 + random.nextInt(128)));
         assertThrows(TDF.DataSizeNotSupported.class,
-                () -> tdf.createTDF(is, os, tdfConfig, kas),
+                () -> tdf.createTDF(is, os, tdfConfig, kas, attrServ),
                 "didn't throw an exception when we created TDF that was too large");
         assertThat(numReturned.get())
                 .withFailMessage("test returned the wrong number of bytes")
@@ -278,6 +294,7 @@ public class TDFTest {
         final String mimeType = "application/pdf";
 
         Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
                 Config.withMimeType(mimeType)
         );
@@ -287,7 +304,7 @@ public class TDFTest {
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
         TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attrServ);
 
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
         assertThat(reader.getManifest().payload.mimeType).isEqualTo(mimeType);
