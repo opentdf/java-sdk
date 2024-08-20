@@ -1,6 +1,5 @@
 package io.opentdf.platform.sdk;
 
-import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -31,21 +30,6 @@ import io.opentdf.platform.policy.Attribute;
 import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.policy.AttributeValueSelector;
 import io.opentdf.platform.policy.AttributeRuleTypeEnum;
-
-// Error handling class
-class AutoConfigureException extends IOException {
-    public AutoConfigureException(String message) {
-        super(message);
-    }
-
-    public AutoConfigureException(Exception e) {
-        super(e);
-    }
-
-    public AutoConfigureException(String message, Exception e) {
-        super(message, e);
-    }
-}
 
 // Attribute rule types: operators!
 class RuleType {
@@ -259,7 +243,7 @@ public class Autoconfigure {
         }
 
         public  Map<String, KeyAccessGrant> getGrants() {
-            return grants;
+            return new HashMap<String,KeyAccessGrant>(grants);
         }
 
         public List<AttributeValueFQN> getPolicy() {
@@ -322,7 +306,7 @@ public class Autoconfigure {
             return steps;
         }
 
-        public BooleanKeyExpression insertKeysForAttribute(AttributeBooleanExpression e) throws AutoConfigureException {
+        BooleanKeyExpression insertKeysForAttribute(AttributeBooleanExpression e) throws AutoConfigureException {
             List<KeyClause> kcs = new ArrayList<>(e.must.size());
     
             for (SingleAttributeClause clause : e.must) {
@@ -393,12 +377,7 @@ public class Autoconfigure {
                     this.dict = new HashMap<>();
                 }
         
-                AttributeNameFQN prefix;
-                try {
-                    prefix = new AttributeNameFQN(ad.getFqn());
-                } catch (Exception e) {
-                    throw new AutoConfigureException(e);
-                }
+                AttributeNameFQN prefix = new AttributeNameFQN(ad.getFqn());
         
                 if (this.dict.containsKey(prefix)) {
                     throw new AutoConfigureException("Attribute prefix already found: [" + prefix.toString() + "]");

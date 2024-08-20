@@ -18,6 +18,7 @@ import io.opentdf.platform.policy.AttributeRuleTypeEnum;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -109,17 +110,11 @@ public class AutoconfigureTest {
     }
 
     private List<Value> valuesToPolicy(AttributeValueFQN... p) throws AutoConfigureException {
-        return List.of(p).stream()
-            .map(t -> {
-                try {
-                    return mockValueFor(t);
-                } catch (AutoConfigureException e) {
-                    // TODO Auto-generated catch block
-                    e.printStackTrace();
-                    return Value.newBuilder().build();
-                }
-            })
-            .collect(Collectors.toList());
+        List<Value> values = new ArrayList<>();
+        for (AttributeValueFQN afqn : List.of(p)){
+            values.add(mockValueFor(afqn));
+        }
+        return values;
     }
 
     private List<String> policyToStringKeys(List<AttributeValueFQN> policy) {
