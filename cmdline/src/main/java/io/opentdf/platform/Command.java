@@ -52,6 +52,7 @@ class Command {
             @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata,
             // cant split on optional parameters
             @Option(names = {"-a", "--attr"}, defaultValue = Option.NULL_VALUE) Optional<String> attributes,
+            @Option(names = {"-c", "--autoconfigure"}, defaultValue = Option.NULL_VALUE) Optional<Boolean> autoconfigure,
             @Option(names = {"--mime-type"}, defaultValue = Option.NULL_VALUE) Optional<String> mimeType) throws
             IOException, JOSEException {
 
@@ -65,6 +66,7 @@ class Command {
         List<Consumer<Config.TDFConfig>> configs = new ArrayList<>();
         configs.add(Config.withKasInformation(kasInfos));
         metadata.map(Config::withMetaData).ifPresent(configs::add);
+        autoconfigure.map(Config::withAutoconfigure).ifPresent(configs::add);
         mimeType.map(Config::withMimeType).ifPresent(configs::add);
         if (attributes.isPresent()){
             configs.add(Config.withDataAttributes(attributes.get().split(",")));
@@ -72,8 +74,7 @@ class Command {
         var tdfConfig = Config.newTDFConfig(configs.toArray(Consumer[]::new));
         try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {
             try (var out = new BufferedOutputStream(System.out)) {
-                new TDF().createTDF(in, out, 
-                tdfConfig, 
+                new TDF().createTDF(in, out, tdfConfig, 
                 sdk.getServices().kas(), 
                 sdk.getServices().attributes());
             }
