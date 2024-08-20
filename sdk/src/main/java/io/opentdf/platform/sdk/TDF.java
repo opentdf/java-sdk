@@ -273,6 +273,7 @@ public class TDF {
                     keyAccess.policyBinding = policyBinding;
                     keyAccess.wrappedKey = encoder.encodeToString(wrappedKey);
                     keyAccess.encryptedMetadata = encryptedMetadata;
+                    keyAccess.sid = splitID;
 
                     manifest.encryptionInformation.keyAccessObj.add(keyAccess);
                 }
