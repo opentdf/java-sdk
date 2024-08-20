@@ -378,10 +378,10 @@ public class TDF {
                                Config.TDFConfig tdfConfig, SDK.KAS kas, SDK.AttributesService attrService) throws IOException, JOSEException {
 
         if (tdfConfig.autoconfigure) {
-            Autoconfigure.Granter granter;
+            Autoconfigure.Granter granter = new Autoconfigure.Granter(null);
             if (!tdfConfig.attributeValues.isEmpty()) {
                 granter = Autoconfigure.newGranterFromAttributes(tdfConfig.attributeValues.toArray(new Value[0]));
-            } else {
+            } else if (!tdfConfig.attributes.isEmpty()) {
                 granter = Autoconfigure.newGranterFromService(attrService, tdfConfig.attributes.toArray(new AttributeValueFQN[0]));
             }
         
@@ -389,7 +389,7 @@ public class TDF {
                 throw new AutoConfigureException("Failed to create Granter"); // Replace with appropriate error handling
             }
         
-            List<String> dk = defaultKas(tdfConfig);
+            List<String> dk = defaultKases(tdfConfig);
             tdfConfig.splitPlan = granter.plan(dk, () -> UUID.randomUUID().toString());
         
             if (tdfConfig.splitPlan == null) {
@@ -397,8 +397,8 @@ public class TDF {
             }
         }
 
-        if (tdfConfig.kasInfoList.isEmpty()) {
-            throw new KasInfoMissing("kas information is missing");
+        if (tdfConfig.kasInfoList.isEmpty() && (tdfConfig.splitPlan==null || tdfConfig.splitPlan.isEmpty())) {
+            throw new KasInfoMissing("kas information is missing, no key access template specified or inferred");
         }
 
         TDFObject tdfObject = new TDFObject();
@@ -522,7 +522,7 @@ public class TDF {
         return tdfObject;
     }
 
-    public List<String> defaultKas(TDFConfig config) {
+    public List<String> defaultKases(TDFConfig config) {
         List<String> allk = new ArrayList<>();
         List<String> defk = new ArrayList<>();
 

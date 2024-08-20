@@ -72,7 +72,10 @@ class Command {
         var tdfConfig = Config.newTDFConfig(configs.toArray(Consumer[]::new));
         try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {
             try (var out = new BufferedOutputStream(System.out)) {
-                new TDF().createTDF(in, out, tdfConfig, sdk.getServices().kas(), sdk.getServices().attributes());
+                new TDF().createTDF(in, out, 
+                tdfConfig, 
+                sdk.getServices().kas(), 
+                sdk.getServices().attributes());
             }
         }
     }
