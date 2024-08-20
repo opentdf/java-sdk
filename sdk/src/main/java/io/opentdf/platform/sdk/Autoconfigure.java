@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.regex.Matcher;
@@ -54,6 +55,7 @@ public class Autoconfigure {
             this.splitID = splitId;
         }
 
+        @Override
         public boolean equals(Object obj) {
             if (this == obj) {
                 return true;
@@ -66,6 +68,11 @@ public class Autoconfigure {
                 return true;
             }
             return false;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(kas, splitID);
         }
     }
 
@@ -160,6 +167,7 @@ public class Autoconfigure {
             return url;
         }
 
+        @Override
         public boolean equals(Object obj) {
             if (this == obj) {
                 return true;
@@ -172,6 +180,11 @@ public class Autoconfigure {
                 return true;
             }
             return false;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(key);
         }
 
         public String getKey() {
@@ -617,6 +630,11 @@ public class Autoconfigure {
                     }
                 }
                 return true;
+            }
+
+            @Override
+            public int hashCode() {
+                return super.hashCode();
             }
 
         }
