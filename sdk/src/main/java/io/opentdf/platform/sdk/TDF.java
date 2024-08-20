@@ -378,10 +378,10 @@ public class TDF {
                                Config.TDFConfig tdfConfig, SDK.KAS kas, SDK.AttributesService attrService) throws IOException, JOSEException {
 
         if (tdfConfig.autoconfigure) {
-            Autoconfigure.Granter granter = new Autoconfigure.Granter(null);
-            if (!tdfConfig.attributeValues.isEmpty()) {
+            Autoconfigure.Granter granter = new Autoconfigure.Granter(new ArrayList<>());
+            if (tdfConfig.attributeValues != null && !tdfConfig.attributeValues.isEmpty()) {
                 granter = Autoconfigure.newGranterFromAttributes(tdfConfig.attributeValues.toArray(new Value[0]));
-            } else if (!tdfConfig.attributes.isEmpty()) {
+            } else if (tdfConfig.attributes != null && !tdfConfig.attributes.isEmpty()) {
                 granter = Autoconfigure.newGranterFromService(attrService, tdfConfig.attributes.toArray(new AttributeValueFQN[0]));
             }
         
@@ -527,7 +527,7 @@ public class TDF {
         List<String> defk = new ArrayList<>();
 
         for (KASInfo kasInfo : config.kasInfoList) {
-            if (kasInfo.Default) {
+            if (kasInfo.Default != null && kasInfo.Default) {
                 defk.add(kasInfo.URL);
             } else if (defk.isEmpty()) {
                 allk.add(kasInfo.URL);
