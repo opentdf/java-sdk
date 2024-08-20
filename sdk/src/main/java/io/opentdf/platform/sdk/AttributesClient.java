@@ -11,10 +11,8 @@ public class AttributesClient implements SDK.AttributesService {
     private final ManagedChannel channel;
 
     /***
-     * A client that communicates with KAS
-     * @param channelFactory A function that produces channels that can be used to communicate
-     * @param dpopKey
-     */
+     * A client that communicates with Attributes Service
+    */
     public AttributesClient(ManagedChannel channel) {
         this.channel = channel;
     }
@@ -25,16 +23,18 @@ public class AttributesClient implements SDK.AttributesService {
         this.channel.shutdownNow();
     }
 
-
-    // make this protected so we can test the address normalization logic
-    synchronized AttributesServiceGrpc.AttributesServiceBlockingStub getStub() {
+    @Override
+    public AttributesServiceGrpc.AttributesServiceBlockingStub getAttributesServiceBlockingStub() {
         return AttributesServiceGrpc.newBlockingStub(channel);
     }
 
+    @Override
+    public AttributesServiceGrpc.AttributesServiceStub getAttributesServiceStub() {
+        return AttributesServiceGrpc.newStub(channel);
+    }
 
     @Override
-    public GetAttributeValuesByFqnsResponse getAttributeValuesByFqn(GetAttributeValuesByFqnsRequest request) {
-        return getStub().getAttributeValuesByFqns(request);
-    } 
-
+    public AttributesServiceGrpc.AttributesServiceFutureStub getAttributesServiceFutureStub() {
+        return AttributesServiceGrpc.newFutureStub(channel);
+    }
 }

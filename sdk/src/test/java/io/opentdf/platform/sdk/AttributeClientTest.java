@@ -61,7 +61,7 @@ public class AttributeClientTest {
                     .usePlaintext()
                     .build();
             try (var attr = new AttributesClient(channel)) {
-                GetAttributeValuesByFqnsResponse resp = attr.getAttributeValuesByFqn(GetAttributeValuesByFqnsRequest.newBuilder().build());
+                GetAttributeValuesByFqnsResponse resp = attr.getAttributesServiceBlockingStub().getAttributeValuesByFqns(GetAttributeValuesByFqnsRequest.newBuilder().build());
                 Set<String> fqnSet = new HashSet<>(Arrays.asList("https://virtru.com/attr/classification/value/value1"));
                 assertThat(resp.getFqnAttributeValuesMap().keySet()).isEqualTo(fqnSet);
                 assertThat(resp.getFqnAttributeValuesCount()).isEqualTo(1);

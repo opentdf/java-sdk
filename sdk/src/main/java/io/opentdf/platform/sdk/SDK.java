@@ -50,7 +50,9 @@ public class SDK implements AutoCloseable {
     }
 
     public interface AttributesService extends AutoCloseable {
-        GetAttributeValuesByFqnsResponse getAttributeValuesByFqn(GetAttributeValuesByFqnsRequest request);
+        AttributesServiceGrpc.AttributesServiceBlockingStub getAttributesServiceBlockingStub();
+        AttributesServiceGrpc.AttributesServiceStub getAttributesServiceStub();
+        AttributesServiceGrpc.AttributesServiceFutureStub getAttributesServiceFutureStub();
     }
 
     // TODO: add KAS
