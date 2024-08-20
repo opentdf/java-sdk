@@ -59,6 +59,20 @@ public class Autoconfigure {
             this.kas = kas;
             this.splitID = splitId;
         }
+
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null || !(obj instanceof SplitStep)) {
+                return false;
+            }
+            SplitStep ss = (SplitStep) obj;
+            if ((this.kas.equals(ss.kas)) && (this.splitID.equals(ss.splitID))){
+                return true;
+            }
+            return false;
+        }
     }
 
     // Utility class for an attribute name FQN.
@@ -327,23 +341,19 @@ public class Autoconfigure {
             return new BooleanKeyExpression(kcs);
         }
 
-        AttributeBooleanExpression constructAttributeBoolean() {
+        AttributeBooleanExpression constructAttributeBoolean() throws AutoConfigureException {
             Map<String, SingleAttributeClause> prefixes = new HashMap<>();
             List<String> sortedPrefixes = new ArrayList<>();
             for (AttributeValueFQN aP : policy) {
-                try {
-                    AttributeNameFQN a = aP.prefix();
-                    String p = a.toString().toLowerCase();
-                    SingleAttributeClause clause = prefixes.get(p);
-                    if (clause != null) {
-                        clause.values.add(aP);
-                    } else if (byAttribute(aP) != null) {
-                        var x = new SingleAttributeClause(byAttribute(aP).attr, Collections.singletonList(aP));
-                        prefixes.put(p, x);
-                        sortedPrefixes.add(p);
-                    }
-                } catch (AutoConfigureException e) {
-                    // Handle exception
+                AttributeNameFQN a = aP.prefix();
+                String p = a.toString().toLowerCase();
+                SingleAttributeClause clause = prefixes.get(p);
+                if (clause != null) {
+                    clause.values.add(aP);
+                } else if (byAttribute(aP) != null) {
+                    var x = new SingleAttributeClause(byAttribute(aP).attr, new ArrayList<AttributeValueFQN>(Arrays.asList(aP)));
+                    prefixes.put(p, x);
+                    sortedPrefixes.add(p);
                 }
             }
 
@@ -535,14 +545,14 @@ public class Autoconfigure {
             public BooleanKeyExpression reduce() {
                 List<Disjunction> conjunction = new ArrayList<>();
                 for (KeyClause v : values) {
-                    if (v.operator.equals("anyOf")) {  // Assuming "anyOf" is a constant in Java
+                    if (v.operator.equals(RuleTypes.ANY_OF)) {
                         Disjunction terms = sortedNoDupes(v.values);
                         if (!terms.isEmpty() && !within(conjunction, terms)) {
                             conjunction.add(terms);
                         }
                     } else {
                         for (PublicKeyInfo k : v.values) {
-                            if (k.getKas().equals("emptyTerm")) {  // Assuming "emptyTerm" is a constant in Java
+                            if (k.getKas().equals(RuleTypes.EMPTY_TERM)) {
                                 continue;
                             }
                             Disjunction terms = new Disjunction();
@@ -563,11 +573,26 @@ public class Autoconfigure {
                     for (String k : d) {
                         pki.add(new PublicKeyInfo(k));
                     }
-                    newValues.add(new KeyClause("anyOf", pki));  // Assuming "anyOf" is a constant in Java
+                    newValues.add(new KeyClause(RuleTypes.ANY_OF, pki));
                 }
                 return new BooleanKeyExpression(newValues);
             }
 
+            public Disjunction sortedNoDupes(List<PublicKeyInfo> l) {
+                Set<String> set = new HashSet<>();
+                Disjunction list = new Disjunction();
+    
+                for (PublicKeyInfo e : l) {
+                    String kas = e.getKas();
+                    if (!kas.equals(RuleTypes.EMPTY_TERM) && !set.contains(kas)) {
+                        set.add(kas);
+                        list.add(kas);
+                    }
+                }
+    
+                Collections.sort(list);
+                return list;
+            }
 
         }
 
@@ -605,6 +630,7 @@ public class Autoconfigure {
                 }
                 return true;
             }
+
         }
 
         public static boolean within(List<Disjunction> list, Disjunction e) {
@@ -614,22 +640,6 @@ public class Autoconfigure {
                 }
             }
             return false;
-        }
-
-        public static Disjunction sortedNoDupes(List<PublicKeyInfo> l) {
-            Set<String> set = new HashSet<>();
-            Disjunction list = new Disjunction();
-
-            for (PublicKeyInfo e : l) {
-                String kas = e.getKas();
-                if (!kas.equals(RuleTypes.EMPTY_TERM) && !set.contains(kas)) {
-                    set.add(kas);
-                    list.add(kas);
-                }
-            }
-
-            Collections.sort(list);
-            return list;
         }
 
         public static String ruleToOperator(AttributeRuleTypeEnum e) {

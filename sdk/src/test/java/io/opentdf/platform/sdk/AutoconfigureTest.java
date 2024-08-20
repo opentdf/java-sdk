@@ -2,7 +2,6 @@ package io.opentdf.platform.sdk;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.Assert.fail;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 import io.opentdf.platform.policy.Attribute;
@@ -19,10 +18,8 @@ import io.opentdf.platform.policy.AttributeRuleTypeEnum;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.regex.Matcher;
@@ -410,8 +407,13 @@ public class AutoconfigureTest {
                 String reduced = actualKeyed.reduce().toString();
                 assertThat(reduced).isEqualTo(tc.getReduced());
 
-                int i = 0;
-                List<SplitStep> plan = reasoner.plan(tc.getDefaults(), () -> String.valueOf(i + 1));
+                var wrapper = new Object(){ int i = 0; };
+                List<SplitStep> plan = reasoner.plan(tc.getDefaults(), () -> {
+                    return String.valueOf(wrapper.i++ + 1);
+                }
+                
+                );
+                assertThat(plan.size()).isEqualTo(tc.getPlan().size());
                 assertThat(plan).isEqualTo(tc.getPlan());
             }
             );
@@ -441,10 +443,6 @@ public class AutoconfigureTest {
 
         TestCase(String n, String u) {
             this(n, u, null, null, null);
-        }
-
-        TestCase(String n, Autoconfigure.AttributeValueFQN a) {
-            this(n, a.toString(), null, null, null);
         }
 
         public String getU() {
