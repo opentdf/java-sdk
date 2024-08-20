@@ -1,6 +1,7 @@
 package io.opentdf.platform.sdk;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -36,10 +37,18 @@ class AutoConfigureException extends IOException {
     public AutoConfigureException(String message) {
         super(message);
     }
+
+    public AutoConfigureException(Exception e) {
+        super(e);
+    }
+
+    public AutoConfigureException(String message, Exception e) {
+        super(message, e);
+    }
 }
 
 // Attribute rule types: operators!
-class RuleTypes {
+class RuleType {
     public static final String HIERARCHY = "hierarchy";
     public static final String ALL_OF = "allOf";
     public static final String ANY_OF = "anyOf";
@@ -50,7 +59,7 @@ class RuleTypes {
 
 public class Autoconfigure {
 
-    public static Logger logger = LoggerFactory.getLogger(TDF.class);
+    public static Logger logger = LoggerFactory.getLogger(Autoconfigure.class);
 
     public static class SplitStep {
         public String kas;
@@ -154,7 +163,7 @@ public class Autoconfigure {
             try {
                 URLDecoder.decode(matcher.group(2), StandardCharsets.UTF_8.name());
                 URLDecoder.decode(matcher.group(3), StandardCharsets.UTF_8.name());
-            } catch (Exception e) {
+            } catch (UnsupportedEncodingException | IllegalArgumentException e) {
                 throw new AutoConfigureException("invalid type: error in attribute or value");
             }
 
@@ -166,7 +175,7 @@ public class Autoconfigure {
         public String toString() {
             return url;
         }
-        
+
         public boolean equals(Object obj) {
             if (this == obj) {
                 return true;
@@ -175,7 +184,7 @@ public class Autoconfigure {
                 return false;
             }
             AttributeValueFQN afqn = (AttributeValueFQN) obj;
-            if ((this.url.equals(afqn.url)) && (this.key.equals(afqn.key))){
+            if (this.key.equals(afqn.key)){
                 return true;
             }
             return false;
@@ -185,11 +194,11 @@ public class Autoconfigure {
             return key;
         }
 
-        public String authority() throws AutoConfigureException {
+        public String authority() {
             Pattern pattern = Pattern.compile("^(https?://[\\w./-]+)/attr/\\S*/value/\\S*$");
             Matcher matcher = pattern.matcher(url);
             if (!matcher.find()) {
-                throw new AutoConfigureException("invalid type");
+                throw new RuntimeException("invalid type");
             }
             return matcher.group(1);
         }
@@ -198,34 +207,34 @@ public class Autoconfigure {
             Pattern pattern = Pattern.compile("^(https?://[\\w./-]+/attr/\\S*)/value/\\S*$");
             Matcher matcher = pattern.matcher(url);
             if (!matcher.find()) {
-                throw new AutoConfigureException("invalid type");
+                throw new RuntimeException("invalid type");
             }
             return new AttributeNameFQN(matcher.group(1));
         }
 
-        public String value() throws AutoConfigureException {
+        public String value() {
             Pattern pattern = Pattern.compile("^https?://[\\w./-]+/attr/\\S*/value/(\\S*)$");
             Matcher matcher = pattern.matcher(url);
             if (!matcher.find()) {
-                throw new AutoConfigureException("invalid type");
+                throw new RuntimeException("invalid type");
             }
             try {
                 return URLDecoder.decode(matcher.group(1), StandardCharsets.UTF_8.name());
-            } catch (Exception e) {
-                throw new AutoConfigureException("invalid type");
+            } catch (UnsupportedEncodingException | IllegalArgumentException e) {
+                throw new RuntimeException("invalid type", e);
             }
         }
 
-        public String name() throws AutoConfigureException {
+        public String name() {
             Pattern pattern = Pattern.compile("^https?://[\\w./-]+/attr/(\\S*)/value/\\S*$");
             Matcher matcher = pattern.matcher(url);
             if (!matcher.find()) {
-                throw new AutoConfigureException("invalid attributeInstance");
+                throw new RuntimeException("invalid attributeInstance");
             }
             try {
                 return URLDecoder.decode(matcher.group(1), StandardCharsets.UTF_8.name());
-            } catch (Exception e) {
-                throw new AutoConfigureException("invalid attributeInstance");
+            } catch (UnsupportedEncodingException | IllegalArgumentException e) {
+                throw new RuntimeException("invalid attributeInstance", e);
             }
         }
     }
@@ -241,17 +250,12 @@ public class Autoconfigure {
     }
 
     // Structure capable of generating a split plan from a given set of data tags.
-    public static class Granter {
+    static class Granter {
         private final List<AttributeValueFQN> policy;
-        private Map<String, KeyAccessGrant> grants = new HashMap<>();
+        private final Map<String, KeyAccessGrant> grants = new HashMap<>();
 
         public Granter(List<AttributeValueFQN> policy) {
             this.policy = policy;
-        }
-
-        public Granter(List<AttributeValueFQN> policy, Map<String, KeyAccessGrant> grants) {
-            this.policy = policy;
-            this.grants = grants;
         }
 
         public  Map<String, KeyAccessGrant> getGrants() {
@@ -283,10 +287,6 @@ public class Autoconfigure {
             return grants.get(fqn.key);
         }
 
-        public interface StringOperator {
-            public String op();
-        }
-
 
         public List<SplitStep> plan(List<String> defaultKas, Supplier<String> genSplitID) throws AutoConfigureException {
             AttributeBooleanExpression b = constructAttributeBoolean();
@@ -296,7 +296,7 @@ public class Autoconfigure {
             }
 
             k = k.reduce();
-            int l = k.len();
+            int l = k.size();
             if (l == 0) {
                 // default behavior: split key across all default KAS
                 if (defaultKas.isEmpty()) {
@@ -336,7 +336,7 @@ public class Autoconfigure {
     
                     List<String> kases = grant.kases;
                     if (kases.isEmpty()) {
-                        kases = List.of(RuleTypes.EMPTY_TERM);
+                        kases = List.of(RuleType.EMPTY_TERM);
                     }
     
                     for (String kas : kases) {
@@ -345,7 +345,7 @@ public class Autoconfigure {
                 }
     
                 String op = ruleToOperator(clause.def.getRule());
-                if (op == RuleTypes.UNSPECIFIED) {
+                if (op == RuleType.UNSPECIFIED) {
                     logger.warn("Unknown attribute rule type: " + clause);
                 }
     
@@ -361,14 +361,13 @@ public class Autoconfigure {
             List<String> sortedPrefixes = new ArrayList<>();
             for (AttributeValueFQN aP : policy) {
                 AttributeNameFQN a = aP.prefix();
-                String p = a.toString().toLowerCase();
-                SingleAttributeClause clause = prefixes.get(p);
+                SingleAttributeClause clause = prefixes.get(a.getKey());
                 if (clause != null) {
                     clause.values.add(aP);
                 } else if (byAttribute(aP) != null) {
                     var x = new SingleAttributeClause(byAttribute(aP).attr, new ArrayList<AttributeValueFQN>(Arrays.asList(aP)));
-                    prefixes.put(p, x);
-                    sortedPrefixes.add(p);
+                    prefixes.put(a.getKey(), x);
+                    sortedPrefixes.add(a.getKey());
                 }
             }
 
@@ -381,7 +380,7 @@ public class Autoconfigure {
 
 
 
-        public class AttributeMapping {
+        static class AttributeMapping {
 
             private Map<AttributeNameFQN, Attribute> dict;
         
@@ -389,7 +388,7 @@ public class Autoconfigure {
                 this.dict = new HashMap<>();
             }
         
-            public void put(Attribute ad) throws Exception {
+            public void put(Attribute ad) throws AutoConfigureException {
                 if (this.dict == null) {
                     this.dict = new HashMap<>();
                 }
@@ -398,27 +397,27 @@ public class Autoconfigure {
                 try {
                     prefix = new AttributeNameFQN(ad.getFqn());
                 } catch (Exception e) {
-                    throw new Exception(e);
+                    throw new AutoConfigureException(e);
                 }
         
                 if (this.dict.containsKey(prefix)) {
-                    throw new Exception("Attribute prefix already found: [" + prefix.toString() + "]");
+                    throw new AutoConfigureException("Attribute prefix already found: [" + prefix.toString() + "]");
                 }
         
                 this.dict.put(prefix, ad);
             }
         
-            public Attribute get(AttributeNameFQN prefix) throws Exception {
+            public Attribute get(AttributeNameFQN prefix) throws AutoConfigureException {
                 Attribute ad = this.dict.get(prefix);
                 if (ad == null) {
-                    throw new Exception("Unknown attribute type: [" + prefix.toString() + "], not in [" + this.dict.keySet().toString() + "]");
+                    throw new AutoConfigureException("Unknown attribute type: [" + prefix.toString() + "], not in [" + this.dict.keySet().toString() + "]");
                 }
                 return ad;
             }
 
         }
 
-        public class SingleAttributeClause {
+        static class SingleAttributeClause {
 
             private Attribute def;
             private List<AttributeValueFQN> values;
@@ -429,7 +428,7 @@ public class Autoconfigure {
             }
         }
 
-        public class AttributeBooleanExpression {
+        class AttributeBooleanExpression {
 
             private List<SingleAttributeClause> must;
         
@@ -461,12 +460,7 @@ public class Autoconfigure {
         
                         StringJoiner joiner = new StringJoiner(",");
                         for (AttributeValueFQN v : values) {
-                            try {
-                                joiner.add(v.value());
-                            } catch (AutoConfigureException e) {
-                                // This shouldnt happen
-                                joiner.add("");
-                            }
+                            joiner.add(v.value());
                         }
                         sb.append(joiner.toString());
                         sb.append("}");
@@ -504,8 +498,8 @@ public class Autoconfigure {
         
             @Override
             public String toString() {
-                if (values.size() == 1 && values.get(0).getKas().equals(RuleTypes.EMPTY_TERM)) {
-                    return "[" + RuleTypes.EMPTY_TERM + "]";
+                if (values.size() == 1 && values.get(0).getKas().equals(RuleType.EMPTY_TERM)) {
+                    return "[" + RuleType.EMPTY_TERM + "]";
                 }
                 if (values.size() == 1) {
                     return "(" + values.get(0).getKas() + ")";
@@ -514,7 +508,7 @@ public class Autoconfigure {
                 StringBuilder sb = new StringBuilder();
                 sb.append("(");
                 String op = "⋀";
-                if (operator.equals(RuleTypes.ANY_OF)) {
+                if (operator.equals(RuleType.ANY_OF)) {
                     op = "⋁";
                 }
         
@@ -549,7 +543,7 @@ public class Autoconfigure {
                 return sb.toString();
             }
 
-            public int len() {
+            public int size() {
                 int count = 0;
                 for (KeyClause v : values) {
                     count += v.values.size();
@@ -560,14 +554,14 @@ public class Autoconfigure {
             public BooleanKeyExpression reduce() {
                 List<Disjunction> conjunction = new ArrayList<>();
                 for (KeyClause v : values) {
-                    if (v.operator.equals(RuleTypes.ANY_OF)) {
+                    if (v.operator.equals(RuleType.ANY_OF)) {
                         Disjunction terms = sortedNoDupes(v.values);
                         if (!terms.isEmpty() && !within(conjunction, terms)) {
                             conjunction.add(terms);
                         }
                     } else {
                         for (PublicKeyInfo k : v.values) {
-                            if (k.getKas().equals(RuleTypes.EMPTY_TERM)) {
+                            if (k.getKas().equals(RuleType.EMPTY_TERM)) {
                                 continue;
                             }
                             Disjunction terms = new Disjunction();
@@ -588,7 +582,7 @@ public class Autoconfigure {
                     for (String k : d) {
                         pki.add(new PublicKeyInfo(k));
                     }
-                    newValues.add(new KeyClause(RuleTypes.ANY_OF, pki));
+                    newValues.add(new KeyClause(RuleType.ANY_OF, pki));
                 }
                 return new BooleanKeyExpression(newValues);
             }
@@ -599,7 +593,7 @@ public class Autoconfigure {
     
                 for (PublicKeyInfo e : l) {
                     String kas = e.getKas();
-                    if (!kas.equals(RuleTypes.EMPTY_TERM) && !set.contains(kas)) {
+                    if (!kas.equals(RuleType.EMPTY_TERM) && !set.contains(kas)) {
                         set.add(kas);
                         list.add(kas);
                     }
@@ -689,7 +683,7 @@ public class Autoconfigure {
         GetAttributeValuesByFqnsResponse av;
         av = as.getAttributeValuesByFqn(request);
 
-        Granter grants = new Granter(Arrays.asList(fqns), new HashMap<>());
+        Granter grants = new Granter(Arrays.asList(fqns));
 
         for (Map.Entry<String,GetAttributeValuesByFqnsResponse.AttributeAndValue> entry : av.getFqnAttributeValuesMap().entrySet()) {
             String fqnstr = entry.getKey();
@@ -721,9 +715,8 @@ public class Autoconfigure {
     // Unlike `NewGranterFromService`, this works offline.
     public static Granter newGranterFromAttributes(Value... attrs) throws AutoConfigureException {
         List<AttributeValueFQN> policyList = new ArrayList<>(attrs.length);
-        Map<String, KeyAccessGrant> grantsMap = new HashMap<>();
 
-        Granter grants = new Granter(policyList, grantsMap);
+        Granter grants = new Granter(policyList);
 
         for (Value v : attrs) {
             AttributeValueFQN fqn;
