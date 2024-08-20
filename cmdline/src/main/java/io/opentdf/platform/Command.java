@@ -28,6 +28,7 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
 @CommandLine.Command(name = "tdf")
@@ -54,7 +55,7 @@ class Command {
             @Option(names = {"-a", "--attr"}, defaultValue = Option.NULL_VALUE) Optional<String> attributes,
             @Option(names = {"-c", "--autoconfigure"}, defaultValue = Option.NULL_VALUE) Optional<Boolean> autoconfigure,
             @Option(names = {"--mime-type"}, defaultValue = Option.NULL_VALUE) Optional<String> mimeType) throws
-            IOException, JOSEException {
+            IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException {
 
         var sdk = buildSDK();
         var kasInfos = kas.stream().map(k -> {

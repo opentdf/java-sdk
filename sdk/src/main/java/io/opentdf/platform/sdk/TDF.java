@@ -9,7 +9,7 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 
 import io.opentdf.platform.policy.Value;
-
+import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
 import io.opentdf.platform.sdk.Config.TDFConfig;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
 import io.opentdf.platform.sdk.Config.KASInfo;
@@ -32,6 +32,7 @@ import java.security.*;
 import java.util.function.Consumer;
 import java.text.ParseException;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 
 public class TDF {
 
@@ -376,7 +377,7 @@ public class TDF {
 
     public TDFObject createTDF(InputStream payload,
                                OutputStream outputStream,
-                               Config.TDFConfig tdfConfig, SDK.KAS kas, SDK.AttributesService attrService) throws IOException, JOSEException {
+                               Config.TDFConfig tdfConfig, SDK.KAS kas, AttributesServiceFutureStub attrService) throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException {
 
         if (tdfConfig.autoconfigure) {
             Autoconfigure.Granter granter = new Autoconfigure.Granter(new ArrayList<>());

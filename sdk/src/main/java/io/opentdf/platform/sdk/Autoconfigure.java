@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.StringJoiner;
+import java.util.concurrent.ExecutionException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -24,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import com.google.common.base.Supplier;
 
 import io.opentdf.platform.policy.KeyAccessServer;
+import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse.AttributeAndValue;
@@ -666,7 +668,7 @@ public class Autoconfigure {
     }
 
     // Gets a list of directory of KAS grants for a list of attribute FQNs
-    public static Granter newGranterFromService(SDK.AttributesService as, AttributeValueFQN... fqns) throws AutoConfigureException {
+    public static Granter newGranterFromService(AttributesServiceFutureStub as, AttributeValueFQN... fqns) throws AutoConfigureException, InterruptedException, ExecutionException {
         String[] fqnsStr = new String[fqns.length];
         for (int i = 0; i < fqns.length; i++) {
             fqnsStr[i] = fqns[i].toString();
@@ -678,7 +680,7 @@ public class Autoconfigure {
             .build();
 
         GetAttributeValuesByFqnsResponse av;
-        av = as.getAttributeValuesByFqn(request);
+        av = as.getAttributeValuesByFqns(request).get();
 
         Granter grants = new Granter(Arrays.asList(fqns));
 
