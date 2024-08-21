@@ -696,13 +696,13 @@ public class Autoconfigure {
             }
 
             Attribute def = pair.getAttribute();
-            if (def != null) {
-                grants.addAllGrants(fqn, def.getGrantsList(), def);
-            }
-
             Value v = pair.getValue();
-            if (v != null) {
+            if (v != null && !v.getGrantsList().isEmpty()) {
                 grants.addAllGrants(fqn, v.getGrantsList(), def);
+            } else {
+              if (def != null) {
+                  grants.addAllGrants(fqn, def.getGrantsList(), def);
+              }
             }
         }
 
