@@ -181,10 +181,10 @@ public class TDF {
             Map<String, Config.KASInfo> latestKASInfo = new HashMap<>();
             if (tdfConfig.splitPlan == null || tdfConfig.splitPlan.isEmpty()) {
                 // Default split plan: Split keys across all KASes
-                List<Autoconfigure.SplitStep> splitPlan = new ArrayList<>(tdfConfig.kasInfoList.size());
+                List<Autoconfigure.KeySplitStep> splitPlan = new ArrayList<>(tdfConfig.kasInfoList.size());
                 int i = 0;
                 for (Config.KASInfo kasInfo : tdfConfig.kasInfoList) {
-                    Autoconfigure.SplitStep step = new Autoconfigure.SplitStep(kasInfo.URL, "");
+                    Autoconfigure.KeySplitStep step = new Autoconfigure.KeySplitStep(kasInfo.URL, "");
                     if (tdfConfig.kasInfoList.size() > 1) {
                         step.splitID = String.format("s-%d", i++);
                     }
@@ -207,7 +207,7 @@ public class TDF {
             Map<String, List<Config.KASInfo>> conjunction = new HashMap<>();
             List<String> splitIDs = new ArrayList<>();
 
-            for (Autoconfigure.SplitStep splitInfo : tdfConfig.splitPlan) {
+            for (Autoconfigure.KeySplitStep splitInfo : tdfConfig.splitPlan) {
                 // Public key was passed in with kasInfoList
                 // TODO First look up in attribute information / add to split plan?
                 Config.KASInfo ki = latestKASInfo.get(splitInfo.kas);
@@ -215,8 +215,7 @@ public class TDF {
                     logger.info("no public key provided for KAS at {}, retrieving", splitInfo.kas);
                     var getKI = new Config.KASInfo();
                     getKI.URL = splitInfo.kas;
-                    getKI.PublicKey = kas.getPublicKey(getKI);
-                    getKI.KID = kas.getKid(getKI);
+                    getKI = kas.getPublicKey(getKI);
                     latestKASInfo.put(splitInfo.kas, getKI);
                     ki = getKI;
                 }
@@ -547,8 +546,9 @@ public class TDF {
                 continue;
             }
             logger.info("no public key provided for KAS at {}, retrieving", kasInfo.URL);
-            kasInfo.PublicKey = kas.getPublicKey(kasInfo);
-            kasInfo.KID = kas.getKid(kasInfo);
+            Config.KASInfo getKasInfo = kas.getPublicKey(kasInfo);
+            kasInfo.PublicKey = getKasInfo.PublicKey;
+            kasInfo.KID = getKasInfo.KID;
         }
     }
 
@@ -563,7 +563,7 @@ public class TDF {
         
         Set<String> knownSplits = new HashSet<String>();
         Set<String> foundSplits = new HashSet<String>();;
-        Map<Autoconfigure.SplitStep, Exception> skippedSplits = new HashMap<>();
+        Map<Autoconfigure.KeySplitStep, Exception> skippedSplits = new HashMap<>();
         boolean mixedSplits = manifest.encryptionInformation.keyAccessObj.size() > 1 &&
          (manifest.encryptionInformation.keyAccessObj.get(0).sid != null) &&
           !manifest.encryptionInformation.keyAccessObj.get(0).sid.isEmpty();
@@ -572,7 +572,7 @@ public class TDF {
 
         if (manifest.payload.isEncrypted) {
             for (Manifest.KeyAccess keyAccess: manifest.encryptionInformation.keyAccessObj) {
-                Autoconfigure.SplitStep ss = new Autoconfigure.SplitStep(keyAccess.url, keyAccess.sid);
+                Autoconfigure.KeySplitStep ss = new Autoconfigure.KeySplitStep(keyAccess.url, keyAccess.sid);
                 byte[] unwrappedKey;
                 if (!mixedSplits) {
                     unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy);
@@ -615,7 +615,7 @@ public class TDF {
                 List<Exception> exceptionList = new ArrayList<>(skippedSplits.size() + 1);
                 exceptionList.add(new Exception("splitKey.unable to reconstruct split key: " + skippedSplits));
                 
-                for (Map.Entry<Autoconfigure.SplitStep, Exception> entry : skippedSplits.entrySet()) {
+                for (Map.Entry<Autoconfigure.KeySplitStep, Exception> entry : skippedSplits.entrySet()) {
                     exceptionList.add(entry.getValue());
                 }
                 

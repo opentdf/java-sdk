@@ -42,13 +42,10 @@ public class NanoTDFTest {
         }
 
         @Override
-        public String getPublicKey(Config.KASInfo kasInfo) {
-            return kasPublicKey;
-        }
-
-        @Override
-        public String getKid(Config.KASInfo kasInfo) {
-            return KID;
+        public Config.KASInfo getPublicKey(Config.KASInfo kasInfo) {
+            Config.KASInfo returnKI = new Config.KASInfo();
+            returnKI.PublicKey = kasPublicKey;
+            return returnKI;
         }
 
         @Override

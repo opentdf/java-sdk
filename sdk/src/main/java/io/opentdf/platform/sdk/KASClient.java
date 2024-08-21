@@ -12,7 +12,9 @@ import com.nimbusds.jwt.SignedJWT;
 import io.grpc.ManagedChannel;
 import io.opentdf.platform.kas.AccessServiceGrpc;
 import io.opentdf.platform.kas.PublicKeyRequest;
+import io.opentdf.platform.kas.PublicKeyResponse;
 import io.opentdf.platform.kas.RewrapRequest;
+import io.opentdf.platform.sdk.Autoconfigure.KeySplitStep;
 import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 
@@ -22,9 +24,12 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Function;
 
 import static java.lang.String.format;
@@ -35,6 +40,8 @@ public class KASClient implements SDK.KAS, AutoCloseable {
     private final RSASSASigner signer;
     private final AsymDecryption decryptor;
     private final String publicKeyPEM;
+
+    private KASKeyCache kasKeyCache;
 
     /***
      * A client that communicates with KAS
@@ -51,28 +58,41 @@ public class KASClient implements SDK.KAS, AutoCloseable {
         var encryptionKeypair = CryptoUtils.generateRSAKeypair();
         decryptor = new AsymDecryption(encryptionKeypair.getPrivate());
         publicKeyPEM = CryptoUtils.getRSAPublicKeyPEM(encryptionKeypair.getPublic());
+
+        this.kasKeyCache = new KASKeyCache();
     }
 
     @Override
     public String getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
+        //String.format("ec:%s", curve.toString())
         return getStub(kasInfo.URL)
                 .publicKey(PublicKeyRequest.newBuilder().setAlgorithm(String.format("ec:%s", curve.toString())).build())
                 .getPublicKey();
     }
 
     @Override
-    public String getPublicKey(Config.KASInfo kasInfo) {
-        return getStub(kasInfo.URL)
-                .publicKey(PublicKeyRequest.getDefaultInstance())
-                .getPublicKey();
+    public Config.KASInfo getPublicKey(Config.KASInfo kasInfo) {
+        Config.KASInfo cachedValue = this.kasKeyCache.get(kasInfo.URL, kasInfo.Algorithm);
+        if (cachedValue != null) {
+            return cachedValue;
+        }
+        PublicKeyResponse resp = getStub(kasInfo.URL).publicKey(PublicKeyRequest.getDefaultInstance());
+        
+        var kiCopy = new Config.KASInfo();
+        kiCopy.KID = resp.getKid();
+        kiCopy.PublicKey = resp.getPublicKey();
+        kiCopy.URL = kasInfo.URL;
+
+        this.kasKeyCache.store(kiCopy);
+        return kiCopy;
     }
 
-    @Override
-    public String getKid(Config.KASInfo kasInfo) {
-        return getStub(kasInfo.URL)
-                .publicKey(PublicKeyRequest.getDefaultInstance())
-                .getKid();
-    }
+    // @Override
+    // public String getKid(Config.KASInfo kasInfo) {
+    //     return getStub(kasInfo.URL)
+    //             .publicKey(PublicKeyRequest.getDefaultInstance())
+    //             .getKid();
+    // }
 
     private String normalizeAddress(String urlString) {
         URL url;
@@ -107,6 +127,82 @@ public class KASClient implements SDK.KAS, AutoCloseable {
         stubs.clear();
         for (var entry: entries) {
             entry.channel.shutdownNow();
+        }
+    }
+
+    class TimeStampedKASInfo {
+        Config.KASInfo kasInfo;
+        LocalDateTime timestamp;
+
+        public TimeStampedKASInfo(Config.KASInfo kasInfo, LocalDateTime timestamp) {
+            this.kasInfo = kasInfo;
+            this.timestamp = timestamp;
+        }
+    }
+
+    class KASKeyRequest {
+        private String url;
+        private String algorithm;
+    
+        public KASKeyRequest(String url, String algorithm) {
+            this.url = url;
+            this.algorithm = algorithm;
+        }
+    
+        // Override equals and hashCode to ensure proper functioning of the HashMap
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || !(o instanceof KASKeyRequest)) return false;
+            KASKeyRequest that = (KASKeyRequest) o;
+           if (algorithm == null){
+                return url.equals(that.url);
+            }
+            return url.equals(that.url) && algorithm.equals(that.algorithm);
+        }
+    
+        @Override
+        public int hashCode() {
+            int result = 31 * url.hashCode();
+            if (algorithm != null) {
+                result = result + algorithm.hashCode();
+            }
+            return result;
+        }
+    }
+
+    class KASKeyCache {
+        private Map<KASKeyRequest, TimeStampedKASInfo> cache;
+
+        public KASKeyCache() {
+            this.cache = new HashMap<>();
+        }
+
+        public void clear() {
+            this.cache = new HashMap<>();
+        }
+
+        public Config.KASInfo get(String url, String algorithm) {
+            KASKeyRequest cacheKey = new KASKeyRequest(url, algorithm);
+            LocalDateTime now = LocalDateTime.now();
+            TimeStampedKASInfo cachedValue = cache.get(cacheKey);
+
+            if (cachedValue == null) {
+                return null;
+            }
+
+            LocalDateTime anHourAgo = now.minus(1, ChronoUnit.HOURS);
+            if (anHourAgo.isAfter(cachedValue.timestamp)) {
+                cache.remove(cacheKey);
+                return null;
+            }
+
+            return cachedValue.kasInfo;
+        }
+
+        public void store(Config.KASInfo kasInfo) {
+            KASKeyRequest cacheKey = new KASKeyRequest(kasInfo.URL, kasInfo.Algorithm);
+            cache.put(cacheKey, new TimeStampedKASInfo(kasInfo, LocalDateTime.now()));
         }
     }
 

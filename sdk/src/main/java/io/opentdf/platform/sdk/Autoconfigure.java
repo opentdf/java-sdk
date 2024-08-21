@@ -48,11 +48,11 @@ public class Autoconfigure {
 
     public static Logger logger = LoggerFactory.getLogger(Autoconfigure.class);
 
-    public static class SplitStep {
+    public static class KeySplitStep {
         public String kas;
         public String splitID;
 
-        public SplitStep(String kas, String splitId) {
+        public KeySplitStep(String kas, String splitId) {
             this.kas = kas;
             this.splitID = splitId;
         }
@@ -62,10 +62,10 @@ public class Autoconfigure {
             if (this == obj) {
                 return true;
             }
-            if (obj == null || !(obj instanceof SplitStep)) {
+            if (obj == null || !(obj instanceof KeySplitStep)) {
                 return false;
             }
-            SplitStep ss = (SplitStep) obj;
+            KeySplitStep ss = (KeySplitStep) obj;
             if ((this.kas.equals(ss.kas)) && (this.splitID.equals(ss.splitID))){
                 return true;
             }
@@ -287,7 +287,7 @@ public class Autoconfigure {
         }
 
 
-        public List<SplitStep> plan(List<String> defaultKas, Supplier<String> genSplitID) throws AutoConfigureException {
+        public List<KeySplitStep> plan(List<String> defaultKas, Supplier<String> genSplitID) throws AutoConfigureException {
             AttributeBooleanExpression b = constructAttributeBoolean();
             BooleanKeyExpression k = insertKeysForAttribute(b);
             if (k == null) {
@@ -301,21 +301,21 @@ public class Autoconfigure {
                 if (defaultKas.isEmpty()) {
                     throw new AutoConfigureException("no default KAS specified; required for grantless plans");
                 } else if (defaultKas.size() == 1) {
-                    return Collections.singletonList(new SplitStep(defaultKas.get(0), ""));
+                    return Collections.singletonList(new KeySplitStep(defaultKas.get(0), ""));
                 } else {
-                    List<SplitStep> result = new ArrayList<>();
+                    List<KeySplitStep> result = new ArrayList<>();
                     for (String kas : defaultKas) {
-                        result.add(new SplitStep(kas, genSplitID.get()));
+                        result.add(new KeySplitStep(kas, genSplitID.get()));
                     }
                     return result;
                 }
             }
 
-            List<SplitStep> steps = new ArrayList<>();
+            List<KeySplitStep> steps = new ArrayList<>();
             for (KeyClause v : k.values) {
                 String splitID = (l > 1) ? genSplitID.get() : "";
                 for (PublicKeyInfo o : v.values) {
-                    steps.add(new SplitStep(o.kas, splitID));
+                    steps.add(new KeySplitStep(o.kas, splitID));
                 }
             }
             return steps;

@@ -61,7 +61,7 @@ public class KASClientTest {
             try (var kas = new KASClient(channelFactory, dpopKey)) {
                 Config.KASInfo kasInfo = new Config.KASInfo();
                 kasInfo.URL = "localhost:" + rewrapServer.getPort();
-                assertThat(kas.getPublicKey(kasInfo)).isEqualTo("тај је клуц");
+                assertThat(kas.getPublicKey(kasInfo).PublicKey).isEqualTo("тај је клуц");
             }
         } finally {
             if (rewrapServer != null) {
@@ -94,7 +94,7 @@ public class KASClientTest {
             try (var kas = new KASClient(channelFactory, dpopKey)) {
                 Config.KASInfo kasInfo = new Config.KASInfo();
                 kasInfo.URL = "localhost:" + server.getPort();
-                assertThat(kas.getKid(kasInfo)).isEqualTo("r1");
+                assertThat(kas.getPublicKey(kasInfo).KID).isEqualTo("r1");
             }
         } finally {
             if (server != null) {

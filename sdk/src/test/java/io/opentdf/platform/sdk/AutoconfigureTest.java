@@ -2,6 +2,7 @@ package io.opentdf.platform.sdk;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 import io.opentdf.platform.policy.Attribute;
@@ -9,8 +10,8 @@ import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
 import io.opentdf.platform.sdk.Autoconfigure.Granter.AttributeBooleanExpression;
 import io.opentdf.platform.sdk.Autoconfigure.Granter.BooleanKeyExpression;
+import io.opentdf.platform.sdk.Autoconfigure.KeySplitStep;
 import io.opentdf.platform.sdk.Autoconfigure.Granter;
-import io.opentdf.platform.sdk.Autoconfigure.SplitStep;
 import io.opentdf.platform.policy.Namespace;
 import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.AttributeRuleTypeEnum;
@@ -28,13 +29,13 @@ import java.util.regex.Pattern;
 
 public class AutoconfigureTest {
 
-    private static final String KAS_AU = "http://kas.au/";
-    private static final String KAS_CA = "http://kas.ca/";
-    private static final String KAS_UK = "http://kas.uk/";
-    private static final String KAS_NZ = "http://kas.nz/";
-    private static final String KAS_US = "http://kas.us/";
-    private static final String KAS_US_HCS = "http://hcs.kas.us/";
-    private static final String KAS_US_SA = "http://si.kas.us/";
+    private static final String KAS_AU = "https://kas.au/";
+    private static final String KAS_CA = "https://kas.ca/";
+    private static final String KAS_UK = "https://kas.uk/";
+    private static final String KAS_NZ = "https://kas.nz/";
+    private static final String KAS_US = "https://kas.us/";
+    private static final String KAS_US_HCS = "https://hcs.kas.us/";
+    private static final String KAS_US_SA = "https://si.kas.us/";
     private static final String AUTHORITY = "https://virtru.com/";
 
     private static Autoconfigure.AttributeNameFQN CLS;
@@ -220,10 +221,10 @@ public class AutoconfigureTest {
     @Test
     public void testAttributeFromURL() throws AutoConfigureException {
         for (TestCase tc : List.of(
-            new TestCase("letter", "http://e/attr/a", "http://e", "a"),
-            new TestCase("number", "http://e/attr/1", "http://e", "1"),
-            new TestCase("emoji", "http://e/attr/%F0%9F%98%81", "http://e", "😁"),
-            new TestCase("dash", "http://a-b.com/attr/b-c", "http://a-b.com", "b-c")
+            new TestCase("letter", "https://e/attr/a", "https://e", "a"),
+            new TestCase("number", "https://e/attr/1", "https://e", "1"),
+            new TestCase("emoji", "https://e/attr/%F0%9F%98%81", "https://e", "😁"),
+            new TestCase("dash", "https://a-b.com/attr/b-c", "https://a-b.com", "b-c")
         )) {
             Autoconfigure.AttributeNameFQN a = new Autoconfigure.AttributeNameFQN(tc.getU());
             assertThat(a.authority()).isEqualTo(tc.getAuth());
@@ -234,13 +235,13 @@ public class AutoconfigureTest {
     @Test
     public void testAttributeFromMalformedURL() {
         for (TestCase tc : List.of(
-            new TestCase("no name", "http://e/attr"),
+            new TestCase("no name", "https://e/attr"),
             new TestCase("invalid prefix 1", "hxxp://e/attr/a"),
             new TestCase("invalid prefix 2", "e/attr/a"),
             new TestCase("invalid prefix 3", "file://e/attr/a"),
-            new TestCase("invalid prefix 4", "http:///attr/a"),
+            new TestCase("invalid prefix 4", "https:///attr/a"),
             new TestCase("bad encoding", "https://a/attr/%😁"),
-            new TestCase("with value", "http://e/attr/a/value/b")
+            new TestCase("with value", "https://e/attr/a/value/b")
         )) {
             assertThatThrownBy(() -> new Autoconfigure.AttributeNameFQN(tc.getU()))
                 .isInstanceOf(AutoConfigureException.class);
@@ -250,12 +251,12 @@ public class AutoconfigureTest {
     @Test
     public void testAttributeValueFromURL() {
         List<TestCase> testCases = List.of(
-            new TestCase("number", "http://e/attr/a/value/1", "http://e", "a", "1"),
-            new TestCase("space", "http://e/attr/a/value/%20", "http://e", "a", " "),
-            new TestCase("emoji", "http://e/attr/a/value/%F0%9F%98%81", "http://e", "a", "😁"),
-            new TestCase("numberdef", "http://e/attr/1/value/one", "http://e", "1", "one"),
-            new TestCase("valuevalue", "http://e/attr/value/value/one", "http://e", "value", "one"),
-            new TestCase("dash", "http://a-b.com/attr/b-c/value/c-d", "http://a-b.com", "b-c", "c-d")
+            new TestCase("number", "https://e/attr/a/value/1", "https://e", "a", "1"),
+            new TestCase("space", "https://e/attr/a/value/%20", "https://e", "a", " "),
+            new TestCase("emoji", "https://e/attr/a/value/%F0%9F%98%81", "https://e", "a", "😁"),
+            new TestCase("numberdef", "https://e/attr/1/value/one", "https://e", "1", "one"),
+            new TestCase("valuevalue", "https://e/attr/value/value/one", "https://e", "value", "one"),
+            new TestCase("dash", "https://a-b.com/attr/b-c/value/c-d", "https://a-b.com", "b-c", "c-d")
         );
 
         for (TestCase tc : testCases) {
@@ -271,8 +272,8 @@ public class AutoconfigureTest {
     @Test
     public void testAttributeValueFromMalformedURL() {
         List<TestCase> testCases = List.of(
-            new TestCase("no name", "http://e/attr/value/1"),
-            new TestCase("no value", "http://e/attr/who/value"),
+            new TestCase("no name", "https://e/attr/value/1"),
+            new TestCase("no value", "https://e/attr/who/value"),
             new TestCase("invalid prefix 1", "hxxp://e/attr/a/value/1"),
             new TestCase("invalid prefix 2", "e/attr/a/a/value/1"),
             new TestCase("bad encoding", "https://a/attr/emoji/value/%😁")
@@ -326,9 +327,9 @@ public class AutoconfigureTest {
                 List.of(clsS, rel2can),
                 List.of(KAS_US),
                 "https://virtru.com/attr/Classification/value/Secret&https://virtru.com/attr/Releasable%20To/value/CAN",
-                "[DEFAULT]&(http://kas.ca/)",
-                "(http://kas.ca/)",
-                List.of(new SplitStep(KAS_CA, ""))
+                "[DEFAULT]&(https://kas.ca/)",
+                "(https://kas.ca/)",
+                List.of(new KeySplitStep(KAS_CA, ""))
             ),
             new ReasonerTestCase(
                 "one defaulted attr",
@@ -337,7 +338,7 @@ public class AutoconfigureTest {
                 "https://virtru.com/attr/Classification/value/Secret",
                 "[DEFAULT]",
                 "",
-                List.of(new SplitStep(KAS_US, ""))
+                List.of(new KeySplitStep(KAS_US, ""))
             ),
             new ReasonerTestCase(
                 "empty policy",
@@ -346,7 +347,7 @@ public class AutoconfigureTest {
                 "∅",
                 "",
                 "",
-                List.of(new SplitStep(KAS_US, ""))
+                List.of(new KeySplitStep(KAS_US, ""))
             ),
             new ReasonerTestCase(
                 "old school splits",
@@ -355,25 +356,25 @@ public class AutoconfigureTest {
                 "∅",
                 "",
                 "",
-                List.of(new SplitStep(KAS_AU, "1"), new SplitStep(KAS_CA, "2"), new SplitStep(KAS_US, "3"))
+                List.of(new KeySplitStep(KAS_AU, "1"), new KeySplitStep(KAS_CA, "2"), new KeySplitStep(KAS_US, "3"))
             ),
             new ReasonerTestCase(
                 "simple with all three ops",
                 List.of(clsS, rel2gbr, n2kInt),
                 List.of(KAS_US),
                 "https://virtru.com/attr/Classification/value/Secret&https://virtru.com/attr/Releasable%20To/value/GBR&https://virtru.com/attr/Need%20to%20Know/value/INT",
-                "[DEFAULT]&(http://kas.uk/)&(http://kas.uk/)",
-                "(http://kas.uk/)",
-                List.of(new SplitStep(KAS_UK, ""))
+                "[DEFAULT]&(https://kas.uk/)&(https://kas.uk/)",
+                "(https://kas.uk/)",
+                List.of(new KeySplitStep(KAS_UK, ""))
             ),
             new ReasonerTestCase(
                 "compartments",
                 List.of(clsS, rel2gbr, rel2usa, n2kHCS, n2kSI),
                 List.of(KAS_US),
                 "https://virtru.com/attr/Classification/value/Secret&https://virtru.com/attr/Releasable%20To/value/{GBR,USA}&https://virtru.com/attr/Need%20to%20Know/value/{HCS,SI}",
-                "[DEFAULT]&(http://kas.uk/⋁http://kas.us/)&(http://hcs.kas.us/⋀http://si.kas.us/)",
-                "(http://kas.uk/⋁http://kas.us/)&(http://hcs.kas.us/)&(http://si.kas.us/)",
-                List.of(new SplitStep(KAS_UK, "1"), new SplitStep(KAS_US, "1"), new SplitStep(KAS_US_HCS, "2"), new SplitStep(KAS_US_SA, "3"))
+                "[DEFAULT]&(https://kas.uk/⋁https://kas.us/)&(https://hcs.kas.us/⋀https://si.kas.us/)",
+                "(https://kas.uk/⋁https://kas.us/)&(https://hcs.kas.us/)&(https://si.kas.us/)",
+                List.of(new KeySplitStep(KAS_UK, "1"), new KeySplitStep(KAS_US, "1"), new KeySplitStep(KAS_US_HCS, "2"), new KeySplitStep(KAS_US_SA, "3"))
             ),
             new ReasonerTestCase(
                 "compartments - case insensitive",
@@ -382,9 +383,9 @@ public class AutoconfigureTest {
                 ),
                 List.of(KAS_US),
                 "https://virtru.com/attr/Classification/value/Secret&https://virtru.com/attr/Releasable%20To/value/{GBR,USA}&https://virtru.com/attr/Need%20to%20Know/value/{HCS,SI}",
-                "[DEFAULT]&(http://kas.uk/⋁http://kas.us/)&(http://hcs.kas.us/⋀http://si.kas.us/)",
-                "(http://kas.uk/⋁http://kas.us/)&(http://hcs.kas.us/)&(http://si.kas.us/)",
-                List.of(new SplitStep(KAS_UK, "1"), new SplitStep(KAS_US, "1"), new SplitStep(KAS_US_HCS, "2"), new SplitStep(KAS_US_SA, "3"))
+                "[DEFAULT]&(https://kas.uk/⋁https://kas.us/)&(https://hcs.kas.us/⋀https://si.kas.us/)",
+                "(https://kas.uk/⋁https://kas.us/)&(https://hcs.kas.us/)&(https://si.kas.us/)",
+                List.of(new KeySplitStep(KAS_UK, "1"), new KeySplitStep(KAS_US, "1"), new KeySplitStep(KAS_US_HCS, "2"), new KeySplitStep(KAS_US_SA, "3"))
             )
         );
 
@@ -403,7 +404,7 @@ public class AutoconfigureTest {
                 assertThat(reduced).isEqualTo(tc.getReduced());
 
                 var wrapper = new Object(){ int i = 0; };
-                List<SplitStep> plan = reasoner.plan(tc.getDefaults(), () -> {
+                List<KeySplitStep> plan = reasoner.plan(tc.getDefaults(), () -> {
                     return String.valueOf(wrapper.i++ + 1);
                 }
                 
@@ -498,9 +499,9 @@ public class AutoconfigureTest {
         private final String ats;
         private final String keyed;
         private final String reduced;
-        private final List<SplitStep> plan;
+        private final List<KeySplitStep> plan;
 
-        ReasonerTestCase(String name, List<AttributeValueFQN> policy, List<String> defaults, String ats, String keyed, String reduced, List<SplitStep> plan) {
+        ReasonerTestCase(String name, List<AttributeValueFQN> policy, List<String> defaults, String ats, String keyed, String reduced, List<KeySplitStep> plan) {
             this.name = name;
             this.policy = policy;
             this.defaults = defaults;
@@ -534,7 +535,7 @@ public class AutoconfigureTest {
             return reduced;
         }
 
-        public List<SplitStep> getPlan() {
+        public List<KeySplitStep> getPlan() {
             return plan;
         }
     }

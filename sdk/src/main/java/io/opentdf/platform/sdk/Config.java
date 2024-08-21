@@ -34,6 +34,7 @@ public class Config {
         public String PublicKey;
         public String KID;
         public Boolean Default;
+        public String Algorithm;
     }
 
 
@@ -88,7 +89,7 @@ public class Config {
         public List<KASInfo> kasInfoList;
         public List<io.opentdf.platform.sdk.AssertionConfig> assertionConfigList;
         public String mimeType;
-        public List<Autoconfigure.SplitStep> splitPlan;
+        public List<Autoconfigure.KeySplitStep> splitPlan;
 
         public TDFConfig() {
             this.autoconfigure = true;
@@ -163,7 +164,7 @@ public class Config {
         };
     }
 
-    public static Consumer<TDFConfig> withSplitPlan(Autoconfigure.SplitStep... p) {
+    public static Consumer<TDFConfig> withSplitPlan(Autoconfigure.KeySplitStep... p) {
         return (TDFConfig config) -> {
             config.splitPlan = new ArrayList<>(Arrays.asList(p));
             config.autoconfigure = false;
