@@ -1,7 +1,6 @@
 package io.opentdf.platform.sdk;
 
 import com.google.gson.Gson;
-import com.google.gson.annotations.SerializedName;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -14,7 +13,6 @@ import io.opentdf.platform.kas.AccessServiceGrpc;
 import io.opentdf.platform.kas.PublicKeyRequest;
 import io.opentdf.platform.kas.PublicKeyResponse;
 import io.opentdf.platform.kas.RewrapRequest;
-import io.opentdf.platform.sdk.Autoconfigure.KeySplitStep;
 import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 
@@ -24,12 +22,9 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.function.Function;
 
 import static java.lang.String.format;
@@ -64,7 +59,6 @@ public class KASClient implements SDK.KAS, AutoCloseable {
 
     @Override
     public String getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
-        //String.format("ec:%s", curve.toString())
         return getStub(kasInfo.URL)
                 .publicKey(PublicKeyRequest.newBuilder().setAlgorithm(String.format("ec:%s", curve.toString())).build())
                 .getPublicKey();
@@ -82,17 +76,16 @@ public class KASClient implements SDK.KAS, AutoCloseable {
         kiCopy.KID = resp.getKid();
         kiCopy.PublicKey = resp.getPublicKey();
         kiCopy.URL = kasInfo.URL;
+        kiCopy.Algorithm = kasInfo.Algorithm;
 
         this.kasKeyCache.store(kiCopy);
         return kiCopy;
     }
 
-    // @Override
-    // public String getKid(Config.KASInfo kasInfo) {
-    //     return getStub(kasInfo.URL)
-    //             .publicKey(PublicKeyRequest.getDefaultInstance())
-    //             .getKid();
-    // }
+    @Override
+    public KASKeyCache getKeyCache(){
+        return this.kasKeyCache;
+    }
 
     private String normalizeAddress(String urlString) {
         URL url;
@@ -127,82 +120,6 @@ public class KASClient implements SDK.KAS, AutoCloseable {
         stubs.clear();
         for (var entry: entries) {
             entry.channel.shutdownNow();
-        }
-    }
-
-    class TimeStampedKASInfo {
-        Config.KASInfo kasInfo;
-        LocalDateTime timestamp;
-
-        public TimeStampedKASInfo(Config.KASInfo kasInfo, LocalDateTime timestamp) {
-            this.kasInfo = kasInfo;
-            this.timestamp = timestamp;
-        }
-    }
-
-    class KASKeyRequest {
-        private String url;
-        private String algorithm;
-    
-        public KASKeyRequest(String url, String algorithm) {
-            this.url = url;
-            this.algorithm = algorithm;
-        }
-    
-        // Override equals and hashCode to ensure proper functioning of the HashMap
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || !(o instanceof KASKeyRequest)) return false;
-            KASKeyRequest that = (KASKeyRequest) o;
-           if (algorithm == null){
-                return url.equals(that.url);
-            }
-            return url.equals(that.url) && algorithm.equals(that.algorithm);
-        }
-    
-        @Override
-        public int hashCode() {
-            int result = 31 * url.hashCode();
-            if (algorithm != null) {
-                result = result + algorithm.hashCode();
-            }
-            return result;
-        }
-    }
-
-    class KASKeyCache {
-        private Map<KASKeyRequest, TimeStampedKASInfo> cache;
-
-        public KASKeyCache() {
-            this.cache = new HashMap<>();
-        }
-
-        public void clear() {
-            this.cache = new HashMap<>();
-        }
-
-        public Config.KASInfo get(String url, String algorithm) {
-            KASKeyRequest cacheKey = new KASKeyRequest(url, algorithm);
-            LocalDateTime now = LocalDateTime.now();
-            TimeStampedKASInfo cachedValue = cache.get(cacheKey);
-
-            if (cachedValue == null) {
-                return null;
-            }
-
-            LocalDateTime anHourAgo = now.minus(1, ChronoUnit.HOURS);
-            if (anHourAgo.isAfter(cachedValue.timestamp)) {
-                cache.remove(cacheKey);
-                return null;
-            }
-
-            return cachedValue.kasInfo;
-        }
-
-        public void store(Config.KASInfo kasInfo) {
-            KASKeyRequest cacheKey = new KASKeyRequest(kasInfo.URL, kasInfo.Algorithm);
-            cache.put(cacheKey, new TimeStampedKASInfo(kasInfo, LocalDateTime.now()));
         }
     }
 

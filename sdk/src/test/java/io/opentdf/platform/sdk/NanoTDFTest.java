@@ -89,6 +89,11 @@ public class NanoTDFTest {
             byte[] key = ECKeyPair.calculateHKDF(hashOfSalt, symmetricKey);
             return key;
         }
+
+        @Override
+        public KASKeyCache getKeyCache(){
+            return new KASKeyCache();
+        }
     };
 
     private static ArrayList<KeyPair> keypairs = new ArrayList<>();

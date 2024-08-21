@@ -81,6 +81,11 @@ public class TDFTest {
         public byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL) {
             return null;
         }
+
+        @Override
+        public KASKeyCache getKeyCache(){
+            return new KASKeyCache();
+        }
     };
 
     AttributesServiceGrpc.AttributesServiceFutureStub attributeGrpcStub;

@@ -2,8 +2,12 @@ package io.opentdf.platform.sdk;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.Assert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import io.opentdf.platform.policy.Attribute;
 import io.opentdf.platform.policy.Value;
@@ -13,11 +17,16 @@ import io.opentdf.platform.sdk.Autoconfigure.Granter.BooleanKeyExpression;
 import io.opentdf.platform.sdk.Autoconfigure.KeySplitStep;
 import io.opentdf.platform.sdk.Autoconfigure.Granter;
 import io.opentdf.platform.policy.Namespace;
+import io.opentdf.platform.policy.PublicKey;
 import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.AttributeRuleTypeEnum;
+import io.opentdf.platform.policy.KasPublicKey;
+import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
+import io.opentdf.platform.policy.KasPublicKeySet;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -538,5 +547,116 @@ public class AutoconfigureTest {
         public List<KeySplitStep> getPlan() {
             return plan;
         }
+    }
+
+    @Test
+    void testStoreKeysToCache_NoKeys() {
+        KASKeyCache keyCache = Mockito.mock(KASKeyCache.class);
+        KeyAccessServer kas1 = KeyAccessServer.newBuilder().setPublicKey(
+            PublicKey.newBuilder().setCached(
+                KasPublicKeySet.newBuilder())
+                ).build();
+
+
+        List<KeyAccessServer> kases = List.of(kas1);
+
+        Autoconfigure.storeKeysToCache(kases, keyCache);
+
+        verify(keyCache, never()).store(any(Config.KASInfo.class));
+    }
+
+    @Test
+    void testStoreKeysToCache_WithKeys() {
+        // Create a real KASKeyCache instance instead of mocking it
+        KASKeyCache keyCache = new KASKeyCache();
+
+        // Create the KasPublicKey object
+        KasPublicKey kasPublicKey1 = KasPublicKey.newBuilder()
+            .setAlg(KasPublicKeyAlgEnum.KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1)
+            .setKid("test-kid")
+            .setPem("public-key-pem")
+            .build();
+
+        // Add the KasPublicKey to a list
+        List<KasPublicKey> kasPublicKeys = new ArrayList<>();
+        kasPublicKeys.add(kasPublicKey1);
+
+        // Create the KeyAccessServer object
+        KeyAccessServer kas1 = KeyAccessServer.newBuilder()
+            .setPublicKey(PublicKey.newBuilder()
+                .setCached(KasPublicKeySet.newBuilder()
+                    .addAllKeys(kasPublicKeys)
+                    .build())
+            )
+            .setUri("https://example.com/kas")
+            .build();
+
+        // Add the KeyAccessServer to a list
+        List<KeyAccessServer> kases = List.of(kas1);
+
+        // Call the method under test
+        Autoconfigure.storeKeysToCache(kases, keyCache);
+
+        // Verify that the key was stored in the cache
+        Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1");
+        assertNotNull(storedKASInfo);
+        assertEquals("https://example.com/kas", storedKASInfo.URL);
+        assertEquals("test-kid", storedKASInfo.KID);
+        assertEquals("ec:secp256r1", storedKASInfo.Algorithm);
+        assertEquals("public-key-pem", storedKASInfo.PublicKey);
+    }
+
+    @Test
+    void testStoreKeysToCache_MultipleKasEntries() {
+        // Create a real KASKeyCache instance instead of mocking it
+        KASKeyCache keyCache = new KASKeyCache();
+
+        // Create the KasPublicKey object
+        KasPublicKey kasPublicKey1 = KasPublicKey.newBuilder()
+            .setAlg(KasPublicKeyAlgEnum.KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1)
+            .setKid("test-kid")
+            .setPem("public-key-pem")
+            .build();
+        KasPublicKey kasPublicKey2 = KasPublicKey.newBuilder()
+            .setAlg(KasPublicKeyAlgEnum.KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048)
+            .setKid("test-kid-2")
+            .setPem("public-key-pem-2")
+            .build();
+
+        // Add the KasPublicKey to a list
+        List<KasPublicKey> kasPublicKeys = new ArrayList<>();
+        kasPublicKeys.add(kasPublicKey1);
+        kasPublicKeys.add(kasPublicKey2);
+
+        // Create the KeyAccessServer object
+        KeyAccessServer kas1 = KeyAccessServer.newBuilder()
+            .setPublicKey(PublicKey.newBuilder()
+                .setCached(KasPublicKeySet.newBuilder()
+                    .addAllKeys(kasPublicKeys)
+                    .build())
+            )
+            .setUri("https://example.com/kas")
+            .build();
+
+        // Add the KeyAccessServer to a list
+        List<KeyAccessServer> kases = List.of(kas1);
+
+        // Call the method under test
+        Autoconfigure.storeKeysToCache(kases, keyCache);
+
+        // Verify that the key was stored in the cache
+        Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1");
+        assertNotNull(storedKASInfo);
+        assertEquals("https://example.com/kas", storedKASInfo.URL);
+        assertEquals("test-kid", storedKASInfo.KID);
+        assertEquals("ec:secp256r1", storedKASInfo.Algorithm);
+        assertEquals("public-key-pem", storedKASInfo.PublicKey);
+
+        Config.KASInfo storedKASInfo2 = keyCache.get("https://example.com/kas", "rsa:2048");
+        assertNotNull(storedKASInfo2);
+        assertEquals("https://example.com/kas", storedKASInfo2.URL);
+        assertEquals("test-kid-2", storedKASInfo2.KID);
+        assertEquals("rsa:2048", storedKASInfo2.Algorithm);
+        assertEquals("public-key-pem-2", storedKASInfo2.PublicKey);
     }
 }

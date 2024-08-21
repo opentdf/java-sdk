@@ -31,8 +31,10 @@ import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse.AttributeAndValue;
 import io.opentdf.platform.policy.Attribute;
 import io.opentdf.platform.policy.Value;
+import io.opentdf.platform.policy.KasPublicKey;
 import io.opentdf.platform.policy.AttributeValueSelector;
 import io.opentdf.platform.policy.AttributeRuleTypeEnum;
+import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
 
 // Attribute rule types: operators!
 class RuleType {
@@ -668,7 +670,7 @@ public class Autoconfigure {
     }
 
     // Gets a list of directory of KAS grants for a list of attribute FQNs
-    public static Granter newGranterFromService(AttributesServiceFutureStub as, AttributeValueFQN... fqns) throws AutoConfigureException, InterruptedException, ExecutionException {
+    public static Granter newGranterFromService(AttributesServiceFutureStub as, KASKeyCache keyCache, AttributeValueFQN... fqns) throws AutoConfigureException, InterruptedException, ExecutionException {
         String[] fqnsStr = new String[fqns.length];
         for (int i = 0; i < fqns.length; i++) {
             fqnsStr[i] = fqns[i].toString();
@@ -698,11 +700,13 @@ public class Autoconfigure {
             Attribute def = pair.getAttribute();
             if (def != null) {
                 grants.addAllGrants(fqn, def.getGrantsList(), def);
+                storeKeysToCache(def.getGrantsList(), keyCache);
             }
 
             Value v = pair.getValue();
             if (v != null) {
                 grants.addAllGrants(fqn, v.getGrantsList(), def);
+                storeKeysToCache(v.getGrantsList(), keyCache);
             }
         }
 
@@ -736,6 +740,36 @@ public class Autoconfigure {
         }
 
         return grants;
+    }
+
+    static void storeKeysToCache(List<KeyAccessServer> kases, KASKeyCache keyCache) {
+        for (KeyAccessServer kas : kases) {
+            List<KasPublicKey> keys = kas.getPublicKey().getCached().getKeysList();
+            if (keys.isEmpty()) {
+                System.out.println("No cached key in policy service for KAS: " + kas.getUri());
+                continue;
+            }
+            for (KasPublicKey ki : keys) {
+                Config.KASInfo kasInfo = new Config.KASInfo();
+                kasInfo.URL = kas.getUri();
+                kasInfo.KID = ki.getKid();
+                kasInfo.Algorithm = algProto2String(ki.getAlg());
+                kasInfo.PublicKey = ki.getPem();
+                keyCache.store(kasInfo);
+            }
+        }
+    }
+
+    private static String algProto2String(KasPublicKeyAlgEnum e) {
+        switch (e) {
+            case KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1:
+                return "ec:secp256r1";
+            case KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048:
+                return "rsa:2048";
+            case KAS_PUBLIC_KEY_ALG_ENUM_UNSPECIFIED:
+            default:
+                return "";
+        }
     }
 
 }

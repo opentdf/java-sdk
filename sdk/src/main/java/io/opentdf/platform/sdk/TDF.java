@@ -215,6 +215,7 @@ public class TDF {
                     logger.info("no public key provided for KAS at {}, retrieving", splitInfo.kas);
                     var getKI = new Config.KASInfo();
                     getKI.URL = splitInfo.kas;
+                    getKI.Algorithm = "rsa:2048";
                     getKI = kas.getPublicKey(getKI);
                     latestKASInfo.put(splitInfo.kas, getKI);
                     ki = getKI;
@@ -383,7 +384,7 @@ public class TDF {
             if (tdfConfig.attributeValues != null && !tdfConfig.attributeValues.isEmpty()) {
                 granter = Autoconfigure.newGranterFromAttributes(tdfConfig.attributeValues.toArray(new Value[0]));
             } else if (tdfConfig.attributes != null && !tdfConfig.attributes.isEmpty()) {
-                granter = Autoconfigure.newGranterFromService(attrService, tdfConfig.attributes.toArray(new AttributeValueFQN[0]));
+                granter = Autoconfigure.newGranterFromService(attrService, kas.getKeyCache(), tdfConfig.attributes.toArray(new AttributeValueFQN[0]));
             }
         
             if (granter == null) {
