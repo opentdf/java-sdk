@@ -52,7 +52,7 @@ class KASKeyCacheTest {
 
         // Simulate time passing by modifying the timestamp directly
         KASKeyRequest cacheKey = new KASKeyRequest("https://example.com/kas1", "rsa:2048");
-        TimeStampedKASInfo timeStampedKASInfo = new TimeStampedKASInfo(kasInfo1, LocalDateTime.now().minus(2, ChronoUnit.HOURS));
+        TimeStampedKASInfo timeStampedKASInfo = new TimeStampedKASInfo(kasInfo1, LocalDateTime.now().minus(6, ChronoUnit.MINUTES));
         kasKeyCache.cache.put(cacheKey, timeStampedKASInfo);
 
         // Attempt to retrieve the item after the time limit

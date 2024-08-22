@@ -25,8 +25,8 @@ public class KASKeyCache {
             return null;
         }
 
-        LocalDateTime anHourAgo = now.minus(1, ChronoUnit.HOURS);
-        if (anHourAgo.isAfter(cachedValue.timestamp)) {
+        LocalDateTime aMinAgo = now.minus(5, ChronoUnit.MINUTES);
+        if (aMinAgo.isAfter(cachedValue.timestamp)) {
             cache.remove(cacheKey);
             return null;
         }
