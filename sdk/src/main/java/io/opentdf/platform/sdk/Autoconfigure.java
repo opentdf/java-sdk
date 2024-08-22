@@ -60,6 +60,11 @@ public class Autoconfigure {
         }
 
         @Override
+        public String toString() {
+            return "KeySplitStep{kas=" + this.kas + ", splitID=" + this.splitID + "}";
+        }
+
+        @Override
         public boolean equals(Object obj) {
             if (this == obj) {
                 return true;
@@ -746,7 +751,7 @@ public class Autoconfigure {
         for (KeyAccessServer kas : kases) {
             List<KasPublicKey> keys = kas.getPublicKey().getCached().getKeysList();
             if (keys.isEmpty()) {
-                System.out.println("No cached key in policy service for KAS: " + kas.getUri());
+                logger.debug("No cached key in policy service for KAS: " + kas.getUri());
                 continue;
             }
             for (KasPublicKey ki : keys) {
