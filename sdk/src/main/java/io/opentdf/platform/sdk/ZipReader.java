@@ -84,7 +84,7 @@ public class ZipReader {
         }
 
         if (eoCDRStart < 0) {
-            throw new RuntimeException("Didn't find the end of central directory");
+            throw new InvalidZipException("Didn't find the end of central directory");
         }
 
         short diskNumber = readShort();
@@ -109,7 +109,7 @@ public class ZipReader {
         // buffer's position at the start of the Central Directory
         int signature = readInt();
         if (signature != ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIGNATURE) {
-            throw new RuntimeException("Invalid Zip64 End of Central Directory Record Signature");
+            throw new InvalidZipException("Invalid Zip64 End of Central Directory Record Signature");
         }
 
         int centralDirectoryDiskNumber = readInt();
@@ -119,7 +119,7 @@ public class ZipReader {
         zipChannel.position(offsetToEndOfCentralDirectory);
         int sig = readInt();
         if (sig != ZIP_64_END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
-            throw new RuntimeException("Invalid");
+            throw new InvalidZipException("Invalid");
         }
         long sizeOfEndOfCentralDirectoryRecord = readLong();
         short versionMadeBy = readShort();
@@ -152,7 +152,7 @@ public class ZipReader {
         public InputStream getData() throws IOException {
             zipChannel.position(offsetToLocalHeader);
             if (readInt() != LOCAL_FILE_HEADER_SIGNATURE) {
-                throw new RuntimeException("Invalid Local Header Signature");
+                throw new InvalidZipException("Invalid Local Header Signature");
             }
             zipChannel.position(zipChannel.position()
                     + Short.BYTES
@@ -218,7 +218,7 @@ public class ZipReader {
     public Entry readCentralDirectoryFileHeader() throws IOException {
         int signature = readInt();
         if (signature != CENTRAL_FILE_HEADER_SIGNATURE) {
-            throw new RuntimeException("Invalid Central Directory File Header Signature");
+            throw new InvalidZipException("Invalid Central Directory File Header Signature");
         }
         short versionMadeBy = readShort();
         short versionNeededToExtract = readShort();

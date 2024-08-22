@@ -1,7 +1,6 @@
 package io.opentdf.platform.sdk;
 
 import com.google.gson.Gson;
-import com.google.gson.annotations.SerializedName;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -12,6 +11,7 @@ import com.nimbusds.jwt.SignedJWT;
 import io.grpc.ManagedChannel;
 import io.opentdf.platform.kas.AccessServiceGrpc;
 import io.opentdf.platform.kas.PublicKeyRequest;
+import io.opentdf.platform.kas.PublicKeyResponse;
 import io.opentdf.platform.kas.RewrapRequest;
 import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
@@ -36,6 +36,8 @@ public class KASClient implements SDK.KAS, AutoCloseable {
     private final AsymDecryption decryptor;
     private final String publicKeyPEM;
 
+    private KASKeyCache kasKeyCache;
+
     /***
      * A client that communicates with KAS
      * @param channelFactory A function that produces channels that can be used to communicate
@@ -51,6 +53,8 @@ public class KASClient implements SDK.KAS, AutoCloseable {
         var encryptionKeypair = CryptoUtils.generateRSAKeypair();
         decryptor = new AsymDecryption(encryptionKeypair.getPrivate());
         publicKeyPEM = CryptoUtils.getRSAPublicKeyPEM(encryptionKeypair.getPublic());
+
+        this.kasKeyCache = new KASKeyCache();
     }
 
     @Override
@@ -61,17 +65,26 @@ public class KASClient implements SDK.KAS, AutoCloseable {
     }
 
     @Override
-    public String getPublicKey(Config.KASInfo kasInfo) {
-        return getStub(kasInfo.URL)
-                .publicKey(PublicKeyRequest.getDefaultInstance())
-                .getPublicKey();
+    public Config.KASInfo getPublicKey(Config.KASInfo kasInfo) {
+        Config.KASInfo cachedValue = this.kasKeyCache.get(kasInfo.URL, kasInfo.Algorithm);
+        if (cachedValue != null) {
+            return cachedValue;
+        }
+        PublicKeyResponse resp = getStub(kasInfo.URL).publicKey(PublicKeyRequest.getDefaultInstance());
+        
+        var kiCopy = new Config.KASInfo();
+        kiCopy.KID = resp.getKid();
+        kiCopy.PublicKey = resp.getPublicKey();
+        kiCopy.URL = kasInfo.URL;
+        kiCopy.Algorithm = kasInfo.Algorithm;
+
+        this.kasKeyCache.store(kiCopy);
+        return kiCopy;
     }
 
     @Override
-    public String getKid(Config.KASInfo kasInfo) {
-        return getStub(kasInfo.URL)
-                .publicKey(PublicKeyRequest.getDefaultInstance())
-                .getKid();
+    public KASKeyCache getKeyCache(){
+        return this.kasKeyCache;
     }
 
     private String normalizeAddress(String urlString) {

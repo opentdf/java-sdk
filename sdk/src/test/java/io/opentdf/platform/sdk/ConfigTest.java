@@ -20,11 +20,11 @@ class ConfigTest {
     }
 
     @Test
-    void withDataAttributes_shouldAddAttributes() {
-        Config.TDFConfig config = Config.newTDFConfig(Config.withDataAttributes("attr1", "attr2"));
+    void withDataAttributes_shouldAddAttributes() throws AutoConfigureException {
+        Config.TDFConfig config = Config.newTDFConfig(Config.withDataAttributes("https://example.com/attr/attr1/value/value1", "https://example.com/attr/attr2/value/value2"));
         assertEquals(2, config.attributes.size());
-        assertTrue(config.attributes.contains("attr1"));
-        assertTrue(config.attributes.contains("attr2"));
+        assertTrue(config.attributes.contains(new Autoconfigure.AttributeValueFQN("https://example.com/attr/attr1/value/value1")));
+        assertTrue(config.attributes.contains(new Autoconfigure.AttributeValueFQN("https://example.com/attr/attr2/value/value2")));
     }
 
     @Test
@@ -48,5 +48,12 @@ class ConfigTest {
     void withSegmentSize_shouldSetSegmentSize() {
         Config.TDFConfig config = Config.newTDFConfig(Config.withSegmentSize(1024));
         assertEquals(1024, config.defaultSegmentSize);
+    }
+
+    @Test
+    void withMimeType_shouldSetMimeType() {
+        final String mimeType = "application/pdf";
+        Config.TDFConfig config = Config.newTDFConfig(Config.withMimeType(mimeType));
+        assertEquals(mimeType, config.mimeType);
     }
 }

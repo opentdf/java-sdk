@@ -3,6 +3,7 @@ package io.opentdf.platform;
 import com.nimbusds.jose.JOSEException;
 import io.opentdf.platform.sdk.*;
 import io.opentdf.platform.sdk.TDF;
+
 import org.apache.commons.codec.DecoderException;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
@@ -12,12 +13,10 @@ import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
@@ -29,6 +28,7 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
 @CommandLine.Command(name = "tdf")
@@ -49,9 +49,13 @@ class Command {
     @CommandLine.Command(name = "encrypt")
     void encrypt(
             @Option(names = {"-f", "--file"}, defaultValue = Option.NULL_VALUE) Optional<File> file,
-            @Option(names = {"-k", "--kas-url"}, required = true) List<String> kas,
-            @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata) throws
-            IOException, JOSEException {
+            @Option(names = {"-k", "--kas-url"}, required = true, split = ",") List<String> kas,
+            @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata,
+            // cant split on optional parameters
+            @Option(names = {"-a", "--attr"}, defaultValue = Option.NULL_VALUE) Optional<String> attributes,
+            @Option(names = {"-c", "--autoconfigure"}, defaultValue = Option.NULL_VALUE) Optional<Boolean> autoconfigure,
+            @Option(names = {"--mime-type"}, defaultValue = Option.NULL_VALUE) Optional<String> mimeType) throws
+            IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException {
 
         var sdk = buildSDK();
         var kasInfos = kas.stream().map(k -> {
@@ -63,11 +67,18 @@ class Command {
         List<Consumer<Config.TDFConfig>> configs = new ArrayList<>();
         configs.add(Config.withKasInformation(kasInfos));
         metadata.map(Config::withMetaData).ifPresent(configs::add);
-
+        autoconfigure.map(Config::withAutoconfigure).ifPresent(configs::add);
+        mimeType.map(Config::withMimeType).ifPresent(configs::add);
+        if (attributes.isPresent()){
+            configs.add(Config.withDataAttributes(attributes.get().split(",")));
+        }
         var tdfConfig = Config.newTDFConfig(configs.toArray(Consumer[]::new));
         try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {
             try (var out = new BufferedOutputStream(System.out)) {
-                new TDF().createTDF(in, out, tdfConfig, sdk.getServices().kas());
+                new TDF().createTDF(in, out, tdfConfig, 
+                    sdk.getServices().kas(), 
+                    sdk.getServices().attributes()
+                );
             }
         }
     }
@@ -88,7 +99,7 @@ class Command {
         var sdk = buildSDK();
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
             try (var stdout = new BufferedOutputStream(System.out)) {
-                    var reader = new TDF().loadTDF(in, new Config.AssertionConfig(), sdk.getServices().kas());
+                    var reader = new TDF().loadTDF(in, sdk.getServices().kas());
                     reader.readPayload(stdout);
                 }
         }
@@ -100,7 +111,7 @@ class Command {
 
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
             try (var stdout = new PrintWriter(System.out)) {
-                var reader = new TDF().loadTDF(in, new Config.AssertionConfig(), sdk.getServices().kas());
+                var reader = new TDF().loadTDF(in, sdk.getServices().kas());
                 stdout.write(reader.getMetadata() == null ? "" : reader.getMetadata());
             }
         }
@@ -110,7 +121,8 @@ class Command {
     void createNanoTDF(
             @Option(names = {"-f", "--file"}, defaultValue = Option.NULL_VALUE) Optional<File> file,
             @Option(names = {"-k", "--kas-url"}, required = true) List<String> kas,
-            @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata) throws Exception {
+            @Option(names = {"-m", "--metadata"}, defaultValue = Option.NULL_VALUE) Optional<String> metadata,
+            @Option(names = {"-a", "--attr"}, defaultValue = Option.NULL_VALUE) Optional<String> attributes) throws Exception {
 
         var sdk = buildSDK();
         var kasInfos = kas.stream().map(k -> {
@@ -121,6 +133,9 @@ class Command {
 
         List<Consumer<Config.NanoTDFConfig>> configs = new ArrayList<>();
         configs.add(Config.withNanoKasInformation(kasInfos));
+        attributes.ifPresent(attr -> {
+            configs.add(Config.witDataAttributes(attr.split(",")));
+        });
 
         var nanoTDFConfig = Config.newNanoTDFConfig(configs.toArray(Consumer[]::new));
         try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {

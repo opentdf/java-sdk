@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.5.0](https://github.com/opentdf/java-sdk/compare/v0.4.0...v0.5.0) (2024-08-19)
+
+
+### Features
+
+* BACK-2316 add a simple method to detect TDFs ([#111](https://github.com/opentdf/java-sdk/issues/111)) ([bfbef70](https://github.com/opentdf/java-sdk/commit/bfbef70d05bdf8a0e6784d27395966f97d42d90d))
+* **cmd:** Adds command `--mime-type` opt ([#113](https://github.com/opentdf/java-sdk/issues/113)) ([45a2c30](https://github.com/opentdf/java-sdk/commit/45a2c30d1a822bfe629daf032f95f13065c36126))
+* **core:** Add attributes client ([#118](https://github.com/opentdf/java-sdk/issues/118)) ([98ba6a9](https://github.com/opentdf/java-sdk/commit/98ba6a9e91f8e4b1903f907583356c084abb3313))
+* **core:** Handle split keys on tdf3 encrypt and decrypt ([#109](https://github.com/opentdf/java-sdk/issues/109)) ([943751f](https://github.com/opentdf/java-sdk/commit/943751ff83b67089472e4422fcfa087e76a8072a))
+* **core:** KID in NanoTDF ([#112](https://github.com/opentdf/java-sdk/issues/112)) ([33b5982](https://github.com/opentdf/java-sdk/commit/33b59820b2830b15c9ec467f45cfab0f1eb38017))
+* **sdk:** Update the assertion support to match go sdk ([#117](https://github.com/opentdf/java-sdk/issues/117)) ([f9badb3](https://github.com/opentdf/java-sdk/commit/f9badb383d769ecbf51c551483633ccb94b2915a))
+
+
+### Bug Fixes
+
+* Issue [#115](https://github.com/opentdf/java-sdk/issues/115) - fix for SSL Context for IDP and plaintext platform ([#116](https://github.com/opentdf/java-sdk/issues/116)) ([36a29df](https://github.com/opentdf/java-sdk/commit/36a29dfd66660c04d55cd100bdcd7e8742edd40b))
+
+## [0.4.0](https://github.com/opentdf/java-sdk/compare/v0.3.0...v0.4.0) (2024-08-09)
+
+
+### Features
+
+* **ci:** Add xtest workflow trigger ([#96](https://github.com/opentdf/java-sdk/issues/96)) ([bc54b63](https://github.com/opentdf/java-sdk/commit/bc54b636c183c99d86a10e566aa33455879ac084))
+* **core:** NanoTDF resource locator protocol bit mask ([#107](https://github.com/opentdf/java-sdk/issues/107)) ([159d2f1](https://github.com/opentdf/java-sdk/commit/159d2f1c5cb4bb3f1257dc5a15a61789211d6848))
+* **sdk:** add mime type. ([#108](https://github.com/opentdf/java-sdk/issues/108)) ([6c4a27b](https://github.com/opentdf/java-sdk/commit/6c4a27b0c608e198b41c395491aff837e883c77b))
+
+
+### Bug Fixes
+
+* make sure we do not deserialize null ([#97](https://github.com/opentdf/java-sdk/issues/97)) ([9579c42](https://github.com/opentdf/java-sdk/commit/9579c427eb26d1020585fdd359551e4e0685a85a))
+* policy-binding new structure ([#95](https://github.com/opentdf/java-sdk/issues/95)) ([b10a61e](https://github.com/opentdf/java-sdk/commit/b10a61ecb30c6cbf2f6cf190a249269b824bf5d3))
+
 ## [0.3.0](https://github.com/opentdf/java-sdk/compare/v0.2.0...v0.3.0) (2024-07-18)
 
 
