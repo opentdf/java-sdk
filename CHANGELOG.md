@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.0](https://github.com/opentdf/java-sdk/compare/v0.5.0...v0.6.0) (2024-08-23)
+
+
+### Features
+
+* **core:** Add autoconfigure for key splitting ([#120](https://github.com/opentdf/java-sdk/issues/120)) ([7ecbf23](https://github.com/opentdf/java-sdk/commit/7ecbf231d9fa1fd07c1c426489fd160602c2883a))
+* **core:** Adding key cache, tests for specificity ([#126](https://github.com/opentdf/java-sdk/issues/126)) ([a149887](https://github.com/opentdf/java-sdk/commit/a14988781f9ad83d8e01b83a3a612aa8f2563bbb))
+
+
+### Bug Fixes
+
+* **core:** Revert "feat(core): Add attributes client" ([#124](https://github.com/opentdf/java-sdk/issues/124)) ([3d1ef2b](https://github.com/opentdf/java-sdk/commit/3d1ef2b5791de989c4242498787617286fad44bf))
+* ztdf support both base and handling assertions ([#128](https://github.com/opentdf/java-sdk/issues/128)) ([5f72e94](https://github.com/opentdf/java-sdk/commit/5f72e9448aa03ca43065cb024d6e783573a3ba29))
+
 ## [0.5.0](https://github.com/opentdf/java-sdk/compare/v0.4.0...v0.5.0) (2024-08-19)
 
 
