@@ -207,7 +207,7 @@ public class TDFTest {
         String assertion1Id = "assertion1";
         var assertionConfig1 = new AssertionConfig();
         assertionConfig1.id = assertion1Id;
-        assertionConfig1.type = AssertionConfig.Type.HandlingAssertion;
+        assertionConfig1.type = AssertionConfig.Type.BaseAssertion;
         assertionConfig1.scope = AssertionConfig.Scope.TrustedDataObj;
         assertionConfig1.appliesToState = AssertionConfig.AppliesToState.Unencrypted;
         assertionConfig1.statement = new AssertionConfig.Statement();
@@ -215,10 +215,21 @@ public class TDFTest {
         assertionConfig1.statement.schema = "text";
         assertionConfig1.statement.value = "ICAgIDxlZGoOkVkaD4=";
 
+        String assertion2Id = "assertion2";
+        var assertionConfig2 = new AssertionConfig();
+        assertionConfig2.id = assertion2Id;
+        assertionConfig2.type = AssertionConfig.Type.HandlingAssertion;
+        assertionConfig2.scope = AssertionConfig.Scope.TrustedDataObj;
+        assertionConfig2.appliesToState = AssertionConfig.AppliesToState.Unencrypted;
+        assertionConfig2.statement = new AssertionConfig.Statement();
+        assertionConfig2.statement.format = "json";
+        assertionConfig2.statement.schema = "urn:nato:stanag:5636:A:1:elements:json";
+        assertionConfig2.statement.value = "{\"uuid\":\"f74efb60-4a9a-11ef-a6f1-8ee1a61c148a\",\"body\":{\"dataAttributes\":null,\"dissem\":null}}";
+
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
-                Config.withAssertionConfig(assertionConfig1)
+                Config.withAssertionConfig(assertionConfig1, assertionConfig2)
         );
 
         String plainText = "this is extremely sensitive stuff!!!";
@@ -235,6 +246,25 @@ public class TDFTest {
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
                 .withFailMessage("extracted data does not match")
                 .isEqualTo(plainText);
+
+        var manifest = reader.getManifest();
+        var assertions = manifest.assertions;
+        assertThat(assertions.size()).isEqualTo(2);
+        for (var assertion : assertions) {
+            if (assertion.id.equals(assertion1Id)) {
+                assertThat(assertion.statement.format).isEqualTo("base64binary");
+                assertThat(assertion.statement.schema).isEqualTo("text");
+                assertThat(assertion.statement.value).isEqualTo("ICAgIDxlZGoOkVkaD4=");
+                assertThat(assertion.type).isEqualTo(AssertionConfig.Type.BaseAssertion.toString());
+            } else if (assertion.id.equals(assertion2Id)) {
+                assertThat(assertion.statement.format).isEqualTo("json");
+                assertThat(assertion.statement.schema).isEqualTo("urn:nato:stanag:5636:A:1:elements:json");
+                assertThat(assertion.statement.value).isEqualTo("{\"uuid\":\"f74efb60-4a9a-11ef-a6f1-8ee1a61c148a\",\"body\":{\"dataAttributes\":null,\"dissem\":null}}");
+                assertThat(assertion.type).isEqualTo(AssertionConfig.Type.HandlingAssertion.toString());
+            } else {
+                throw new RuntimeException("unexpected assertion id: " + assertion.id);
+            }
+        }
     }
 
     @Test
