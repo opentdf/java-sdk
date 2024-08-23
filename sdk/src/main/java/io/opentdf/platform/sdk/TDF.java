@@ -488,10 +488,6 @@ public class TDF {
 
         List<Manifest.Assertion> signedAssertions = new ArrayList<>();;
         for (var assertionConfig: tdfConfig.assertionConfigList) {
-            if (!Objects.equals(assertionConfig.type, AssertionConfig.Type.BaseAssertion)) {
-                continue;
-            }
-
             var assertion = new Manifest.Assertion();
             assertion.id = assertionConfig.id;
             assertion.type = assertionConfig.type.toString();
@@ -506,8 +502,8 @@ public class TDF {
             var encodedHash = Base64.getEncoder().encodeToString(completeHashBuilder.toString().getBytes());
 
             var assertionSigningKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256,
-                    new MACSigner(tdfObject.aesGcm.getKey()));
-            if (assertionConfig.assertionKey.isDefined()) {
+                    tdfObject.aesGcm.getKey());
+            if (assertionConfig.assertionKey != null && assertionConfig.assertionKey.isDefined()) {
                 assertionSigningKey = assertionConfig.assertionKey;
             }
 
@@ -671,13 +667,8 @@ public class TDF {
 
         // Validate assertions
         for (var assertion: manifest.assertions) {
-            if (!Objects.equals(assertion.type, AssertionConfig.Type.BaseAssertion.toString())) {
-                continue;
-            }
-
             // Set default to HS256
-            var assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256,
-                    new MACSigner(payloadKey));
+            var assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, payloadKey);
             if (assertionVerificationKeys != null && assertionVerificationKeys.length > 0) {
                 var keyForAssertion = assertionVerificationKeys[0].getKey(assertion.id);
                 if (keyForAssertion != null) {
