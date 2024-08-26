@@ -19,6 +19,8 @@ public class AsymEncryption {
     private final PublicKey publicKey;
     private static final String PUBLIC_KEY_HEADER = "-----BEGIN PUBLIC KEY-----";
     private static final String PUBLIC_KEY_FOOTER = "-----END PUBLIC KEY-----";
+    private static final String PEM_HEADER = "-----BEGIN (.*)-----";
+    private static final String PEM_FOOTER = "-----END (.*)-----";
     private static final String CIPHER_TRANSFORM = "RSA/ECB/OAEPWithSHA-1AndMGF1Padding";
 
     /**
@@ -29,15 +31,10 @@ public class AsymEncryption {
     public AsymEncryption(String publicKeyInPem) {
 
         PublicKey pubKey = null;
-        
-        // publicKeyInPem = publicKeyInPem
-        //         .replace(PUBLIC_KEY_HEADER, "")
-        //         .replace(PUBLIC_KEY_FOOTER, "")
-        //         .replaceAll("\\s", "");
 
         String base64EncodedPem= publicKeyInPem
-                .replaceAll("-----BEGIN (.*)-----", "")
-                .replaceAll("-----END (.*)-----", "")
+                .replaceAll(PEM_HEADER, "")
+                .replaceAll(PEM_FOOTER, "")
                 .replaceAll("\\s", "")
                 .replaceAll("\r\n", "")
                 .replaceAll("\n", "")
@@ -45,20 +42,6 @@ public class AsymEncryption {
         
 
         byte[] decoded = Base64.getDecoder().decode(base64EncodedPem);
-        // X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
-        // KeyFactory kf;
-        // try {
-        //     kf = KeyFactory.getInstance("RSA");
-        // } catch (NoSuchAlgorithmException e) {
-        //     throw new SDKException("RSA is not a valid algorithm!!!???!!!", e);
-        // }
-
-        // try {
-        //     this.publicKey = kf.generatePublic(spec);
-        // } catch (InvalidKeySpecException e) {
-        //     // throw new SDKException("Original pem string: \n"+publicKeyInPem+"\n replaced pem string: \n"+publicKeyInPem2);
-        //     throw new SDKException("error creating asymmetric encryption", e);
-        // }
 
          // Check if the PEM contains a certificate
         if (publicKeyInPem.contains("BEGIN CERTIFICATE")) {
@@ -72,12 +55,17 @@ public class AsymEncryption {
             }
         } else {
             // Otherwise, treat it as a PKIX public key
+            X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
+            KeyFactory keyFactory;
             try {
-                X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
-                KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+                keyFactory = KeyFactory.getInstance("RSA");
+            } catch (NoSuchAlgorithmException e) {
+                throw new SDKException("RSA is not a valid algorithm!!!???!!!", e);
+            }
+            try {
                 pubKey = keyFactory.generatePublic(spec);
-            } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
-                throw new SDKException("x509.ParsePKIXPublicKey failed: " + e.getMessage(), e);
+            } catch (InvalidKeySpecException e) {
+                throw new SDKException("error creating asymmetric encryption", e);
             }
         }
 
