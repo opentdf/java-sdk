@@ -55,7 +55,7 @@ public class NanoTDFTest {
                 throw new IllegalArgumentException("Unexpected algorithm: " + kasInfo);
             }
             var k2 = kasInfo.clone();
-            k2.KID = "e1";
+            k2.KID = KID;
             k2.PublicKey = kasPublicKey;
             return k2;
         }
