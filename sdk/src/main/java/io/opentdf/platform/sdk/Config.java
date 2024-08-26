@@ -35,6 +35,26 @@ public class Config {
         public String KID;
         public Boolean Default;
         public String Algorithm;
+        @Override
+        public String toString() {
+            var sb = new StringBuilder("KASInfo{");
+            if (this.URL != null) {
+                sb.append("URL:\"").append(this.URL).append("\",");
+            }
+            if (this.PublicKey != null) {
+                sb.append("PublicKey:\"").append(this.PublicKey).append("\",");
+            }
+            if (this.KID != null) {
+                sb.append("KID:\"").append(this.KID).append("\",");
+            }
+            if (this.Default != null) {
+                sb.append("Default:").append(this.Default).append(",");
+            }
+            if (this.Algorithm != null) {
+                sb.append("Algorithm:\"").append(this.Algorithm).append("\",");
+            }
+            return sb.append("}").toString();
+        }
     }
 
 

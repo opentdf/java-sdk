@@ -216,9 +216,8 @@ public class TDF {
                     var getKI = new Config.KASInfo();
                     getKI.URL = splitInfo.kas;
                     getKI.Algorithm = "rsa:2048";
-                    getKI = kas.getPublicKey(getKI);
-                    latestKASInfo.put(splitInfo.kas, getKI);
-                    ki = getKI;
+                    ki = kas.getPublicKey(getKI);
+                    latestKASInfo.put(splitInfo.kas, ki);
                 }
                 if (conjunction.containsKey(splitInfo.splitID)) {
                     conjunction.get(splitInfo.splitID).add(ki);

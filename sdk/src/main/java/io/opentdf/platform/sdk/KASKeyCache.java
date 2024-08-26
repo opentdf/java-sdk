@@ -5,7 +5,12 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class KASKeyCache {
+    public static Logger logger = LoggerFactory.getLogger(KASKeyCache.class);
+
     Map<KASKeyRequest, TimeStampedKASInfo> cache;
 
     public KASKeyCache() {
@@ -22,22 +27,26 @@ public class KASKeyCache {
         TimeStampedKASInfo cachedValue = cache.get(cacheKey);
 
         if (cachedValue == null) {
+            logger.info("Cache miss [{}#{}]", url, algorithm);
             return null;
         }
 
         LocalDateTime aMinAgo = now.minus(5, ChronoUnit.MINUTES);
         if (aMinAgo.isAfter(cachedValue.timestamp)) {
+            logger.info("Cache out of date [{}#{}]", url, algorithm);
             cache.remove(cacheKey);
             return null;
         }
 
+        logger.info("Cache hit [{}#{}]: [{}]", url, algorithm, cachedValue.kasInfo);
         return cachedValue.kasInfo;
     }
 
     public void store(Config.KASInfo kasInfo) {
         KASKeyRequest cacheKey = new KASKeyRequest(kasInfo.URL, kasInfo.Algorithm);
         cache.put(cacheKey, new TimeStampedKASInfo(kasInfo, LocalDateTime.now()));
-    }
+        logger.info("Cache store [{}]", kasInfo);
+     }
 }
 
 class TimeStampedKASInfo {
