@@ -22,10 +22,18 @@ public class AsymEncryption {
      * @param publicKeyInPem a Public Key in PEM format
      */
     public AsymEncryption(String publicKeyInPem) {
-        publicKeyInPem = publicKeyInPem
-                .replace(PUBLIC_KEY_HEADER, "")
-                .replace(PUBLIC_KEY_FOOTER, "")
-                .replaceAll("\\s", "");
+        // publicKeyInPem = publicKeyInPem
+        //         .replace(PUBLIC_KEY_HEADER, "")
+        //         .replace(PUBLIC_KEY_FOOTER, "")
+        //         .replaceAll("\\s", "");
+
+        publicKeyInPem= publicKeyInPem
+                .replaceAll("-----BEGIN (.*)-----", "")
+                .replaceAll("-----END (.*)-----", "")
+                .replaceAll("\\s", "")
+                .replaceAll("\r\n", "")
+                .replaceAll("\n", "")
+                .trim();
 
         byte[] decoded = Base64.getDecoder().decode(publicKeyInPem);
         X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
