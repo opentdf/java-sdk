@@ -249,7 +249,7 @@ jobs:
       contents: read
       packages: read
     needs: platform-integration
-    uses: opentdf/tests/.github/workflows/xtest.yml@main
+    uses: opentdf/tests/.github/workflows/xtest.yml@feature/enable-cached-kesy
     with:
       java-ref: ${{ github.ref }}
   
