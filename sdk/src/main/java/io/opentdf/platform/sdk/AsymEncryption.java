@@ -27,7 +27,7 @@ public class AsymEncryption {
         //         .replace(PUBLIC_KEY_FOOTER, "")
         //         .replaceAll("\\s", "");
 
-        publicKeyInPem= publicKeyInPem
+        String publicKeyInPem2= publicKeyInPem
                 .replaceAll("-----BEGIN (.*)-----", "")
                 .replaceAll("-----END (.*)-----", "")
                 .replaceAll("\\s", "")
@@ -35,7 +35,9 @@ public class AsymEncryption {
                 .replaceAll("\n", "")
                 .trim();
 
-        byte[] decoded = Base64.getDecoder().decode(publicKeyInPem);
+        
+
+        byte[] decoded = Base64.getDecoder().decode(publicKeyInPem2);
         X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
         KeyFactory kf;
         try {
@@ -47,7 +49,8 @@ public class AsymEncryption {
         try {
             this.publicKey = kf.generatePublic(spec);
         } catch (InvalidKeySpecException e) {
-            throw new SDKException("error creating asymmetric encryption", e);
+            throw new SDKException("Original pem string: \n"+publicKeyInPem+"\n replaced pem string: \n"+publicKeyInPem2);
+            // throw new SDKException("error creating asymmetric encryption", e);
         }
     }
 
