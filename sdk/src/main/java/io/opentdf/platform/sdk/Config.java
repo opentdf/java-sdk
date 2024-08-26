@@ -29,12 +29,42 @@ public class Config {
 
     public static final int K_HTTP_OK = 200;
 
-    public static class KASInfo {
+    public static class KASInfo implements Cloneable {
         public String URL;
         public String PublicKey;
         public String KID;
         public Boolean Default;
         public String Algorithm;
+
+        @Override
+        public KASInfo clone() {
+            try {
+                return (KASInfo) super.clone();
+            } catch (CloneNotSupportedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        @Override
+        public String toString() {
+            var sb = new StringBuilder("KASInfo{");
+            if (this.URL != null) {
+                sb.append("URL:\"").append(this.URL).append("\",");
+            }
+            if (this.PublicKey != null) {
+                sb.append("PublicKey:\"").append(this.PublicKey).append("\",");
+            }
+            if (this.KID != null) {
+                sb.append("KID:\"").append(this.KID).append("\",");
+            }
+            if (this.Default != null) {
+                sb.append("Default:").append(this.Default).append(",");
+            }
+            if (this.Algorithm != null) {
+                sb.append("Algorithm:\"").append(this.Algorithm).append("\",");
+            }
+            return sb.append("}").toString();
+        }
     }
 
 

@@ -1,5 +1,6 @@
 package io.opentdf.platform.sdk;
 
+import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.Header;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
@@ -49,8 +50,14 @@ public class NanoTDFTest {
         }
 
         @Override
-        public String getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
-            return kasPublicKey;
+        public KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
+            if (kasInfo.Algorithm != null && !"ec:secp256r1".equals(kasInfo.Algorithm)) {
+                throw new IllegalArgumentException("Unexpected algorithm: " + kasInfo);
+            }
+            var k2 = kasInfo.clone();
+            k2.KID = "e1";
+            k2.PublicKey = kasPublicKey;
+            return k2;
         }
 
         @Override

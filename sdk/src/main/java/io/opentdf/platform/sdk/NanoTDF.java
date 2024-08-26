@@ -63,10 +63,9 @@ public class NanoTDF {
 
         Config.KASInfo kasInfo = nanoTDFConfig.kasInfoList.get(0);
         String url = kasInfo.URL;
-        String kasPublicKeyAsPem = kasInfo.PublicKey;
-        if (kasPublicKeyAsPem == null || kasPublicKeyAsPem.isEmpty()) {
+        if (kasInfo.PublicKey == null || kasInfo.PublicKey.isEmpty()) {
             logger.info("no public key provided for KAS at {}, retrieving", url);
-            kasPublicKeyAsPem = kas.getECPublicKey(kasInfo, nanoTDFConfig.eccMode.getEllipticCurveType());
+            kasInfo = kas.getECPublicKey(kasInfo, nanoTDFConfig.eccMode.getEllipticCurveType());
         }
 
         // Kas url resource locator
@@ -76,7 +75,7 @@ public class NanoTDF {
         ECKeyPair keyPair = new ECKeyPair(nanoTDFConfig.eccMode.getCurveName(), ECKeyPair.ECAlgorithm.ECDSA);
 
         // Generate symmetric key
-        ECPublicKey kasPublicKey = ECKeyPair.publicKeyFromPem(kasPublicKeyAsPem);
+        ECPublicKey kasPublicKey = ECKeyPair.publicKeyFromPem(kasInfo.PublicKey);
         byte[] symmetricKey = ECKeyPair.computeECDHKey(kasPublicKey, keyPair.getPrivateKey());
 
         // Generate HKDF key

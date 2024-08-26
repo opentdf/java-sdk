@@ -13,6 +13,7 @@ import io.opentdf.platform.kas.AccessServiceGrpc;
 import io.opentdf.platform.kas.PublicKeyRequest;
 import io.opentdf.platform.kas.PublicKeyResponse;
 import io.opentdf.platform.kas.RewrapRequest;
+import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 
@@ -58,10 +59,13 @@ public class KASClient implements SDK.KAS, AutoCloseable {
     }
 
     @Override
-    public String getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
-        return getStub(kasInfo.URL)
-                .publicKey(PublicKeyRequest.newBuilder().setAlgorithm(String.format("ec:%s", curve.toString())).build())
-                .getPublicKey();
+    public KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
+        var r = getStub(kasInfo.URL)
+                .publicKey(PublicKeyRequest.newBuilder().setAlgorithm(String.format("ec:%s", curve.toString())).build());
+        var k2 = kasInfo.clone();
+        k2.KID = r.getKid();
+        k2.PublicKey = r.getPublicKey();
+        return k2;
     }
 
     @Override
