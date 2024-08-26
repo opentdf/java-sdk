@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.1](https://github.com/opentdf/java-sdk/compare/v0.6.0...v0.6.1) (2024-08-26)
+
+
+### Bug Fixes
+
+* **core:** Add support for certs ([#131](https://github.com/opentdf/java-sdk/issues/131)) ([2f98a3a](https://github.com/opentdf/java-sdk/commit/2f98a3a099a1bde796669bf84eeb3f673cbb5d40))
+
+
+### Miscellaneous Chores
+
+* release 0.6.1 Release-As: 0.6.1 ([#135](https://github.com/opentdf/java-sdk/issues/135)) ([09ec548](https://github.com/opentdf/java-sdk/commit/09ec5480c6ad5c4f958d051c0ef668b68e13637c))
+
 ## [0.6.0](https://github.com/opentdf/java-sdk/compare/v0.5.0...v0.6.0) (2024-08-23)
 
 
