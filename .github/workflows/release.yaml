@@ -20,7 +20,6 @@ jobs:
           app-id: "${{ secrets.APP_ID }}"
           private-key: "${{ secrets.AUTOMATION_KEY }}"
       - uses: googleapis/release-please-action@7987652d64b4581673a76e33ad5e98e3dd56832f
-        id: release-please
         with:
           token: "${{ steps.generate_token.outputs.token }}"
           config-file: release-please.json
