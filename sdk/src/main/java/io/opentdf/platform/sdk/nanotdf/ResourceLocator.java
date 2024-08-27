@@ -220,6 +220,7 @@ public class ResourceLocator {
                     actualLength = i + 1;
                 }
             }
-            return new String(this.identifier, 0, actualLength);
+            String identifierPadded =  new String(this.identifier, 0, actualLength);
+            return identifierPadded.trim();
     }
 }
