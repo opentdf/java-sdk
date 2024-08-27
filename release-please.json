@@ -1,7 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "release-type": "java-yoshi-mono-repo",
-  "versioning": "always-bump-minor",
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true,
   "separate-pull-requests": false,
   "include-component-in-tag": false,
   "group-pull-request-title-pattern": "chore(${branch}): release ${version}",
