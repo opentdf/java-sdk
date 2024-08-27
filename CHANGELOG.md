@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.6.1](https://github.com/opentdf/java-sdk/compare/v0.7.0...v0.6.1) (2024-08-27)
+
+
+### Features
+
+* update README.md ([#142](https://github.com/opentdf/java-sdk/issues/142)) ([198d335](https://github.com/opentdf/java-sdk/commit/198d3351c544cc1e23d62b4d097fb7310a7a3625))
+
+
+### Bug Fixes
+
+* **nano:** Store key ids if found ([#134](https://github.com/opentdf/java-sdk/issues/134)) ([94c672b](https://github.com/opentdf/java-sdk/commit/94c672b1e6617a5e6bd0b4339d38a9aae3ae2ae1))
+
+
+### Miscellaneous Chores
+
+* release 0.6.1 Release-As: 0.6.1 ([#135](https://github.com/opentdf/java-sdk/issues/135)) ([09ec548](https://github.com/opentdf/java-sdk/commit/09ec5480c6ad5c4f958d051c0ef668b68e13637c))
+
 ## [0.6.1](https://github.com/opentdf/java-sdk/compare/v0.6.0...v0.6.1) (2024-08-26)
 
 
