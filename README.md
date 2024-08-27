@@ -67,3 +67,8 @@ Use the SDKBuilder.withSSL... methods to build an SDKBuilder with:
 - An SSLFactory: ```sdkBuilder.sslFactory(mySSLFactory)```
 - Directory containing trusted certificates: ```sdkBuilder.sslFactoryFromDirectory(myDirectoryWithCerts)```
 - Java Keystore: ```sdkBuilder.sslFactoryFromKeyStore(keystorepath, keystorePassword)```
+
+### Maven Modules
+- cmdline: Command line utility
+- protocol:  Buf generated source code from opentdf proto definitions
+- sdk: The OpenTDF Java SDK
