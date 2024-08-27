@@ -19,7 +19,8 @@ jobs:
         with:
           app-id: "${{ secrets.APP_ID }}"
           private-key: "${{ secrets.AUTOMATION_KEY }}"
-      - uses: google-github-actions/release-please-action@v4
+      - uses: googleapis/release-please-action@7987652d64b4581673a76e33ad5e98e3dd56832f
+        id: release-please
         with:
           token: "${{ steps.generate_token.outputs.token }}"
           config-file: release-please.json
@@ -30,7 +31,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       - name: Setup Buf
-        uses: bufbuild/buf-setup-action@382440cdb8ec7bc25a68d7b4711163d95f7cc3aa
+        uses: bufbuild/buf-setup-action@aceb106d2419c4cff48863df90161d92decb8591
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up JDK
