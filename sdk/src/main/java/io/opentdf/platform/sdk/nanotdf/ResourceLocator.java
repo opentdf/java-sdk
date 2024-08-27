@@ -60,15 +60,15 @@ public class ResourceLocator {
             } else if (identifierLen <= 2) {
                 this.identifierType = NanoTDFType.IdentifierType.TWO_BYTES;
                 this.identifier = new byte[NanoTDFType.IdentifierType.TWO_BYTES.getLength()];
-                System.arraycopy(identifier.getBytes(), 0, this.identifier, 0, identifierLen);
+                System.arraycopy(identifier.getBytes(), 0, this.identifier, this.identifier.length - identifierLen, identifierLen);
             } else if (identifierLen <= 8) {
                 this.identifierType = NanoTDFType.IdentifierType.EIGHT_BYTES;
                 this.identifier = new byte[NanoTDFType.IdentifierType.EIGHT_BYTES.getLength()];
-                System.arraycopy(identifier.getBytes(), 0, this.identifier, 0, identifierLen);
+                System.arraycopy(identifier.getBytes(), 0, this.identifier, this.identifier.length - identifierLen, identifierLen);
             } else if (identifierLen <= 32) {
                 this.identifierType = NanoTDFType.IdentifierType.THIRTY_TWO_BYTES;
                 this.identifier = new byte[NanoTDFType.IdentifierType.THIRTY_TWO_BYTES.getLength()];
-                System.arraycopy(identifier.getBytes(), 0, this.identifier, 0, identifierLen);
+                System.arraycopy(identifier.getBytes(), 0, this.identifier, this.identifier.length - identifierLen, identifierLen);
             } else {
                 throw new IllegalArgumentException("Unsupported identifier length: " + identifierLen);
             }
