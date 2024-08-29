@@ -4,7 +4,12 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
+
+import java.io.ByteArrayInputStream;
 import java.security.*;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
@@ -14,6 +19,8 @@ public class AsymEncryption {
     private final PublicKey publicKey;
     private static final String PUBLIC_KEY_HEADER = "-----BEGIN PUBLIC KEY-----";
     private static final String PUBLIC_KEY_FOOTER = "-----END PUBLIC KEY-----";
+    private static final String PEM_HEADER = "-----BEGIN (.*)-----";
+    private static final String PEM_FOOTER = "-----END (.*)-----";
     private static final String CIPHER_TRANSFORM = "RSA/ECB/OAEPWithSHA-1AndMGF1Padding";
 
     /**
@@ -22,24 +29,51 @@ public class AsymEncryption {
      * @param publicKeyInPem a Public Key in PEM format
      */
     public AsymEncryption(String publicKeyInPem) {
-        publicKeyInPem = publicKeyInPem
-                .replace(PUBLIC_KEY_HEADER, "")
-                .replace(PUBLIC_KEY_FOOTER, "")
-                .replaceAll("\\s", "");
 
-        byte[] decoded = Base64.getDecoder().decode(publicKeyInPem);
-        X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
-        KeyFactory kf;
-        try {
-            kf = KeyFactory.getInstance("RSA");
-        } catch (NoSuchAlgorithmException e) {
-            throw new SDKException("RSA is not a valid algorithm!!!???!!!", e);
+        PublicKey pubKey = null;
+
+        String base64EncodedPem= publicKeyInPem
+                .replaceAll(PEM_HEADER, "")
+                .replaceAll(PEM_FOOTER, "")
+                .replaceAll("\\s", "")
+                .replaceAll("\r\n", "")
+                .replaceAll("\n", "")
+                .trim();
+        
+
+        byte[] decoded = Base64.getDecoder().decode(base64EncodedPem);
+
+         // Check if the PEM contains a certificate
+        if (publicKeyInPem.contains("BEGIN CERTIFICATE")) {
+            try {
+                // Parse the certificate
+                CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
+                X509Certificate cert = (X509Certificate) certFactory.generateCertificate(new ByteArrayInputStream(decoded));
+                pubKey = cert.getPublicKey();
+            } catch (CertificateException e) {
+                throw new SDKException("x509.ParseCertificate failed: " + e.getMessage(), e);
+            }
+        } else {
+            // Otherwise, treat it as a PKIX public key
+            X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
+            KeyFactory keyFactory;
+            try {
+                keyFactory = KeyFactory.getInstance("RSA");
+            } catch (NoSuchAlgorithmException e) {
+                throw new SDKException("RSA is not a valid algorithm!!!???!!!", e);
+            }
+            try {
+                pubKey = keyFactory.generatePublic(spec);
+            } catch (InvalidKeySpecException e) {
+                throw new SDKException("error creating asymmetric encryption", e);
+            }
         }
 
-        try {
-            this.publicKey = kf.generatePublic(spec);
-        } catch (InvalidKeySpecException e) {
-            throw new SDKException("error creating asymmetric encryption", e);
+        // Check if the public key is RSA
+        if (pubKey instanceof java.security.interfaces.RSAPublicKey) {
+            this.publicKey = pubKey;
+        } else {
+            throw new SDKException("Not an RSA PEM formatted public key");
         }
     }
 

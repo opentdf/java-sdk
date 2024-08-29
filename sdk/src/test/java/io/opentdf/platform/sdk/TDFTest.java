@@ -1,12 +1,22 @@
 package io.opentdf.platform.sdk;
 
 
+import com.google.common.util.concurrent.ListenableFuture;
+import com.nimbusds.jose.crypto.MACSigner;
+import com.nimbusds.jose.crypto.MACVerifier;
+import com.nimbusds.jose.crypto.RSASSASigner;
+import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jose.jwk.RSAKey;
 
-import io.opentdf.platform.sdk.TDF.TDFObject;
+import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
+import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
+import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
+import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
+import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import javax.annotation.Nonnull;
@@ -16,31 +26,39 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
+import java.security.SecureRandom;
 import java.security.interfaces.RSAPublicKey;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TDFTest {
+
+    @BeforeEach
+    public void setup() {
+        attributeGrpcStub = mock(AttributesServiceGrpc.AttributesServiceFutureStub.class);
+    }
 
     private static SDK.KAS kas = new SDK.KAS() {
         @Override
         public void close() {}
 
         @Override
-        public String getPublicKey(Config.KASInfo kasInfo) {
+        public Config.KASInfo getPublicKey(Config.KASInfo kasInfo) {
             int index = Integer.parseInt(kasInfo.URL);
-
-            return CryptoUtils.getRSAPublicKeyPEM(keypairs.get(index).getPublic());
-        }
-
-        @Override
-        public String getKid(Config.KASInfo kasInfo) {
-            return "r1";
+            var kiCopy = new Config.KASInfo();
+            kiCopy.KID = "r1";
+            kiCopy.PublicKey = CryptoUtils.getRSAPublicKeyPEM(keypairs.get(index).getPublic());
+            kiCopy.URL = kasInfo.URL;
+            return kiCopy;
         }
 
         @Override
@@ -56,7 +74,7 @@ public class TDFTest {
         }
 
         @Override
-        public String getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
+        public KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
             return null;
         }
 
@@ -64,8 +82,15 @@ public class TDFTest {
         public byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL) {
             return null;
         }
+
+        @Override
+        public KASKeyCache getKeyCache(){
+            return new KASKeyCache();
+        }
     };
 
+    AttributesServiceGrpc.AttributesServiceFutureStub attributeGrpcStub;
+    
     private static ArrayList<KeyPair> keypairs = new ArrayList<>();
 
     @BeforeAll
@@ -77,19 +102,31 @@ public class TDFTest {
 
     @Test
     void testSimpleTDFEncryptAndDecrypt() throws Exception {
-        var assertion1 = new Assertion();
+
+        ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
+        lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
+        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class))).thenReturn(resp1);
+
+        SecureRandom secureRandom = new SecureRandom();
+        byte[] key = new byte[32];
+        secureRandom.nextBytes(key);
+
+        var assertion1 = new AssertionConfig();
         assertion1.id = "assertion1";
-        assertion1.type = Assertion.Type.HandlingAssertion.toString();
-        assertion1.scope = Assertion.Scope.TrustedDataObj.toString();
-        assertion1.appliesToState = Assertion.AppliesToState.Unencrypted.toString();
-        assertion1.statement = new Assertion.Statement();
-        assertion1.statement.format = Assertion.StatementFormat.Base64BinaryStatement.toString();
+        assertion1.type = AssertionConfig.Type.BaseAssertion;
+        assertion1.scope = AssertionConfig.Scope.TrustedDataObj;
+        assertion1.appliesToState = AssertionConfig.AppliesToState.Unencrypted;
+        assertion1.statement = new AssertionConfig.Statement();
+        assertion1.statement.format = "base64binary";
+        assertion1.statement.schema = "text";
         assertion1.statement.value = "ICAgIDxlZGoOkVkaD4=";
+        assertion1.assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, key);
 
         Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
                 Config.withMetaData("here is some metadata"),
-                Config.WithAssertion(assertion1)
+                Config.withAssertionConfig(assertion1)
         );
 
         String plainText = "this is extremely sensitive stuff!!!";
@@ -97,10 +134,13 @@ public class TDFTest {
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
         TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
+
+        var assertionVerificationKeys = new Config.AssertionVerificationKeys();
+        assertionVerificationKeys.defaultKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, key);
 
         var unwrappedData = new ByteArrayOutputStream();
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), new Config.AssertionConfig(), kas);
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas, assertionVerificationKeys);
         assertThat(reader.getManifest().payload.mimeType).isEqualTo("application/octet-stream");
 
         reader.readPayload(unwrappedData);
@@ -114,26 +154,28 @@ public class TDFTest {
     @Test
     void testSimpleTDFWithAssertionWithRS256() throws Exception {
 
-        var assertion = new Assertion();
-        assertion.id = "assertion1";
-        assertion.type = Assertion.Type.HandlingAssertion.name();
-        assertion.scope = Assertion.Scope.TrustedDataObj.name();
-        assertion.appliesToState = Assertion.AppliesToState.Unencrypted.name();
-        assertion.statement = new Assertion.Statement();
-        assertion.statement.format = Assertion.StatementFormat.Base64BinaryStatement.name();
-        assertion.statement.value = "ICAgIDxlZGoOkVkaD4=";
+        ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
+        lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
+        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class))).thenReturn(resp1);
 
+        String assertion1Id = "assertion1";
         var keypair = CryptoUtils.generateRSAKeypair();
-        Config.AssertionConfig assertionConfig = new Config.AssertionConfig();
-        assertionConfig.keyType = Config.AssertionConfig.KeyType.RS256;
-        assertionConfig.rs256PrivateKeyForSigning = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).privateKey(keypair.getPrivate()).build();
-        assertionConfig.rs256PublicKeyForVerifying = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).build();
+        var assertionConfig = new AssertionConfig();
+        assertionConfig.id = assertion1Id;
+        assertionConfig.type = AssertionConfig.Type.BaseAssertion;
+        assertionConfig.scope = AssertionConfig.Scope.TrustedDataObj;
+        assertionConfig.appliesToState = AssertionConfig.AppliesToState.Unencrypted;
+        assertionConfig.statement = new AssertionConfig.Statement();
+        assertionConfig.statement.format = "base64binary";
+        assertionConfig.statement.schema = "text";
+        assertionConfig.statement.value = "ICAgIDxlZGoOkVkaD4=";
+        assertionConfig.assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256,
+                keypair.getPrivate());
 
         Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
-                Config.WithAssertion(assertion),
-                Config.withAssertionConfig(assertionConfig),
-                Config.withDisableEncryption()
+                Config.withAssertionConfig(assertionConfig)
         );
 
         String plainText = "this is extremely sensitive stuff!!!";
@@ -141,10 +183,14 @@ public class TDFTest {
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
         TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
+
+        var assertionVerificationKeys = new Config.AssertionVerificationKeys();
+        assertionVerificationKeys.keys.put(assertion1Id,
+                new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256, keypair.getPublic()));
 
         var unwrappedData = new ByteArrayOutputStream();
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), assertionConfig, kas);
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas, assertionVerificationKeys);
         reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
@@ -155,22 +201,36 @@ public class TDFTest {
     @Test
     void testSimpleTDFWithAssertionWithHS256() throws Exception {
 
-        var assertion = new Assertion();
-        assertion.id = "assertion1";
-        assertion.type = Assertion.Type.HandlingAssertion.name();
-        assertion.scope = Assertion.Scope.TrustedDataObj.name();
-        assertion.appliesToState = Assertion.AppliesToState.Unencrypted.name();
-        assertion.statement = new Assertion.Statement();
-        assertion.statement.format = Assertion.StatementFormat.Base64BinaryStatement.name();
-        assertion.statement.value = "ICAgIDxlZGoOkVkaD4=";
+        ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
+        lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
+        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class))).thenReturn(resp1);
 
-        Config.AssertionConfig assertionConfig = new Config.AssertionConfig();
-        assertionConfig.keyType = Config.AssertionConfig.KeyType.HS256PayloadKey;
+        String assertion1Id = "assertion1";
+        var assertionConfig1 = new AssertionConfig();
+        assertionConfig1.id = assertion1Id;
+        assertionConfig1.type = AssertionConfig.Type.BaseAssertion;
+        assertionConfig1.scope = AssertionConfig.Scope.TrustedDataObj;
+        assertionConfig1.appliesToState = AssertionConfig.AppliesToState.Unencrypted;
+        assertionConfig1.statement = new AssertionConfig.Statement();
+        assertionConfig1.statement.format = "base64binary";
+        assertionConfig1.statement.schema = "text";
+        assertionConfig1.statement.value = "ICAgIDxlZGoOkVkaD4=";
+
+        String assertion2Id = "assertion2";
+        var assertionConfig2 = new AssertionConfig();
+        assertionConfig2.id = assertion2Id;
+        assertionConfig2.type = AssertionConfig.Type.HandlingAssertion;
+        assertionConfig2.scope = AssertionConfig.Scope.TrustedDataObj;
+        assertionConfig2.appliesToState = AssertionConfig.AppliesToState.Unencrypted;
+        assertionConfig2.statement = new AssertionConfig.Statement();
+        assertionConfig2.statement.format = "json";
+        assertionConfig2.statement.schema = "urn:nato:stanag:5636:A:1:elements:json";
+        assertionConfig2.statement.value = "{\"uuid\":\"f74efb60-4a9a-11ef-a6f1-8ee1a61c148a\",\"body\":{\"dataAttributes\":null,\"dissem\":null}}";
 
         Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
-                Config.WithAssertion(assertion),
-                Config.withAssertionConfig(assertionConfig)
+                Config.withAssertionConfig(assertionConfig1, assertionConfig2)
         );
 
         String plainText = "this is extremely sensitive stuff!!!";
@@ -178,22 +238,47 @@ public class TDFTest {
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
         TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
 
         var unwrappedData = new ByteArrayOutputStream();
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), assertionConfig, kas);
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
         reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
                 .withFailMessage("extracted data does not match")
                 .isEqualTo(plainText);
+
+        var manifest = reader.getManifest();
+        var assertions = manifest.assertions;
+        assertThat(assertions.size()).isEqualTo(2);
+        for (var assertion : assertions) {
+            if (assertion.id.equals(assertion1Id)) {
+                assertThat(assertion.statement.format).isEqualTo("base64binary");
+                assertThat(assertion.statement.schema).isEqualTo("text");
+                assertThat(assertion.statement.value).isEqualTo("ICAgIDxlZGoOkVkaD4=");
+                assertThat(assertion.type).isEqualTo(AssertionConfig.Type.BaseAssertion.toString());
+            } else if (assertion.id.equals(assertion2Id)) {
+                assertThat(assertion.statement.format).isEqualTo("json");
+                assertThat(assertion.statement.schema).isEqualTo("urn:nato:stanag:5636:A:1:elements:json");
+                assertThat(assertion.statement.value).isEqualTo("{\"uuid\":\"f74efb60-4a9a-11ef-a6f1-8ee1a61c148a\",\"body\":{\"dataAttributes\":null,\"dissem\":null}}");
+                assertThat(assertion.type).isEqualTo(AssertionConfig.Type.HandlingAssertion.toString());
+            } else {
+                throw new RuntimeException("unexpected assertion id: " + assertion.id);
+            }
+        }
     }
 
     @Test
     public void testCreatingTDFWithMultipleSegments() throws Exception {
+
+        ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
+        lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
+        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class))).thenReturn(resp1);
+
         var random = new Random();
 
         Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
                 // use a random segment size that makes sure that we will use multiple segments
                 Config.withSegmentSize(1 + random.nextInt(20))
@@ -205,10 +290,9 @@ public class TDFTest {
         var plainTextInputStream = new ByteArrayInputStream(data);
         var tdfOutputStream = new ByteArrayOutputStream();
         var tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
         var unwrappedData = new ByteArrayOutputStream();
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()),
-                new Config.AssertionConfig(), kas);
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
         reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toByteArray())
@@ -218,7 +302,12 @@ public class TDFTest {
     }
 
     @Test
-    public void testCreatingTooLargeTDF() {
+    public void testCreatingTooLargeTDF() throws Exception {
+        ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
+        lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
+        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class))).thenReturn(resp1);
+
+
         var random = new Random();
         var maxSize = random.nextInt(1024);
         var numReturned = new AtomicInteger(0);
@@ -251,10 +340,11 @@ public class TDFTest {
 
         var tdf = new TDF(maxSize);
         var tdfConfig = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
                 Config.withSegmentSize(1 + random.nextInt(128)));
         assertThrows(TDF.DataSizeNotSupported.class,
-                () -> tdf.createTDF(is, os, tdfConfig, kas),
+                () -> tdf.createTDF(is, os, tdfConfig, kas, attributeGrpcStub),
                 "didn't throw an exception when we created TDF that was too large");
         assertThat(numReturned.get())
                 .withFailMessage("test returned the wrong number of bytes")
@@ -264,9 +354,14 @@ public class TDFTest {
     @Test
     public void testCreateTDFWithMimeType() throws Exception {
 
+        ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
+        lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
+        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class))).thenReturn(resp1);
+
         final String mimeType = "application/pdf";
 
         Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
                 Config.withMimeType(mimeType)
         );
@@ -276,9 +371,9 @@ public class TDFTest {
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
         TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas);
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
 
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), new Config.AssertionConfig(), kas);
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
         assertThat(reader.getManifest().payload.mimeType).isEqualTo(mimeType);
     }
 

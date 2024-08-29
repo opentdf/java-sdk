@@ -35,11 +35,10 @@ public class TDFE2ETest {
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
         TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, sdk.kas());
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, sdk.kas(), sdk.attributes());
 
         var unwrappedData = new java.io.ByteArrayOutputStream();
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()),
-                new Config.AssertionConfig(), sdk.kas());
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), sdk.kas());
         reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8)).isEqualTo("text");
