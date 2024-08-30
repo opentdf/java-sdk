@@ -93,7 +93,6 @@ class Command {
     }
 
     private SDK buildSDK() {
-        // Create an SSLFactory with the TrustManager that trusts all certificates
         SDKBuilder builder = new SDKBuilder();
         if (insecure){
             SSLFactory sslFactory = SSLFactory.builder()
