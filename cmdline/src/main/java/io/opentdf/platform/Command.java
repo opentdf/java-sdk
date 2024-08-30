@@ -31,13 +31,21 @@ import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
+import nl.altindag.ssl.SSLFactory;
+import nl.altindag.ssl.util.TrustManagerUtils;
+
+import javax.net.ssl.TrustManager;
+
 @CommandLine.Command(name = "tdf")
 class Command {
 
     @Option(names = {"--client-secret"}, required = true)
     private String clientSecret;
 
-    @Option(names = {"-i", "--insecure-connection"}, defaultValue = "false")
+    @Option(names = {"-p", "--plaintext"}, defaultValue = "false")
+    private boolean plaintext;
+
+    @Option(names = {"-i", "--insecure"}, defaultValue = "false")
     private boolean insecure;
 
     @Option(names = {"--client-id"}, required = true)
@@ -63,6 +71,7 @@ class Command {
             ki.URL = k;
             return ki;
         }).toArray(Config.KASInfo[]::new);
+        
 
         List<Consumer<Config.TDFConfig>> configs = new ArrayList<>();
         configs.add(Config.withKasInformation(kasInfos));
@@ -84,10 +93,18 @@ class Command {
     }
 
     private SDK buildSDK() {
-        return new SDKBuilder()
-                .platformEndpoint(platformEndpoint)
+        // Create an SSLFactory with the TrustManager that trusts all certificates
+        SDKBuilder builder = new SDKBuilder();
+        if (insecure){
+            SSLFactory sslFactory = SSLFactory.builder()
+            .withUnsafeTrustMaterial() // Trust all certificates
+            .build();
+            builder.sslFactory(sslFactory);
+        }
+        
+        return  builder.platformEndpoint(platformEndpoint)
                 .clientSecret(clientId, clientSecret)
-                .useInsecurePlaintextConnection(insecure)
+                .useInsecurePlaintextConnection(plaintext)
                 .build();
     }
 
