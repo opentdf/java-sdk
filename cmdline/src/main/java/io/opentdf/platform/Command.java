@@ -42,7 +42,7 @@ class Command {
     @Option(names = {"--client-secret"}, required = true)
     private String clientSecret;
 
-    @Option(names = {"-p", "--plaintext"}, defaultValue = "false")
+    @Option(names = {"-h", "--plaintext"}, defaultValue = "false")
     private boolean plaintext;
 
     @Option(names = {"-i", "--insecure"}, defaultValue = "false")
