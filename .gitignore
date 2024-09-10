@@ -1,4 +1,5 @@
-protocol/src/main/protogen
+src/main/java/grpc
+src/main/java/io/opentdf/platform/proto
 /.idea/
 target/
 .vscode/
