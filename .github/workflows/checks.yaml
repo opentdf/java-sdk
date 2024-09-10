@@ -164,7 +164,6 @@ jobs:
             printf 'metadata is incorrect [%s]\n' "$(< metadata)"
             exit 1
           fi
-        working-directory: cmdline
 
       - name: Encrypt/Decrypt NanoTDF
         run: |
@@ -188,7 +187,6 @@ jobs:
             printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
             exit 1
           fi
-        working-directory: cmdline
 
       - uses: JarvusInnovations/background-action@2428e7b970a846423095c79d43f759abf979a635
         name: start another KAS server in background
@@ -242,7 +240,6 @@ jobs:
             printf 'metadata is incorrect [%s]\n' "$(< metadata)"
             exit 1
           fi
-        working-directory: cmdline
 
   platform-xtest:
     permissions:
