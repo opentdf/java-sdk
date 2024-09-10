@@ -1,4 +1,4 @@
 # Format:
 # module:released-version:current-version
 
-java-sdk:0.6.1:0.6.1
+java-sdk:0.6.1:0.6.2-SNAPSHOT
