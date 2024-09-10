@@ -42,10 +42,10 @@ class Command {
     @Option(names = { "--client-secret" }, required = true)
     private String clientSecret;
 
-    @Option(names = {"-h", "--plaintext"}, defaultValue = "false")
+    @Option(names = { "-h", "--plaintext" }, defaultValue = "false")
     private boolean plaintext;
 
-    @Option(names = {"-i", "--insecure"}, defaultValue = "false")
+    @Option(names = { "-i", "--insecure" }, defaultValue = "false")
     private boolean insecure;
 
     @Option(names = { "--client-id" }, required = true)
@@ -72,7 +72,6 @@ class Command {
             ki.URL = k;
             return ki;
         }).toArray(Config.KASInfo[]::new);
-        
 
         List<Consumer<Config.TDFConfig>> configs = new ArrayList<>();
         configs.add(Config.withKasInformation(kasInfos));
