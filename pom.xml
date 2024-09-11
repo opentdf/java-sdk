@@ -476,7 +476,7 @@
                         <configuration>
                             <sources>
                                 <source>protocol/src/main/protogen</source>
-                                <source>cmdline/src/main/io/opentdf/platform</source>
+                                <source>cmdline/src/main/java/io/opentdf/platform</source>
                             </sources>
                         </configuration>
                     </execution>
