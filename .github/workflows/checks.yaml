@@ -134,21 +134,21 @@ jobs:
         run: |
           printf 'here is some data to encrypt' > data
 
-          java -jar target/sdk-cli.jar \
+          java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
             -h \
             encrypt --kas-url=localhost:8080 --mime-type=text/plain --attr https://example.com/attr/attr1/value/value1 --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
 
-          java -jar target/sdk-cli.jar \
+          java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
             -h \
             decrypt -f test.tdf > decrypted
 
-          java -jar target/sdk-cli.jar \
+          java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
@@ -169,14 +169,14 @@ jobs:
         run: |
           echo 'here is some data to encrypt' > data
 
-          java -jar target/sdk-cli.jar \
+          java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
             -i -h \
             encryptnano --kas-url=http://localhost:8080 --attr https://example.com/attr/attr1/value/value1 -f data -m 'here is some metadata' > nano.ntdf
 
-          java -jar target/sdk-cli.jar \
+          java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
@@ -210,21 +210,21 @@ jobs:
         run: |
           printf 'here is some data to encrypt' > data
 
-          java -jar target/sdk-cli.jar \
+          java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
             -h \
             encrypt --kas-url=localhost:8080,localhost:8282 -f data -m 'here is some metadata' > test.tdf
 
-          java -jar target/sdk-cli.jar \
+          java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
             -h \
             decrypt -f test.tdf > decrypted
 
-          java -jar target/sdk-cli.jar \
+          java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
@@ -246,7 +246,7 @@ jobs:
       contents: read
       packages: read
     needs: platform-integration
-    uses: opentdf/tests/.github/workflows/xtest.yml@single-java-module
+    uses: opentdf/tests/.github/workflows/xtest.yml@main
     with:
       java-ref: ${{ github.ref }}
   
