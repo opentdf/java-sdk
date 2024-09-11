@@ -60,20 +60,22 @@ class ResourceLocatorTest {
 
     @ParameterizedTest
     @MethodSource("provideUrlsAndIdentifiers")
-    void creatingResourceLocatorWithDifferentIdentifiers(String url, String identifier, int expectedLength) {
+    void creatingResourceLocatorWithDifferentIdentifiers(String url, String identifier, int expectedLength, byte[] goldenIdentifier) {
         locator = new ResourceLocator(url, identifier);
         assertEquals(url, locator.getResourceUrl());
         assertEquals(identifier, locator.getIdentifierString());
+        assertArrayEquals(goldenIdentifier, locator.getIdentifier());
         assertEquals(expectedLength, locator.getIdentifier().length);
     }
 
     private static Stream<Arguments> provideUrlsAndIdentifiers() {
         return Stream.of(
-                Arguments.of("http://test.com", "F", 2),
-                Arguments.of("http://test.com", "e0", 2),
-                Arguments.of("http://test.com", "e0e0e0e0", 8),
-                Arguments.of("http://test.com", "e0e0e0e0e0e0e0e0", 32),
-                Arguments.of("https://test.com", "e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0",32 )
+                Arguments.of("http://test.com", "F", 2, new byte[]{70, 0}),
+                Arguments.of("http://test.com", "e0", 2, new byte[]{101,48}),
+                Arguments.of("http://test.com", "12345", 8, new byte[]{49,50,51,52,53,0,0,0}),
+                Arguments.of("http://test.com", "e0e0e0e0", 8, new byte[]{101, 48, 101, 48, 101, 48, 101, 48}),
+                Arguments.of("http://test.com", "e0e0e0e0e0e0e0e0", 32, new byte[]{101,48,101,48,101,48,101,48,101,48,101,48,101,48,101,48,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}),
+                Arguments.of("https://test.com", "e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0",32, new byte[]{101, 48, 101, 48, 101, 48, 101, 48, 101, 48, 101, 48, 101, 48, 101, 48, 101, 48, 101, 48, 101, 48, 101, 48, 101, 48, 101, 48, 101, 48, 101, 48})
         );
     }
 
