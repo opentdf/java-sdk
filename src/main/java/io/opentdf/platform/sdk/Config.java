@@ -5,7 +5,7 @@ import io.opentdf.platform.sdk.nanotdf.ECCMode;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import io.opentdf.platform.sdk.nanotdf.SymmetricAndPayloadConfig;
 
-import io.opentdf.platform.proto.policy.Value;
+import io.opentdf.platform.policy.Value;
 
 import java.util.*;
 import java.util.function.Consumer;

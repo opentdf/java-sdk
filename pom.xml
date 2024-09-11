@@ -432,11 +432,7 @@
                             <target>
                                 <exec executable="rm">
                                     <arg value="-rf" />
-                                    <arg value="src/main/java/io/opentdf/platform/proto" />
-                                </exec>
-                                <exec executable="rm">
-                                    <arg value="-rf" />
-                                    <arg value="src/main/java/grpc" />
+                                    <arg value="src/main/protogen" />
                                 </exec>
                                 <exec executable="buf" dir="./">
                                     <arg value="generate" />
@@ -451,9 +447,8 @@
                                 </exec>
                                 <exec executable="cp" dir="./">
                                     <arg value="-r" />
-                                    <arg
-                                        value="tmp-gen/src/main/java/grpc" />
-                                    <arg value="src/main/java/grpc" />
+                                    <arg value="tmp-gen/protocol/src/main/protogen/grpc" />
+                                    <arg value="protocol/src/main/protogen" />
                                 </exec>
                                 <exec executable="rm" dir="./">
                                     <arg value="-rf" />
@@ -480,7 +475,8 @@
                         </goals>
                         <configuration>
                             <sources>
-                                <source>src/main/java</source>
+                                <source>protocol/src/main/protogen</source>
+                                <source>cmdline/src/main/io/opentdf/platform</source>
                             </sources>
                         </configuration>
                     </execution>

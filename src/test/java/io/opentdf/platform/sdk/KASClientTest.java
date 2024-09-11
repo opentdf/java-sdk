@@ -12,11 +12,11 @@ import io.grpc.ManagedChannelBuilder;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.stub.StreamObserver;
-import io.opentdf.platform.proto.kas.AccessServiceGrpc;
-import io.opentdf.platform.proto.kas.PublicKeyRequest;
-import io.opentdf.platform.proto.kas.PublicKeyResponse;
-import io.opentdf.platform.proto.kas.RewrapRequest;
-import io.opentdf.platform.proto.kas.RewrapResponse;
+import io.opentdf.platform.kas.AccessServiceGrpc;
+import io.opentdf.platform.kas.PublicKeyRequest;
+import io.opentdf.platform.kas.PublicKeyResponse;
+import io.opentdf.platform.kas.RewrapRequest;
+import io.opentdf.platform.kas.RewrapResponse;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

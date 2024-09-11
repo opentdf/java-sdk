@@ -24,17 +24,17 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Supplier;
 
-import io.opentdf.platform.proto.policy.KeyAccessServer;
-import io.opentdf.platform.proto.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
-import io.opentdf.platform.proto.policy.attributes.GetAttributeValuesByFqnsRequest;
-import io.opentdf.platform.proto.policy.attributes.GetAttributeValuesByFqnsResponse;
-import io.opentdf.platform.proto.policy.attributes.GetAttributeValuesByFqnsResponse.AttributeAndValue;
-import io.opentdf.platform.proto.policy.Attribute;
-import io.opentdf.platform.proto.policy.Value;
-import io.opentdf.platform.proto.policy.KasPublicKey;
-import io.opentdf.platform.proto.policy.AttributeValueSelector;
-import io.opentdf.platform.proto.policy.AttributeRuleTypeEnum;
-import io.opentdf.platform.proto.policy.KasPublicKeyAlgEnum;
+import io.opentdf.platform.policy.KeyAccessServer;
+import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
+import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
+import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
+import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse.AttributeAndValue;
+import io.opentdf.platform.policy.Attribute;
+import io.opentdf.platform.policy.Value;
+import io.opentdf.platform.policy.KasPublicKey;
+import io.opentdf.platform.policy.AttributeValueSelector;
+import io.opentdf.platform.policy.AttributeRuleTypeEnum;
+import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
 
 // Attribute rule types: operators!
 class RuleType {

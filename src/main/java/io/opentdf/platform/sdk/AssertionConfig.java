@@ -1,6 +1,5 @@
 package io.opentdf.platform.sdk;
 
-import com.nimbusds.jose.JWSSigner;
 
 import java.util.Objects;
 

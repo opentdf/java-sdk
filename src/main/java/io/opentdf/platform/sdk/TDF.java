@@ -2,19 +2,13 @@ package io.opentdf.platform.sdk;
 
 import com.google.gson.Gson;
 import com.nimbusds.jose.*;
-import com.nimbusds.jose.crypto.MACVerifier;
-import com.nimbusds.jose.crypto.RSASSAVerifier;
-import com.nimbusds.jwt.JWTClaimsSet;
-import com.nimbusds.jwt.SignedJWT;
 
-import io.opentdf.platform.proto.policy.Value;
-import io.opentdf.platform.proto.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
+import io.opentdf.platform.policy.Value;
+import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
 import io.opentdf.platform.sdk.Config.TDFConfig;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
 import io.opentdf.platform.sdk.Config.KASInfo;
 
-import com.nimbusds.jose.crypto.RSASSASigner;
-import com.nimbusds.jose.crypto.MACSigner;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
 import org.erdtman.jcs.JsonCanonicalizer;
@@ -28,7 +22,6 @@ import java.io.OutputStream;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
-import java.util.function.Consumer;
 import java.text.ParseException;
 import java.util.*;
 import java.util.concurrent.ExecutionException;

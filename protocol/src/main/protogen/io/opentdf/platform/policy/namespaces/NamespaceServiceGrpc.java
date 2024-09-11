@@ -1,0 +1,757 @@
+package io.opentdf.platform.policy.namespaces;
+
+import static io.grpc.MethodDescriptor.generateFullMethodName;
+
+/**
+ */
+@javax.annotation.Generated(
+    value = "by gRPC proto compiler (version 1.61.1)",
+    comments = "Source: policy/namespaces/namespaces.proto")
+@io.grpc.stub.annotations.GrpcGenerated
+public final class NamespaceServiceGrpc {
+
+  private NamespaceServiceGrpc() {}
+
+  public static final java.lang.String SERVICE_NAME = "policy.namespaces.NamespaceService";
+
+  // Static method descriptors that strictly reflect the proto.
+  private static volatile io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.GetNamespaceRequest,
+      io.opentdf.platform.policy.namespaces.GetNamespaceResponse> getGetNamespaceMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "GetNamespace",
+      requestType = io.opentdf.platform.policy.namespaces.GetNamespaceRequest.class,
+      responseType = io.opentdf.platform.policy.namespaces.GetNamespaceResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.GetNamespaceRequest,
+      io.opentdf.platform.policy.namespaces.GetNamespaceResponse> getGetNamespaceMethod() {
+    io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.GetNamespaceRequest, io.opentdf.platform.policy.namespaces.GetNamespaceResponse> getGetNamespaceMethod;
+    if ((getGetNamespaceMethod = NamespaceServiceGrpc.getGetNamespaceMethod) == null) {
+      synchronized (NamespaceServiceGrpc.class) {
+        if ((getGetNamespaceMethod = NamespaceServiceGrpc.getGetNamespaceMethod) == null) {
+          NamespaceServiceGrpc.getGetNamespaceMethod = getGetNamespaceMethod =
+              io.grpc.MethodDescriptor.<io.opentdf.platform.policy.namespaces.GetNamespaceRequest, io.opentdf.platform.policy.namespaces.GetNamespaceResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "GetNamespace"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  io.opentdf.platform.policy.namespaces.GetNamespaceRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  io.opentdf.platform.policy.namespaces.GetNamespaceResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new NamespaceServiceMethodDescriptorSupplier("GetNamespace"))
+              .build();
+        }
+      }
+    }
+    return getGetNamespaceMethod;
+  }
+
+  private static volatile io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.ListNamespacesRequest,
+      io.opentdf.platform.policy.namespaces.ListNamespacesResponse> getListNamespacesMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "ListNamespaces",
+      requestType = io.opentdf.platform.policy.namespaces.ListNamespacesRequest.class,
+      responseType = io.opentdf.platform.policy.namespaces.ListNamespacesResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.ListNamespacesRequest,
+      io.opentdf.platform.policy.namespaces.ListNamespacesResponse> getListNamespacesMethod() {
+    io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.ListNamespacesRequest, io.opentdf.platform.policy.namespaces.ListNamespacesResponse> getListNamespacesMethod;
+    if ((getListNamespacesMethod = NamespaceServiceGrpc.getListNamespacesMethod) == null) {
+      synchronized (NamespaceServiceGrpc.class) {
+        if ((getListNamespacesMethod = NamespaceServiceGrpc.getListNamespacesMethod) == null) {
+          NamespaceServiceGrpc.getListNamespacesMethod = getListNamespacesMethod =
+              io.grpc.MethodDescriptor.<io.opentdf.platform.policy.namespaces.ListNamespacesRequest, io.opentdf.platform.policy.namespaces.ListNamespacesResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "ListNamespaces"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  io.opentdf.platform.policy.namespaces.ListNamespacesRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  io.opentdf.platform.policy.namespaces.ListNamespacesResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new NamespaceServiceMethodDescriptorSupplier("ListNamespaces"))
+              .build();
+        }
+      }
+    }
+    return getListNamespacesMethod;
+  }
+
+  private static volatile io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.CreateNamespaceRequest,
+      io.opentdf.platform.policy.namespaces.CreateNamespaceResponse> getCreateNamespaceMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "CreateNamespace",
+      requestType = io.opentdf.platform.policy.namespaces.CreateNamespaceRequest.class,
+      responseType = io.opentdf.platform.policy.namespaces.CreateNamespaceResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.CreateNamespaceRequest,
+      io.opentdf.platform.policy.namespaces.CreateNamespaceResponse> getCreateNamespaceMethod() {
+    io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.CreateNamespaceRequest, io.opentdf.platform.policy.namespaces.CreateNamespaceResponse> getCreateNamespaceMethod;
+    if ((getCreateNamespaceMethod = NamespaceServiceGrpc.getCreateNamespaceMethod) == null) {
+      synchronized (NamespaceServiceGrpc.class) {
+        if ((getCreateNamespaceMethod = NamespaceServiceGrpc.getCreateNamespaceMethod) == null) {
+          NamespaceServiceGrpc.getCreateNamespaceMethod = getCreateNamespaceMethod =
+              io.grpc.MethodDescriptor.<io.opentdf.platform.policy.namespaces.CreateNamespaceRequest, io.opentdf.platform.policy.namespaces.CreateNamespaceResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "CreateNamespace"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  io.opentdf.platform.policy.namespaces.CreateNamespaceRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  io.opentdf.platform.policy.namespaces.CreateNamespaceResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new NamespaceServiceMethodDescriptorSupplier("CreateNamespace"))
+              .build();
+        }
+      }
+    }
+    return getCreateNamespaceMethod;
+  }
+
+  private static volatile io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.UpdateNamespaceRequest,
+      io.opentdf.platform.policy.namespaces.UpdateNamespaceResponse> getUpdateNamespaceMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "UpdateNamespace",
+      requestType = io.opentdf.platform.policy.namespaces.UpdateNamespaceRequest.class,
+      responseType = io.opentdf.platform.policy.namespaces.UpdateNamespaceResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.UpdateNamespaceRequest,
+      io.opentdf.platform.policy.namespaces.UpdateNamespaceResponse> getUpdateNamespaceMethod() {
+    io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.UpdateNamespaceRequest, io.opentdf.platform.policy.namespaces.UpdateNamespaceResponse> getUpdateNamespaceMethod;
+    if ((getUpdateNamespaceMethod = NamespaceServiceGrpc.getUpdateNamespaceMethod) == null) {
+      synchronized (NamespaceServiceGrpc.class) {
+        if ((getUpdateNamespaceMethod = NamespaceServiceGrpc.getUpdateNamespaceMethod) == null) {
+          NamespaceServiceGrpc.getUpdateNamespaceMethod = getUpdateNamespaceMethod =
+              io.grpc.MethodDescriptor.<io.opentdf.platform.policy.namespaces.UpdateNamespaceRequest, io.opentdf.platform.policy.namespaces.UpdateNamespaceResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "UpdateNamespace"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  io.opentdf.platform.policy.namespaces.UpdateNamespaceRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  io.opentdf.platform.policy.namespaces.UpdateNamespaceResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new NamespaceServiceMethodDescriptorSupplier("UpdateNamespace"))
+              .build();
+        }
+      }
+    }
+    return getUpdateNamespaceMethod;
+  }
+
+  private static volatile io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.DeactivateNamespaceRequest,
+      io.opentdf.platform.policy.namespaces.DeactivateNamespaceResponse> getDeactivateNamespaceMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "DeactivateNamespace",
+      requestType = io.opentdf.platform.policy.namespaces.DeactivateNamespaceRequest.class,
+      responseType = io.opentdf.platform.policy.namespaces.DeactivateNamespaceResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.DeactivateNamespaceRequest,
+      io.opentdf.platform.policy.namespaces.DeactivateNamespaceResponse> getDeactivateNamespaceMethod() {
+    io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.DeactivateNamespaceRequest, io.opentdf.platform.policy.namespaces.DeactivateNamespaceResponse> getDeactivateNamespaceMethod;
+    if ((getDeactivateNamespaceMethod = NamespaceServiceGrpc.getDeactivateNamespaceMethod) == null) {
+      synchronized (NamespaceServiceGrpc.class) {
+        if ((getDeactivateNamespaceMethod = NamespaceServiceGrpc.getDeactivateNamespaceMethod) == null) {
+          NamespaceServiceGrpc.getDeactivateNamespaceMethod = getDeactivateNamespaceMethod =
+              io.grpc.MethodDescriptor.<io.opentdf.platform.policy.namespaces.DeactivateNamespaceRequest, io.opentdf.platform.policy.namespaces.DeactivateNamespaceResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "DeactivateNamespace"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  io.opentdf.platform.policy.namespaces.DeactivateNamespaceRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  io.opentdf.platform.policy.namespaces.DeactivateNamespaceResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new NamespaceServiceMethodDescriptorSupplier("DeactivateNamespace"))
+              .build();
+        }
+      }
+    }
+    return getDeactivateNamespaceMethod;
+  }
+
+  private static volatile io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceRequest,
+      io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceResponse> getAssignKeyAccessServerToNamespaceMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "AssignKeyAccessServerToNamespace",
+      requestType = io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceRequest.class,
+      responseType = io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceRequest,
+      io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceResponse> getAssignKeyAccessServerToNamespaceMethod() {
+    io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceRequest, io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceResponse> getAssignKeyAccessServerToNamespaceMethod;
+    if ((getAssignKeyAccessServerToNamespaceMethod = NamespaceServiceGrpc.getAssignKeyAccessServerToNamespaceMethod) == null) {
+      synchronized (NamespaceServiceGrpc.class) {
+        if ((getAssignKeyAccessServerToNamespaceMethod = NamespaceServiceGrpc.getAssignKeyAccessServerToNamespaceMethod) == null) {
+          NamespaceServiceGrpc.getAssignKeyAccessServerToNamespaceMethod = getAssignKeyAccessServerToNamespaceMethod =
+              io.grpc.MethodDescriptor.<io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceRequest, io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "AssignKeyAccessServerToNamespace"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new NamespaceServiceMethodDescriptorSupplier("AssignKeyAccessServerToNamespace"))
+              .build();
+        }
+      }
+    }
+    return getAssignKeyAccessServerToNamespaceMethod;
+  }
+
+  private static volatile io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceRequest,
+      io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceResponse> getRemoveKeyAccessServerFromNamespaceMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "RemoveKeyAccessServerFromNamespace",
+      requestType = io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceRequest.class,
+      responseType = io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceRequest,
+      io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceResponse> getRemoveKeyAccessServerFromNamespaceMethod() {
+    io.grpc.MethodDescriptor<io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceRequest, io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceResponse> getRemoveKeyAccessServerFromNamespaceMethod;
+    if ((getRemoveKeyAccessServerFromNamespaceMethod = NamespaceServiceGrpc.getRemoveKeyAccessServerFromNamespaceMethod) == null) {
+      synchronized (NamespaceServiceGrpc.class) {
+        if ((getRemoveKeyAccessServerFromNamespaceMethod = NamespaceServiceGrpc.getRemoveKeyAccessServerFromNamespaceMethod) == null) {
+          NamespaceServiceGrpc.getRemoveKeyAccessServerFromNamespaceMethod = getRemoveKeyAccessServerFromNamespaceMethod =
+              io.grpc.MethodDescriptor.<io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceRequest, io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "RemoveKeyAccessServerFromNamespace"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new NamespaceServiceMethodDescriptorSupplier("RemoveKeyAccessServerFromNamespace"))
+              .build();
+        }
+      }
+    }
+    return getRemoveKeyAccessServerFromNamespaceMethod;
+  }
+
+  /**
+   * Creates a new async stub that supports all call types for the service
+   */
+  public static NamespaceServiceStub newStub(io.grpc.Channel channel) {
+    io.grpc.stub.AbstractStub.StubFactory<NamespaceServiceStub> factory =
+      new io.grpc.stub.AbstractStub.StubFactory<NamespaceServiceStub>() {
+        @java.lang.Override
+        public NamespaceServiceStub newStub(io.grpc.Channel channel, io.grpc.CallOptions callOptions) {
+          return new NamespaceServiceStub(channel, callOptions);
+        }
+      };
+    return NamespaceServiceStub.newStub(factory, channel);
+  }
+
+  /**
+   * Creates a new blocking-style stub that supports unary and streaming output calls on the service
+   */
+  public static NamespaceServiceBlockingStub newBlockingStub(
+      io.grpc.Channel channel) {
+    io.grpc.stub.AbstractStub.StubFactory<NamespaceServiceBlockingStub> factory =
+      new io.grpc.stub.AbstractStub.StubFactory<NamespaceServiceBlockingStub>() {
+        @java.lang.Override
+        public NamespaceServiceBlockingStub newStub(io.grpc.Channel channel, io.grpc.CallOptions callOptions) {
+          return new NamespaceServiceBlockingStub(channel, callOptions);
+        }
+      };
+    return NamespaceServiceBlockingStub.newStub(factory, channel);
+  }
+
+  /**
+   * Creates a new ListenableFuture-style stub that supports unary calls on the service
+   */
+  public static NamespaceServiceFutureStub newFutureStub(
+      io.grpc.Channel channel) {
+    io.grpc.stub.AbstractStub.StubFactory<NamespaceServiceFutureStub> factory =
+      new io.grpc.stub.AbstractStub.StubFactory<NamespaceServiceFutureStub>() {
+        @java.lang.Override
+        public NamespaceServiceFutureStub newStub(io.grpc.Channel channel, io.grpc.CallOptions callOptions) {
+          return new NamespaceServiceFutureStub(channel, callOptions);
+        }
+      };
+    return NamespaceServiceFutureStub.newStub(factory, channel);
+  }
+
+  /**
+   */
+  public interface AsyncService {
+
+    /**
+     */
+    default void getNamespace(io.opentdf.platform.policy.namespaces.GetNamespaceRequest request,
+        io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.GetNamespaceResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getGetNamespaceMethod(), responseObserver);
+    }
+
+    /**
+     */
+    default void listNamespaces(io.opentdf.platform.policy.namespaces.ListNamespacesRequest request,
+        io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.ListNamespacesResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getListNamespacesMethod(), responseObserver);
+    }
+
+    /**
+     */
+    default void createNamespace(io.opentdf.platform.policy.namespaces.CreateNamespaceRequest request,
+        io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.CreateNamespaceResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getCreateNamespaceMethod(), responseObserver);
+    }
+
+    /**
+     */
+    default void updateNamespace(io.opentdf.platform.policy.namespaces.UpdateNamespaceRequest request,
+        io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.UpdateNamespaceResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getUpdateNamespaceMethod(), responseObserver);
+    }
+
+    /**
+     */
+    default void deactivateNamespace(io.opentdf.platform.policy.namespaces.DeactivateNamespaceRequest request,
+        io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.DeactivateNamespaceResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getDeactivateNamespaceMethod(), responseObserver);
+    }
+
+    /**
+     * <pre>
+     *--------------------------------------*
+     * Namespace &lt;&gt; Key Access Server RPCs
+     *---------------------------------------
+     * </pre>
+     */
+    default void assignKeyAccessServerToNamespace(io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceRequest request,
+        io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getAssignKeyAccessServerToNamespaceMethod(), responseObserver);
+    }
+
+    /**
+     */
+    default void removeKeyAccessServerFromNamespace(io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceRequest request,
+        io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getRemoveKeyAccessServerFromNamespaceMethod(), responseObserver);
+    }
+  }
+
+  /**
+   * Base class for the server implementation of the service NamespaceService.
+   */
+  public static abstract class NamespaceServiceImplBase
+      implements io.grpc.BindableService, AsyncService {
+
+    @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
+      return NamespaceServiceGrpc.bindService(this);
+    }
+  }
+
+  /**
+   * A stub to allow clients to do asynchronous rpc calls to service NamespaceService.
+   */
+  public static final class NamespaceServiceStub
+      extends io.grpc.stub.AbstractAsyncStub<NamespaceServiceStub> {
+    private NamespaceServiceStub(
+        io.grpc.Channel channel, io.grpc.CallOptions callOptions) {
+      super(channel, callOptions);
+    }
+
+    @java.lang.Override
+    protected NamespaceServiceStub build(
+        io.grpc.Channel channel, io.grpc.CallOptions callOptions) {
+      return new NamespaceServiceStub(channel, callOptions);
+    }
+
+    /**
+     */
+    public void getNamespace(io.opentdf.platform.policy.namespaces.GetNamespaceRequest request,
+        io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.GetNamespaceResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getGetNamespaceMethod(), getCallOptions()), request, responseObserver);
+    }
+
+    /**
+     */
+    public void listNamespaces(io.opentdf.platform.policy.namespaces.ListNamespacesRequest request,
+        io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.ListNamespacesResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getListNamespacesMethod(), getCallOptions()), request, responseObserver);
+    }
+
+    /**
+     */
+    public void createNamespace(io.opentdf.platform.policy.namespaces.CreateNamespaceRequest request,
+        io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.CreateNamespaceResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getCreateNamespaceMethod(), getCallOptions()), request, responseObserver);
+    }
+
+    /**
+     */
+    public void updateNamespace(io.opentdf.platform.policy.namespaces.UpdateNamespaceRequest request,
+        io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.UpdateNamespaceResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getUpdateNamespaceMethod(), getCallOptions()), request, responseObserver);
+    }
+
+    /**
+     */
+    public void deactivateNamespace(io.opentdf.platform.policy.namespaces.DeactivateNamespaceRequest request,
+        io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.DeactivateNamespaceResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getDeactivateNamespaceMethod(), getCallOptions()), request, responseObserver);
+    }
+
+    /**
+     * <pre>
+     *--------------------------------------*
+     * Namespace &lt;&gt; Key Access Server RPCs
+     *---------------------------------------
+     * </pre>
+     */
+    public void assignKeyAccessServerToNamespace(io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceRequest request,
+        io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getAssignKeyAccessServerToNamespaceMethod(), getCallOptions()), request, responseObserver);
+    }
+
+    /**
+     */
+    public void removeKeyAccessServerFromNamespace(io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceRequest request,
+        io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getRemoveKeyAccessServerFromNamespaceMethod(), getCallOptions()), request, responseObserver);
+    }
+  }
+
+  /**
+   * A stub to allow clients to do synchronous rpc calls to service NamespaceService.
+   */
+  public static final class NamespaceServiceBlockingStub
+      extends io.grpc.stub.AbstractBlockingStub<NamespaceServiceBlockingStub> {
+    private NamespaceServiceBlockingStub(
+        io.grpc.Channel channel, io.grpc.CallOptions callOptions) {
+      super(channel, callOptions);
+    }
+
+    @java.lang.Override
+    protected NamespaceServiceBlockingStub build(
+        io.grpc.Channel channel, io.grpc.CallOptions callOptions) {
+      return new NamespaceServiceBlockingStub(channel, callOptions);
+    }
+
+    /**
+     */
+    public io.opentdf.platform.policy.namespaces.GetNamespaceResponse getNamespace(io.opentdf.platform.policy.namespaces.GetNamespaceRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getGetNamespaceMethod(), getCallOptions(), request);
+    }
+
+    /**
+     */
+    public io.opentdf.platform.policy.namespaces.ListNamespacesResponse listNamespaces(io.opentdf.platform.policy.namespaces.ListNamespacesRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getListNamespacesMethod(), getCallOptions(), request);
+    }
+
+    /**
+     */
+    public io.opentdf.platform.policy.namespaces.CreateNamespaceResponse createNamespace(io.opentdf.platform.policy.namespaces.CreateNamespaceRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getCreateNamespaceMethod(), getCallOptions(), request);
+    }
+
+    /**
+     */
+    public io.opentdf.platform.policy.namespaces.UpdateNamespaceResponse updateNamespace(io.opentdf.platform.policy.namespaces.UpdateNamespaceRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getUpdateNamespaceMethod(), getCallOptions(), request);
+    }
+
+    /**
+     */
+    public io.opentdf.platform.policy.namespaces.DeactivateNamespaceResponse deactivateNamespace(io.opentdf.platform.policy.namespaces.DeactivateNamespaceRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getDeactivateNamespaceMethod(), getCallOptions(), request);
+    }
+
+    /**
+     * <pre>
+     *--------------------------------------*
+     * Namespace &lt;&gt; Key Access Server RPCs
+     *---------------------------------------
+     * </pre>
+     */
+    public io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceResponse assignKeyAccessServerToNamespace(io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getAssignKeyAccessServerToNamespaceMethod(), getCallOptions(), request);
+    }
+
+    /**
+     */
+    public io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceResponse removeKeyAccessServerFromNamespace(io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getRemoveKeyAccessServerFromNamespaceMethod(), getCallOptions(), request);
+    }
+  }
+
+  /**
+   * A stub to allow clients to do ListenableFuture-style rpc calls to service NamespaceService.
+   */
+  public static final class NamespaceServiceFutureStub
+      extends io.grpc.stub.AbstractFutureStub<NamespaceServiceFutureStub> {
+    private NamespaceServiceFutureStub(
+        io.grpc.Channel channel, io.grpc.CallOptions callOptions) {
+      super(channel, callOptions);
+    }
+
+    @java.lang.Override
+    protected NamespaceServiceFutureStub build(
+        io.grpc.Channel channel, io.grpc.CallOptions callOptions) {
+      return new NamespaceServiceFutureStub(channel, callOptions);
+    }
+
+    /**
+     */
+    public com.google.common.util.concurrent.ListenableFuture<io.opentdf.platform.policy.namespaces.GetNamespaceResponse> getNamespace(
+        io.opentdf.platform.policy.namespaces.GetNamespaceRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getGetNamespaceMethod(), getCallOptions()), request);
+    }
+
+    /**
+     */
+    public com.google.common.util.concurrent.ListenableFuture<io.opentdf.platform.policy.namespaces.ListNamespacesResponse> listNamespaces(
+        io.opentdf.platform.policy.namespaces.ListNamespacesRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getListNamespacesMethod(), getCallOptions()), request);
+    }
+
+    /**
+     */
+    public com.google.common.util.concurrent.ListenableFuture<io.opentdf.platform.policy.namespaces.CreateNamespaceResponse> createNamespace(
+        io.opentdf.platform.policy.namespaces.CreateNamespaceRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getCreateNamespaceMethod(), getCallOptions()), request);
+    }
+
+    /**
+     */
+    public com.google.common.util.concurrent.ListenableFuture<io.opentdf.platform.policy.namespaces.UpdateNamespaceResponse> updateNamespace(
+        io.opentdf.platform.policy.namespaces.UpdateNamespaceRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getUpdateNamespaceMethod(), getCallOptions()), request);
+    }
+
+    /**
+     */
+    public com.google.common.util.concurrent.ListenableFuture<io.opentdf.platform.policy.namespaces.DeactivateNamespaceResponse> deactivateNamespace(
+        io.opentdf.platform.policy.namespaces.DeactivateNamespaceRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getDeactivateNamespaceMethod(), getCallOptions()), request);
+    }
+
+    /**
+     * <pre>
+     *--------------------------------------*
+     * Namespace &lt;&gt; Key Access Server RPCs
+     *---------------------------------------
+     * </pre>
+     */
+    public com.google.common.util.concurrent.ListenableFuture<io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceResponse> assignKeyAccessServerToNamespace(
+        io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getAssignKeyAccessServerToNamespaceMethod(), getCallOptions()), request);
+    }
+
+    /**
+     */
+    public com.google.common.util.concurrent.ListenableFuture<io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceResponse> removeKeyAccessServerFromNamespace(
+        io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getRemoveKeyAccessServerFromNamespaceMethod(), getCallOptions()), request);
+    }
+  }
+
+  private static final int METHODID_GET_NAMESPACE = 0;
+  private static final int METHODID_LIST_NAMESPACES = 1;
+  private static final int METHODID_CREATE_NAMESPACE = 2;
+  private static final int METHODID_UPDATE_NAMESPACE = 3;
+  private static final int METHODID_DEACTIVATE_NAMESPACE = 4;
+  private static final int METHODID_ASSIGN_KEY_ACCESS_SERVER_TO_NAMESPACE = 5;
+  private static final int METHODID_REMOVE_KEY_ACCESS_SERVER_FROM_NAMESPACE = 6;
+
+  private static final class MethodHandlers<Req, Resp> implements
+      io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
+      io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,
+      io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,
+      io.grpc.stub.ServerCalls.BidiStreamingMethod<Req, Resp> {
+    private final AsyncService serviceImpl;
+    private final int methodId;
+
+    MethodHandlers(AsyncService serviceImpl, int methodId) {
+      this.serviceImpl = serviceImpl;
+      this.methodId = methodId;
+    }
+
+    @java.lang.Override
+    @java.lang.SuppressWarnings("unchecked")
+    public void invoke(Req request, io.grpc.stub.StreamObserver<Resp> responseObserver) {
+      switch (methodId) {
+        case METHODID_GET_NAMESPACE:
+          serviceImpl.getNamespace((io.opentdf.platform.policy.namespaces.GetNamespaceRequest) request,
+              (io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.GetNamespaceResponse>) responseObserver);
+          break;
+        case METHODID_LIST_NAMESPACES:
+          serviceImpl.listNamespaces((io.opentdf.platform.policy.namespaces.ListNamespacesRequest) request,
+              (io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.ListNamespacesResponse>) responseObserver);
+          break;
+        case METHODID_CREATE_NAMESPACE:
+          serviceImpl.createNamespace((io.opentdf.platform.policy.namespaces.CreateNamespaceRequest) request,
+              (io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.CreateNamespaceResponse>) responseObserver);
+          break;
+        case METHODID_UPDATE_NAMESPACE:
+          serviceImpl.updateNamespace((io.opentdf.platform.policy.namespaces.UpdateNamespaceRequest) request,
+              (io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.UpdateNamespaceResponse>) responseObserver);
+          break;
+        case METHODID_DEACTIVATE_NAMESPACE:
+          serviceImpl.deactivateNamespace((io.opentdf.platform.policy.namespaces.DeactivateNamespaceRequest) request,
+              (io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.DeactivateNamespaceResponse>) responseObserver);
+          break;
+        case METHODID_ASSIGN_KEY_ACCESS_SERVER_TO_NAMESPACE:
+          serviceImpl.assignKeyAccessServerToNamespace((io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceRequest) request,
+              (io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceResponse>) responseObserver);
+          break;
+        case METHODID_REMOVE_KEY_ACCESS_SERVER_FROM_NAMESPACE:
+          serviceImpl.removeKeyAccessServerFromNamespace((io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceRequest) request,
+              (io.grpc.stub.StreamObserver<io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceResponse>) responseObserver);
+          break;
+        default:
+          throw new AssertionError();
+      }
+    }
+
+    @java.lang.Override
+    @java.lang.SuppressWarnings("unchecked")
+    public io.grpc.stub.StreamObserver<Req> invoke(
+        io.grpc.stub.StreamObserver<Resp> responseObserver) {
+      switch (methodId) {
+        default:
+          throw new AssertionError();
+      }
+    }
+  }
+
+  public static final io.grpc.ServerServiceDefinition bindService(AsyncService service) {
+    return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
+        .addMethod(
+          getGetNamespaceMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              io.opentdf.platform.policy.namespaces.GetNamespaceRequest,
+              io.opentdf.platform.policy.namespaces.GetNamespaceResponse>(
+                service, METHODID_GET_NAMESPACE)))
+        .addMethod(
+          getListNamespacesMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              io.opentdf.platform.policy.namespaces.ListNamespacesRequest,
+              io.opentdf.platform.policy.namespaces.ListNamespacesResponse>(
+                service, METHODID_LIST_NAMESPACES)))
+        .addMethod(
+          getCreateNamespaceMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              io.opentdf.platform.policy.namespaces.CreateNamespaceRequest,
+              io.opentdf.platform.policy.namespaces.CreateNamespaceResponse>(
+                service, METHODID_CREATE_NAMESPACE)))
+        .addMethod(
+          getUpdateNamespaceMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              io.opentdf.platform.policy.namespaces.UpdateNamespaceRequest,
+              io.opentdf.platform.policy.namespaces.UpdateNamespaceResponse>(
+                service, METHODID_UPDATE_NAMESPACE)))
+        .addMethod(
+          getDeactivateNamespaceMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              io.opentdf.platform.policy.namespaces.DeactivateNamespaceRequest,
+              io.opentdf.platform.policy.namespaces.DeactivateNamespaceResponse>(
+                service, METHODID_DEACTIVATE_NAMESPACE)))
+        .addMethod(
+          getAssignKeyAccessServerToNamespaceMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceRequest,
+              io.opentdf.platform.policy.namespaces.AssignKeyAccessServerToNamespaceResponse>(
+                service, METHODID_ASSIGN_KEY_ACCESS_SERVER_TO_NAMESPACE)))
+        .addMethod(
+          getRemoveKeyAccessServerFromNamespaceMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceRequest,
+              io.opentdf.platform.policy.namespaces.RemoveKeyAccessServerFromNamespaceResponse>(
+                service, METHODID_REMOVE_KEY_ACCESS_SERVER_FROM_NAMESPACE)))
+        .build();
+  }
+
+  private static abstract class NamespaceServiceBaseDescriptorSupplier
+      implements io.grpc.protobuf.ProtoFileDescriptorSupplier, io.grpc.protobuf.ProtoServiceDescriptorSupplier {
+    NamespaceServiceBaseDescriptorSupplier() {}
+
+    @java.lang.Override
+    public com.google.protobuf.Descriptors.FileDescriptor getFileDescriptor() {
+      return io.opentdf.platform.policy.namespaces.NamespacesProto.getDescriptor();
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Descriptors.ServiceDescriptor getServiceDescriptor() {
+      return getFileDescriptor().findServiceByName("NamespaceService");
+    }
+  }
+
+  private static final class NamespaceServiceFileDescriptorSupplier
+      extends NamespaceServiceBaseDescriptorSupplier {
+    NamespaceServiceFileDescriptorSupplier() {}
+  }
+
+  private static final class NamespaceServiceMethodDescriptorSupplier
+      extends NamespaceServiceBaseDescriptorSupplier
+      implements io.grpc.protobuf.ProtoMethodDescriptorSupplier {
+    private final java.lang.String methodName;
+
+    NamespaceServiceMethodDescriptorSupplier(java.lang.String methodName) {
+      this.methodName = methodName;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Descriptors.MethodDescriptor getMethodDescriptor() {
+      return getServiceDescriptor().findMethodByName(methodName);
+    }
+  }
+
+  private static volatile io.grpc.ServiceDescriptor serviceDescriptor;
+
+  public static io.grpc.ServiceDescriptor getServiceDescriptor() {
+    io.grpc.ServiceDescriptor result = serviceDescriptor;
+    if (result == null) {
+      synchronized (NamespaceServiceGrpc.class) {
+        result = serviceDescriptor;
+        if (result == null) {
+          serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
+              .setSchemaDescriptor(new NamespaceServiceFileDescriptorSupplier())
+              .addMethod(getGetNamespaceMethod())
+              .addMethod(getListNamespacesMethod())
+              .addMethod(getCreateNamespaceMethod())
+              .addMethod(getUpdateNamespaceMethod())
+              .addMethod(getDeactivateNamespaceMethod())
+              .addMethod(getAssignKeyAccessServerToNamespaceMethod())
+              .addMethod(getRemoveKeyAccessServerFromNamespaceMethod())
+              .build();
+        }
+      }
+    }
+    return result;
+  }
+}
