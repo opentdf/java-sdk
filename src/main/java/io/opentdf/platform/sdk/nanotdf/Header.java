@@ -128,32 +128,4 @@ public class Header {
 
         return totalBytesWritten;
     }
-
-    // public int writeIntoBuffer(OutputStream stream) {
-    // if (buffer.remaining() < getTotalSize()) {
-    // throw new IllegalArgumentException("Failed to write header - invalid buffer
-    // size.");
-    // }
-    //
-    // int totalBytesWritten = 0;
-    // buffer.put(NanoTDF.MAGIC_NUMBER_AND_VERSION);
-    // totalBytesWritten += NanoTDF.MAGIC_NUMBER_AND_VERSION.length;
-    //
-    // int kasLocatorSize = kasLocator.writeIntoBuffer(buffer);
-    // totalBytesWritten += kasLocatorSize;
-    //
-    // buffer.put(eccMode.getECCModeAsByte());
-    // totalBytesWritten += 1;
-    //
-    // buffer.put(payloadConfig.getSymmetricAndPayloadConfigAsByte());
-    // totalBytesWritten += 1;
-    //
-    // int policyInfoSize = policyInfo.writeIntoBuffer(buffer);
-    // totalBytesWritten += policyInfoSize;
-    //
-    // buffer.put(ephemeralKey);
-    // totalBytesWritten += ephemeralKey.length;
-    //
-    // return totalBytesWritten;
-    // }
 }

@@ -18,7 +18,7 @@ class HeaderTest {
     @Test
     void settingAndGettingMagicNumberAndVersion() {
         byte[] expected = header.getMagicNumberAndVersion();
-        assertArrayEquals(expected, new byte[]{0x4C, 0x31, 0x4C});
+        assertArrayEquals(expected, new byte[] { 0x4C, 0x31, 0x4C });
     }
 
     @Test
@@ -47,7 +47,7 @@ class HeaderTest {
         ECCMode mode = new ECCMode((byte) 1); // Initialize the ECCMode object
         header.setECCMode(mode); // Set the ECCMode object
 
-        int keySize = mode.getECCompressedPubKeySize(mode.getEllipticCurveType());
+        int keySize = ECCMode.getECCompressedPubKeySize(mode.getEllipticCurveType());
         byte[] key = new byte[keySize]; // Ensure the key size is correct
         header.setEphemeralKey(key);
         assertArrayEquals(key, header.getEphemeralKey());
@@ -55,7 +55,7 @@ class HeaderTest {
 
     @Test
     void settingEphemeralKeyWithInvalidSize() {
-        byte[] key = new byte[]{1, 2, 3};
+        byte[] key = new byte[] { 1, 2, 3 };
         header.setECCMode(new ECCMode((byte) 1)); // ECC mode with key size > 3
         assertThrows(IllegalArgumentException.class, () -> header.setEphemeralKey(key));
     }

@@ -291,23 +291,42 @@
             </plugin>
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.8.0</version>
+                <version>3.13.0</version>
             </plugin>
             <plugin>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.0.0</version>
+                <version>3.4.0</version>
             </plugin>
             <plugin>
                 <artifactId>maven-jar-plugin</artifactId>
-                <version>3.0.2</version>
+                <version>3.4.2</version>
+                <executions>
+                    <execution>
+                        <id>default-jar</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                        <configuration>
+                            <finalName>${project.artifactId}-${project.version}</finalName>
+                            <excludes>
+                                <!-- Exclude specific CLI-related class files -->
+                                <exclude>io/opentdf/platform/TDF.class</exclude>
+                                <exclude>io/opentdf/platform/Command.class</exclude>
+                                <!-- Exclude the Picocli package from the library JAR -->
+                                <exclude>info/picocli/**</exclude>
+                            </excludes>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <artifactId>maven-install-plugin</artifactId>
-                <version>2.5.2</version>
+                <version>3.1.3</version>
             </plugin>
             <plugin>
                 <artifactId>maven-deploy-plugin</artifactId>
-                <version>2.8.2</version>
+                <version>3.1.3</version>
             </plugin>
             <!-- site lifecycle, see
                 https://maven.apache.org/ref/current/maven-core/lifecycles.html#site_Lifecycle -->
@@ -356,6 +375,7 @@
                         </goals>
                         <configuration>
                             <finalName>${project.artifactId}-cli</finalName>
+                            <attach>false</attach>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
                             <transformers>
                                 <!-- Main class entry for CLI -->
