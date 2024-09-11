@@ -14,11 +14,6 @@
     <packaging>jar</packaging>
     <dependencies>
         <dependency>
-            <groupId>io.opentdf.platform</groupId>
-            <artifactId>protocol</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
             <version>2.0.13</version>
@@ -136,6 +131,11 @@
             <groupId>org.mockito</groupId>
             <artifactId>mockito-junit-jupiter</artifactId>
         </dependency>
+        <dependency>
+            <groupId>build.buf</groupId>
+            <artifactId>protovalidate</artifactId>
+            <version>0.1.9</version>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
@@ -166,7 +166,7 @@
                                 </exec>
                                 <exec executable="cp" dir="../">
                                     <arg value="-r" />
-                                    <arg value="tmp-gen/protocol/src/main/protogen/grpc" />
+                                    <arg value="tmp-gen/sdk/src/main/protogen/grpc" />
                                     <arg value="sdk/src/main/protogen" />
                                 </exec>
                                 <exec executable="rm" dir="../">
