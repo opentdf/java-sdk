@@ -194,7 +194,7 @@ public class ResourceLocator {
                 buffer.put((byte) ((0b0010 << 4) | protocol.ordinal()));
                 break;
             case THIRTY_TWO_BYTES:
-                buffer.put((byte) ((0b0100 << 4) | protocol.ordinal()));
+                buffer.put((byte) ((0b0011 << 4) | protocol.ordinal()));
                 break;
         }
         totalBytesWritten += 1; // size of byte
