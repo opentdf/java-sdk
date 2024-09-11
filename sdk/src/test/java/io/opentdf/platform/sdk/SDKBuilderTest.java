@@ -45,10 +45,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 
-
 public class SDKBuilderTest {
 
-    final String EXAMPLE_COM_PEM= "-----BEGIN CERTIFICATE-----\n" +
+    final String EXAMPLE_COM_PEM = "-----BEGIN CERTIFICATE-----\n" +
             "MIIBqTCCARKgAwIBAgIIT0xFd/5uogEwDQYJKoZIhvcNAQEFBQAwFjEUMBIGA1UEAxMLZXhhbXBs\n" +
             "ZS5jb20wIBcNMTcwMTIwMTczOTIwWhgPOTk5OTEyMzEyMzU5NTlaMBYxFDASBgNVBAMTC2V4YW1w\n" +
             "bGUuY29tMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC2Tl2MdaUFmjAaYwmEwgEVRfVqwJO4\n" +
@@ -57,45 +56,46 @@ public class SDKBuilderTest {
             "CSqGSIb3DQEBBQUAA4GBAGfw0xavZSJXxuFAwxCZBtne9BAtk+SmfKkTI21v8Tx6w/p5Yt0IIvF3\n" +
             "0wCES7YVZ+zUc8vtVVyk1q3f1ZqXqVvzRCjzLzQnu6VVLBaiZPH9SYNX6j0pHhBvx1ZUMopJPr2D\n" +
             "avTXCTSHY5JoX20KEwfu8QQXQRDUzyc0QKn9SiE3\n" +
-    "-----END CERTIFICATE-----";
+            "-----END CERTIFICATE-----";
+
     @Test
-    void testDirCertsSSLContext() throws Exception{
+    void testDirCertsSSLContext() throws Exception {
         Path certDirPath = Files.createTempDirectory("certs");
         File pemFile = new File(certDirPath.toAbsolutePath().toString(), "ca.pem");
         FileOutputStream fos = new FileOutputStream(pemFile);
-        IOUtils.write(EXAMPLE_COM_PEM,fos);
+        IOUtils.write(EXAMPLE_COM_PEM, fos);
         fos.close();
         SDKBuilder builder = SDKBuilder.newBuilder().sslFactoryFromDirectory(certDirPath.toAbsolutePath().toString());
         SSLFactory sslFactory = builder.getSslFactory();
         assertNotNull(sslFactory);
-        X509Certificate[] acceptedIssuers=  sslFactory.getTrustManager().get().getAcceptedIssuers();
-        assertEquals(1, Arrays.stream(acceptedIssuers).filter(x->x.getIssuerX500Principal().getName()
+        X509Certificate[] acceptedIssuers = sslFactory.getTrustManager().get().getAcceptedIssuers();
+        assertEquals(1, Arrays.stream(acceptedIssuers).filter(x -> x.getIssuerX500Principal().getName()
                 .equals("CN=example.com")).count());
     }
 
     @Test
-    void testKeystoreSSLContext() throws Exception{
+    void testKeystoreSSLContext() throws Exception {
         KeyStore keystore = KeyStoreUtils.createKeyStore();
         keystore.setCertificateEntry("example.com", PemUtils.parseCertificate(EXAMPLE_COM_PEM).get(0));
         Path keyStorePath = Files.createTempFile("ca", "jks");
         keystore.store(new FileOutputStream(keyStorePath.toAbsolutePath().toString()), "foo".toCharArray());
-        SDKBuilder builder = SDKBuilder.newBuilder().sslFactoryFromKeyStore(keyStorePath.toAbsolutePath().toString(), "foo");
+        SDKBuilder builder = SDKBuilder.newBuilder().sslFactoryFromKeyStore(keyStorePath.toAbsolutePath().toString(),
+                "foo");
         SSLFactory sslFactory = builder.getSslFactory();
         assertNotNull(sslFactory);
-        X509Certificate[] acceptedIssuers=  sslFactory.getTrustManager().get().getAcceptedIssuers();
-        assertEquals(1, Arrays.stream(acceptedIssuers).filter(x->x.getIssuerX500Principal().getName()
+        X509Certificate[] acceptedIssuers = sslFactory.getTrustManager().get().getAcceptedIssuers();
+        assertEquals(1, Arrays.stream(acceptedIssuers).filter(x -> x.getIssuerX500Principal().getName()
                 .equals("CN=example.com")).count());
 
     }
 
-
     @Test
-    public void testPlatformPlainTextAndIDPWithSSL() throws Exception{
+    public void testPlatformPlainTextAndIDPWithSSL() throws Exception {
         sdkServicesSetup(false, true);
     }
 
     @Test
-    void testSDKServicesWithTruststore() throws Exception{
+    void testSDKServicesWithTruststore() throws Exception {
         sdkServicesSetup(true, true);
     }
 
@@ -104,7 +104,7 @@ public class SDKBuilderTest {
         sdkServicesSetup(false, false);
     }
 
-    void sdkServicesSetup(boolean useSSLPlatform, boolean useSSLIDP) throws Exception{
+    void sdkServicesSetup(boolean useSSLPlatform, boolean useSSLIDP) throws Exception {
 
         HeldCertificate rootCertificate = new HeldCertificate.Builder()
                 .certificateAuthority(0)
@@ -125,9 +125,10 @@ public class SDKBuilderTest {
         SDK.Services services = null;
         // we use the HTTP server for two things:
         // * it returns the OIDC configuration we use at bootstrapping time
-        // * it fakes out being an IDP and returns an access token when need to retrieve an access token
+        // * it fakes out being an IDP and returns an access token when need to retrieve
+        // an access token
         try (MockWebServer httpServer = new MockWebServer()) {
-            if (useSSLIDP){
+            if (useSSLIDP) {
                 httpServer.useHttps(serverHandshakeCertificates.sslSocketFactory(), false);
             }
             String oidcConfig;
@@ -138,18 +139,21 @@ public class SDKBuilderTest {
             oidcConfig = oidcConfig
                     // if we don't do this then the library code complains that the issuer is wrong
                     .replace("<issuer>", issuer)
-                    // we want this server to be called when we fetch an access token during a service call
+                    // we want this server to be called when we fetch an access token during a
+                    // service call
                     .replace("<token_endpoint>", httpServer.url("tokens").toString());
             httpServer.enqueue(new MockResponse()
                     .setBody(oidcConfig)
-                    .setHeader("Content-type", "application/json")
-            );
+                    .setHeader("Content-type", "application/json"));
 
-            // this service returns the platform_issuer url to the SDK during bootstrapping. This
-            // tells the SDK where to download the OIDC discovery document from (our test webserver!)
+            // this service returns the platform_issuer url to the SDK during bootstrapping.
+            // This
+            // tells the SDK where to download the OIDC discovery document from (our test
+            // webserver!)
             WellKnownServiceGrpc.WellKnownServiceImplBase wellKnownService = new WellKnownServiceGrpc.WellKnownServiceImplBase() {
                 @Override
-                public void getWellKnownConfiguration(GetWellKnownConfigurationRequest request, StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
+                public void getWellKnownConfiguration(GetWellKnownConfigurationRequest request,
+                        StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
                     var val = Value.newBuilder().setStringValue(issuer).build();
                     var config = Struct.newBuilder().putFields("platform_issuer", val).build();
                     var response = GetWellKnownConfigurationResponse
@@ -161,31 +165,38 @@ public class SDKBuilderTest {
                 }
             };
 
-            // remember the auth headers that we received during GRPC calls to platform services
+            // remember the auth headers that we received during GRPC calls to platform
+            // services
             AtomicReference<String> servicesAuthHeader = new AtomicReference<>(null);
             AtomicReference<String> servicesDPoPHeader = new AtomicReference<>(null);
 
             // remember the auth headers that we received during GRPC calls to KAS
             AtomicReference<String> kasAuthHeader = new AtomicReference<>(null);
             AtomicReference<String> kasDPoPHeader = new AtomicReference<>(null);
-            // we use the server in two different ways. the first time we use it to actually return
-            // issuer for bootstrapping. the second time we use the interception functionality in order
+            // we use the server in two different ways. the first time we use it to actually
+            // return
+            // issuer for bootstrapping. the second time we use the interception
+            // functionality in order
             // to make sure that we are including a DPoP proof and an auth header
             ServerBuilder<?> platformServicesServerBuilder = ServerBuilder
                     .forPort(getRandomPort())
                     .directExecutor()
                     .addService(wellKnownService)
-                    .addService(new NamespaceServiceGrpc.NamespaceServiceImplBase() {})
+                    .addService(new NamespaceServiceGrpc.NamespaceServiceImplBase() {
+                    })
                     .intercept(new ServerInterceptor() {
                         @Override
-                        public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
-                            servicesAuthHeader.set(headers.get(Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER)));
-                            servicesDPoPHeader.set(headers.get(Metadata.Key.of("DPoP", Metadata.ASCII_STRING_MARSHALLER)));
+                        public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
+                                Metadata headers, ServerCallHandler<ReqT, RespT> next) {
+                            servicesAuthHeader.set(
+                                    headers.get(Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER)));
+                            servicesDPoPHeader
+                                    .set(headers.get(Metadata.Key.of("DPoP", Metadata.ASCII_STRING_MARSHALLER)));
                             return next.startCall(call, headers);
                         }
                     });
-            if (useSSLPlatform){
-                 platformServicesServerBuilder = platformServicesServerBuilder.useTransportSecurity(
+            if (useSSLPlatform) {
+                platformServicesServerBuilder = platformServicesServerBuilder.useTransportSecurity(
                         new ByteArrayInputStream(serverCertificate.certificatePem().getBytes()),
                         new ByteArrayInputStream(serverCertificate.privateKeyPkcs8Pem().getBytes()));
             }
@@ -205,14 +216,16 @@ public class SDKBuilderTest {
                     })
                     .intercept(new ServerInterceptor() {
                         @Override
-                        public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
-                            kasAuthHeader.set(headers.get(Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER)));
+                        public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
+                                Metadata headers, ServerCallHandler<ReqT, RespT> next) {
+                            kasAuthHeader.set(
+                                    headers.get(Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER)));
                             kasDPoPHeader.set(headers.get(Metadata.Key.of("DPoP", Metadata.ASCII_STRING_MARSHALLER)));
                             return next.startCall(call, headers);
                         }
                     });
 
-            if(useSSLPlatform){
+            if (useSSLPlatform) {
                 kasServerBuilder = kasServerBuilder.useTransportSecurity(
                         new ByteArrayInputStream(serverCertificate.certificatePem().getBytes()),
                         new ByteArrayInputStream(serverCertificate.privateKeyPkcs8Pem().getBytes()));
@@ -225,12 +238,12 @@ public class SDKBuilderTest {
                     .clientSecret("client-id", "client-secret")
                     .platformEndpoint("localhost:" + platformServicesServer.getPort());
 
-            if(!useSSLPlatform) {
+            if (!useSSLPlatform) {
                 servicesBuilder = servicesBuilder.useInsecurePlaintextConnection(true);
             }
-            if (useSSLPlatform || useSSLIDP){
-                servicesBuilder = servicesBuilder.sslFactory(SSLFactory.builder().withTrustMaterial(rootCertificate.
-                        certificate()).build());
+            if (useSSLPlatform || useSSLIDP) {
+                servicesBuilder = servicesBuilder
+                        .sslFactory(SSLFactory.builder().withTrustMaterial(rootCertificate.certificate()).build());
             }
 
             var servicesAndComponents = servicesBuilder.buildServices();
@@ -254,7 +267,8 @@ public class SDKBuilderTest {
 
             httpServer.takeRequest();
 
-            // validate that we made a reasonable request to our fake IdP to get an access token
+            // validate that we made a reasonable request to our fake IdP to get an access
+            // token
             var accessTokenRequest = httpServer.takeRequest();
             assertThat(accessTokenRequest).isNotNull();
             var authHeader = accessTokenRequest.getHeader("Authorization");
@@ -262,13 +276,15 @@ public class SDKBuilderTest {
             var authHeaderParts = authHeader.split(" ");
             assertThat(authHeaderParts).hasSize(2);
             assertThat(authHeaderParts[0]).isEqualTo("Basic");
-            var usernameAndPassword = new String(Base64.getDecoder().decode(authHeaderParts[1]), StandardCharsets.UTF_8);
+            var usernameAndPassword = new String(Base64.getDecoder().decode(authHeaderParts[1]),
+                    StandardCharsets.UTF_8);
             assertThat(usernameAndPassword).isEqualTo("client-id:client-secret");
 
-            // validate that during the request to the namespace service we supplied a valid token
+            // validate that during the request to the namespace service we supplied a valid
+            // token
 
-            int i =0; //some race condition with testing
-            while(servicesDPoPHeader.get()==null && i < 10){
+            int i = 0; // some race condition with testing
+            while (servicesDPoPHeader.get() == null && i < 10) {
                 Thread.sleep(10);
                 i += 1;
             }
@@ -278,18 +294,20 @@ public class SDKBuilderTest {
             var body = new String(accessTokenRequest.getBody().readByteArray(), StandardCharsets.UTF_8);
             assertThat(body).contains("grant_type=client_credentials");
 
-            // now call KAS _on a different server_ and make sure that the interceptors provide us with auth tokens
+            // now call KAS _on a different server_ and make sure that the interceptors
+            // provide us with auth tokens
             var keyAccess = new Manifest.KeyAccess();
             keyAccess.url = "localhost:" + kasServer.getPort();
 
             try {
                 services.kas().unwrap(keyAccess, "");
             } catch (Exception ignoredException) {
-                // not going to bother making a real request with real crypto, just make sure that
+                // not going to bother making a real request with real crypto, just make sure
+                // that
                 // we have the right headers
             }
-            i =0; //some race condition with testing
-            while(kasDPoPHeader.get()==null && i < 10){
+            i = 0; // some race condition with testing
+            while (kasDPoPHeader.get() == null && i < 10) {
                 Thread.sleep(10);
                 i += 1;
             }
@@ -309,15 +327,18 @@ public class SDKBuilderTest {
     }
 
     /**
-     * If auth is disabled then the `platform_issuer` isn't returned during bootstrapping. The SDK
+     * If auth is disabled then the `platform_issuer` isn't returned during
+     * bootstrapping. The SDK
      * should still function without auth if auth is disabled on the server
+     * 
      * @throws IOException
      */
     @Test
     public void testSdkWithNoIssuerMakesRequests() throws IOException {
         WellKnownServiceGrpc.WellKnownServiceImplBase wellKnownService = new WellKnownServiceGrpc.WellKnownServiceImplBase() {
             @Override
-            public void getWellKnownConfiguration(GetWellKnownConfigurationRequest request, StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
+            public void getWellKnownConfiguration(GetWellKnownConfigurationRequest request,
+                    StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
                 // don't return a platform issuer
                 responseObserver.onNext(GetWellKnownConfigurationResponse.getDefaultInstance());
                 responseObserver.onCompleted();
@@ -332,17 +353,18 @@ public class SDKBuilderTest {
                 .directExecutor()
                 .intercept(new ServerInterceptor() {
                     @Override
-                    public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
+                    public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
+                            Metadata headers, ServerCallHandler<ReqT, RespT> next) {
                         authHeader.set(
-                                headers.get(Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER))
-                        );
+                                headers.get(Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER)));
                         return next.startCall(call, headers);
                     }
                 })
                 .addService(wellKnownService)
                 .addService(new NamespaceServiceGrpc.NamespaceServiceImplBase() {
                     @Override
-                    public void getNamespace(GetNamespaceRequest request, StreamObserver<GetNamespaceResponse> responseObserver) {
+                    public void getNamespace(GetNamespaceRequest request,
+                            StreamObserver<GetNamespaceResponse> responseObserver) {
                         getNsCalled.set(true);
                         responseObserver.onNext(GetNamespaceResponse.getDefaultInstance());
                         responseObserver.onCompleted();
@@ -360,7 +382,6 @@ public class SDKBuilderTest {
                     .useInsecurePlaintextConnection(true)
                     .build();
             assertThat(sdk.getAuthInterceptor()).isEmpty();
-
 
             try {
                 sdk.getServices().namespaces().getNamespace(GetNamespaceRequest.getDefaultInstance()).get();

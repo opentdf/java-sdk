@@ -22,8 +22,10 @@ import java.nio.channels.SeekableByteChannel;
 import java.util.Optional;
 
 /**
- * The SDK class represents a software development kit for interacting with the opentdf platform. It
- * provides various services and stubs for making API calls to the opentdf platform.
+ * The SDK class represents a software development kit for interacting with the
+ * opentdf platform. It
+ * provides various services and stubs for making API calls to the opentdf
+ * platform.
  */
 public class SDK implements AutoCloseable {
     private final Services services;
@@ -39,19 +41,28 @@ public class SDK implements AutoCloseable {
 
     public interface KAS extends AutoCloseable {
         Config.KASInfo getPublicKey(Config.KASInfo kasInfo);
+
         Config.KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve);
+
         byte[] unwrap(Manifest.KeyAccess keyAccess, String policy);
+
         byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL);
+
         KASKeyCache getKeyCache();
     }
 
     // TODO: add KAS
     public interface Services extends AutoCloseable {
         AuthorizationServiceFutureStub authorization();
+
         AttributesServiceFutureStub attributes();
+
         NamespaceServiceFutureStub namespaces();
+
         SubjectMappingServiceFutureStub subjectMappings();
+
         ResourceMappingServiceFutureStub resourceMappings();
+
         KAS kas();
 
         static Services newServices(ManagedChannel channel, KAS kas) {
@@ -120,8 +131,10 @@ public class SDK implements AutoCloseable {
     }
 
     /**
-     * Checks to see if this has the structure of a Z-TDF in that it is a zip file containing
+     * Checks to see if this has the structure of a Z-TDF in that it is a zip file
+     * containing
      * a `manifest.json` and a `0.payload`
+     * 
      * @param channel A channel containing the bytes of the potential Z-TDF
      * @return `true` if
      */

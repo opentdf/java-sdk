@@ -1,22 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <name>sdk</name>
     <artifactId>sdk</artifactId>
     <parent>
         <artifactId>sdk-pom</artifactId>
         <groupId>io.opentdf.platform</groupId>
-        <version>0.6.2-SNAPSHOT</version><!-- {x-version-update:java-sdk:current} -->
+        <version>${revision}</version>
     </parent>
     <packaging>jar</packaging>
     <dependencies>
-        <dependency>
-            <groupId>io.opentdf.platform</groupId>
-            <artifactId>protocol</artifactId>
-            <version>0.6.2-SNAPSHOT</version><!-- {x-version-update:java-sdk:current} -->
-        </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
@@ -28,7 +24,7 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-        <groupId>org.apache.logging.log4j</groupId>
+            <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-core</artifactId>
             <scope>test</scope>
         </dependency>
@@ -135,5 +131,75 @@
             <groupId>org.mockito</groupId>
             <artifactId>mockito-junit-jupiter</artifactId>
         </dependency>
+        <dependency>
+            <groupId>build.buf</groupId>
+            <artifactId>protovalidate</artifactId>
+            <version>0.1.9</version>
+        </dependency>
     </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>generateSources</id>
+                        <phase>generate-sources</phase>
+                        <configuration>
+                            <target>
+                                <exec executable="rm">
+                                    <arg value="-rf" />
+                                    <arg value="src/main/protogen" />
+                                </exec>
+                                <exec executable="buf" dir="../">
+                                    <arg value="generate" />
+                                    <arg
+                                        value="https://github.com/opentdf/platform.git#branch=main,subdir=service" />
+                                </exec>
+                                <exec executable="buf" dir="../">
+                                    <arg value="generate" />
+                                    <arg value="buf.build/grpc-ecosystem/grpc-gateway" />
+                                    <arg value="-o" />
+                                    <arg value="tmp-gen" />
+                                </exec>
+                                <exec executable="cp" dir="../">
+                                    <arg value="-r" />
+                                    <arg value="tmp-gen/sdk/src/main/protogen/grpc" />
+                                    <arg value="sdk/src/main/protogen" />
+                                </exec>
+                                <exec executable="rm" dir="../">
+                                    <arg value="-rf" />
+                                    <arg value="tmp-gen" />
+                                </exec>
+                            </target>
+                        </configuration>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>add-source</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>src/main/protogen</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

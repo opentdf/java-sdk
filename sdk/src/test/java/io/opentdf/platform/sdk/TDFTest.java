@@ -1,17 +1,10 @@
 package io.opentdf.platform.sdk;
 
-
 import com.google.common.util.concurrent.ListenableFuture;
-import com.nimbusds.jose.crypto.MACSigner;
-import com.nimbusds.jose.crypto.MACVerifier;
-import com.nimbusds.jose.crypto.RSASSASigner;
-import com.nimbusds.jose.crypto.RSASSAVerifier;
-import com.nimbusds.jose.jwk.RSAKey;
 
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
-import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
 import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
@@ -27,7 +20,6 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.SecureRandom;
-import java.security.interfaces.RSAPublicKey;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Random;
@@ -49,7 +41,8 @@ public class TDFTest {
 
     private static SDK.KAS kas = new SDK.KAS() {
         @Override
-        public void close() {}
+        public void close() {
+        }
 
         @Override
         public Config.KASInfo getPublicKey(Config.KASInfo kasInfo) {
@@ -84,13 +77,13 @@ public class TDFTest {
         }
 
         @Override
-        public KASKeyCache getKeyCache(){
+        public KASKeyCache getKeyCache() {
             return new KASKeyCache();
         }
     };
 
     AttributesServiceGrpc.AttributesServiceFutureStub attributeGrpcStub;
-    
+
     private static ArrayList<KeyPair> keypairs = new ArrayList<>();
 
     @BeforeAll
@@ -105,7 +98,8 @@ public class TDFTest {
 
         ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
         lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
-        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class))).thenReturn(resp1);
+        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
+                .thenReturn(resp1);
 
         SecureRandom secureRandom = new SecureRandom();
         byte[] key = new byte[32];
@@ -126,8 +120,7 @@ public class TDFTest {
                 Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
                 Config.withMetaData("here is some metadata"),
-                Config.withAssertionConfig(assertion1)
-        );
+                Config.withAssertionConfig(assertion1));
 
         String plainText = "this is extremely sensitive stuff!!!";
         InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
@@ -137,10 +130,12 @@ public class TDFTest {
         tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
 
         var assertionVerificationKeys = new Config.AssertionVerificationKeys();
-        assertionVerificationKeys.defaultKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, key);
+        assertionVerificationKeys.defaultKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256,
+                key);
 
         var unwrappedData = new ByteArrayOutputStream();
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas, assertionVerificationKeys);
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas,
+                assertionVerificationKeys);
         assertThat(reader.getManifest().payload.mimeType).isEqualTo("application/octet-stream");
 
         reader.readPayload(unwrappedData);
@@ -156,7 +151,8 @@ public class TDFTest {
 
         ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
         lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
-        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class))).thenReturn(resp1);
+        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
+                .thenReturn(resp1);
 
         String assertion1Id = "assertion1";
         var keypair = CryptoUtils.generateRSAKeypair();
@@ -175,8 +171,7 @@ public class TDFTest {
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
-                Config.withAssertionConfig(assertionConfig)
-        );
+                Config.withAssertionConfig(assertionConfig));
 
         String plainText = "this is extremely sensitive stuff!!!";
         InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
@@ -190,7 +185,8 @@ public class TDFTest {
                 new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256, keypair.getPublic()));
 
         var unwrappedData = new ByteArrayOutputStream();
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas, assertionVerificationKeys);
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas,
+                assertionVerificationKeys);
         reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
@@ -203,7 +199,8 @@ public class TDFTest {
 
         ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
         lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
-        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class))).thenReturn(resp1);
+        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
+                .thenReturn(resp1);
 
         String assertion1Id = "assertion1";
         var assertionConfig1 = new AssertionConfig();
@@ -230,8 +227,7 @@ public class TDFTest {
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
-                Config.withAssertionConfig(assertionConfig1, assertionConfig2)
-        );
+                Config.withAssertionConfig(assertionConfig1, assertionConfig2));
 
         String plainText = "this is extremely sensitive stuff!!!";
         InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
@@ -260,7 +256,8 @@ public class TDFTest {
             } else if (assertion.id.equals(assertion2Id)) {
                 assertThat(assertion.statement.format).isEqualTo("json");
                 assertThat(assertion.statement.schema).isEqualTo("urn:nato:stanag:5636:A:1:elements:json");
-                assertThat(assertion.statement.value).isEqualTo("{\"uuid\":\"f74efb60-4a9a-11ef-a6f1-8ee1a61c148a\",\"body\":{\"dataAttributes\":null,\"dissem\":null}}");
+                assertThat(assertion.statement.value).isEqualTo(
+                        "{\"uuid\":\"f74efb60-4a9a-11ef-a6f1-8ee1a61c148a\",\"body\":{\"dataAttributes\":null,\"dissem\":null}}");
                 assertThat(assertion.type).isEqualTo(AssertionConfig.Type.HandlingAssertion.toString());
             } else {
                 throw new RuntimeException("unexpected assertion id: " + assertion.id);
@@ -273,7 +270,8 @@ public class TDFTest {
 
         ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
         lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
-        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class))).thenReturn(resp1);
+        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
+                .thenReturn(resp1);
 
         var random = new Random();
 
@@ -281,8 +279,7 @@ public class TDFTest {
                 Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
                 // use a random segment size that makes sure that we will use multiple segments
-                Config.withSegmentSize(1 + random.nextInt(20))
-        );
+                Config.withSegmentSize(1 + random.nextInt(20)));
 
         // data should be bigger than the largest segment
         var data = new byte[21 + random.nextInt(2048)];
@@ -305,8 +302,8 @@ public class TDFTest {
     public void testCreatingTooLargeTDF() throws Exception {
         ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
         lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
-        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class))).thenReturn(resp1);
-
+        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
+                .thenReturn(resp1);
 
         var random = new Random();
         var maxSize = random.nextInt(1024);
@@ -333,9 +330,12 @@ public class TDFTest {
 
         var os = new OutputStream() {
             @Override
-            public void write(int b) {}
+            public void write(int b) {
+            }
+
             @Override
-            public void write(byte[] b, int off, int len) {}
+            public void write(byte[] b, int off, int len) {
+            }
         };
 
         var tdf = new TDF(maxSize);
@@ -356,15 +356,15 @@ public class TDFTest {
 
         ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
         lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
-        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class))).thenReturn(resp1);
+        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
+                .thenReturn(resp1);
 
         final String mimeType = "application/pdf";
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
-                Config.withMimeType(mimeType)
-        );
+                Config.withMimeType(mimeType));
 
         String plainText = "this is extremely sensitive stuff!!!";
         InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());

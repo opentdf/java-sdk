@@ -1,12 +1,7 @@
 package io.opentdf.platform.sdk;
 
-
 import com.google.gson.Gson;
 import com.nimbusds.jose.*;
-import com.nimbusds.jose.crypto.MACVerifier;
-import com.nimbusds.jose.crypto.RSASSAVerifier;
-import com.nimbusds.jwt.JWTClaimsSet;
-import com.nimbusds.jwt.SignedJWT;
 
 import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
@@ -14,8 +9,6 @@ import io.opentdf.platform.sdk.Config.TDFConfig;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
 import io.opentdf.platform.sdk.Config.KASInfo;
 
-import com.nimbusds.jose.crypto.RSASSASigner;
-import com.nimbusds.jose.crypto.MACSigner;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
 import org.erdtman.jcs.JsonCanonicalizer;
@@ -29,7 +22,6 @@ import java.io.OutputStream;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
-import java.util.function.Consumer;
 import java.text.ParseException;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -42,7 +34,8 @@ public class TDF {
         this(MAX_TDF_INPUT_SIZE);
     }
 
-    // constructor for tests so that we can set a maximum size that's tractable for tests
+    // constructor for tests so that we can set a maximum size that's tractable for
+    // tests
     TDF(long maximumInputSize) {
         this.maximumSize = maximumInputSize;
     }
@@ -54,7 +47,7 @@ public class TDF {
     private static final String kSplitKeyType = "split";
     private static final String kWrapped = "wrapped";
     private static final String kKasProtocol = "kas";
-    private static final int kGcmIvSize  = 12;
+    private static final int kGcmIvSize = 12;
     private static final int kAesBlockSize = 16;
     private static final String kGCMCipherAlgorithm = "AES-256-GCM";
     private static final int kGMACPayloadLength = 16;
@@ -69,7 +62,7 @@ public class TDF {
 
     private static final Gson gson = new Gson();
 
-    public class SplitKeyException extends IOException { 
+    public class SplitKeyException extends IOException {
         public SplitKeyException(String errorMessage) {
             super(errorMessage);
         }
@@ -135,7 +128,6 @@ public class TDF {
         }
     }
 
-
     public static class EncryptedMetadata {
         private String ciphertext;
         private String iv;
@@ -162,7 +154,7 @@ public class TDF {
             policyObject.body.dataAttributes = new ArrayList<>();
             policyObject.body.dissem = new ArrayList<>();
 
-            for (Autoconfigure.AttributeValueFQN attribute: attributes) {
+            for (Autoconfigure.AttributeValueFQN attribute : attributes) {
                 PolicyObject.AttributeObject attributeObject = new PolicyObject.AttributeObject();
                 attributeObject.attribute = attribute.toString();
                 policyObject.body.dataAttributes.add(attributeObject);
@@ -171,12 +163,14 @@ public class TDF {
         }
 
         private static final Base64.Encoder encoder = Base64.getEncoder();
+
         private void prepareManifest(Config.TDFConfig tdfConfig, SDK.KAS kas) {
             manifest.encryptionInformation.keyAccessType = kSplitKeyType;
-            manifest.encryptionInformation.keyAccessObj =  new ArrayList<>();
+            manifest.encryptionInformation.keyAccessObj = new ArrayList<>();
 
             PolicyObject policyObject = createPolicyObject(tdfConfig.attributes);
-            String base64PolicyObject  = encoder.encodeToString(gson.toJson(policyObject).getBytes(StandardCharsets.UTF_8));
+            String base64PolicyObject = encoder
+                    .encodeToString(gson.toJson(policyObject).getBytes(StandardCharsets.UTF_8));
             List<byte[]> symKeys = new ArrayList<>();
             Map<String, Config.KASInfo> latestKASInfo = new HashMap<>();
             if (tdfConfig.splitPlan == null || tdfConfig.splitPlan.isEmpty()) {
@@ -197,7 +191,7 @@ public class TDF {
             }
 
             // Seed anything passed in manually
-            for (Config.KASInfo kasInfo: tdfConfig.kasInfoList) {
+            for (Config.KASInfo kasInfo : tdfConfig.kasInfoList) {
                 if (kasInfo.PublicKey != null && !kasInfo.PublicKey.isEmpty()) {
                     latestKASInfo.put(kasInfo.URL, kasInfo);
                 }
@@ -230,22 +224,22 @@ public class TDF {
                 }
             }
 
-            for (String splitID: splitIDs) {
+            for (String splitID : splitIDs) {
                 // Symmetric key
                 byte[] symKey = new byte[GCM_KEY_SIZE];
                 sRandom.nextBytes(symKey);
                 symKeys.add(symKey);
 
                 // Add policyBinding
-                var hexBinding = Hex.encodeHexString(CryptoUtils.CalculateSHA256Hmac(symKey, base64PolicyObject.getBytes(StandardCharsets.UTF_8)));
+                var hexBinding = Hex.encodeHexString(
+                        CryptoUtils.CalculateSHA256Hmac(symKey, base64PolicyObject.getBytes(StandardCharsets.UTF_8)));
                 var policyBinding = new Manifest.PolicyBinding();
                 policyBinding.alg = kHmacIntegrityAlgorithm;
                 policyBinding.hash = encoder.encodeToString(hexBinding.getBytes(StandardCharsets.UTF_8));
-                
 
                 // Add meta data
                 var encryptedMetadata = new String();
-                if(tdfConfig.metaData != null && !tdfConfig.metaData.trim().isEmpty()) {
+                if (tdfConfig.metaData != null && !tdfConfig.metaData.trim().isEmpty()) {
                     AesGcm aesGcm = new AesGcm(symKey);
                     var encrypted = aesGcm.encrypt(tdfConfig.metaData.getBytes(StandardCharsets.UTF_8));
 
@@ -257,7 +251,7 @@ public class TDF {
                     encryptedMetadata = encoder.encodeToString(metadata.getBytes(StandardCharsets.UTF_8));
                 }
 
-                for (Config.KASInfo kasInfo: conjunction.get(splitID)){
+                for (Config.KASInfo kasInfo : conjunction.get(splitID)) {
                     if (kasInfo.PublicKey == null || kasInfo.PublicKey.isEmpty()) {
                         throw new KasPublicKeyMissing("Kas public key is missing in kas information list");
                     }
@@ -284,7 +278,7 @@ public class TDF {
             manifest.encryptionInformation.method.algorithm = kGCMCipherAlgorithm;
 
             // Create the payload key by XOR all the keys in key access object.
-            for (byte[] symKey: symKeys) {
+            for (byte[] symKey : symKeys) {
                 for (int index = 0; index < symKey.length; index++) {
                     this.payloadKey[index] ^= symKey[index];
                 }
@@ -295,10 +289,12 @@ public class TDF {
     }
 
     private static final Base64.Decoder decoder = Base64.getDecoder();
+
     public static class Reader {
         private final TDFReader tdfReader;
         private final byte[] payloadKey;
         private final Manifest manifest;
+
         public String getMetadata() {
             return unencryptedMetadata;
         }
@@ -324,8 +320,8 @@ public class TDF {
 
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
 
-            for (Manifest.Segment segment: manifest.encryptionInformation.integrityInformation.segments) {
-                byte[] readBuf = new byte[(int)segment.encryptedSegmentSize];
+            for (Manifest.Segment segment : manifest.encryptionInformation.integrityInformation.segments) {
+                byte[] readBuf = new byte[(int) segment.encryptedSegmentSize];
                 int bytesRead = tdfReader.readPayloadBytes(readBuf);
 
                 if (readBuf.length != bytesRead) {
@@ -376,30 +372,33 @@ public class TDF {
     }
 
     public TDFObject createTDF(InputStream payload,
-                               OutputStream outputStream,
-                               Config.TDFConfig tdfConfig, SDK.KAS kas, AttributesServiceFutureStub attrService) throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException {
+            OutputStream outputStream,
+            Config.TDFConfig tdfConfig, SDK.KAS kas, AttributesServiceFutureStub attrService)
+            throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException {
 
         if (tdfConfig.autoconfigure) {
             Autoconfigure.Granter granter = new Autoconfigure.Granter(new ArrayList<>());
             if (tdfConfig.attributeValues != null && !tdfConfig.attributeValues.isEmpty()) {
                 granter = Autoconfigure.newGranterFromAttributes(tdfConfig.attributeValues.toArray(new Value[0]));
             } else if (tdfConfig.attributes != null && !tdfConfig.attributes.isEmpty()) {
-                granter = Autoconfigure.newGranterFromService(attrService, kas.getKeyCache(), tdfConfig.attributes.toArray(new AttributeValueFQN[0]));
+                granter = Autoconfigure.newGranterFromService(attrService, kas.getKeyCache(),
+                        tdfConfig.attributes.toArray(new AttributeValueFQN[0]));
             }
-        
+
             if (granter == null) {
                 throw new AutoConfigureException("Failed to create Granter"); // Replace with appropriate error handling
             }
-        
+
             List<String> dk = defaultKases(tdfConfig);
             tdfConfig.splitPlan = granter.plan(dk, () -> UUID.randomUUID().toString());
-        
+
             if (tdfConfig.splitPlan == null) {
-                throw new AutoConfigureException("Failed to generate Split Plan"); // Replace with appropriate error handling
+                throw new AutoConfigureException("Failed to generate Split Plan"); // Replace with appropriate error
+                                                                                   // handling
             }
         }
 
-        if (tdfConfig.kasInfoList.isEmpty() && (tdfConfig.splitPlan==null || tdfConfig.splitPlan.isEmpty())) {
+        if (tdfConfig.kasInfoList.isEmpty() && (tdfConfig.splitPlan == null || tdfConfig.splitPlan.isEmpty())) {
             throw new KasInfoMissing("kas information is missing, no key access template specified or inferred");
         }
 
@@ -426,7 +425,8 @@ public class TDF {
             do {
                 int nRead = 0;
                 int readThisLoop = 0;
-                while (readThisLoop < readBuf.length && (nRead = payload.read(readBuf, readThisLoop, readBuf.length - readThisLoop)) > 0) {
+                while (readThisLoop < readBuf.length
+                        && (nRead = payload.read(readBuf, readThisLoop, readBuf.length - readThisLoop)) > 0) {
                     readThisLoop += nRead;
                 }
                 finished = nRead < 0;
@@ -469,7 +469,7 @@ public class TDF {
 
         tdfObject.manifest.encryptionInformation.integrityInformation.rootSignature = rootSignature;
         tdfObject.manifest.encryptionInformation.integrityInformation.segmentSizeDefault = tdfConfig.defaultSegmentSize;
-        tdfObject.manifest.encryptionInformation.integrityInformation.encryptedSegmentSizeDefault = (int)encryptedSegmentSize;
+        tdfObject.manifest.encryptionInformation.integrityInformation.encryptedSegmentSizeDefault = (int) encryptedSegmentSize;
 
         tdfObject.manifest.encryptionInformation.integrityInformation.segmentHashAlg = kGmacIntegrityAlgorithm;
         if (tdfConfig.segmentIntegrityAlgorithm == Config.IntegrityAlgorithm.HS256) {
@@ -486,8 +486,9 @@ public class TDF {
         tdfObject.manifest.payload.url = TDFWriter.TDF_PAYLOAD_FILE_NAME;
         tdfObject.manifest.payload.isEncrypted = true;
 
-        List<Manifest.Assertion> signedAssertions = new ArrayList<>();;
-        for (var assertionConfig: tdfConfig.assertionConfigList) {
+        List<Manifest.Assertion> signedAssertions = new ArrayList<>();
+        ;
+        for (var assertionConfig : tdfConfig.assertionConfigList) {
             var assertion = new Manifest.Assertion();
             assertion.id = assertionConfig.id;
             assertion.type = assertionConfig.type.toString();
@@ -538,7 +539,7 @@ public class TDF {
     }
 
     private void fillInPublicKeyInfo(List<Config.KASInfo> kasInfoList, SDK.KAS kas) {
-        for (var kasInfo: kasInfoList) {
+        for (var kasInfo : kasInfoList) {
             if (kasInfo.PublicKey != null && !kasInfo.PublicKey.isBlank()) {
                 continue;
             }
@@ -549,7 +550,9 @@ public class TDF {
         }
     }
 
-    public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas, Config.AssertionVerificationKeys... assertionVerificationKeys) throws NotValidateRootSignature, SegmentSizeMismatch,
+    public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas,
+            Config.AssertionVerificationKeys... assertionVerificationKeys)
+            throws NotValidateRootSignature, SegmentSizeMismatch,
             IOException, FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException, DecoderException {
 
         TDFReader tdfReader = new TDFReader(tdf);
@@ -557,25 +560,26 @@ public class TDF {
         Manifest manifest = gson.fromJson(manifestJson, Manifest.class);
         byte[] payloadKey = new byte[GCM_KEY_SIZE];
         String unencryptedMetadata = null;
-        
+
         Set<String> knownSplits = new HashSet<String>();
-        Set<String> foundSplits = new HashSet<String>();;
+        Set<String> foundSplits = new HashSet<String>();
+        ;
         Map<Autoconfigure.KeySplitStep, Exception> skippedSplits = new HashMap<>();
         boolean mixedSplits = manifest.encryptionInformation.keyAccessObj.size() > 1 &&
-         (manifest.encryptionInformation.keyAccessObj.get(0).sid != null) &&
-          !manifest.encryptionInformation.keyAccessObj.get(0).sid.isEmpty();
+                (manifest.encryptionInformation.keyAccessObj.get(0).sid != null) &&
+                !manifest.encryptionInformation.keyAccessObj.get(0).sid.isEmpty();
 
-        MessageDigest digest =  MessageDigest.getInstance("SHA-256");
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
 
         if (manifest.payload.isEncrypted) {
-            for (Manifest.KeyAccess keyAccess: manifest.encryptionInformation.keyAccessObj) {
+            for (Manifest.KeyAccess keyAccess : manifest.encryptionInformation.keyAccessObj) {
                 Autoconfigure.KeySplitStep ss = new Autoconfigure.KeySplitStep(keyAccess.url, keyAccess.sid);
                 byte[] unwrappedKey;
                 if (!mixedSplits) {
                     unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy);
                 } else {
                     knownSplits.add(unencryptedMetadata);
-                    if (foundSplits.contains(ss.splitID)){
+                    if (foundSplits.contains(ss.splitID)) {
                         continue;
                     }
                     try {
@@ -585,7 +589,7 @@ public class TDF {
                         continue;
                     }
                 }
-                
+
                 for (int index = 0; index < unwrappedKey.length; index++) {
                     payloadKey[index] ^= unwrappedKey[index];
                 }
@@ -594,16 +598,18 @@ public class TDF {
                 if (keyAccess.encryptedMetadata != null && !keyAccess.encryptedMetadata.isEmpty()) {
                     AesGcm aesGcm = new AesGcm(unwrappedKey);
 
-                    String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata), "UTF-8");
+                    String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata),
+                            "UTF-8");
                     EncryptedMetadata encryptedMetadata = gson.fromJson(decodedMetadata, EncryptedMetadata.class);
 
                     var encryptedData = new AesGcm.Encrypted(
-                            decoder.decode(encryptedMetadata.ciphertext)
-                    );
+                            decoder.decode(encryptedMetadata.ciphertext));
 
                     byte[] decrypted = aesGcm.decrypt(encryptedData);
-                    // this is a little bit weird... the last unencrypted metadata we get from a KAS is the one
-                    // that we return to the user. This is OK because we can't have different metadata per-KAS
+                    // this is a little bit weird... the last unencrypted metadata we get from a KAS
+                    // is the one
+                    // that we return to the user. This is OK because we can't have different
+                    // metadata per-KAS
                     unencryptedMetadata = new String(decrypted, StandardCharsets.UTF_8);
                 }
             }
@@ -611,16 +617,16 @@ public class TDF {
             if (mixedSplits && knownSplits.size() > foundSplits.size()) {
                 List<Exception> exceptionList = new ArrayList<>(skippedSplits.size() + 1);
                 exceptionList.add(new Exception("splitKey.unable to reconstruct split key: " + skippedSplits));
-                
+
                 for (Map.Entry<Autoconfigure.KeySplitStep, Exception> entry : skippedSplits.entrySet()) {
                     exceptionList.add(entry.getValue());
                 }
-                
+
                 StringBuilder combinedMessage = new StringBuilder();
                 for (Exception e : exceptionList) {
                     combinedMessage.append(e.getMessage()).append("\n");
                 }
-                
+
                 throw new SplitKeyException(combinedMessage.toString());
             }
         }
@@ -630,7 +636,7 @@ public class TDF {
         String rootSignature = manifest.encryptionInformation.integrityInformation.rootSignature.signature;
 
         ByteArrayOutputStream aggregateHash = new ByteArrayOutputStream();
-        for (Manifest.Segment segment: manifest.encryptionInformation.integrityInformation.segments) {
+        for (Manifest.Segment segment : manifest.encryptionInformation.integrityInformation.segments) {
             if (manifest.payload.isEncrypted) {
                 byte[] decodedHash = Base64.getDecoder().decode(segment.hash);
                 aggregateHash.write(decodedHash);
@@ -649,8 +655,7 @@ public class TDF {
             var sig = calculateSignature(aggregateHash.toByteArray(), payloadKey, sigAlg);
             rootSigValue = Base64.getEncoder().encodeToString(sig.getBytes(StandardCharsets.UTF_8));
 
-        }
-        else {
+        } else {
             rootSigValue = Base64.getEncoder().encodeToString(digest.digest(aggregateHash.toString().getBytes()));
         }
 
@@ -666,7 +671,7 @@ public class TDF {
         }
 
         // Validate assertions
-        for (var assertion: manifest.assertions) {
+        for (var assertion : manifest.assertions) {
             // Set default to HS256
             var assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, payloadKey);
             if (assertionVerificationKeys != null && assertionVerificationKeys.length > 0) {

@@ -30,7 +30,7 @@ import java.util.function.Function;
 
 import static java.lang.String.format;
 
-public class KASClient implements SDK.KAS, AutoCloseable {
+public class KASClient implements SDK.KAS {
 
     private final Function<String, ManagedChannel> channelFactory;
     private final RSASSASigner signer;
@@ -41,10 +41,12 @@ public class KASClient implements SDK.KAS, AutoCloseable {
 
     /***
      * A client that communicates with KAS
-     * @param channelFactory A function that produces channels that can be used to communicate
+     * 
+     * @param channelFactory A function that produces channels that can be used to
+     *                       communicate
      * @param dpopKey
      */
-    public KASClient(Function <String, ManagedChannel> channelFactory, RSAKey dpopKey) {
+    public KASClient(Function<String, ManagedChannel> channelFactory, RSAKey dpopKey) {
         this.channelFactory = channelFactory;
         try {
             this.signer = new RSASSASigner(dpopKey);
@@ -61,7 +63,8 @@ public class KASClient implements SDK.KAS, AutoCloseable {
     @Override
     public KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
         var r = getStub(kasInfo.URL)
-                .publicKey(PublicKeyRequest.newBuilder().setAlgorithm(String.format("ec:%s", curve.toString())).build());
+                .publicKey(
+                        PublicKeyRequest.newBuilder().setAlgorithm(String.format("ec:%s", curve.toString())).build());
         var k2 = kasInfo.clone();
         k2.KID = r.getKid();
         k2.PublicKey = r.getPublicKey();
@@ -75,7 +78,7 @@ public class KASClient implements SDK.KAS, AutoCloseable {
             return cachedValue;
         }
         PublicKeyResponse resp = getStub(kasInfo.URL).publicKey(PublicKeyRequest.getDefaultInstance());
-        
+
         var kiCopy = new Config.KASInfo();
         kiCopy.KID = resp.getKid();
         kiCopy.PublicKey = resp.getPublicKey();
@@ -87,7 +90,7 @@ public class KASClient implements SDK.KAS, AutoCloseable {
     }
 
     @Override
-    public KASKeyCache getKeyCache(){
+    public KASKeyCache getKeyCache() {
         return this.kasKeyCache;
     }
 
@@ -122,7 +125,7 @@ public class KASClient implements SDK.KAS, AutoCloseable {
     public synchronized void close() {
         var entries = new ArrayList<>(stubs.values());
         stubs.clear();
-        for (var entry: entries) {
+        for (var entry : entries) {
             entry.channel.shutdownNow();
         }
     }
@@ -179,7 +182,7 @@ public class KASClient implements SDK.KAS, AutoCloseable {
         return decryptor.decrypt(wrappedKey);
     }
 
-    public byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL)  {
+    public byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL) {
         ECKeyPair keyPair = new ECKeyPair(curve.toString(), ECKeyPair.ECAlgorithm.ECDH);
 
         NanoTDFKeyAccess keyAccess = new NanoTDFKeyAccess();
@@ -190,7 +193,7 @@ public class KASClient implements SDK.KAS, AutoCloseable {
 
         NanoTDFRewrapRequestBody body = new NanoTDFRewrapRequestBody();
         body.algorithm = String.format("ec:%s", curve.toString());
-        body.clientPublicKey =  keyPair.publicKeyInPEMFormat();
+        body.clientPublicKey = keyPair.publicKeyInPEMFormat();
         body.keyAccess = keyAccess;
 
         var requestBody = gson.toJson(body);
@@ -236,9 +239,11 @@ public class KASClient implements SDK.KAS, AutoCloseable {
     }
 
     private final HashMap<String, CacheEntry> stubs = new HashMap<>();
+
     private static class CacheEntry {
         final ManagedChannel channel;
         final AccessServiceGrpc.AccessServiceBlockingStub stub;
+
         private CacheEntry(ManagedChannel channel, AccessServiceGrpc.AccessServiceBlockingStub stub) {
             this.channel = channel;
             this.stub = stub;
@@ -257,4 +262,3 @@ public class KASClient implements SDK.KAS, AutoCloseable {
         return stubs.get(realAddress).stub;
     }
 }
-

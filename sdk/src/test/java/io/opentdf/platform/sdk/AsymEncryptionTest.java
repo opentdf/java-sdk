@@ -2,11 +2,6 @@ package io.opentdf.platform.sdk;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import javax.crypto.Cipher;
-import java.security.KeyFactory;
-import java.security.PublicKey;
-import java.security.spec.X509EncodedKeySpec;
-import java.util.Base64;
 import org.junit.jupiter.api.Test;
 
 class AsymEncryptionTest {
@@ -21,7 +16,8 @@ class AsymEncryptionTest {
                 "GBKh0CWGAXWRmphzGj7kFpkAxT1b827MrQMYxkn4w2WB8B/bGKz0+dWyqnnzGYAS\n" +
                 "hVJ0rIiNE8dDWzQCRBfivLemXhX8UFICyoS5i0IwenFvTr6T85EvMxK3aSAlGya3\n" +
                 "3wIDAQAB\n" +
-                "-----END PUBLIC KEY-----";;
+                "-----END PUBLIC KEY-----";
+        ;
         AsymEncryption asymEncryption = new AsymEncryption(publicKeyInPem);
         byte[] plaintext = "Virtru, JavaSDK!".getBytes();
 
@@ -49,7 +45,8 @@ class AsymEncryptionTest {
                 "OcL/UAwQ2pXmfEFjYBs5mDEpKwGC0DxW4tg0FIsb3bbAvqy8ETklExkOh0VfJP4a\n" +
                 "CMz9WjmCfS15t0mPzofK8ir20kF0u0sWvviVVlun+8KYdFOG/wzS100cPNn/wqug\n" +
                 "4w==\n" +
-                "-----END CERTIFICATE-----";;
+                "-----END CERTIFICATE-----";
+        ;
         AsymEncryption asymEncryption = new AsymEncryption(certInPem);
         byte[] plaintext = "Virtru, JavaSDK!".getBytes();
 

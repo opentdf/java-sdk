@@ -45,7 +45,6 @@ class RuleType {
     public static final String EMPTY_TERM = "DEFAULT";
 }
 
-
 public class Autoconfigure {
 
     public static Logger logger = LoggerFactory.getLogger(Autoconfigure.class);
@@ -73,7 +72,7 @@ public class Autoconfigure {
                 return false;
             }
             KeySplitStep ss = (KeySplitStep) obj;
-            if ((this.kas.equals(ss.kas)) && (this.splitID.equals(ss.splitID))){
+            if ((this.kas.equals(ss.kas)) && (this.splitID.equals(ss.splitID))) {
                 return true;
             }
             return false;
@@ -185,7 +184,7 @@ public class Autoconfigure {
                 return false;
             }
             AttributeValueFQN afqn = (AttributeValueFQN) obj;
-            if (this.key.equals(afqn.key)){
+            if (this.key.equals(afqn.key)) {
                 return true;
             }
             return false;
@@ -264,8 +263,8 @@ public class Autoconfigure {
             this.policy = policy;
         }
 
-        public  Map<String, KeyAccessGrant> getGrants() {
-            return new HashMap<String,KeyAccessGrant>(grants);
+        public Map<String, KeyAccessGrant> getGrants() {
+            return new HashMap<String, KeyAccessGrant>(grants);
         }
 
         public List<AttributeValueFQN> getPolicy() {
@@ -273,8 +272,7 @@ public class Autoconfigure {
         }
 
         public void addGrant(AttributeValueFQN fqn, String kas, Attribute attr) {
-            grants.computeIfAbsent(fqn.key, k -> new KeyAccessGrant(attr, new ArrayList<>()))
-                .kases.add(kas);
+            grants.computeIfAbsent(fqn.key, k -> new KeyAccessGrant(attr, new ArrayList<>())).kases.add(kas);
         }
 
         public void addAllGrants(AttributeValueFQN fqn, List<KeyAccessServer> gs, Attribute attr) {
@@ -293,8 +291,8 @@ public class Autoconfigure {
             return grants.get(fqn.key);
         }
 
-
-        public List<KeySplitStep> plan(List<String> defaultKas, Supplier<String> genSplitID) throws AutoConfigureException {
+        public List<KeySplitStep> plan(List<String> defaultKas, Supplier<String> genSplitID)
+                throws AutoConfigureException {
             AttributeBooleanExpression b = constructAttributeBoolean();
             BooleanKeyExpression k = insertKeysForAttribute(b);
             if (k == null) {
@@ -330,35 +328,35 @@ public class Autoconfigure {
 
         BooleanKeyExpression insertKeysForAttribute(AttributeBooleanExpression e) throws AutoConfigureException {
             List<KeyClause> kcs = new ArrayList<>(e.must.size());
-    
+
             for (SingleAttributeClause clause : e.must) {
                 List<PublicKeyInfo> kcv = new ArrayList<>(clause.values.size());
-    
+
                 for (AttributeValueFQN term : clause.values) {
                     KeyAccessGrant grant = byAttribute(term);
                     if (grant == null) {
                         throw new AutoConfigureException(String.format("no definition or grant found for [%s]", term));
                     }
-    
+
                     List<String> kases = grant.kases;
                     if (kases.isEmpty()) {
                         kases = List.of(RuleType.EMPTY_TERM);
                     }
-    
+
                     for (String kas : kases) {
                         kcv.add(new PublicKeyInfo(kas));
                     }
                 }
-    
+
                 String op = ruleToOperator(clause.def.getRule());
                 if (op == RuleType.UNSPECIFIED) {
                     logger.warn("Unknown attribute rule type: " + clause);
                 }
-    
+
                 KeyClause kc = new KeyClause(op, kcv);
                 kcs.add(kc);
             }
-    
+
             return new BooleanKeyExpression(kcs);
         }
 
@@ -371,7 +369,8 @@ public class Autoconfigure {
                 if (clause != null) {
                     clause.values.add(aP);
                 } else if (byAttribute(aP) != null) {
-                    var x = new SingleAttributeClause(byAttribute(aP).attr, new ArrayList<AttributeValueFQN>(Arrays.asList(aP)));
+                    var x = new SingleAttributeClause(byAttribute(aP).attr,
+                            new ArrayList<AttributeValueFQN>(Arrays.asList(aP)));
                     prefixes.put(a.getKey(), x);
                     sortedPrefixes.add(a.getKey());
                 }
@@ -384,34 +383,33 @@ public class Autoconfigure {
             return new AttributeBooleanExpression(must);
         }
 
-
-
         static class AttributeMapping {
 
             private Map<AttributeNameFQN, Attribute> dict;
-        
+
             public AttributeMapping() {
                 this.dict = new HashMap<>();
             }
-        
+
             public void put(Attribute ad) throws AutoConfigureException {
                 if (this.dict == null) {
                     this.dict = new HashMap<>();
                 }
-        
+
                 AttributeNameFQN prefix = new AttributeNameFQN(ad.getFqn());
-        
+
                 if (this.dict.containsKey(prefix)) {
                     throw new AutoConfigureException("Attribute prefix already found: [" + prefix.toString() + "]");
                 }
-        
+
                 this.dict.put(prefix, ad);
             }
-        
+
             public Attribute get(AttributeNameFQN prefix) throws AutoConfigureException {
                 Attribute ad = this.dict.get(prefix);
                 if (ad == null) {
-                    throw new AutoConfigureException("Unknown attribute type: [" + prefix.toString() + "], not in [" + this.dict.keySet().toString() + "]");
+                    throw new AutoConfigureException("Unknown attribute type: [" + prefix.toString() + "], not in ["
+                            + this.dict.keySet().toString() + "]");
                 }
                 return ad;
             }
@@ -422,7 +420,7 @@ public class Autoconfigure {
 
             private Attribute def;
             private List<AttributeValueFQN> values;
-        
+
             public SingleAttributeClause(Attribute def, List<AttributeValueFQN> values) {
                 this.def = def;
                 this.values = values;
@@ -432,24 +430,24 @@ public class Autoconfigure {
         class AttributeBooleanExpression {
 
             private List<SingleAttributeClause> must;
-        
+
             public AttributeBooleanExpression(List<SingleAttributeClause> must) {
                 this.must = must;
             }
-        
+
             @Override
             public String toString() {
                 if (must == null || must.isEmpty()) {
                     return "∅";
                 }
-        
+
                 StringBuilder sb = new StringBuilder();
                 for (int i = 0; i < must.size(); i++) {
                     SingleAttributeClause clause = must.get(i);
                     if (i > 0) {
                         sb.append("&");
                     }
-        
+
                     List<AttributeValueFQN> values = clause.values;
                     if (values == null || values.isEmpty()) {
                         sb.append(clause.def.getFqn());
@@ -458,7 +456,7 @@ public class Autoconfigure {
                     } else {
                         sb.append(clause.def.getFqn());
                         sb.append("/value/{");
-        
+
                         StringJoiner joiner = new StringJoiner(",");
                         for (AttributeValueFQN v : values) {
                             joiner.add(v.value());
@@ -469,20 +467,20 @@ public class Autoconfigure {
                 }
                 return sb.toString();
             }
-        
+
         }
 
         public class PublicKeyInfo {
             private String kas;
-        
+
             public PublicKeyInfo(String kas) {
                 this.kas = kas;
             }
-        
+
             public String getKas() {
                 return kas;
             }
-        
+
             public void setKas(String kas) {
                 this.kas = kas;
             }
@@ -491,12 +489,12 @@ public class Autoconfigure {
         public class KeyClause {
             private String operator;
             private List<PublicKeyInfo> values;
-        
+
             public KeyClause(String operator, List<PublicKeyInfo> values) {
                 this.operator = operator;
                 this.values = values;
             }
-        
+
             @Override
             public String toString() {
                 if (values.size() == 1 && values.get(0).getKas().equals(RuleType.EMPTY_TERM)) {
@@ -505,14 +503,14 @@ public class Autoconfigure {
                 if (values.size() == 1) {
                     return "(" + values.get(0).getKas() + ")";
                 }
-        
+
                 StringBuilder sb = new StringBuilder();
                 sb.append("(");
                 String op = "⋀";
                 if (operator.equals(RuleType.ANY_OF)) {
                     op = "⋁";
                 }
-        
+
                 for (int i = 0; i < values.size(); i++) {
                     if (i > 0) {
                         sb.append(op);
@@ -520,18 +518,18 @@ public class Autoconfigure {
                     sb.append(values.get(i).getKas());
                 }
                 sb.append(")");
-        
+
                 return sb.toString();
             }
         }
 
         public class BooleanKeyExpression {
             private List<KeyClause> values;
-        
+
             public BooleanKeyExpression(List<KeyClause> values) {
                 this.values = values;
             }
-        
+
             @Override
             public String toString() {
                 StringBuilder sb = new StringBuilder();
@@ -576,7 +574,7 @@ public class Autoconfigure {
                 if (conjunction.isEmpty()) {
                     return new BooleanKeyExpression(new ArrayList<>());
                 }
-        
+
                 List<KeyClause> newValues = new ArrayList<>();
                 for (List<String> d : conjunction) {
                     List<PublicKeyInfo> pki = new ArrayList<>();
@@ -591,7 +589,7 @@ public class Autoconfigure {
             public Disjunction sortedNoDupes(List<PublicKeyInfo> l) {
                 Set<String> set = new HashSet<>();
                 Disjunction list = new Disjunction();
-    
+
                 for (PublicKeyInfo e : l) {
                     String kas = e.getKas();
                     if (!kas.equals(RuleType.EMPTY_TERM) && !set.contains(kas)) {
@@ -599,7 +597,7 @@ public class Autoconfigure {
                         list.add(kas);
                     }
                 }
-    
+
                 Collections.sort(list);
                 return list;
             }
@@ -621,7 +619,7 @@ public class Autoconfigure {
                 }
                 return this.size() < r.size();
             }
-        
+
             public boolean equals(Object obj) {
                 if (this == obj) {
                     return true;
@@ -675,23 +673,25 @@ public class Autoconfigure {
     }
 
     // Gets a list of directory of KAS grants for a list of attribute FQNs
-    public static Granter newGranterFromService(AttributesServiceFutureStub as, KASKeyCache keyCache, AttributeValueFQN... fqns) throws AutoConfigureException, InterruptedException, ExecutionException {
+    public static Granter newGranterFromService(AttributesServiceFutureStub as, KASKeyCache keyCache,
+            AttributeValueFQN... fqns) throws AutoConfigureException, InterruptedException, ExecutionException {
         String[] fqnsStr = new String[fqns.length];
         for (int i = 0; i < fqns.length; i++) {
             fqnsStr[i] = fqns[i].toString();
         }
 
         GetAttributeValuesByFqnsRequest request = GetAttributeValuesByFqnsRequest.newBuilder()
-            .addAllFqns(Arrays.asList(fqnsStr))
-            .setWithValue(AttributeValueSelector.newBuilder().setWithKeyAccessGrants(true).build())
-            .build();
+                .addAllFqns(Arrays.asList(fqnsStr))
+                .setWithValue(AttributeValueSelector.newBuilder().setWithKeyAccessGrants(true).build())
+                .build();
 
         GetAttributeValuesByFqnsResponse av;
         av = as.getAttributeValuesByFqns(request).get();
 
         Granter grants = new Granter(Arrays.asList(fqns));
 
-        for (Map.Entry<String,GetAttributeValuesByFqnsResponse.AttributeAndValue> entry : av.getFqnAttributeValuesMap().entrySet()) {
+        for (Map.Entry<String, GetAttributeValuesByFqnsResponse.AttributeAndValue> entry : av.getFqnAttributeValuesMap()
+                .entrySet()) {
             String fqnstr = entry.getKey();
             AttributeAndValue pair = entry.getValue();
 
@@ -708,10 +708,10 @@ public class Autoconfigure {
                 grants.addAllGrants(fqn, v.getGrantsList(), def);
                 storeKeysToCache(v.getGrantsList(), keyCache);
             } else {
-              if (def != null) {
-                  grants.addAllGrants(fqn, def.getGrantsList(), def);
-                  storeKeysToCache(def.getGrantsList(), keyCache);
-              }
+                if (def != null) {
+                    grants.addAllGrants(fqn, def.getGrantsList(), def);
+                    storeKeysToCache(def.getGrantsList(), keyCache);
+                }
             }
         }
 

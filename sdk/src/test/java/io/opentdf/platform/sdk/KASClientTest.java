@@ -57,7 +57,8 @@ public class KASClientTest {
                     .build();
 
             var keypair = CryptoUtils.generateRSAKeypair();
-            var dpopKey = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).privateKey(keypair.getPrivate()).build();
+            var dpopKey = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).privateKey(keypair.getPrivate())
+                    .build();
             try (var kas = new KASClient(channelFactory, dpopKey)) {
                 Config.KASInfo kasInfo = new Config.KASInfo();
                 kasInfo.URL = "localhost:" + rewrapServer.getPort();
@@ -90,7 +91,8 @@ public class KASClientTest {
                     .build();
 
             var keypair = CryptoUtils.generateRSAKeypair();
-            var dpopKey = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).privateKey(keypair.getPrivate()).build();
+            var dpopKey = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).privateKey(keypair.getPrivate())
+                    .build();
             try (var kas = new KASClient(channelFactory, dpopKey)) {
                 Config.KASInfo kasInfo = new Config.KASInfo();
                 kasInfo.URL = "localhost:" + server.getPort();
@@ -106,7 +108,8 @@ public class KASClientTest {
     @Test
     void testCallingRewrap() throws IOException {
         var dpopKeypair = CryptoUtils.generateRSAKeypair();
-        var dpopKey = new RSAKey.Builder((RSAPublicKey)dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate()).build();
+        var dpopKey = new RSAKey.Builder((RSAPublicKey) dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate())
+                .build();
         var serverKeypair = CryptoUtils.generateRSAKeypair();
         AccessServiceGrpc.AccessServiceImplBase accessService = new AccessServiceGrpc.AccessServiceImplBase() {
             @Override
@@ -138,10 +141,12 @@ public class KASClientTest {
                 var gson = new Gson();
                 var req = gson.fromJson(requestBodyJson, KASClient.RewrapRequestBody.class);
 
-                var decryptedKey = new AsymDecryption(serverKeypair.getPrivate()).decrypt(Base64.getDecoder().decode(req.keyAccess.wrappedKey));
+                var decryptedKey = new AsymDecryption(serverKeypair.getPrivate())
+                        .decrypt(Base64.getDecoder().decode(req.keyAccess.wrappedKey));
                 var encryptedKey = new AsymEncryption(req.clientPublicKey).encrypt(decryptedKey);
 
-                responseObserver.onNext(RewrapResponse.newBuilder().setEntityWrappedKey(ByteString.copyFrom(encryptedKey)).build());
+                responseObserver.onNext(
+                        RewrapResponse.newBuilder().setEntityWrappedKey(ByteString.copyFrom(encryptedKey)).build());
                 responseObserver.onCompleted();
             }
         };
@@ -174,7 +179,8 @@ public class KASClientTest {
     public void testAddressNormalization() {
         var lastAddress = new AtomicReference<String>();
         var dpopKeypair = CryptoUtils.generateRSAKeypair();
-        var dpopKey = new RSAKey.Builder((RSAPublicKey)dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate()).build();
+        var dpopKey = new RSAKey.Builder((RSAPublicKey) dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate())
+                .build();
         var kasClient = new KASClient(addr -> {
             lastAddress.set(addr);
             return ManagedChannelBuilder.forTarget(addr).build();
