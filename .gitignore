@@ -3,3 +3,4 @@ sdk/src/main/protogen
 target/
 .vscode/
 .DS_Store
+sdk/sample.tdf
