@@ -79,7 +79,7 @@ public class ResourceLocator {
         // Get the first byte and mask it with 0xF to keep only the first four bits
         final byte protocolWithIdentifier = buffer.get();
         int protocolNibble = protocolWithIdentifier & 0x0F;
-        int identifierNibble = (protocolWithIdentifier & 0xF0) >> 4;
+        int identifierNibble = ((protocolWithIdentifier & 0xFF) & 0xF0) >> 4;
         this.protocol = NanoTDFType.Protocol.values()[protocolNibble];
         // body
         this.bodyLength = buffer.get();
@@ -183,13 +183,21 @@ public class ResourceLocator {
         int totalBytesWritten = 0;
 
         // Write the protocol type.
-        if (identifierType == NanoTDFType.IdentifierType.NONE) {
-            buffer.put((byte) protocol.ordinal());
-            totalBytesWritten += 1; // size of byte
-        } else {
-            buffer.put((byte) (identifierType.ordinal() << 4 | protocol.ordinal()));
-            totalBytesWritten += 1;
+        switch (identifierType) {
+            case NONE:
+                buffer.put((byte) protocol.ordinal());
+                break;
+            case TWO_BYTES:
+                buffer.put((byte) ((0b0001 << 4) | protocol.ordinal()));
+                break;
+            case EIGHT_BYTES:
+                buffer.put((byte) ((0b0010 << 4) | protocol.ordinal()));
+                break;
+            case THIRTY_TWO_BYTES:
+                buffer.put((byte) ((0b0011 << 4) | protocol.ordinal()));
+                break;
         }
+        totalBytesWritten += 1; // size of byte
 
         // Write the url body length
         buffer.put((byte)bodyLength);
@@ -220,6 +228,7 @@ public class ResourceLocator {
                     actualLength = i + 1;
                 }
             }
-            return new String(this.identifier, 0, actualLength);
+            String identifierPadded =  new String(this.identifier, 0, actualLength);
+            return identifierPadded.trim();
     }
 }
