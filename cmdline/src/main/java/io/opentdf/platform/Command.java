@@ -139,7 +139,7 @@ class Command {
             @Option(names = { "-k", "--kas-url" }, required = true) List<String> kas,
             @Option(names = { "-m", "--metadata" }, defaultValue = Option.NULL_VALUE) Optional<String> metadata,
             @Option(names = { "-a", "--attr" }, defaultValue = Option.NULL_VALUE) Optional<String> attributes,
-            @Option(names = { "--ecsda-binding" }, defaultValue = Option.NULL_VALUE) Optional<Boolean> ecdsaBinding)
+            @Option(names = { "--ecdsa-binding" }, defaultValue = Option.NULL_VALUE) Optional<Boolean> ecdsaBinding)
             throws Exception {
 
         var sdk = buildSDK();
