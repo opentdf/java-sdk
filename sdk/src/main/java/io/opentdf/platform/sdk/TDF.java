@@ -514,6 +514,7 @@ public class TDF {
 
         tdfObject.manifest.assertions = signedAssertions;
         String manifestAsStr = gson.toJson(tdfObject.manifest);
+        logger.debug("during encryption, generated manifest [{}]", manifestAsStr);
 
         tdfWriter.appendManifest(manifestAsStr);
         tdfObject.size = tdfWriter.finish();
