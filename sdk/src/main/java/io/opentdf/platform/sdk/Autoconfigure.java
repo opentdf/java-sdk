@@ -372,7 +372,6 @@ public class Autoconfigure {
                     var x = new SingleAttributeClause(byAttribute(aP).attr,
                             new ArrayList<AttributeValueFQN>(Arrays.asList(aP)));
                     prefixes.put(a.getKey(), x);
-                    prefixes.put(a.authority(), x);
                     sortedPrefixes.add(a.getKey());
                 }
             }
@@ -757,6 +756,7 @@ public class Autoconfigure {
                     storeKeysToCache(nsGrants, keyCache);
                 }
             } else {
+                grants.addAllGrants(fqn, List.of(), def);
                 logger.debug("didn't find any grants on value, attribute, or namespace for attribute value [{}]", fqnstr);
             }
         }

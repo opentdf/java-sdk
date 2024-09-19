@@ -572,7 +572,7 @@ public class AutoconfigureTest {
                         "spk.uns.uns & spk.spk.uns && spk.uns.spk => ns.spk || attr.spk || value.spk",
                         List.of(spk2uns2uns, spk2spk2uns, spk2uns2spk),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(NAMESPACE_KAS, "1"), new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, "1"), new KeySplitStep(SPECIFIED_KAS, "1")))
+                        List.of(new KeySplitStep(NAMESPACE_KAS, "1"), new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, "1"), new KeySplitStep(SPECIFIED_KAS, "2")))
         );
 
         for (ReasonerTestCase tc : testCases) {
