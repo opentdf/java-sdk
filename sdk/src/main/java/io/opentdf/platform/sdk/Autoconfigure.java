@@ -680,6 +680,35 @@ public class Autoconfigure {
         return getGranter(null, Arrays.asList(attrs));
     }
 
+    // Given a policy (list of data attributes or tags),
+    // get a set of grants from attribute values to KASes.
+    // Unlike `NewGranterFromService`, this works offline.
+    public static Granter newGranterFromAttributes2(Value... attrs) throws AutoConfigureException {
+        List<AttributeValueFQN> policyList = new ArrayList<>(attrs.length);
+
+        Granter grants = new Granter(policyList);
+
+        for (Value v : attrs) {
+            AttributeValueFQN fqn;
+            try {
+                fqn = new AttributeValueFQN(v.getFqn());
+            } catch (Exception e) {
+                return grants;
+            }
+
+            grants.policy.add(fqn);
+            Attribute def = v.getAttribute();
+            if (def == null) {
+                throw new AutoConfigureException("No associated definition with value [" + fqn.toString() + "]");
+            }
+
+            grants.addAllGrants(fqn, def.getGrantsList(), def);
+            grants.addAllGrants(fqn, v.getGrantsList(), def);
+        }
+
+        return grants;
+    }
+
     // Gets a list of directory of KAS grants for a list of attribute FQNs
     public static Granter newGranterFromService(AttributesServiceFutureStub as, KASKeyCache keyCache, AttributeValueFQN... fqns) throws AutoConfigureException, ExecutionException, InterruptedException {
 
@@ -696,7 +725,7 @@ public class Autoconfigure {
     private static Granter getGranter(@Nullable KASKeyCache keyCache, List<Value> values) {
         Granter grants = new Granter(values.stream().map(Value::getFqn).map(AttributeValueFQN::new).collect(Collectors.toList()));
 
-        for (var val: values) {
+        for (var val : values) {
             String fqnstr = val.getFqn();
             AttributeValueFQN fqn = new AttributeValueFQN(fqnstr);
 
@@ -709,7 +738,7 @@ public class Autoconfigure {
                 if (keyCache != null) {
                     storeKeysToCache(val.getGrantsList(), keyCache);
                 }
-            } else if (!def.getGrantsList().isEmpty()){
+            } else if (!def.getGrantsList().isEmpty()) {
                 var attributeGrants = def.getGrantsList();
                 if (logger.isDebugEnabled()) {
                     logger.debug("adding grants from attribute [{}]: {}", def.getFqn(), attributeGrants.stream().map(KeyAccessServer::getId).collect(Collectors.toList()));
@@ -718,7 +747,7 @@ public class Autoconfigure {
                 if (keyCache != null) {
                     storeKeysToCache(def.getGrantsList(), keyCache);
                 }
-            } else if (!def.getNamespace().getGrantsList().isEmpty()){
+            } else if (!def.getNamespace().getGrantsList().isEmpty()) {
                 var nsGrants = def.getNamespace().getGrantsList();
                 if (logger.isDebugEnabled()) {
                     logger.debug("adding grants from namespace [{}]: [{}]", def.getNamespace().getName(), nsGrants.stream().map(KeyAccessServer::getId).collect(Collectors.toList()));
