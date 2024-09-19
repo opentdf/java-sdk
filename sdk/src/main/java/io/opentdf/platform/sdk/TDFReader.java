@@ -12,6 +12,9 @@ import static io.opentdf.platform.sdk.TDFWriter.TDF_PAYLOAD_FILE_NAME;
 
 public class TDFReader {
 
+    private static final int MAX_MANIFEST_SIZE_MB = 10;
+    private static final int BYTES_IN_MB = 1024 * 1024;
+    private static final int MAX_MANIFEST_SIZE_BYTES = MAX_MANIFEST_SIZE_MB * BYTES_IN_MB;
     private final ZipReader.Entry manifest;
     private final InputStream payload;
 
@@ -28,6 +31,10 @@ public class TDFReader {
         }
 
         manifest = entries.get(TDF_MANIFEST_FILE_NAME);
+        if (manifest.getFileSize() > MAX_MANIFEST_SIZE_BYTES) {
+            throw new SDKException("manifest file too large: " + (manifest.getFileSize() / (double) BYTES_IN_MB) + " MB");
+        }
+
         payload = entries.get(TDF_PAYLOAD_FILE_NAME).getData();
     }
 
