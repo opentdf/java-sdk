@@ -201,6 +201,10 @@
                         </goals>
                     </execution>
                 </executions>
+                <configuration>
+                    <keyname>security@opentdf.io</keyname>
+                    <passphraseServerId>gpg.passphrase</passphraseServerId>
+                </configuration>
             </plugin>
             <!-- Plugin for Deploying -->
             <plugin>
