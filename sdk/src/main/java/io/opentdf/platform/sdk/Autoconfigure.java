@@ -718,7 +718,7 @@ public class Autoconfigure {
                 if (keyCache != null) {
                     storeKeysToCache(def.getGrantsList(), keyCache);
                 }
-            } else {
+            } else if (!def.getNamespace().getGrantsList().isEmpty()){
                 var nsGrants = def.getNamespace().getGrantsList();
                 if (logger.isDebugEnabled()) {
                     logger.debug("adding grants from namespace [{}]: [{}]", def.getNamespace().getName(), nsGrants.stream().map(KeyAccessServer::getId).collect(Collectors.toList()));
@@ -727,6 +727,8 @@ public class Autoconfigure {
                 if (keyCache != null) {
                     storeKeysToCache(nsGrants, keyCache);
                 }
+            } else {
+                logger.debug("didn't find any grants on value, attribute, or namespace for attribute value [{}]", fqnstr);
             }
         }
 

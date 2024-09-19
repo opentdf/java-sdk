@@ -451,31 +451,29 @@ public class AutoconfigureTest {
                                 new KeySplitStep(KAS_US_HCS, "2"), new KeySplitStep(KAS_US_SA, "3"))));
 
         for (ReasonerTestCase tc : testCases) {
-            assertDoesNotThrow(() -> {
-                Granter reasoner = Autoconfigure.newGranterFromAttributes(
-                        valuesToPolicy(tc.getPolicy().toArray(new AttributeValueFQN[0])).toArray(new Value[0]));
-                assertThat(reasoner).isNotNull();
+            Granter reasoner = Autoconfigure.newGranterFromAttributes(
+                    valuesToPolicy(tc.getPolicy().toArray(new AttributeValueFQN[0])).toArray(new Value[0]));
+            assertThat(reasoner).isNotNull();
 
-                AttributeBooleanExpression actualAB = reasoner.constructAttributeBoolean();
-                assertThat(actualAB.toString().toLowerCase()).isEqualTo(tc.getAts().toLowerCase());
+            AttributeBooleanExpression actualAB = reasoner.constructAttributeBoolean();
+            assertThat(actualAB.toString().toLowerCase()).isEqualTo(tc.getAts().toLowerCase());
 
-                BooleanKeyExpression actualKeyed = reasoner.insertKeysForAttribute(actualAB);
-                assertThat(actualKeyed.toString()).isEqualTo(tc.getKeyed());
+            BooleanKeyExpression actualKeyed = reasoner.insertKeysForAttribute(actualAB);
+            assertThat(actualKeyed.toString()).isEqualTo(tc.getKeyed());
 
-                String reduced = actualKeyed.reduce().toString();
-                assertThat(reduced).isEqualTo(tc.getReduced());
+            String reduced = actualKeyed.reduce().toString();
+            assertThat(reduced).isEqualTo(tc.getReduced());
 
-                var wrapper = new Object() {
-                    int i = 0;
-                };
-                List<KeySplitStep> plan = reasoner.plan(tc.getDefaults(), () -> {
-                            return String.valueOf(wrapper.i++ + 1);
-                        }
+            var wrapper = new Object() {
+                int i = 0;
+            };
+            List<KeySplitStep> plan = reasoner.plan(tc.getDefaults(), () -> {
+                        return String.valueOf(wrapper.i++ + 1);
+                    }
 
-                );
-                assertThat(plan.size()).isEqualTo(tc.getPlan().size());
-                assertThat(plan).isEqualTo(tc.getPlan());
-            });
+            );
+            assertThat(plan.size()).isEqualTo(tc.getPlan().size());
+            assertThat(plan).isEqualTo(tc.getPlan());
         }
     }
 
