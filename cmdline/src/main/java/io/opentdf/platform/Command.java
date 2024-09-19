@@ -6,6 +6,7 @@ import io.opentdf.platform.sdk.TDF;
 
 import org.apache.commons.codec.DecoderException;
 import picocli.CommandLine;
+import picocli.CommandLine.HelpCommand;
 import picocli.CommandLine.Option;
 
 import javax.crypto.BadPaddingException;
@@ -36,7 +37,7 @@ import nl.altindag.ssl.util.TrustManagerUtils;
 
 import javax.net.ssl.TrustManager;
 
-@CommandLine.Command(name = "tdf")
+@CommandLine.Command(name = "tdf", subcommands = {HelpCommand.class})
 class Command {
 
     @Option(names = { "--client-secret" }, required = true)
@@ -137,7 +138,8 @@ class Command {
             @Option(names = { "-f", "--file" }, defaultValue = Option.NULL_VALUE) Optional<File> file,
             @Option(names = { "-k", "--kas-url" }, required = true) List<String> kas,
             @Option(names = { "-m", "--metadata" }, defaultValue = Option.NULL_VALUE) Optional<String> metadata,
-            @Option(names = { "-a", "--attr" }, defaultValue = Option.NULL_VALUE) Optional<String> attributes)
+            @Option(names = { "-a", "--attr" }, defaultValue = Option.NULL_VALUE) Optional<String> attributes,
+            @Option(names = { "--ecdsa-binding" }, defaultValue = Option.NULL_VALUE) Optional<Boolean> ecdsaBinding)
             throws Exception {
 
         var sdk = buildSDK();
@@ -152,6 +154,9 @@ class Command {
         attributes.ifPresent(attr -> {
             configs.add(Config.witDataAttributes(attr.split(",")));
         });
+        if (ecdsaBinding.orElse(false)) {
+            configs.add(Config.WithECDSAPolicyBinding());
+        };
 
         var nanoTDFConfig = Config.newNanoTDFConfig(configs.toArray(Consumer[]::new));
         try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {

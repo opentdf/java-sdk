@@ -578,10 +578,10 @@ public class TDF {
                 if (!mixedSplits) {
                     unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy);
                 } else {
-                    knownSplits.add(unencryptedMetadata);
                     if (foundSplits.contains(ss.splitID)) {
                         continue;
                     }
+                    knownSplits.add(ss.splitID);
                     try {
                         unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy);
                     } catch (Exception e) {
