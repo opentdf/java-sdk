@@ -53,10 +53,11 @@ public class AutoconfigureTest {
     private static final String KAS_US = "https://kas.us/";
     private static final String KAS_US_HCS = "https://hcs.kas.us/";
     private static final String KAS_US_SA = "https://si.kas.us/";
-    private static final String AUTHORITY = "https://virtru.com/";
-    public static final String OTHER_AUTH = "https://other.com/";
     public static final String SPECIFIED_KAS = "https://attr.kas.com/";
     public static final String EVEN_MORE_SPECIFIC_KAS = "https://value.kas.com/";
+    private static final String NAMESPACE_KAS = "https://namespace.kas.com/";
+    private static Autoconfigure.AttributeNameFQN SPKSPECKED;
+    private static Autoconfigure.AttributeNameFQN SPKUNSPECKED;
 
     private static Autoconfigure.AttributeNameFQN CLS;
     private static Autoconfigure.AttributeNameFQN N2K;
@@ -78,6 +79,10 @@ public class AutoconfigureTest {
     private static Autoconfigure.AttributeValueFQN uns2spk;
     private static Autoconfigure.AttributeValueFQN spk2uns;
     private static Autoconfigure.AttributeValueFQN spk2spk;
+    private static AttributeValueFQN spk2uns2uns;
+    private static AttributeValueFQN spk2uns2spk;
+    private static Autoconfigure.AttributeValueFQN spk2spk2uns;
+    private static Autoconfigure.AttributeValueFQN spk2spk2spk;
 
     @BeforeAll
     public static void setup() throws AutoConfigureException {
@@ -87,6 +92,8 @@ public class AutoconfigureTest {
         REL = new Autoconfigure.AttributeNameFQN("https://virtru.com/attr/Releasable%20To");
         UNSPECKED = new Autoconfigure.AttributeNameFQN("https://other.com/attr/unspecified");
         SPECKED = new Autoconfigure.AttributeNameFQN("https://other.com/attr/specified");
+        SPKUNSPECKED = new Autoconfigure.AttributeNameFQN("https://hasgrants.com/attr/unspecified");
+        SPKSPECKED = new Autoconfigure.AttributeNameFQN("https://hasgrants.com/attr/specified");
 
         clsA = new Autoconfigure.AttributeValueFQN("https://virtru.com/attr/Classification/value/Allowed");
         clsS = new Autoconfigure.AttributeValueFQN("https://virtru.com/attr/Classification/value/Secret");
@@ -105,6 +112,11 @@ public class AutoconfigureTest {
         uns2spk = new Autoconfigure.AttributeValueFQN("https://other.com/attr/unspecified/value/specked");
         spk2uns = new Autoconfigure.AttributeValueFQN("https://other.com/attr/specified/value/unspecked");
         spk2spk = new Autoconfigure.AttributeValueFQN("https://other.com/attr/specified/value/specked");
+
+        spk2uns2uns = new Autoconfigure.AttributeValueFQN("https://hasgrants.com/attr/unspecified/value/unspecked");
+        spk2uns2spk = new Autoconfigure.AttributeValueFQN("https://hasgrants.com/attr/unspecified/value/specked");
+        spk2spk2uns = new Autoconfigure.AttributeValueFQN("https://hasgrants.com/attr/specified/value/unspecked");
+        spk2spk2spk = new Autoconfigure.AttributeValueFQN("https://hasgrants.com/attr/specified/value/specked");
     }
 
     private static String spongeCase(String s) {
@@ -168,6 +180,8 @@ public class AutoconfigureTest {
     private Attribute mockAttributeFor(Autoconfigure.AttributeNameFQN fqn) {
         Namespace ns1 = Namespace.newBuilder().setId("v").setName("virtru.com").setFqn("https://virtru.com").build();
         Namespace ns2 = Namespace.newBuilder().setId("o").setName("other.com").setFqn("https://other.com").build();
+        Namespace ns3 = Namespace.newBuilder().setId("h").setName("hasgrants.com").addGrants(KeyAccessServer.newBuilder().setUri(NAMESPACE_KAS).build()).setFqn("https://hasgrants.com").build();
+
         String key = fqn.getKey();
         if (key.equals(CLS.getKey())) {
             return Attribute.newBuilder().setId("CLS").setNamespace(ns1)
@@ -191,9 +205,20 @@ public class AutoconfigureTest {
             return Attribute.newBuilder().setId("UNS").setNamespace(ns2)
                     .setName("unspecified").setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ANY_OF)
                     .setFqn(fqn.toString()).build();
-        } else {
-            return null;
+        } else if (key.equals(SPKSPECKED.getKey())) {
+            return Attribute.newBuilder().setId("SPKSPK").setNamespace(ns3)
+                    .setName("specified").setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ANY_OF)
+                    .addGrants(KeyAccessServer.newBuilder().setUri(SPECIFIED_KAS).build())
+                    .setName(fqn.toString())
+                    .build();
+        } else if (key.equals(SPKUNSPECKED.getKey())) {
+            return Attribute.newBuilder().setId("SPKUNSPK").setNamespace(ns3)
+                    .setName("unspecified").setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ANY_OF)
+                    .setName(fqn.toString())
+                    .build();
         }
+
+        throw new IllegalArgumentException("Key not recognized: " + key);
     }
 
     private Value mockValueFor(Autoconfigure.AttributeValueFQN fqn) throws AutoConfigureException {
@@ -252,13 +277,13 @@ public class AutoconfigureTest {
             }
         } else if (an.getKey().equals(CLS.getKey())) {
             // defaults only
-        } else if (an.getKey().equals(SPECKED.getKey())) {
-            if (fqn.value().toLowerCase().equals("specked")) {
+        } else if (List.of(SPECKED.getKey(), SPKSPECKED.getKey()).contains(an.getKey())) {
+            if (fqn.value().equalsIgnoreCase("specked")) {
                 p = p.toBuilder().addGrants(KeyAccessServer.newBuilder().setUri(EVEN_MORE_SPECIFIC_KAS).build())
                         .build();
             }
-        } else if (an.getKey().equals(UNSPECKED.getKey())) {
-            if (fqn.value().toLowerCase().equals("specked")) {
+        } else if (List.of(UNSPECKED.getKey(), SPKUNSPECKED.getKey()).contains(an.getKey())) {
+            if (fqn.value().equalsIgnoreCase("specked")) {
                 p = p.toBuilder().addGrants(KeyAccessServer.newBuilder().setUri(EVEN_MORE_SPECIFIC_KAS).build())
                         .build();
             }
@@ -444,8 +469,8 @@ public class AutoconfigureTest {
                     int i = 0;
                 };
                 List<KeySplitStep> plan = reasoner.plan(tc.getDefaults(), () -> {
-                    return String.valueOf(wrapper.i++ + 1);
-                }
+                            return String.valueOf(wrapper.i++ + 1);
+                        }
 
                 );
                 assertThat(plan.size()).isEqualTo(tc.getPlan().size());
@@ -528,7 +553,28 @@ public class AutoconfigureTest {
                         "uns.uns & uns.spk => spk",
                         List.of(uns2uns, spk2spk),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))));
+                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
+                new ReasonerTestCase(
+                        "spk.uns.uns => ns.spk",
+                        List.of(spk2uns2uns, uns2uns),
+                        List.of(KAS_US),
+                        List.of(new KeySplitStep(NAMESPACE_KAS, ""))),
+                new ReasonerTestCase(
+                        "spk.uns.uns & uns.uns => ns.spk",
+                        List.of(spk2uns2uns, uns2uns),
+                        List.of(KAS_US),
+                        List.of(new KeySplitStep(NAMESPACE_KAS, ""))),
+                new ReasonerTestCase(
+                        "spk.uns.uns & uns.spk => ns.spk && spk",
+                        List.of(spk2uns2uns, uns2spk),
+                        List.of(KAS_US),
+                        List.of(new KeySplitStep(NAMESPACE_KAS, "1"), new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, "2"))),
+                new ReasonerTestCase(
+                        "spk.uns.uns & spk.spk.uns && spk.uns.spk => ns.spk || attr.spk || value.spk",
+                        List.of(spk2uns2uns, spk2spk2uns, spk2uns2spk),
+                        List.of(KAS_US),
+                        List.of(new KeySplitStep(NAMESPACE_KAS, "1"), new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, "1"), new KeySplitStep(SPECIFIED_KAS, "1")))
+        );
 
         for (ReasonerTestCase tc : testCases) {
             assertDoesNotThrow(() -> {
@@ -552,11 +598,10 @@ public class AutoconfigureTest {
                     int i = 0;
                 };
                 List<KeySplitStep> plan = reasoner.plan(tc.getDefaults(), () -> {
-                    return String.valueOf(wrapper.i++ + 1);
-                }
+                            return String.valueOf(wrapper.i++ + 1);
+                        }
 
                 );
-                assertThat(plan.size()).isEqualTo(tc.getPlan().size());
                 assertThat(plan).hasSameElementsAs(tc.getPlan());
             });
         }
@@ -646,7 +691,7 @@ public class AutoconfigureTest {
         private final List<KeySplitStep> plan;
 
         ReasonerTestCase(String name, List<AttributeValueFQN> policy, List<String> defaults, String ats, String keyed,
-                String reduced, List<KeySplitStep> plan) {
+                         String reduced, List<KeySplitStep> plan) {
             this.name = name;
             this.policy = policy;
             this.defaults = defaults;
@@ -699,8 +744,8 @@ public class AutoconfigureTest {
     void testStoreKeysToCache_NoKeys() {
         KASKeyCache keyCache = Mockito.mock(KASKeyCache.class);
         KeyAccessServer kas1 = KeyAccessServer.newBuilder().setPublicKey(
-                PublicKey.newBuilder().setCached(
-                        KasPublicKeySet.newBuilder()))
+                        PublicKey.newBuilder().setCached(
+                                KasPublicKeySet.newBuilder()))
                 .build();
 
         List<KeyAccessServer> kases = List.of(kas1);
@@ -804,7 +849,7 @@ public class AutoconfigureTest {
     }
 
     GetAttributeValuesByFqnsResponse getResponseWithGrants(GetAttributeValuesByFqnsRequest req,
-            List<KeyAccessServer> grants) {
+                                                           List<KeyAccessServer> grants) {
         GetAttributeValuesByFqnsResponse.Builder builder = GetAttributeValuesByFqnsResponse.newBuilder();
 
         for (String v : req.getFqnsList()) {

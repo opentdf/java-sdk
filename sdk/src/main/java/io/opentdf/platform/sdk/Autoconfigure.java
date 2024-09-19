@@ -1,5 +1,21 @@
 package io.opentdf.platform.sdk;
 
+import com.google.common.base.Supplier;
+import io.opentdf.platform.policy.Attribute;
+import io.opentdf.platform.policy.AttributeRuleTypeEnum;
+import io.opentdf.platform.policy.AttributeValueSelector;
+import io.opentdf.platform.policy.KasPublicKey;
+import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
+import io.opentdf.platform.policy.KeyAccessServer;
+import io.opentdf.platform.policy.Value;
+import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
+import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
+import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
+import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse.AttributeAndValue;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -12,29 +28,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.common.base.Supplier;
-
-import io.opentdf.platform.policy.KeyAccessServer;
-import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
-import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
-import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
-import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse.AttributeAndValue;
-import io.opentdf.platform.policy.Attribute;
-import io.opentdf.platform.policy.Value;
-import io.opentdf.platform.policy.KasPublicKey;
-import io.opentdf.platform.policy.AttributeValueSelector;
-import io.opentdf.platform.policy.AttributeRuleTypeEnum;
-import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
 
 // Attribute rule types: operators!
 class RuleType {
@@ -349,7 +349,7 @@ public class Autoconfigure {
                 }
 
                 String op = ruleToOperator(clause.def.getRule());
-                if (op == RuleType.UNSPECIFIED) {
+                if (op.equals(RuleType.UNSPECIFIED)) {
                     logger.warn("Unknown attribute rule type: " + clause);
                 }
 
@@ -365,13 +365,14 @@ public class Autoconfigure {
             List<String> sortedPrefixes = new ArrayList<>();
             for (AttributeValueFQN aP : policy) {
                 AttributeNameFQN a = aP.prefix();
-                SingleAttributeClause clause = prefixes.get(a.getKey());
+                SingleAttributeClause clause = Optional.ofNullable(prefixes.get(a.getKey())).orElseGet(() -> prefixes.get(a.authority()));
                 if (clause != null) {
                     clause.values.add(aP);
                 } else if (byAttribute(aP) != null) {
                     var x = new SingleAttributeClause(byAttribute(aP).attr,
                             new ArrayList<AttributeValueFQN>(Arrays.asList(aP)));
                     prefixes.put(a.getKey(), x);
+                    prefixes.put(a.authority(), x);
                     sortedPrefixes.add(a.getKey());
                 }
             }
@@ -672,45 +673,59 @@ public class Autoconfigure {
 
     }
 
+    // Given a policy (list of data attributes or tags),
+    // get a set of grants from attribute values to KASes.
+    // Unlike `NewGranterFromService`, this works offline.
+    public static Granter newGranterFromAttributes(Value... attrs) throws AutoConfigureException {
+        return getGranter(null, Arrays.asList(attrs));
+    }
+
     // Gets a list of directory of KAS grants for a list of attribute FQNs
-    public static Granter newGranterFromService(AttributesServiceFutureStub as, KASKeyCache keyCache,
-            AttributeValueFQN... fqns) throws AutoConfigureException, InterruptedException, ExecutionException {
-        String[] fqnsStr = new String[fqns.length];
-        for (int i = 0; i < fqns.length; i++) {
-            fqnsStr[i] = fqns[i].toString();
-        }
+    public static Granter newGranterFromService(AttributesServiceFutureStub as, KASKeyCache keyCache, AttributeValueFQN... fqns) throws AutoConfigureException, ExecutionException, InterruptedException {
 
         GetAttributeValuesByFqnsRequest request = GetAttributeValuesByFqnsRequest.newBuilder()
-                .addAllFqns(Arrays.asList(fqnsStr))
+                .addAllFqns(Arrays.stream(fqns).map(AttributeValueFQN::toString).collect(Collectors.toList()))
                 .setWithValue(AttributeValueSelector.newBuilder().setWithKeyAccessGrants(true).build())
                 .build();
 
-        GetAttributeValuesByFqnsResponse av;
-        av = as.getAttributeValuesByFqns(request).get();
+        GetAttributeValuesByFqnsResponse av = as.getAttributeValuesByFqns(request).get();
 
-        Granter grants = new Granter(Arrays.asList(fqns));
+        return getGranter(keyCache, av.getFqnAttributeValuesMap().values().stream().map(AttributeAndValue::getValue).collect(Collectors.toList()));
+    }
 
-        for (Map.Entry<String, GetAttributeValuesByFqnsResponse.AttributeAndValue> entry : av.getFqnAttributeValuesMap()
-                .entrySet()) {
-            String fqnstr = entry.getKey();
-            AttributeAndValue pair = entry.getValue();
+    private static Granter getGranter(@Nullable KASKeyCache keyCache, List<Value> values) {
+        Granter grants = new Granter(values.stream().map(Value::getFqn).map(AttributeValueFQN::new).collect(Collectors.toList()));
 
-            AttributeValueFQN fqn;
-            try {
-                fqn = new AttributeValueFQN(fqnstr);
-            } catch (Exception e) {
-                return grants;
-            }
+        for (var val: values) {
+            String fqnstr = val.getFqn();
+            AttributeValueFQN fqn = new AttributeValueFQN(fqnstr);
 
-            Attribute def = pair.getAttribute();
-            Value v = pair.getValue();
-            if (v != null && !v.getGrantsList().isEmpty()) {
-                grants.addAllGrants(fqn, v.getGrantsList(), def);
-                storeKeysToCache(v.getGrantsList(), keyCache);
-            } else {
-                if (def != null) {
-                    grants.addAllGrants(fqn, def.getGrantsList(), def);
+            Attribute def = val.getAttribute();
+            if (!val.getGrantsList().isEmpty()) {
+                if (logger.isDebugEnabled()) {
+                    logger.debug("adding grants from attribute value [{}]: {}", val.getFqn(), val.getGrantsList().stream().map(KeyAccessServer::getUri).collect(Collectors.toList()));
+                }
+                grants.addAllGrants(fqn, val.getGrantsList(), def);
+                if (keyCache != null) {
+                    storeKeysToCache(val.getGrantsList(), keyCache);
+                }
+            } else if (!def.getGrantsList().isEmpty()){
+                var attributeGrants = def.getGrantsList();
+                if (logger.isDebugEnabled()) {
+                    logger.debug("adding grants from attribute [{}]: {}", def.getFqn(), attributeGrants.stream().map(KeyAccessServer::getId).collect(Collectors.toList()));
+                }
+                grants.addAllGrants(fqn, attributeGrants, def);
+                if (keyCache != null) {
                     storeKeysToCache(def.getGrantsList(), keyCache);
+                }
+            } else {
+                var nsGrants = def.getNamespace().getGrantsList();
+                if (logger.isDebugEnabled()) {
+                    logger.debug("adding grants from namespace [{}]: [{}]", def.getNamespace().getName(), nsGrants.stream().map(KeyAccessServer::getId).collect(Collectors.toList()));
+                }
+                grants.addAllGrants(fqn, nsGrants, def);
+                if (keyCache != null) {
+                    storeKeysToCache(nsGrants, keyCache);
                 }
             }
         }
@@ -718,34 +733,6 @@ public class Autoconfigure {
         return grants;
     }
 
-    // Given a policy (list of data attributes or tags),
-    // get a set of grants from attribute values to KASes.
-    // Unlike `NewGranterFromService`, this works offline.
-    public static Granter newGranterFromAttributes(Value... attrs) throws AutoConfigureException {
-        List<AttributeValueFQN> policyList = new ArrayList<>(attrs.length);
-
-        Granter grants = new Granter(policyList);
-
-        for (Value v : attrs) {
-            AttributeValueFQN fqn;
-            try {
-                fqn = new AttributeValueFQN(v.getFqn());
-            } catch (Exception e) {
-                return grants;
-            }
-
-            grants.policy.add(fqn);
-            Attribute def = v.getAttribute();
-            if (def == null) {
-                throw new AutoConfigureException("No associated definition with value [" + fqn.toString() + "]");
-            }
-
-            grants.addAllGrants(fqn, def.getGrantsList(), def);
-            grants.addAllGrants(fqn, v.getGrantsList(), def);
-        }
-
-        return grants;
-    }
 
     static void storeKeysToCache(List<KeyAccessServer> kases, KASKeyCache keyCache) {
         for (KeyAccessServer kas : kases) {
