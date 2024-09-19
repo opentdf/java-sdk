@@ -365,7 +365,7 @@ public class Autoconfigure {
             List<String> sortedPrefixes = new ArrayList<>();
             for (AttributeValueFQN aP : policy) {
                 AttributeNameFQN a = aP.prefix();
-                SingleAttributeClause clause = Optional.ofNullable(prefixes.get(a.getKey())).orElseGet(() -> prefixes.get(a.authority()));
+                SingleAttributeClause clause = prefixes.get(a.getKey());
                 if (clause != null) {
                     clause.values.add(aP);
                 } else if (byAttribute(aP) != null) {
