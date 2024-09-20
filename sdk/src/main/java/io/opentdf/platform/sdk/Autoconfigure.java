@@ -28,7 +28,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.ExecutionException;
@@ -676,37 +675,18 @@ public class Autoconfigure {
     // Given a policy (list of data attributes or tags),
     // get a set of grants from attribute values to KASes.
     // Unlike `NewGranterFromService`, this works offline.
-    public static Granter newGranterFromAttributes(Value... attrs) throws AutoConfigureException {
-        return getGranter(null, Arrays.asList(attrs));
-    }
-
-    // Given a policy (list of data attributes or tags),
-    // get a set of grants from attribute values to KASes.
-    // Unlike `NewGranterFromService`, this works offline.
-    public static Granter newGranterFromAttributes2(Value... attrs) throws AutoConfigureException {
-        List<AttributeValueFQN> policyList = new ArrayList<>(attrs.length);
-
-        Granter grants = new Granter(policyList);
-
-        for (Value v : attrs) {
-            AttributeValueFQN fqn;
-            try {
-                fqn = new AttributeValueFQN(v.getFqn());
-            } catch (Exception e) {
-                return grants;
+    public static Granter newGranterFromAttributes(Value... attrValues) throws AutoConfigureException {
+        var attrsAndValues = Arrays.stream(attrValues).map(v -> {
+            if (!v.hasAttribute()) {
+                throw new AutoConfigureException("tried to use an attribute that is not initialized");
             }
+            return AttributeAndValue.newBuilder()
+                    .setValue(v)
+                    .setAttribute(v.getAttribute())
+                    .build();
+        }).collect(Collectors.toList());
 
-            grants.policy.add(fqn);
-            Attribute def = v.getAttribute();
-            if (def == null) {
-                throw new AutoConfigureException("No associated definition with value [" + fqn.toString() + "]");
-            }
-
-            grants.addAllGrants(fqn, def.getGrantsList(), def);
-            grants.addAllGrants(fqn, v.getGrantsList(), def);
-        }
-
-        return grants;
+        return getGranter(null, attrsAndValues);
     }
 
     // Gets a list of directory of KAS grants for a list of attribute FQNs
@@ -719,17 +699,18 @@ public class Autoconfigure {
 
         GetAttributeValuesByFqnsResponse av = as.getAttributeValuesByFqns(request).get();
 
-        return getGranter(keyCache, av.getFqnAttributeValuesMap().values().stream().map(AttributeAndValue::getValue).collect(Collectors.toList()));
+        return getGranter(keyCache, new ArrayList<>(av.getFqnAttributeValuesMap().values()));
     }
 
-    private static Granter getGranter(@Nullable KASKeyCache keyCache, List<Value> values) {
-        Granter grants = new Granter(values.stream().map(Value::getFqn).map(AttributeValueFQN::new).collect(Collectors.toList()));
+    private static Granter getGranter(@Nullable KASKeyCache keyCache, List<AttributeAndValue> values) {
+        Granter grants = new Granter(values.stream().map(AttributeAndValue::getValue).map(Value::getFqn).map(AttributeValueFQN::new).collect(Collectors.toList()));
 
-        for (var val : values) {
+        for (var attributeAndValue: values) {
+            var val = attributeAndValue.getValue();
+            var attribute = attributeAndValue.getAttribute();
             String fqnstr = val.getFqn();
             AttributeValueFQN fqn = new AttributeValueFQN(fqnstr);
 
-            Attribute attribute = val.getAttribute();
             if (!val.getGrantsList().isEmpty()) {
                 if (logger.isDebugEnabled()) {
                     logger.debug("adding grants from attribute value [{}]: {}", val.getFqn(), val.getGrantsList().stream().map(KeyAccessServer::getUri).collect(Collectors.toList()));
