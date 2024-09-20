@@ -271,7 +271,6 @@ public class Autoconfigure {
         }
 
         public void addGrant(AttributeValueFQN fqn, String kas, Attribute attr) {
-            logger.debug("adding attribute [{}], kas = [{}], attr = [{}]", fqn.url, kas, attr.getFqn());
             grants.computeIfAbsent(fqn.key, k -> new KeyAccessGrant(attr, new ArrayList<>())).kases.add(kas);
         }
 

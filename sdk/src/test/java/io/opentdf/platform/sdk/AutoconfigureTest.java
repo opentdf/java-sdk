@@ -596,8 +596,8 @@ public class AutoconfigureTest {
                     int i = 0;
                 };
                 List<KeySplitStep> plan = reasoner.plan(tc.getDefaults(), () -> {
-                            return String.valueOf(wrapper.i++ + 1);
-                        }
+                    return String.valueOf(wrapper.i++ + 1);
+                }
 
                 );
                 assertThat(plan).hasSameElementsAs(tc.getPlan());
@@ -742,8 +742,8 @@ public class AutoconfigureTest {
     void testStoreKeysToCache_NoKeys() {
         KASKeyCache keyCache = Mockito.mock(KASKeyCache.class);
         KeyAccessServer kas1 = KeyAccessServer.newBuilder().setPublicKey(
-                        PublicKey.newBuilder().setCached(
-                                KasPublicKeySet.newBuilder()))
+                PublicKey.newBuilder().setCached(
+                        KasPublicKeySet.newBuilder()))
                 .build();
 
         List<KeyAccessServer> kases = List.of(kas1);
@@ -847,7 +847,7 @@ public class AutoconfigureTest {
     }
 
     GetAttributeValuesByFqnsResponse getResponseWithGrants(GetAttributeValuesByFqnsRequest req,
-                                                           List<KeyAccessServer> grants) {
+            List<KeyAccessServer> grants) {
         GetAttributeValuesByFqnsResponse.Builder builder = GetAttributeValuesByFqnsResponse.newBuilder();
 
         for (String v : req.getFqnsList()) {
