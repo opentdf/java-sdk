@@ -3,10 +3,6 @@
           xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
     <servers>
         <server>
-            <id>gpg.passphrase</id>
-            <passphrase>${env.OPENTDF_GPG_KEY}</passphrase>
-        </server>
-        <server>
             <id>github</id>
             <username>${env.GITHUB_ACTOR}</username>
             <password>${env.GITHUB_TOKEN}</password>
