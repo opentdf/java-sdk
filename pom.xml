@@ -202,8 +202,10 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <keyname>security@opentdf.io</keyname>
-                    <passphraseServerId>gpg.passphrase</passphraseServerId>
+                    <gpgArguments>
+                        <arg>--pinentry-mode</arg>
+                        <arg>loopback</arg>
+                    </gpgArguments>
                 </configuration>
             </plugin>
             <!-- Plugin for Deploying -->
