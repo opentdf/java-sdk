@@ -728,35 +728,36 @@ public class Autoconfigure {
             String fqnstr = val.getFqn();
             AttributeValueFQN fqn = new AttributeValueFQN(fqnstr);
 
-            Attribute def = val.getAttribute();
+            Attribute attribute = val.getAttribute();
             if (!val.getGrantsList().isEmpty()) {
                 if (logger.isDebugEnabled()) {
                     logger.debug("adding grants from attribute value [{}]: {}", val.getFqn(), val.getGrantsList().stream().map(KeyAccessServer::getUri).collect(Collectors.toList()));
                 }
-                grants.addAllGrants(fqn, val.getGrantsList(), def);
+                grants.addAllGrants(fqn, val.getGrantsList(), attribute);
                 if (keyCache != null) {
                     storeKeysToCache(val.getGrantsList(), keyCache);
                 }
-            } else if (!def.getGrantsList().isEmpty()) {
-                var attributeGrants = def.getGrantsList();
+            } else if (!attribute.getGrantsList().isEmpty()) {
+                var attributeGrants = attribute.getGrantsList();
                 if (logger.isDebugEnabled()) {
-                    logger.debug("adding grants from attribute [{}]: {}", def.getFqn(), attributeGrants.stream().map(KeyAccessServer::getId).collect(Collectors.toList()));
+                    logger.debug("adding grants from attribute [{}]: {}", attribute.getFqn(), attributeGrants.stream().map(KeyAccessServer::getId).collect(Collectors.toList()));
                 }
-                grants.addAllGrants(fqn, attributeGrants, def);
+                grants.addAllGrants(fqn, attributeGrants, attribute);
                 if (keyCache != null) {
-                    storeKeysToCache(def.getGrantsList(), keyCache);
+                    storeKeysToCache(attributeGrants, keyCache);
                 }
-            } else if (!def.getNamespace().getGrantsList().isEmpty()) {
-                var nsGrants = def.getNamespace().getGrantsList();
+            } else if (!attribute.getNamespace().getGrantsList().isEmpty()) {
+                var nsGrants = attribute.getNamespace().getGrantsList();
                 if (logger.isDebugEnabled()) {
-                    logger.debug("adding grants from namespace [{}]: [{}]", def.getNamespace().getName(), nsGrants.stream().map(KeyAccessServer::getId).collect(Collectors.toList()));
+                    logger.debug("adding grants from namespace [{}]: [{}]", attribute.getNamespace().getName(), nsGrants.stream().map(KeyAccessServer::getId).collect(Collectors.toList()));
                 }
-                grants.addAllGrants(fqn, nsGrants, def);
+                grants.addAllGrants(fqn, nsGrants, attribute);
                 if (keyCache != null) {
                     storeKeysToCache(nsGrants, keyCache);
                 }
             } else {
-                grants.addAllGrants(fqn, List.of(), def);
+                // this is needed to mark the fact that we have an empty
+                grants.addAllGrants(fqn, List.of(), attribute);
                 logger.debug("didn't find any grants on value, attribute, or namespace for attribute value [{}]", fqnstr);
             }
         }
