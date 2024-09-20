@@ -472,7 +472,6 @@ public class AutoconfigureTest {
                     }
 
             );
-            assertThat(plan.size()).isEqualTo(tc.getPlan().size());
             assertThat(plan).isEqualTo(tc.getPlan());
         }
     }
