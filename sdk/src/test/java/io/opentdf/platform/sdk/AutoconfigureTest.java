@@ -689,7 +689,7 @@ public class AutoconfigureTest {
         private final List<KeySplitStep> plan;
 
         ReasonerTestCase(String name, List<AttributeValueFQN> policy, List<String> defaults, String ats, String keyed,
-                         String reduced, List<KeySplitStep> plan) {
+                String reduced, List<KeySplitStep> plan) {
             this.name = name;
             this.policy = policy;
             this.defaults = defaults;
