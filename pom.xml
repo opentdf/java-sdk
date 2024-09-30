@@ -12,7 +12,6 @@
     <packaging>pom</packaging>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <!--        TODO: Move to new version of Java-->
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
         <log4j.version>2.20.0</log4j.version>
@@ -20,6 +19,11 @@
         <protobuf.version>3.25.3</protobuf.version>
         <sslcontext.version>8.3.5</sslcontext.version>
     </properties>
+    <scm>
+        <connection>scm:git:https://github.com/opentdf/java-sdk.git</connection>
+        <developerConnection>scm:git:git@github.com:opentdf/java-sdk.git</developerConnection>
+        <url>https://github.com/opentdf/java-sdk</url>
+    </scm>
     <modules>
         <module>sdk</module>
         <module>cmdline</module>
@@ -149,6 +153,14 @@
                     <artifactId>maven-deploy-plugin</artifactId>
                     <version>2.8.2</version>
                 </plugin>
+                <plugin>
+                    <artifactId>maven-gpg-plugin</artifactId>
+                    <version>3.2.3</version>
+                </plugin>
+                <plugin>
+                    <artifactId>nexus-staging-maven-plugin</artifactId>
+                    <version>1.7.0</version>
+                </plugin>
                 <!-- site lifecycle, see
                 https://maven.apache.org/ref/current/maven-core/lifecycles.html#site_Lifecycle -->
                 <plugin>
@@ -176,6 +188,43 @@
             </plugins>
         </pluginManagement>
         <plugins>
+            <!-- Plugin for Signing -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-gpg-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>sign-artifacts</id>
+                        <phase>deploy</phase>
+                        <goals>
+                            <goal>sign</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <gpgArguments>
+                        <arg>--pinentry-mode</arg>
+                        <arg>loopback</arg>
+                    </gpgArguments>
+                </configuration>
+            </plugin>
+            <!-- Plugin for Deploying -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+            </plugin>
+            <!-- Plugin for Nexus Staging -->
+            <plugin>
+                <groupId>org.sonatype.plugins</groupId>
+                <artifactId>nexus-staging-maven-plugin</artifactId>
+                <version>1.7.0</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <serverId>ossrh</serverId>
+                    <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+                    <autoReleaseAfterClose>true</autoReleaseAfterClose>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
@@ -236,6 +285,23 @@
                 </snapshotRepository>
             </distributionManagement>
         </profile>
-
+        <profile>
+            <id>ossrh</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <distributionManagement>
+                <repository>
+                    <id>ossrh</id>
+                    <name>sonatype</name>
+                    <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+                </repository>
+                <snapshotRepository>
+                    <id>ossrh</id>
+                    <name>sonatype</name>
+                    <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+                </snapshotRepository>
+            </distributionManagement>
+        </profile>
     </profiles>
 </project>
