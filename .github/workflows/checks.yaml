@@ -41,9 +41,14 @@ jobs:
           java-version: "11"
           distribution: "adopt"
           server-id: github
+      - name: Import GPG key
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)
+          echo "KEY_ID=$KEY_ID" >> $GITHUB_ENV
       - name: Maven Verify
         run: |
-          mvn --batch-mode clean install -DskipTests
+          mvn --batch-mode clean install -DskipTests -Dgpg.keyname=$KEY_ID -Dgpg.passphrase=${{ secrets.OPENTDF_GPG_KEY_PASSPHRASE }}
           mvn --batch-mode verify
         env:
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
