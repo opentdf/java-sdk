@@ -53,10 +53,11 @@ public class AutoconfigureTest {
     private static final String KAS_US = "https://kas.us/";
     private static final String KAS_US_HCS = "https://hcs.kas.us/";
     private static final String KAS_US_SA = "https://si.kas.us/";
-    private static final String AUTHORITY = "https://virtru.com/";
-    public static final String OTHER_AUTH = "https://other.com/";
     public static final String SPECIFIED_KAS = "https://attr.kas.com/";
     public static final String EVEN_MORE_SPECIFIC_KAS = "https://value.kas.com/";
+    private static final String NAMESPACE_KAS = "https://namespace.kas.com/";
+    private static Autoconfigure.AttributeNameFQN SPKSPECKED;
+    private static Autoconfigure.AttributeNameFQN SPKUNSPECKED;
 
     private static Autoconfigure.AttributeNameFQN CLS;
     private static Autoconfigure.AttributeNameFQN N2K;
@@ -78,6 +79,10 @@ public class AutoconfigureTest {
     private static Autoconfigure.AttributeValueFQN uns2spk;
     private static Autoconfigure.AttributeValueFQN spk2uns;
     private static Autoconfigure.AttributeValueFQN spk2spk;
+    private static AttributeValueFQN spk2uns2uns;
+    private static AttributeValueFQN spk2uns2spk;
+    private static Autoconfigure.AttributeValueFQN spk2spk2uns;
+    private static Autoconfigure.AttributeValueFQN spk2spk2spk;
 
     @BeforeAll
     public static void setup() throws AutoConfigureException {
@@ -87,6 +92,8 @@ public class AutoconfigureTest {
         REL = new Autoconfigure.AttributeNameFQN("https://virtru.com/attr/Releasable%20To");
         UNSPECKED = new Autoconfigure.AttributeNameFQN("https://other.com/attr/unspecified");
         SPECKED = new Autoconfigure.AttributeNameFQN("https://other.com/attr/specified");
+        SPKUNSPECKED = new Autoconfigure.AttributeNameFQN("https://hasgrants.com/attr/unspecified");
+        SPKSPECKED = new Autoconfigure.AttributeNameFQN("https://hasgrants.com/attr/specified");
 
         clsA = new Autoconfigure.AttributeValueFQN("https://virtru.com/attr/Classification/value/Allowed");
         clsS = new Autoconfigure.AttributeValueFQN("https://virtru.com/attr/Classification/value/Secret");
@@ -105,6 +112,11 @@ public class AutoconfigureTest {
         uns2spk = new Autoconfigure.AttributeValueFQN("https://other.com/attr/unspecified/value/specked");
         spk2uns = new Autoconfigure.AttributeValueFQN("https://other.com/attr/specified/value/unspecked");
         spk2spk = new Autoconfigure.AttributeValueFQN("https://other.com/attr/specified/value/specked");
+
+        spk2uns2uns = new Autoconfigure.AttributeValueFQN("https://hasgrants.com/attr/unspecified/value/unspecked");
+        spk2uns2spk = new Autoconfigure.AttributeValueFQN("https://hasgrants.com/attr/unspecified/value/specked");
+        spk2spk2uns = new Autoconfigure.AttributeValueFQN("https://hasgrants.com/attr/specified/value/unspecked");
+        spk2spk2spk = new Autoconfigure.AttributeValueFQN("https://hasgrants.com/attr/specified/value/specked");
     }
 
     private static String spongeCase(String s) {
@@ -168,6 +180,8 @@ public class AutoconfigureTest {
     private Attribute mockAttributeFor(Autoconfigure.AttributeNameFQN fqn) {
         Namespace ns1 = Namespace.newBuilder().setId("v").setName("virtru.com").setFqn("https://virtru.com").build();
         Namespace ns2 = Namespace.newBuilder().setId("o").setName("other.com").setFqn("https://other.com").build();
+        Namespace ns3 = Namespace.newBuilder().setId("h").setName("hasgrants.com").addGrants(KeyAccessServer.newBuilder().setUri(NAMESPACE_KAS).build()).setFqn("https://hasgrants.com").build();
+
         String key = fqn.getKey();
         if (key.equals(CLS.getKey())) {
             return Attribute.newBuilder().setId("CLS").setNamespace(ns1)
@@ -191,9 +205,20 @@ public class AutoconfigureTest {
             return Attribute.newBuilder().setId("UNS").setNamespace(ns2)
                     .setName("unspecified").setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ANY_OF)
                     .setFqn(fqn.toString()).build();
-        } else {
-            return null;
+        } else if (key.equals(SPKSPECKED.getKey())) {
+            return Attribute.newBuilder().setId("SPKSPK").setNamespace(ns3)
+                    .setName("specified").setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ANY_OF)
+                    .addGrants(KeyAccessServer.newBuilder().setUri(SPECIFIED_KAS).build())
+                    .setName(fqn.toString())
+                    .build();
+        } else if (key.equals(SPKUNSPECKED.getKey())) {
+            return Attribute.newBuilder().setId("SPKUNSPK").setNamespace(ns3)
+                    .setName("unspecified").setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ANY_OF)
+                    .setName(fqn.toString())
+                    .build();
         }
+
+        throw new IllegalArgumentException("Key not recognized: " + key);
     }
 
     private Value mockValueFor(Autoconfigure.AttributeValueFQN fqn) throws AutoConfigureException {
@@ -252,13 +277,13 @@ public class AutoconfigureTest {
             }
         } else if (an.getKey().equals(CLS.getKey())) {
             // defaults only
-        } else if (an.getKey().equals(SPECKED.getKey())) {
-            if (fqn.value().toLowerCase().equals("specked")) {
+        } else if (List.of(SPECKED.getKey(), SPKSPECKED.getKey()).contains(an.getKey())) {
+            if (fqn.value().equalsIgnoreCase("specked")) {
                 p = p.toBuilder().addGrants(KeyAccessServer.newBuilder().setUri(EVEN_MORE_SPECIFIC_KAS).build())
                         .build();
             }
-        } else if (an.getKey().equals(UNSPECKED.getKey())) {
-            if (fqn.value().toLowerCase().equals("specked")) {
+        } else if (List.of(UNSPECKED.getKey(), SPKUNSPECKED.getKey()).contains(an.getKey())) {
+            if (fqn.value().equalsIgnoreCase("specked")) {
                 p = p.toBuilder().addGrants(KeyAccessServer.newBuilder().setUri(EVEN_MORE_SPECIFIC_KAS).build())
                         .build();
             }
@@ -426,31 +451,28 @@ public class AutoconfigureTest {
                                 new KeySplitStep(KAS_US_HCS, "2"), new KeySplitStep(KAS_US_SA, "3"))));
 
         for (ReasonerTestCase tc : testCases) {
-            assertDoesNotThrow(() -> {
-                Granter reasoner = Autoconfigure.newGranterFromAttributes(
-                        valuesToPolicy(tc.getPolicy().toArray(new AttributeValueFQN[0])).toArray(new Value[0]));
-                assertThat(reasoner).isNotNull();
+            Granter reasoner = Autoconfigure.newGranterFromAttributes(
+                    valuesToPolicy(tc.getPolicy().toArray(new AttributeValueFQN[0])).toArray(new Value[0]));
+            assertThat(reasoner).isNotNull();
 
-                AttributeBooleanExpression actualAB = reasoner.constructAttributeBoolean();
-                assertThat(actualAB.toString().toLowerCase()).isEqualTo(tc.getAts().toLowerCase());
+            AttributeBooleanExpression actualAB = reasoner.constructAttributeBoolean();
+            assertThat(actualAB.toString().toLowerCase()).isEqualTo(tc.getAts().toLowerCase());
 
-                BooleanKeyExpression actualKeyed = reasoner.insertKeysForAttribute(actualAB);
-                assertThat(actualKeyed.toString()).isEqualTo(tc.getKeyed());
+            BooleanKeyExpression actualKeyed = reasoner.insertKeysForAttribute(actualAB);
+            assertThat(actualKeyed.toString()).isEqualTo(tc.getKeyed());
 
-                String reduced = actualKeyed.reduce().toString();
-                assertThat(reduced).isEqualTo(tc.getReduced());
+            String reduced = actualKeyed.reduce().toString();
+            assertThat(reduced).isEqualTo(tc.getReduced());
 
-                var wrapper = new Object() {
-                    int i = 0;
-                };
-                List<KeySplitStep> plan = reasoner.plan(tc.getDefaults(), () -> {
-                    return String.valueOf(wrapper.i++ + 1);
-                }
+            var wrapper = new Object() {
+                int i = 0;
+            };
+            List<KeySplitStep> plan = reasoner.plan(tc.getDefaults(), () -> {
+                        return String.valueOf(wrapper.i++ + 1);
+                    }
 
-                );
-                assertThat(plan.size()).isEqualTo(tc.getPlan().size());
-                assertThat(plan).isEqualTo(tc.getPlan());
-            });
+            );
+            assertThat(plan).isEqualTo(tc.getPlan());
         }
     }
 
@@ -528,7 +550,28 @@ public class AutoconfigureTest {
                         "uns.uns & uns.spk => spk",
                         List.of(uns2uns, spk2spk),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))));
+                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
+                new ReasonerTestCase(
+                        "spk.uns.uns => ns.spk",
+                        List.of(spk2uns2uns, uns2uns),
+                        List.of(KAS_US),
+                        List.of(new KeySplitStep(NAMESPACE_KAS, ""))),
+                new ReasonerTestCase(
+                        "spk.uns.uns & uns.uns => ns.spk",
+                        List.of(spk2uns2uns, uns2uns),
+                        List.of(KAS_US),
+                        List.of(new KeySplitStep(NAMESPACE_KAS, ""))),
+                new ReasonerTestCase(
+                        "spk.uns.uns & uns.spk => ns.spk && spk",
+                        List.of(spk2uns2uns, uns2spk),
+                        List.of(KAS_US),
+                        List.of(new KeySplitStep(NAMESPACE_KAS, "1"), new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, "2"))),
+                new ReasonerTestCase(
+                        "spk.uns.uns & spk.spk.uns && spk.uns.spk => ns.spk || attr.spk || value.spk",
+                        List.of(spk2uns2uns, spk2spk2uns, spk2uns2spk),
+                        List.of(KAS_US),
+                        List.of(new KeySplitStep(NAMESPACE_KAS, "1"), new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, "1"), new KeySplitStep(SPECIFIED_KAS, "2")))
+        );
 
         for (ReasonerTestCase tc : testCases) {
             assertDoesNotThrow(() -> {
@@ -556,7 +599,6 @@ public class AutoconfigureTest {
                 }
 
                 );
-                assertThat(plan.size()).isEqualTo(tc.getPlan().size());
                 assertThat(plan).hasSameElementsAs(tc.getPlan());
             });
         }
