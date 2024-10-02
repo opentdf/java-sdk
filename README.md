@@ -25,7 +25,7 @@ import java.io.InputStream;
 import java.io.FileInputStream;
 
 public class Example {
-  public static void main(String args[]) {
+  public static void main(String[] args) {
     SDK sdk =
         new SDKBuilder
             .clientSecret("myClient", "token")
@@ -33,7 +33,7 @@ public class Example {
             .build();
     // Encrypt a file
     try (InputStream in = new FileInputStream("input.plaintext")) {
-      Config c = Config.newTDFConfig(Config.withDataAttributes("attr1", "attr2"))
+      Config c = Config.newTDFConfig(Config.withDataAttributes("attr1", "attr2"));
       new TDF().createTDF(in, System.out, tdfConfig, sdk.getServices().kas());
     }
 
@@ -43,7 +43,7 @@ public class Example {
         TDF.Reader reader = new TDF().loadTDF(in, sdk.getServices().kas());
         reader.readPayload(System.out);
     }
-}
+}}
 ```
 
 ### Cryptography Library
@@ -70,5 +70,4 @@ Use the SDKBuilder.withSSL... methods to build an SDKBuilder with:
 
 ### Maven Modules
 - cmdline: Command line utility
-- protocol:  Buf generated source code from opentdf proto definitions
 - sdk: The OpenTDF Java SDK

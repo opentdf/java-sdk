@@ -139,39 +139,53 @@
     </dependencies>
     <build>
         <plugins>
+            <!-- Clean Generated Sources -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
+                <version>3.2.0</version>
+                <configuration>
+                    <filesets>
+                        <fileset>
+                            <directory>${project.basedir}/src/main/protogen</directory>
+                            <includes>
+                                <include>**/*</include>
+                            </includes>
+                        </fileset>
+                    </filesets>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-antrun-plugin</artifactId>
                 <version>3.1.0</version>
                 <executions>
+                    <!-- Generate Sources Execution -->
                     <execution>
                         <id>generateSources</id>
                         <phase>generate-sources</phase>
                         <configuration>
                             <target>
-                                <exec executable="rm">
-                                    <arg value="-rf" />
-                                    <arg value="src/main/protogen" />
-                                </exec>
-                                <exec executable="buf" dir="../">
+                                <!-- Generate OpenTDF Platform Protobuf -->
+                                <exec executable="buf" dir=".">
                                     <arg value="generate" />
                                     <arg
                                         value="https://github.com/opentdf/platform.git#branch=main,subdir=service" />
+                                    <arg value="-o" />
+                                    <arg value="target/generated-sources" />
                                 </exec>
-                                <exec executable="buf" dir="../">
+                                <!-- Generate gRPC Protobuf -->
+                                <exec executable="buf" dir=".">
                                     <arg value="generate" />
                                     <arg value="buf.build/grpc-ecosystem/grpc-gateway" />
                                     <arg value="-o" />
-                                    <arg value="tmp-gen" />
+                                    <arg value="target/generated-sources" />
                                 </exec>
-                                <exec executable="cp" dir="../">
+                                <!-- Copy to source -->
+                                <exec executable="cp" dir=".">
                                     <arg value="-r" />
-                                    <arg value="tmp-gen/sdk/src/main/protogen/grpc" />
-                                    <arg value="sdk/src/main/protogen" />
-                                </exec>
-                                <exec executable="rm" dir="../">
-                                    <arg value="-rf" />
-                                    <arg value="tmp-gen" />
+                                    <arg value="target/generated-sources/" />
+                                    <arg value="${project.basedir}/src/main/protogen" />
                                 </exec>
                             </target>
                         </configuration>
@@ -181,6 +195,7 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- Add Generated sources - hack-->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>build-helper-maven-plugin</artifactId>
@@ -194,7 +209,7 @@
                         </goals>
                         <configuration>
                             <sources>
-                                <source>src/main/protogen</source>
+                                <source>${project.basedir}/src/main/protogen</source>
                             </sources>
                         </configuration>
                     </execution>
