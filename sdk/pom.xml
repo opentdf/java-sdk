@@ -126,41 +126,28 @@
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-junit-jupiter</artifactId>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>build.buf</groupId>
             <artifactId>protovalidate</artifactId>
             <version>0.1.9</version>
+            <scope>compile</scope>
         </dependency>
     </dependencies>
     <build>
         <plugins>
-            <!-- Clean Generated Sources -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-clean-plugin</artifactId>
-                <version>3.2.0</version>
-                <configuration>
-                    <filesets>
-                        <fileset>
-                            <directory>${project.basedir}/src/main/protogen</directory>
-                            <includes>
-                                <include>**/*</include>
-                            </includes>
-                        </fileset>
-                    </filesets>
-                </configuration>
-            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-antrun-plugin</artifactId>
                 <version>3.1.0</version>
                 <executions>
-                    <!-- Generate Sources Execution -->
+                    <!-- Generate Sources Execution under target/generated-sources -->
                     <execution>
                         <id>generateSources</id>
                         <phase>generate-sources</phase>
@@ -181,37 +168,11 @@
                                     <arg value="-o" />
                                     <arg value="target/generated-sources" />
                                 </exec>
-                                <!-- Copy to source -->
-                                <exec executable="cp" dir=".">
-                                    <arg value="-r" />
-                                    <arg value="target/generated-sources/" />
-                                    <arg value="${project.basedir}/src/main/protogen" />
-                                </exec>
                             </target>
                         </configuration>
                         <goals>
                             <goal>run</goal>
                         </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <!-- Add Generated sources - hack-->
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>build-helper-maven-plugin</artifactId>
-                <version>3.5.0</version>
-                <executions>
-                    <execution>
-                        <id>add-source</id>
-                        <phase>generate-sources</phase>
-                        <goals>
-                            <goal>add-source</goal>
-                        </goals>
-                        <configuration>
-                            <sources>
-                                <source>${project.basedir}/src/main/protogen</source>
-                            </sources>
-                        </configuration>
                     </execution>
                 </executions>
             </plugin>
