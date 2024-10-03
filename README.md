@@ -71,3 +71,15 @@ Use the SDKBuilder.withSSL... methods to build an SDKBuilder with:
 ### Maven Modules
 - cmdline: Command line utility
 - sdk: The OpenTDF Java SDK
+
+### Buf
+
+Create an account, link with GitHub, under User setting, Create a `token`
+
+```shell
+[INFO] --- antrun:3.1.0:run (generateSources) @ sdk ---
+[INFO] Executing tasks
+[INFO]      [exec] Failure: too many requests
+[INFO]      [exec] 
+[INFO]      [exec] Please see https://buf.build/docs/bsr/rate-limits for details about BSR rate limiting.
+```

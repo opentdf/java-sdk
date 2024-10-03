@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - feature/maven-central
 
 permissions:
   contents: read
@@ -44,15 +45,26 @@ jobs:
           gpg-private-key: ${{ secrets.GPG_KEY }}
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
       - name: Publish to GitHub Packages
-        run: mvn --batch-mode deploy -DskipTests -P stage
+        run: |
+          mkdir -p $HOME/.m2
+          cat > $HOME/.m2/settings.xml <<EOF
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+          <servers><server>
+          <id>github-pkg</id>
+          <username>${{ secrets.GITHUB_USERNAME }}</username>
+          <password>${{ secrets.GITHUB_TOKEN }}</password>
+          </server></servers>
+          </settings>
+          EOF
+          mvn --batch-mode deploy -DskipTests -P stage
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
-          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
-          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_KEY_PASSPHRASE }}
       - name: Publish to Maven Central
+        if: github.ref == 'refs/heads/main'
         run: mvn --batch-mode deploy -DskipTests -P release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
