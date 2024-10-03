@@ -5,7 +5,6 @@ import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.SignedJWT;
 import com.nimbusds.oauth2.sdk.AuthorizationGrant;
-import com.nimbusds.oauth2.sdk.ClientCredentialsGrant;
 import com.nimbusds.oauth2.sdk.ErrorObject;
 import com.nimbusds.oauth2.sdk.TokenRequest;
 import com.nimbusds.oauth2.sdk.TokenResponse;
@@ -41,6 +40,7 @@ class GRPCAuthInterceptor implements ClientInterceptor {
     private final ClientAuthentication clientAuth;
     private final RSAKey rsaKey;
     private final URI tokenEndpointURI;
+    private final AuthorizationGrant authzGrant;
     private SSLFactory sslFactory;
     private static final Logger logger = LoggerFactory.getLogger(GRPCAuthInterceptor.class);
 
@@ -52,11 +52,12 @@ class GRPCAuthInterceptor implements ClientInterceptor {
      * @param rsaKey     the RSA key to be used by the interceptor
      * @param sslFactory Optional SSLFactory for Requests
      */
-    public GRPCAuthInterceptor(ClientAuthentication clientAuth, RSAKey rsaKey, URI tokenEndpointURI, SSLFactory sslFactory) {
+    public GRPCAuthInterceptor(ClientAuthentication clientAuth, RSAKey rsaKey, URI tokenEndpointURI, AuthorizationGrant authzGrant, SSLFactory sslFactory) {
         this.clientAuth = clientAuth;
         this.rsaKey = rsaKey;
         this.tokenEndpointURI = tokenEndpointURI;
         this.sslFactory = sslFactory;
+        this.authzGrant = authzGrant;
     }
 
     /**
@@ -110,12 +111,9 @@ class GRPCAuthInterceptor implements ClientInterceptor {
 
                 logger.trace("The current access token is expired or empty, getting a new one");
 
-                // Construct the client credentials grant
-                AuthorizationGrant clientGrant = new ClientCredentialsGrant();
-
                 // Make the token request
                 TokenRequest tokenRequest = new TokenRequest(this.tokenEndpointURI,
-                        clientAuth, clientGrant, null);
+                        clientAuth, authzGrant, null);
                 HTTPRequest httpRequest = tokenRequest.toHTTPRequest();
                 if(sslFactory!=null){
                     httpRequest.setSSLSocketFactory(sslFactory.getSslSocketFactory());
