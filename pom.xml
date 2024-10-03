@@ -214,7 +214,7 @@
                 <artifactId>maven-deploy-plugin</artifactId>
             </plugin>
             <!-- Plugin for Nexus Staging -->
-            <plugin>
+            <!-- <plugin>
                 <groupId>org.sonatype.plugins</groupId>
                 <artifactId>nexus-staging-maven-plugin</artifactId>
                 <version>1.7.0</version>
@@ -223,6 +223,15 @@
                     <serverId>ossrh</serverId>
                     <nexusUrl>https://oss.sonatype.org/</nexusUrl>
                     <autoReleaseAfterClose>true</autoReleaseAfterClose>
+                </configuration>
+            </plugin> -->
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <version>0.6.0</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <publishingServerId>central</publishingServerId>
                 </configuration>
             </plugin>
             <plugin>
@@ -285,7 +294,7 @@
                 </snapshotRepository>
             </distributionManagement>
         </profile>
-        <profile>
+        <!-- <profile>
             <id>ossrh</id>
             <activation>
                 <activeByDefault>true</activeByDefault>
@@ -302,6 +311,6 @@
                     <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
                 </snapshotRepository>
             </distributionManagement>
-        </profile>
+        </profile> -->
     </profiles>
 </project>
