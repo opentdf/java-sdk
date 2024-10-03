@@ -8,7 +8,9 @@
     <groupId>io.opentdf.platform</groupId>
     <artifactId>sdk-pom</artifactId>
     <version>0.7.0-SNAPSHOT</version>
-    <name>sdk-pom</name>
+    <name>io.opentdf.platform:sdk-pom</name>
+    <description>OpenTDF Java SDK</description>
+    <url>https://github.com/opentdf/java-sdk</url>
     <packaging>pom</packaging>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -19,6 +21,18 @@
         <protobuf.version>3.25.3</protobuf.version>
         <sslcontext.version>8.3.5</sslcontext.version>
     </properties>
+    <licenses>
+        <license>
+            <name>BSD 3-Clause Clear License</name>
+            <url>https://spdx.org/licenses/BSD-3-Clause-Clear.html</url>
+        </license>
+    </licenses>
+    <developers>
+        <developer>
+            <organization>Virtru</organization>
+            <organizationUrl>https://www.virtru.com</organizationUrl>
+        </developer>
+    </developers>
     <scm>
         <connection>scm:git:https://github.com/opentdf/java-sdk.git</connection>
         <developerConnection>scm:git:git@github.com:opentdf/java-sdk.git</developerConnection>
@@ -281,6 +295,8 @@
                         <version>0.6.0</version>
                         <extensions>true</extensions>
                         <configuration>
+                            <autoPublish>true</autoPublish>
+                            <waitUntil>published</waitUntil>
                             <!-- defined in settings.xml -->
                             <publishingServerId>central</publishingServerId>
                         </configuration>
