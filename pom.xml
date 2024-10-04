@@ -38,10 +38,6 @@
         <developerConnection>scm:git:git@github.com:opentdf/java-sdk.git</developerConnection>
         <url>https://github.com/opentdf/java-sdk</url>
     </scm>
-    <modules>
-        <module>sdk</module>
-        <module>cmdline</module>
-    </modules>
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -275,6 +271,9 @@
                     <id>github-pkg</id>
                     <name>GitHub opentdf Apache Maven Packages</name>
                     <url>https://maven.pkg.github.com/opentdf/java-sdk</url>
+                    <snapshots>
+                        <enabled>true</enabled>
+                    </snapshots>
                 </repository>
             </distributionManagement>
         </profile>
