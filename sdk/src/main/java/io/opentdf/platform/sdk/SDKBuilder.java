@@ -4,12 +4,17 @@ import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
+import com.nimbusds.oauth2.sdk.AuthorizationGrant;
+import com.nimbusds.oauth2.sdk.ClientCredentialsGrant;
 import com.nimbusds.oauth2.sdk.GeneralException;
 import com.nimbusds.oauth2.sdk.auth.ClientAuthentication;
 import com.nimbusds.oauth2.sdk.auth.ClientSecretBasic;
 import com.nimbusds.oauth2.sdk.auth.Secret;
 import com.nimbusds.oauth2.sdk.id.ClientID;
 import com.nimbusds.oauth2.sdk.id.Issuer;
+import com.nimbusds.oauth2.sdk.token.BearerAccessToken;
+import com.nimbusds.oauth2.sdk.token.TokenTypeURI;
+import com.nimbusds.oauth2.sdk.tokenexchange.TokenExchangeGrant;
 import com.nimbusds.openid.connect.sdk.op.OIDCProviderMetadata;
 import io.grpc.*;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRequest;
@@ -41,6 +46,7 @@ public class SDKBuilder {
     private ClientAuthentication clientAuth = null;
     private Boolean usePlainText;
     private SSLFactory sslFactory;
+    private AuthorizationGrant authzGrant;
 
     private static final Logger logger = LoggerFactory.getLogger(SDKBuilder.class);
 
@@ -49,6 +55,7 @@ public class SDKBuilder {
         builder.usePlainText = false;
         builder.clientAuth = null;
         builder.platformEndpoint = null;
+        builder.authzGrant = null;
 
         return builder;
     }
@@ -96,6 +103,24 @@ public class SDKBuilder {
 
     public SDKBuilder platformEndpoint(String platformEndpoint) {
         this.platformEndpoint = platformEndpoint;
+        return this;
+    }
+
+    public SDKBuilder authorizationGrant(AuthorizationGrant authzGrant) {
+        if (this.authzGrant != null) {
+            throw new RuntimeException("Authorization grant can't be specified twice");
+        }
+        this.authzGrant = authzGrant;
+        return this;
+    }
+
+    public SDKBuilder tokenExchange(String jwt) {
+        if (this.authzGrant != null) {
+            throw new RuntimeException("Authorization grant can't be specified twice");
+        }
+
+        BearerAccessToken token = new BearerAccessToken(jwt);
+        this.authzGrant = new TokenExchangeGrant(token, TokenTypeURI.ACCESS_TOKEN);
         return this;
     }
 
@@ -168,7 +193,11 @@ public class SDKBuilder {
             throw new SDKException("Error resolving the OIDC provider metadata", e);
         }
 
-        return new GRPCAuthInterceptor(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI(), sslFactory);
+        if (this.authzGrant == null) {
+            this.authzGrant = new ClientCredentialsGrant();
+        }
+
+        return new GRPCAuthInterceptor(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI(), this.authzGrant, sslFactory);
     }
 
     static class ServicesAndInternals {
