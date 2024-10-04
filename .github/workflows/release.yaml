@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+  release:
+    types: [created]
 
 permissions:
   contents: read
@@ -43,8 +45,41 @@ jobs:
           server-password: MAVEN_PASSWORD
           gpg-private-key: ${{ secrets.GPG_KEY }}
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
-      - name: Publish package
-        run: mvn --batch-mode deploy -DskipTests
+      - name: Publish to GitHub Packages
+        if: github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p $HOME/.m2
+          cat > $HOME/.m2/settings.xml <<EOF
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+          <servers><server>
+          <id>github-pkg</id>
+          <username>${{ secrets.GITHUB_USERNAME }}</username>
+          <password>${{ secrets.GITHUB_TOKEN }}</password>
+          </server></servers>
+          </settings>
+          EOF
+          mvn --batch-mode deploy -DskipTests -P stage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_KEY_PASSPHRASE }}
+      - name: Publish to Maven Central
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          mkdir -p $HOME/.m2
+          cat > $HOME/.m2/settings.xml <<EOF
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+          <servers><server>
+          <id>central</id>
+          <username>${{ secrets.MAVEN_USERNAME }}</username>
+          <password>${{ secrets.MAVEN_PASSWORD }}</password>
+          </server></servers>
+          </settings>
+          EOF 
+          mvn --batch-mode deploy -DskipTests -P release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
