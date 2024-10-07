@@ -15,9 +15,11 @@ import org.erdtman.jcs.JsonCanonicalizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
@@ -355,6 +357,10 @@ public class TDF {
                 }
             }
         }
+
+        public PolicyObject readPolicyObject() {
+            return tdfReader.readPolicyObject();
+        }
     }
 
     private static String calculateSignature(byte[] data, byte[] secret, Config.IntegrityAlgorithm algorithm) {
@@ -410,13 +416,6 @@ public class TDF {
 
         StringBuilder aggregateHash = new StringBuilder();
         byte[] readBuf = new byte[tdfConfig.defaultSegmentSize];
-
-        MessageDigest digest;
-        try {
-            digest = MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException e) {
-            throw new SDKException("error creating SHA-256 message digest", e);
-        }
 
         tdfObject.manifest.encryptionInformation.integrityInformation.segments = new ArrayList<>();
         long totalSize = 0;
@@ -487,7 +486,7 @@ public class TDF {
         tdfObject.manifest.payload.isEncrypted = true;
 
         List<Manifest.Assertion> signedAssertions = new ArrayList<>();
-        ;
+
         for (var assertionConfig : tdfConfig.assertionConfigList) {
             var assertion = new Manifest.Assertion();
             assertion.id = assertionConfig.id;
@@ -538,18 +537,6 @@ public class TDF {
         return defk;
     }
 
-    private void fillInPublicKeyInfo(List<Config.KASInfo> kasInfoList, SDK.KAS kas) {
-        for (var kasInfo : kasInfoList) {
-            if (kasInfo.PublicKey != null && !kasInfo.PublicKey.isBlank()) {
-                continue;
-            }
-            logger.info("no public key provided for KAS at {}, retrieving", kasInfo.URL);
-            Config.KASInfo getKasInfo = kas.getPublicKey(kasInfo);
-            kasInfo.PublicKey = getKasInfo.PublicKey;
-            kasInfo.KID = getKasInfo.KID;
-        }
-    }
-
     public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas,
             Config.AssertionVerificationKeys... assertionVerificationKeys)
             throws NotValidateRootSignature, SegmentSizeMismatch,
@@ -562,8 +549,8 @@ public class TDF {
         String unencryptedMetadata = null;
 
         Set<String> knownSplits = new HashSet<String>();
-        Set<String> foundSplits = new HashSet<String>();
-        ;
+        Set<String> foundSplits = new HashSet<>();
+
         Map<Autoconfigure.KeySplitStep, Exception> skippedSplits = new HashMap<>();
         boolean mixedSplits = manifest.encryptionInformation.keyAccessObj.size() > 1 &&
                 (manifest.encryptionInformation.keyAccessObj.get(0).sid != null) &&

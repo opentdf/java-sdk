@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
@@ -120,6 +121,7 @@ public class TDFTest {
                 Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
                 Config.withMetaData("here is some metadata"),
+                Config.withDataAttributes("https://example.org/attr/a/value/b", "https://example.org/attr/c/value/d"),
                 Config.withAssertionConfig(assertion1));
 
         String plainText = "this is extremely sensitive stuff!!!";
@@ -144,6 +146,11 @@ public class TDFTest {
                 .withFailMessage("extracted data does not match")
                 .isEqualTo(plainText);
         assertThat(reader.getMetadata()).isEqualTo("here is some metadata");
+
+        var policyObject = reader.readPolicyObject();
+        assertThat(policyObject).isNotNull();
+        assertThat(policyObject.body.dataAttributes.stream().map(a -> a.attribute).collect(Collectors.toList())).asList()
+                .containsExactlyInAnyOrder("https://example.org/attr/a/value/b", "https://example.org/attr/c/value/d");
     }
 
     @Test
