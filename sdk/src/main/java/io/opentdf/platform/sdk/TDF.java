@@ -128,6 +128,12 @@ public class TDF {
         }
     }
 
+    public static class AssertionException extends RuntimeException {
+        public AssertionException(String errorMessage, String id) {
+            super("assertion id: "+ id + "; " + errorMessage);
+        }
+    }
+
     public static class EncryptedMetadata {
         private String ciphertext;
         private String iv;
@@ -689,11 +695,11 @@ public class TDF {
             var encodeSignature = Base64.getEncoder().encodeToString(signature.getBytes());
 
             if (!Objects.equals(hashOfAssertion, hashValues.getAssertionHash())) {
-                throw new SDKException("assertion hash mismatch");
+                throw new AssertionException("assertion hash mismatch", assertion.id);
             }
 
             if (!Objects.equals(encodeSignature, hashValues.getSignature())) {
-                throw new SDKException("failed integrity check on assertion signature");
+                throw new AssertionException("failed integrity check on assertion signature", assertion.id);
             }
         }
 
