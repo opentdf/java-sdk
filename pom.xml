@@ -1,13 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.opentdf.platform</groupId>
     <artifactId>sdk-pom</artifactId>
-    <version>0.7.0-SNAPSHOT</version>
+    <version>0.7.3-SNAPSHOT</version>
     <name>io.opentdf.platform:sdk-pom</name>
     <description>OpenTDF Java SDK</description>
     <url>https://github.com/opentdf/java-sdk</url>
@@ -164,10 +162,10 @@
                     <configuration>
                         <failFast>false</failFast>
                         <rules>
-                            <dependencyConvergence />
-                            <requireUpperBoundDeps />
-                            <requireSameVersions />
-                            <banDuplicatePomDependencyVersions />
+                            <dependencyConvergence/>
+                            <requireUpperBoundDeps/>
+                            <requireSameVersions/>
+                            <banDuplicatePomDependencyVersions/>
                         </rules>
                     </configuration>
                 </plugin>
@@ -209,12 +207,12 @@
                             <version>${maven.compiler.target}</version>
                             <level>WARN</level>
                         </requireJavaVersion>
-                        <dependencyConvergence />
-                        <requireUpperBoundDeps />
-                        <requireSameVersions />
-                        <requirePluginVersions />
-                        <banDuplicatePomDependencyVersions />
-                        <reactorModuleConvergence />
+                        <dependencyConvergence/>
+                        <requireUpperBoundDeps/>
+                        <requireSameVersions/>
+                        <requirePluginVersions/>
+                        <banDuplicatePomDependencyVersions/>
+                        <reactorModuleConvergence/>
                     </rules>
                 </configuration>
                 <executions>
@@ -230,18 +228,6 @@
                                 </requireMavenVersion>
                             </rules>
                         </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <!-- Exclude from lifecycle, phase none -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-deploy-plugin</artifactId>
-                <version>3.1.1</version>
-                <executions>
-                    <execution>
-                        <id>default-deploy</id>
-                        <phase>none</phase>
                     </execution>
                 </executions>
             </plugin>
@@ -276,6 +262,19 @@
                     </snapshots>
                 </repository>
             </distributionManagement>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-deploy-plugin</artifactId>
+                        <version>3.1.2</version>
+                        <configuration>
+                            <repositoryId>github-pkg</repositoryId>
+                            <url>https://maven.pkg.github.com/opentdf/java-sdk</url>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
         </profile>
         <profile>
             <id>release</id>
@@ -299,6 +298,18 @@
                             <!-- defined in settings.xml -->
                             <publishingServerId>central</publishingServerId>
                         </configuration>
+                    </plugin>
+                    <!-- Exclude from lifecycle, phase none -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-deploy-plugin</artifactId>
+                        <version>3.1.2</version>
+                        <executions>
+                            <execution>
+                                <id>default-deploy</id>
+                                <phase>none</phase>
+                            </execution>
+                        </executions>
                     </plugin>
                 </plugins>
             </build>

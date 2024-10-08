@@ -83,3 +83,18 @@ Create an account, link with GitHub, under User setting, Create a `token`
 [INFO]      [exec] 
 [INFO]      [exec] Please see https://buf.build/docs/bsr/rate-limits for details about BSR rate limiting.
 ```
+
+## Release Process
+
+### SNAPSHOT
+
+Snapshots are from main latest
+
+```shell
+mvn versions:set -DnewVersion=1.2.3-SNAPSHOT
+```
+
+### RELEASE
+
+Releases are from tags created by GitHub Release process.
+Release Please trigger the release process.

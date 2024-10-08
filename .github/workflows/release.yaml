@@ -35,51 +35,44 @@ jobs:
         uses: bufbuild/buf-setup-action@382440cdb8ec7bc25a68d7b4711163d95f7cc3aa
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Set up JDK
+      # stage maven profile
+      - name: Set up JDK to publish to GitHub Packages
+        if: github.ref == 'refs/heads/main'
         uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
         with:
           java-version: "11"
           distribution: "adopt"
-          server-id: github
-          server-username: MAVEN_USERNAME
-          server-password: MAVEN_PASSWORD
+          # write settings.xml
+          server-id: github-pkg
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
           gpg-private-key: ${{ secrets.GPG_KEY }}
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
       - name: Publish to GitHub Packages
         if: github.ref == 'refs/heads/main'
-        run: |
-          mkdir -p $HOME/.m2
-          cat > $HOME/.m2/settings.xml <<EOF
-          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
-          <servers><server>
-          <id>github-pkg</id>
-          <username>${{ secrets.GITHUB_USERNAME }}</username>
-          <password>${{ secrets.GITHUB_TOKEN }}</password>
-          </server></servers>
-          </settings>
-          EOF
-          mvn --batch-mode deploy -DskipTests -P stage
+        run: mvn --batch-mode deploy -DskipTests -P stage
         env:
+          GITHUB_ACTOR: ${{ secrets.GITHUB_ACTOR }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_KEY_PASSPHRASE }}
+      # release maven profile
+      - name: Set up JDK to publish to Maven Central
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
+        with:
+          java-version: "11"
+          distribution: "adopt"
+          # write settings.xml
+          server-id: central
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
       - name: Publish to Maven Central
         if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          mkdir -p $HOME/.m2
-          cat > $HOME/.m2/settings.xml <<EOF
-          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
-          <servers><server>
-          <id>central</id>
-          <username>${{ secrets.MAVEN_USERNAME }}</username>
-          <password>${{ secrets.MAVEN_PASSWORD }}</password>
-          </server></servers>
-          </settings>
-          EOF 
-          mvn --batch-mode deploy -DskipTests -P release
+        run: mvn --batch-mode deploy -DskipTests -P release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
