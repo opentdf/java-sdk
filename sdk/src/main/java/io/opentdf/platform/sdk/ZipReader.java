@@ -139,6 +139,10 @@ public class ZipReader {
         private final String fileName;
         final long offsetToLocalHeader;
 
+        public long getFileSize() {
+            return fileSize;
+        }
+
         private Entry(byte[] fileName, long offsetToLocalHeader, long fileSize) {
             this.fileName = new String(fileName, StandardCharsets.UTF_8);
             this.offsetToLocalHeader = offsetToLocalHeader;

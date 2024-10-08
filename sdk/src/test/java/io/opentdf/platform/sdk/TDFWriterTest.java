@@ -7,7 +7,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -72,4 +75,36 @@ String kManifestJsonFromTDF = "{\n" +
         writer.finish();
         fileOutStream.close();
     }
+
+    @Test
+    void testLargeManifest() throws IOException {
+        // Generate a large manifest string more than 10MB
+        StringBuilder largeManifestBuilder = new StringBuilder();
+        for (int i = 0; i < ((10 * 1024 * 1024) + 1); i++) {
+            largeManifestBuilder.append("a");
+        }
+        String largeManifest = largeManifestBuilder.toString();
+
+        String payload = "Hello, world!";
+        FileOutputStream fileOutStream = new FileOutputStream("sample.tdf");
+        TDFWriter writer = new TDFWriter(fileOutStream);
+        try (var p = writer.payload()) {
+            new ByteArrayInputStream(payload.getBytes(StandardCharsets.UTF_8)).transferTo(p);
+        }
+        writer.appendManifest(largeManifest);
+        writer.finish();
+        fileOutStream.close();
+
+        // Read the TDF file and check if the manifest is too large
+        SeekableByteChannel tdfChannel = Files.newByteChannel(Paths.get("sample.tdf"));
+        try {
+            TDFReader reader = new TDFReader(tdfChannel);
+            assertEquals(largeManifest, reader.manifest());
+        } catch (SDKException e) {
+            assertTrue(e.getMessage().contains("manifest file too large:"));
+        } finally {
+            Files.deleteIfExists(Paths.get("sample.tdf"));
+        }
+    }
+
 }
