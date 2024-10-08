@@ -4,7 +4,7 @@
     <parent>
         <groupId>io.opentdf.platform</groupId>
         <artifactId>sdk-pom</artifactId>
-        <version>0.7.2</version>
+        <version>0.7.3-SNAPSHOT</version>
     </parent>
     <artifactId>cmdline</artifactId>
     <properties>
