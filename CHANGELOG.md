@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.3](https://github.com/opentdf/java-sdk/compare/v0.7.2...v0.7.3) (2024-10-09)
+
+
+### Features
+
+* **sdk:** deserialize policy objects ([#179](https://github.com/opentdf/java-sdk/issues/179)) ([39582f3](https://github.com/opentdf/java-sdk/commit/39582f37944890af287a4acc2219bcf45642c93a))
+
 ## [0.7.2](https://github.com/opentdf/java-sdk/compare/v0.7.0...v0.7.2) (2024-10-08)
 
 
