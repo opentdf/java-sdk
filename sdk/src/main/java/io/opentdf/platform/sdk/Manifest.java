@@ -14,13 +14,16 @@ import org.apache.commons.codec.binary.Hex;
 import org.erdtman.jcs.JsonCanonicalizer;
 
 import java.io.IOException;
+import java.io.Reader;
 import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
 
@@ -28,6 +31,8 @@ public class Manifest {
 
     private static final String kAssertionHash = "assertionHash";
     private static final String kAssertionSignature = "assertionSig";
+
+    private static final Gson gson = new Gson();
 
     @Override
     public boolean equals(Object o) {
@@ -327,7 +332,6 @@ public class Manifest {
         }
 
         public String hash() throws IOException {
-            Gson gson = new Gson();
             MessageDigest digest;
             try {
                 digest = MessageDigest.getInstance("SHA-256");
@@ -443,4 +447,17 @@ public class Manifest {
     public EncryptionInformation encryptionInformation;
     public Payload payload;
     public List<Assertion> assertions = new ArrayList<>();
+
+    private static Manifest readManifest(Reader reader) {
+        return gson.fromJson(reader, Manifest.class);
+    }
+
+    static PolicyObject readPolicyObject(Reader reader) {
+        var manifest = readManifest(reader);
+        var policyBase64 = manifest.encryptionInformation.policy;
+        var policyBytes = Base64.getDecoder().decode(policyBase64);
+        var policyJson = new String(policyBytes, StandardCharsets.UTF_8);
+
+        return gson.fromJson(policyJson, PolicyObject.class);
+    }
 }

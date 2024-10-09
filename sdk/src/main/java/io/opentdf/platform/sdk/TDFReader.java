@@ -1,8 +1,10 @@
 package io.opentdf.platform.sdk;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Collectors;
@@ -12,7 +14,7 @@ import static io.opentdf.platform.sdk.TDFWriter.TDF_PAYLOAD_FILE_NAME;
 
 public class TDFReader {
 
-    private final ZipReader.Entry manifest;
+    private final ZipReader.Entry manifestEntry;
     private final InputStream payload;
 
     public TDFReader(SeekableByteChannel tdf) throws IOException {
@@ -27,14 +29,14 @@ public class TDFReader {
             throw new IllegalArgumentException("tdf doesn't contain a payload");
         }
 
-        manifest = entries.get(TDF_MANIFEST_FILE_NAME);
+        manifestEntry = entries.get(TDF_MANIFEST_FILE_NAME);
         payload = entries.get(TDF_PAYLOAD_FILE_NAME).getData();
     }
 
     public String manifest() {
         var out = new ByteArrayOutputStream();
         try {
-            manifest.getData().transferTo(out);
+            manifestEntry.getData().transferTo(out);
         } catch (IOException e) {
             throw new SDKException("error retrieving manifest from zip file", e);
         }
@@ -53,5 +55,13 @@ public class TDFReader {
             throw new SDKException("error reading from payload in TDF", e);
         }
         return totalRead;
+    }
+
+    public PolicyObject readPolicyObject() {
+        try (var reader = new BufferedReader(new InputStreamReader(manifestEntry.getData()))){
+            return Manifest.readPolicyObject(reader);
+        } catch (IOException e) {
+            throw new SDKException("error reading policy object", e);
+        }
     }
 }
