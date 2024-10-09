@@ -10,6 +10,9 @@ import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+
+import io.opentdf.platform.sdk.TDF.AssertionException;
+
 import org.apache.commons.codec.binary.Hex;
 import org.erdtman.jcs.JsonCanonicalizer;
 
@@ -373,7 +376,7 @@ public class Manifest {
         public Assertion.HashValues verify(AssertionConfig.AssertionKey assertionKey)
                 throws ParseException, JOSEException {
             if (binding == null) {
-                throw new SDKException("Binding is null in assertion");
+                throw new AssertionException("Binding is null in assertion", this.id);
             }
 
             String signatureString = binding.signature;
@@ -383,7 +386,7 @@ public class Manifest {
             JWSVerifier verifier = createVerifier(assertionKey);
 
             if (!signedJWT.verify(verifier)) {
-                throw new SDKException("Unable to verify assertion signature");
+                throw new AssertionException("Unable to verify assertion signature", this.id);
             }
 
             JWTClaimsSet claimsSet = signedJWT.getJWTClaimsSet();
@@ -435,7 +438,7 @@ public class Manifest {
                 case HS256:
                     return new MACVerifier((byte[]) assertionKey.key);
                 default:
-                    throw new SDKException("Unknown verify key, unable to verify assertion signature");
+                    throw new AssertionException("Unknown verify key, unable to verify assertion signature", this.id);
             }
         }
     }

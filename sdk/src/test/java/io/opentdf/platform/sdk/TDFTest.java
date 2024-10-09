@@ -6,6 +6,9 @@ import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
 import io.opentdf.platform.sdk.Config.KASInfo;
+import io.opentdf.platform.sdk.TDF.AssertionException;
+import io.opentdf.platform.sdk.TDF.TamperException;
+import io.opentdf.platform.sdk.TDF.Reader;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
@@ -262,6 +265,61 @@ public class TDFTest {
             } else {
                 throw new RuntimeException("unexpected assertion id: " + assertion.id);
             }
+        }
+    }
+
+    @Test
+    void testSimpleTDFWithAssertionWithHS256Failure() throws Exception {
+
+        ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
+        lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
+        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
+                .thenReturn(resp1);
+
+        // var keypair = CryptoUtils.generateRSAKeypair();
+        SecureRandom secureRandom = new SecureRandom();
+        byte[] key = new byte[32];
+        secureRandom.nextBytes(key);
+
+        String assertion1Id = "assertion1";
+        var assertionConfig1 = new AssertionConfig();
+        assertionConfig1.id = assertion1Id;
+        assertionConfig1.type = AssertionConfig.Type.BaseAssertion;
+        assertionConfig1.scope = AssertionConfig.Scope.TrustedDataObj;
+        assertionConfig1.appliesToState = AssertionConfig.AppliesToState.Unencrypted;
+        assertionConfig1.statement = new AssertionConfig.Statement();
+        assertionConfig1.statement.format = "base64binary";
+        assertionConfig1.statement.schema = "text";
+        assertionConfig1.statement.value = "ICAgIDxlZGoOkVkaD4=";
+        assertionConfig1.assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, key);
+
+        Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
+                Config.withKasInformation(getKASInfos()),
+                Config.withAssertionConfig(assertionConfig1));
+
+        String plainText = "this is extremely sensitive stuff!!!";
+        InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+
+        TDF tdf = new TDF();
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
+
+        byte[] notkey = new byte[32];
+        secureRandom.nextBytes(notkey);
+        var assertionVerificationKeys = new Config.AssertionVerificationKeys();
+        assertionVerificationKeys.defaultKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256,
+            notkey);
+
+        var unwrappedData = new ByteArrayOutputStream();
+        Reader reader;
+        try {
+            reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas, assertionVerificationKeys);
+            throw new RuntimeException("no tamper error thrown");
+
+        } catch (TamperException e) {
+            assertThat(e)
+            .isInstanceOf(AssertionException.class);
         }
     }
 

@@ -110,9 +110,9 @@ public class TDF {
         }
     }
 
-    public static class TamperException extends RuntimeException {
+    public static class TamperException extends SDKException {
         public TamperException(String errorMessage) {
-            super(errorMessage);
+            super("[tamper detected] "+errorMessage);
         }
     }
 
