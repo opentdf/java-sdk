@@ -386,7 +386,7 @@ public class Manifest {
             JWSVerifier verifier = createVerifier(assertionKey);
 
             if (!signedJWT.verify(verifier)) {
-                throw new AssertionException("Unable to verify assertion signature", this.id);
+                throw new SDKException("Unable to verify assertion signature");
             }
 
             JWTClaimsSet claimsSet = signedJWT.getJWTClaimsSet();
@@ -438,7 +438,7 @@ public class Manifest {
                 case HS256:
                     return new MACVerifier((byte[]) assertionKey.key);
                 default:
-                    throw new AssertionException("Unknown verify key, unable to verify assertion signature", this.id);
+                    throw new SDKException("Unknown verify key, unable to verify assertion signature");
             }
         }
     }

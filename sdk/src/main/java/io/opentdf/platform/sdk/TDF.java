@@ -134,6 +134,12 @@ public class TDF {
         }
     }
 
+    public static class KasBadRequestException extends TamperException {
+        public KasBadRequestException(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
     public static class AssertionException extends TamperException {
         public AssertionException(String errorMessage, String id) {
             super("assertion id: "+ id + "; " + errorMessage);
