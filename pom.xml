@@ -156,18 +156,8 @@
                     <version>3.0.0</version>
                 </plugin>
                 <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-enforcer-plugin</artifactId>
                     <version>3.0.0</version>
-                    <configuration>
-                        <failFast>false</failFast>
-                        <rules>
-                            <dependencyConvergence/>
-                            <requireUpperBoundDeps/>
-                            <requireSameVersions/>
-                            <banDuplicatePomDependencyVersions/>
-                        </rules>
-                    </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -195,7 +185,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
-                <inherited>false</inherited>
+                <inherited>true</inherited>
                 <configuration>
                     <failFast>false</failFast>
                     <rules>
