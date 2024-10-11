@@ -6,8 +6,6 @@ import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
 import io.opentdf.platform.sdk.Config.KASInfo;
-import io.opentdf.platform.sdk.TDF.AssertionException;
-import io.opentdf.platform.sdk.TDF.TamperException;
 import io.opentdf.platform.sdk.TDF.Reader;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
@@ -31,7 +29,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
-
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -315,11 +312,10 @@ public class TDFTest {
         Reader reader;
         try {
             reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas, assertionVerificationKeys);
-            throw new RuntimeException("no tamper error thrown");
+            throw new RuntimeException("assertion verify key error thrown");
 
-        } catch (TamperException e) {
-            assertThat(e)
-            .isInstanceOf(AssertionException.class);
+        } catch (SDKException e) {
+            assertThat(e).hasMessageContaining("verify");
         }
     }
 
