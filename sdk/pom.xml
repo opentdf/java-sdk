@@ -234,14 +234,14 @@
                         <configuration>
                             <target>
                                 <!-- Generate OpenTDF Platform Protobuf -->
-                                <exec executable="buf" dir=".">
+                                <exec executable="buf" dir="." failOnError="true">
                                     <arg value="generate"/>
                                     <arg value="https://github.com/opentdf/platform.git#branch=main,subdir=service"/>
                                     <arg value="-o"/>
                                     <arg value="target/generated-sources"/>
                                 </exec>
                                 <!-- Generate gRPC Protobuf -->
-                                <exec executable="buf" dir=".">
+                                <exec executable="buf" dir="." failOnError="true">
                                     <arg value="generate"/>
                                     <arg value="buf.build/grpc-ecosystem/grpc-gateway"/>
                                     <arg value="-o"/>
