@@ -9,13 +9,17 @@ import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import io.grpc.ManagedChannel;
+import io.grpc.StatusRuntimeException;
+import io.grpc.Status;
 import io.opentdf.platform.kas.AccessServiceGrpc;
 import io.opentdf.platform.kas.PublicKeyRequest;
 import io.opentdf.platform.kas.PublicKeyResponse;
 import io.opentdf.platform.kas.RewrapRequest;
+import io.opentdf.platform.kas.RewrapResponse;
 import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
+import io.opentdf.platform.sdk.TDF.KasBadRequestException;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -177,9 +181,21 @@ public class KASClient implements SDK.KAS {
                 .newBuilder()
                 .setSignedRequestToken(jwt.serialize())
                 .build();
-        var response = getStub(keyAccess.url).rewrap(request);
-        var wrappedKey = response.getEntityWrappedKey().toByteArray();
-        return decryptor.decrypt(wrappedKey);
+        RewrapResponse response;
+        try {
+            response = getStub(keyAccess.url).rewrap(request);
+            var wrappedKey = response.getEntityWrappedKey().toByteArray();
+            return decryptor.decrypt(wrappedKey);
+        } catch (StatusRuntimeException e) {
+            if (e.getStatus().getCode() == Status.Code.INVALID_ARGUMENT) {
+                // 400 Bad Request
+                throw new KasBadRequestException("rewrap request 400: " + e.toString());
+            } else {
+                // Other errors
+                throw e;
+            }
+        }
+        
     }
 
     public byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL) {
