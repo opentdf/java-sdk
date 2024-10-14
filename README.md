@@ -1,7 +1,7 @@
-# java-sdk
+# OpenTDF Java SDK
 
-This repository provides the OpenTDF Java SDK.
-It will be available from maven central as:
+A Java implementation of the OpenTDF protocol, and access library for the services provided by the OpenTDF platform.
+This SDK is available from Maven central as:
 
 ```xml
     <dependency>
@@ -9,12 +9,10 @@ It will be available from maven central as:
         <artifactId>sdk</artifactId>
     </dependency>
 ```
+### Additional Maven Modules
+- cmdline: Command line utility
 
-
-
-## SDK Usage
-
-### TDF File Creation and Reading
+## Quick Start Example
 
 ```java
 import io.opentdf.platform.sdk.Config;
@@ -48,7 +46,8 @@ public class Example {
 
 ### Cryptography Library
 
-The SDK uses the [Bouncy Castle Security library](https://www.bouncycastle.org/).  SDK users may need to register the Bouncy Castle Provider; e.g.:
+This SDK uses the [Bouncy Castle Security library](https://www.bouncycastle.org/) library. 
+Note: When using this SDK, it may be necessary to register the Bouncy Castle Provider as follows:
 
 ```java
     static{
@@ -58,23 +57,19 @@ The SDK uses the [Bouncy Castle Security library](https://www.bouncycastle.org/)
 
 ### Logging
 
-We use [slf4j](https://www.slf4j.org/), without providing a backend. We use log4j2 in our tests.
+The Java SDK makes use of the [slf4j](https://www.slf4j.org/) library, without providing a backend. log4j2 in leveraged within the included automated tests.
 
 ### SSL - Untrusted Certificates
 
-Use the SDKBuilder.withSSL... methods to build an SDKBuilder with:
+Leverage the SDKBuilder.withSSL methods to create an SDKBuilder as follows:
 
 - An SSLFactory: ```sdkBuilder.sslFactory(mySSLFactory)```
 - Directory containing trusted certificates: ```sdkBuilder.sslFactoryFromDirectory(myDirectoryWithCerts)```
 - Java Keystore: ```sdkBuilder.sslFactoryFromKeyStore(keystorepath, keystorePassword)```
 
-### Maven Modules
-- cmdline: Command line utility
-- sdk: The OpenTDF Java SDK
-
 ### Buf
 
-Create an account, link with GitHub, under User setting, Create a `token`
+Create an account, link that account with GitHub and then under User settings create a `token`
 
 ```shell
 [INFO] --- antrun:3.1.0:run (generateSources) @ sdk ---
@@ -96,5 +91,5 @@ mvn versions:set -DnewVersion=1.2.3-SNAPSHOT
 
 ### RELEASE
 
-Releases are from tags created by GitHub Release process.
-Release Please trigger the release process.
+Releases are from tags created by the GitHub release process.
+Enter 'Release Please' to trigger the release process.
