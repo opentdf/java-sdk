@@ -38,7 +38,7 @@
         <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
-            <version>2.10.1</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>commons-codec</groupId>
@@ -118,7 +118,7 @@
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
-            <version>4.13.1</version>
+            <version>4.13.2</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -234,14 +234,14 @@
                         <configuration>
                             <target>
                                 <!-- Generate OpenTDF Platform Protobuf -->
-                                <exec executable="buf" dir=".">
+                                <exec executable="buf" dir="." failOnError="true">
                                     <arg value="generate"/>
                                     <arg value="https://github.com/opentdf/platform.git#branch=main,subdir=service"/>
                                     <arg value="-o"/>
                                     <arg value="target/generated-sources"/>
                                 </exec>
                                 <!-- Generate gRPC Protobuf -->
-                                <exec executable="buf" dir=".">
+                                <exec executable="buf" dir="." failOnError="true">
                                     <arg value="generate"/>
                                     <arg value="buf.build/grpc-ecosystem/grpc-gateway"/>
                                     <arg value="-o"/>
