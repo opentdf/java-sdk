@@ -56,8 +56,8 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
         with:
-          java-version: "11"
-          distribution: "adopt"
+          java-version: "17"
+          distribution: "temurin"
           server-id: github
       - name: Maven Test Coverage
         env:
