@@ -1,5 +1,6 @@
-protocol/src/main/protogen
+sdk/src/main/protogen
 /.idea/
 target/
 .vscode/
 .DS_Store
+sdk/sample.tdf

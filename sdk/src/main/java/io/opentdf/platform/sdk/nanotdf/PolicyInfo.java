@@ -1,9 +1,6 @@
 package io.opentdf.platform.sdk.nanotdf;
 
-import io.opentdf.platform.sdk.NanoTDF;
-
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 
 public class PolicyInfo {
     private NanoTDFType.PolicyType type;
@@ -14,7 +11,7 @@ public class PolicyInfo {
     public PolicyInfo() {
     }
 
-    public PolicyInfo(ByteBuffer buffer, ECCMode eccMode)  {
+    public PolicyInfo(ByteBuffer buffer, ECCMode eccMode) {
         this.type = NanoTDFType.PolicyType.values()[buffer.get()];
         this.hasECDSABinding = eccMode.isECDSABindingEnabled();
 
@@ -48,7 +45,7 @@ public class PolicyInfo {
         }
 
         int bindingBytesSize = 8; // GMAC length
-        if(this.hasECDSABinding) { // ECDSA - The size of binding depends on the curve.
+        if (this.hasECDSABinding) { // ECDSA - The size of binding depends on the curve.
             bindingBytesSize = ECCMode.getECDSASignatureStructSize(eccMode.getEllipticCurveType());
         }
 
@@ -66,7 +63,7 @@ public class PolicyInfo {
             if (type == NanoTDFType.PolicyType.EMBEDDED_POLICY_PLAIN_TEXT ||
                     type == NanoTDFType.PolicyType.EMBEDDED_POLICY_ENCRYPTED) {
 
-                int policySize =  body.length;
+                int policySize = body.length;
                 totalSize = (1 + Short.BYTES + body.length + binding.length);
             } else {
                 throw new RuntimeException("Embedded policy with key access is not supported.");
@@ -101,13 +98,12 @@ public class PolicyInfo {
             // 1 - Length of the policy;
             // 2 - policy bytes itself
             // 3 - policy key access( ONLY for EMBEDDED_POLICY_ENCRYPTED_POLICY_KEY_ACCESS)
-            //      1 - resource locator
-            //      2 - ephemeral public key, the size depends on ECC mode.
+            // 1 - resource locator
+            // 2 - ephemeral public key, the size depends on ECC mode.
 
             // Write the length of the policy
 
-
-            short policyLength = (short)body.length;
+            short policyLength = (short) body.length;
             buffer.putShort(policyLength);
             totalBytesWritten += Short.BYTES;
 

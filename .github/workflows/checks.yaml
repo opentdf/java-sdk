@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-      - uses: bufbuild/buf-setup-action@382440cdb8ec7bc25a68d7b4711163d95f7cc3aa
+      - uses: bufbuild/buf-setup-action@2211e06e8cf26d628cda2eea15c95f8c42b080b3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up JDK
@@ -43,7 +43,6 @@ jobs:
           server-id: github
       - name: Maven Verify
         run: |
-          mvn --batch-mode clean install -DskipTests
           mvn --batch-mode verify
         env:
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
@@ -54,7 +53,7 @@ jobs:
     steps:
       - name: Checkout Java SDK
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-      - uses: bufbuild/buf-setup-action@382440cdb8ec7bc25a68d7b4711163d95f7cc3aa
+      - uses: bufbuild/buf-setup-action@2211e06e8cf26d628cda2eea15c95f8c42b080b3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up JDK
@@ -138,21 +137,21 @@ jobs:
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
-            -i \
+            -h\
             encrypt --kas-url=localhost:8080 --mime-type=text/plain --attr https://example.com/attr/attr1/value/value1 --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
-            -i \
+            -h\
             decrypt -f test.tdf > decrypted
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
-            -i \
+            -h\
             metadata -f test.tdf > metadata
 
           if ! diff -q data decrypted; then
@@ -174,14 +173,14 @@ jobs:
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
-            -i \
+            -h\
             encryptnano --kas-url=http://localhost:8080 --attr https://example.com/attr/attr1/value/value1 -f data -m 'here is some metadata' > nano.ntdf
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
-            -i \
+            -h\
             decryptnano -f nano.ntdf > decrypted
           
           if ! diff -q data decrypted; then
@@ -216,21 +215,21 @@ jobs:
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
-            -i \
+            -h\
             encrypt --kas-url=localhost:8080,localhost:8282 -f data -m 'here is some metadata' > test.tdf
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
-            -i \
+            -h\
             decrypt -f test.tdf > decrypted
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=localhost:8080 \
-            -i \
+            -h\
             metadata -f test.tdf > metadata
 
           if ! diff -q data decrypted; then

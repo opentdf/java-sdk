@@ -67,7 +67,6 @@ public class Config {
         }
     }
 
-
     public static class AssertionVerificationKeys {
         public AssertionConfig.AssertionKey defaultKey;
         public Map<String, AssertionConfig.AssertionKey> keys = new HashMap<>();
@@ -100,7 +99,8 @@ public class Config {
         return config;
     }
 
-    public static Consumer<TDFReaderConfig> withAssertionVerificationKeys(AssertionVerificationKeys assertionVerificationKeys) {
+    public static Consumer<TDFReaderConfig> withAssertionVerificationKeys(
+            AssertionVerificationKeys assertionVerificationKeys) {
         return (TDFReaderConfig config) -> config.assertionVerificationKeys = assertionVerificationKeys;
     }
 
@@ -147,7 +147,7 @@ public class Config {
 
     public static Consumer<TDFConfig> withDataAttributes(String... attributes) throws AutoConfigureException {
         List<Autoconfigure.AttributeValueFQN> attrValFqns = new ArrayList<Autoconfigure.AttributeValueFQN>();
-        for (String a : attributes){
+        for (String a : attributes) {
             Autoconfigure.AttributeValueFQN attrValFqn = new Autoconfigure.AttributeValueFQN(a);
             attrValFqns.add(attrValFqn);
         }
@@ -159,7 +159,7 @@ public class Config {
 
     public static Consumer<TDFConfig> withDataAttributeValues(String... attributes) throws AutoConfigureException {
         List<Autoconfigure.AttributeValueFQN> attrValFqns = new ArrayList<Autoconfigure.AttributeValueFQN>();
-        for (String a : attributes){
+        for (String a : attributes) {
             Autoconfigure.AttributeValueFQN attrValFqn = new Autoconfigure.AttributeValueFQN(a);
             attrValFqns.add(attrValFqn);
         }
@@ -169,8 +169,10 @@ public class Config {
         };
     }
 
-    // WithDataAttributeValues appends the given data attributes to the bound policy.
-    // Unlike `WithDataAttributes`, this will not trigger an attribute definition lookup
+    // WithDataAttributeValues appends the given data attributes to the bound
+    // policy.
+    // Unlike `WithDataAttributes`, this will not trigger an attribute definition
+    // lookup
     // during autoconfigure. That is, to use autoconfigure in an 'offline' context,
     // you must first store the relevant attribute information locally and load
     // it to the `CreateTDF` method with this option.
@@ -222,9 +224,9 @@ public class Config {
         };
     }
 
-//    public static Consumer<TDFConfig> withDisableEncryption() {
-//        return (TDFConfig config) -> config.enableEncryption = false;
-//    }
+    // public static Consumer<TDFConfig> withDisableEncryption() {
+    // return (TDFConfig config) -> config.enableEncryption = false;
+    // }
 
     public static Consumer<TDFConfig> withMimeType(String mimeType) {
         return (TDFConfig config) -> config.mimeType = mimeType;

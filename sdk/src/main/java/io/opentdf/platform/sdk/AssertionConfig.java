@@ -1,9 +1,7 @@
 package io.opentdf.platform.sdk;
 
-import com.nimbusds.jose.JWSSigner;
 
 import java.util.Objects;
-
 
 public class AssertionConfig {
 
@@ -70,7 +68,7 @@ public class AssertionConfig {
             this.key = key;
         }
 
-        public boolean isDefined()  {
+        public boolean isDefined() {
             return alg != AssertionKeyAlg.NotDefined;
         }
     }
@@ -82,10 +80,13 @@ public class AssertionConfig {
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
             Statement statement = (Statement) o;
-            return Objects.equals(format, statement.format) && Objects.equals(schema, statement.schema) && Objects.equals(value, statement.value);
+            return Objects.equals(format, statement.format) && Objects.equals(schema, statement.schema)
+                    && Objects.equals(value, statement.value);
         }
 
         @Override

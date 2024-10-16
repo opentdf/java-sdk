@@ -4,12 +4,17 @@ import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
+import com.nimbusds.oauth2.sdk.AuthorizationGrant;
+import com.nimbusds.oauth2.sdk.ClientCredentialsGrant;
 import com.nimbusds.oauth2.sdk.GeneralException;
 import com.nimbusds.oauth2.sdk.auth.ClientAuthentication;
 import com.nimbusds.oauth2.sdk.auth.ClientSecretBasic;
 import com.nimbusds.oauth2.sdk.auth.Secret;
 import com.nimbusds.oauth2.sdk.id.ClientID;
 import com.nimbusds.oauth2.sdk.id.Issuer;
+import com.nimbusds.oauth2.sdk.token.BearerAccessToken;
+import com.nimbusds.oauth2.sdk.token.TokenTypeURI;
+import com.nimbusds.oauth2.sdk.tokenexchange.TokenExchangeGrant;
 import com.nimbusds.openid.connect.sdk.op.OIDCProviderMetadata;
 import io.grpc.*;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRequest;
@@ -41,6 +46,7 @@ public class SDKBuilder {
     private ClientAuthentication clientAuth = null;
     private Boolean usePlainText;
     private SSLFactory sslFactory;
+    private AuthorizationGrant authzGrant;
 
     private static final Logger logger = LoggerFactory.getLogger(SDKBuilder.class);
 
@@ -49,6 +55,7 @@ public class SDKBuilder {
         builder.usePlainText = false;
         builder.clientAuth = null;
         builder.platformEndpoint = null;
+        builder.authzGrant = null;
 
         return builder;
     }
@@ -60,42 +67,60 @@ public class SDKBuilder {
 
     /**
      * Add SSL Context with trusted certs from certDirPath
+     * 
      * @param certsDirPath Path to a directory containing .pem or .crt trusted certs
      * @return
      */
-    public SDKBuilder sslFactoryFromDirectory(String certsDirPath)  throws Exception{
+    public SDKBuilder sslFactoryFromDirectory(String certsDirPath) throws Exception {
         File certsDir = new File(certsDirPath);
-        File[] certFiles =
-                certsDir.listFiles((dir, name) -> name.endsWith(".pem") || name.endsWith(".crt"));
+        File[] certFiles = certsDir.listFiles((dir, name) -> name.endsWith(".pem") || name.endsWith(".crt"));
         logger.info("Loading certificates from: " + certsDir.getAbsolutePath());
         List<InputStream> certStreams = new ArrayList<>();
         for (File certFile : certFiles) {
             certStreams.add(new FileInputStream(certFile));
         }
-        X509ExtendedTrustManager trustManager =
-                PemUtils.loadTrustMaterial(certStreams.toArray(new InputStream[0]));
-        this.sslFactory =
-                SSLFactory.builder().withDefaultTrustMaterial().withSystemTrustMaterial()
-                        .withTrustMaterial(trustManager).build();
+        X509ExtendedTrustManager trustManager = PemUtils.loadTrustMaterial(certStreams.toArray(new InputStream[0]));
+        this.sslFactory = SSLFactory.builder().withDefaultTrustMaterial().withSystemTrustMaterial()
+                .withTrustMaterial(trustManager).build();
         return this;
     }
 
     /**
-     * Add SSL Context with default system trust material + certs contained in a Java keystore
-     * @param keystorePath Path to keystore
+     * Add SSL Context with default system trust material + certs contained in a
+     * Java keystore
+     * 
+     * @param keystorePath     Path to keystore
      * @param keystorePassword Password to keystore
      * @return
      */
     public SDKBuilder sslFactoryFromKeyStore(String keystorePath, String keystorePassword) {
-        this.sslFactory =
-                SSLFactory.builder().withDefaultTrustMaterial().withSystemTrustMaterial()
-                        .withTrustMaterial(Path.of(keystorePath), keystorePassword==null ?
-                                "".toCharArray() : keystorePassword.toCharArray()).build();
+        this.sslFactory = SSLFactory.builder().withDefaultTrustMaterial().withSystemTrustMaterial()
+                .withTrustMaterial(Path.of(keystorePath),
+                        keystorePassword == null ? "".toCharArray() : keystorePassword.toCharArray())
+                .build();
         return this;
     }
 
     public SDKBuilder platformEndpoint(String platformEndpoint) {
         this.platformEndpoint = platformEndpoint;
+        return this;
+    }
+
+    public SDKBuilder authorizationGrant(AuthorizationGrant authzGrant) {
+        if (this.authzGrant != null) {
+            throw new RuntimeException("Authorization grant can't be specified twice");
+        }
+        this.authzGrant = authzGrant;
+        return this;
+    }
+
+    public SDKBuilder tokenExchange(String jwt) {
+        if (this.authzGrant != null) {
+            throw new RuntimeException("Authorization grant can't be specified twice");
+        }
+
+        BearerAccessToken token = new BearerAccessToken(jwt);
+        this.authzGrant = new TokenExchangeGrant(token, TokenTypeURI.ACCESS_TOKEN);
         return this;
     }
 
@@ -117,12 +142,14 @@ public class SDKBuilder {
         }
 
         if (clientAuth == null) {
-            // this simplifies things for now, if we need to support this case we can revisit
+            // this simplifies things for now, if we need to support this case we can
+            // revisit
             throw new SDKException("cannot build an SDK without specifying OAuth credentials");
         }
 
-        // we don't add the auth listener to this channel since it is only used to call the
-        //    well known endpoint
+        // we don't add the auth listener to this channel since it is only used to call
+        // the
+        // well known endpoint
         ManagedChannel bootstrapChannel = null;
         GetWellKnownConfigurationResponse config;
         try {
@@ -148,7 +175,9 @@ public class SDKBuilder {
                     .getStringValue();
 
         } catch (IllegalArgumentException e) {
-            logger.warn("no `platform_issuer` found in well known configuration. requests from the SDK will be unauthenticated", e);
+            logger.warn(
+                    "no `platform_issuer` found in well known configuration. requests from the SDK will be unauthenticated",
+                    e);
             return null;
         }
 
@@ -156,7 +185,7 @@ public class SDKBuilder {
         OIDCProviderMetadata providerMetadata;
         try {
             providerMetadata = OIDCProviderMetadata.resolve(issuer, httpRequest -> {
-                if (sslFactory!=null) {
+                if (sslFactory != null) {
                     httpRequest.setSSLSocketFactory(sslFactory.getSslSocketFactory());
                 }
             });
@@ -164,7 +193,11 @@ public class SDKBuilder {
             throw new SDKException("Error resolving the OIDC provider metadata", e);
         }
 
-        return new GRPCAuthInterceptor(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI(), sslFactory);
+        if (this.authzGrant == null) {
+            this.authzGrant = new ClientCredentialsGrant();
+        }
+
+        return new GRPCAuthInterceptor(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI(), this.authzGrant, sslFactory);
     }
 
     static class ServicesAndInternals {
@@ -200,14 +233,14 @@ public class SDKBuilder {
 
         } else {
             channel = getManagedChannelBuilder(platformEndpoint).intercept(authInterceptor).build();
-            managedChannelFactory = (String endpoint) -> getManagedChannelBuilder(endpoint).intercept(authInterceptor).build();
+            managedChannelFactory = (String endpoint) -> getManagedChannelBuilder(endpoint).intercept(authInterceptor)
+                    .build();
         }
         var client = new KASClient(managedChannelFactory, dpopKey);
         return new ServicesAndInternals(
                 authInterceptor,
                 sslFactory == null ? null : sslFactory.getTrustManager().orElse(null),
-                SDK.Services.newServices(channel, client)
-        );
+                SDK.Services.newServices(channel, client));
     }
 
     public SDK build() {
@@ -216,9 +249,12 @@ public class SDKBuilder {
     }
 
     /**
-     * This produces a channel configured with all the available SDK options. The only
-     * reason it can't take in an interceptor is because we need to create a channel that
+     * This produces a channel configured with all the available SDK options. The
+     * only
+     * reason it can't take in an interceptor is because we need to create a channel
+     * that
      * doesn't have any authentication when we are bootstrapping
+     * 
      * @param endpoint The endpoint that we are creating the channel for
      * @return {@type ManagedChannelBuilder<?>} configured with the SDK options
      */
@@ -227,7 +263,7 @@ public class SDKBuilder {
         if (sslFactory != null && !usePlainText) {
             channelBuilder = Grpc.newChannelBuilder(endpoint, TlsChannelCredentials.newBuilder()
                     .trustManager(sslFactory.getTrustManager().get()).build());
-        }else{
+        } else {
             channelBuilder = ManagedChannelBuilder.forTarget(endpoint);
         }
 
@@ -237,7 +273,7 @@ public class SDKBuilder {
         return channelBuilder;
     }
 
-    SSLFactory getSslFactory(){
+    SSLFactory getSslFactory() {
         return this.sslFactory;
     }
 }

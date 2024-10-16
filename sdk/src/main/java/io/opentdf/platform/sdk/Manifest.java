@@ -14,7 +14,9 @@ import org.apache.commons.codec.binary.Hex;
 import org.erdtman.jcs.JsonCanonicalizer;
 
 import java.io.IOException;
+import java.io.Reader;
 import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
@@ -30,12 +32,17 @@ public class Manifest {
     private static final String kAssertionHash = "assertionHash";
     private static final String kAssertionSignature = "assertionSig";
 
+    private static final Gson gson = new Gson();
+
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Manifest manifest = (Manifest) o;
-        return Objects.equals(encryptionInformation, manifest.encryptionInformation) && Objects.equals(payload, manifest.payload) && Objects.equals(assertions, manifest.assertions);
+        return Objects.equals(encryptionInformation, manifest.encryptionInformation)
+                && Objects.equals(payload, manifest.payload) && Objects.equals(assertions, manifest.assertions);
     }
 
     @Override
@@ -45,7 +52,8 @@ public class Manifest {
 
     private static class PolicyBindingSerializer implements JsonDeserializer<Object>, JsonSerializer<Object> {
         @Override
-        public Object deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+        public Object deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context)
+                throws JsonParseException {
             if (json.isJsonObject()) {
                 return context.deserialize(json, Manifest.PolicyBinding.class);
             } else if (json.isJsonPrimitive() && json.getAsJsonPrimitive().isString()) {
@@ -60,6 +68,7 @@ public class Manifest {
             return context.serialize(src, typeOfSrc);
         }
     }
+
     static public class Segment {
         public String hash;
         public long segmentSize;
@@ -67,10 +76,13 @@ public class Manifest {
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
             Segment segment = (Segment) o;
-            return segmentSize == segment.segmentSize && encryptedSegmentSize == segment.encryptedSegmentSize && Objects.equals(hash, segment.hash);
+            return segmentSize == segment.segmentSize && encryptedSegmentSize == segment.encryptedSegmentSize
+                    && Objects.equals(hash, segment.hash);
         }
 
         @Override
@@ -87,8 +99,10 @@ public class Manifest {
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
             RootSignature that = (RootSignature) o;
             return Objects.equals(algorithm, that.algorithm) && Objects.equals(signature, that.signature);
         }
@@ -108,26 +122,34 @@ public class Manifest {
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
             IntegrityInformation that = (IntegrityInformation) o;
-            return segmentSizeDefault == that.segmentSizeDefault && encryptedSegmentSizeDefault == that.encryptedSegmentSizeDefault && Objects.equals(rootSignature, that.rootSignature) && Objects.equals(segmentHashAlg, that.segmentHashAlg) && Objects.equals(segments, that.segments);
+            return segmentSizeDefault == that.segmentSizeDefault
+                    && encryptedSegmentSizeDefault == that.encryptedSegmentSizeDefault
+                    && Objects.equals(rootSignature, that.rootSignature)
+                    && Objects.equals(segmentHashAlg, that.segmentHashAlg) && Objects.equals(segments, that.segments);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(rootSignature, segmentHashAlg, segmentSizeDefault, encryptedSegmentSizeDefault, segments);
+            return Objects.hash(rootSignature, segmentHashAlg, segmentSizeDefault, encryptedSegmentSizeDefault,
+                    segments);
         }
     }
-    
+
     static public class PolicyBinding {
         public String alg;
         public String hash;
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
             PolicyBinding that = (PolicyBinding) o;
             return Objects.equals(alg, that.alg) && Objects.equals(hash, that.hash);
         }
@@ -153,10 +175,16 @@ public class Manifest {
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
             KeyAccess keyAccess = (KeyAccess) o;
-            return Objects.equals(keyType, keyAccess.keyType) && Objects.equals(url, keyAccess.url) && Objects.equals(protocol, keyAccess.protocol) && Objects.equals(wrappedKey, keyAccess.wrappedKey) && Objects.equals(policyBinding, keyAccess.policyBinding) && Objects.equals(encryptedMetadata, keyAccess.encryptedMetadata) && Objects.equals(kid, keyAccess.kid);
+            return Objects.equals(keyType, keyAccess.keyType) && Objects.equals(url, keyAccess.url)
+                    && Objects.equals(protocol, keyAccess.protocol) && Objects.equals(wrappedKey, keyAccess.wrappedKey)
+                    && Objects.equals(policyBinding, keyAccess.policyBinding)
+                    && Objects.equals(encryptedMetadata, keyAccess.encryptedMetadata)
+                    && Objects.equals(kid, keyAccess.kid);
         }
 
         @Override
@@ -172,10 +200,13 @@ public class Manifest {
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
             Method method = (Method) o;
-            return Objects.equals(algorithm, method.algorithm) && Objects.equals(iv, method.iv) && Objects.equals(IsStreamable, method.IsStreamable);
+            return Objects.equals(algorithm, method.algorithm) && Objects.equals(iv, method.iv)
+                    && Objects.equals(IsStreamable, method.IsStreamable);
         }
 
         @Override
@@ -183,8 +214,6 @@ public class Manifest {
             return Objects.hash(algorithm, iv, IsStreamable);
         }
     }
-
-    
 
     static public class EncryptionInformation {
         @SerializedName(value = "type")
@@ -198,10 +227,14 @@ public class Manifest {
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
             EncryptionInformation that = (EncryptionInformation) o;
-            return Objects.equals(keyAccessType, that.keyAccessType) && Objects.equals(policy, that.policy) && Objects.equals(keyAccessObj, that.keyAccessObj) && Objects.equals(method, that.method) && Objects.equals(integrityInformation, that.integrityInformation);
+            return Objects.equals(keyAccessType, that.keyAccessType) && Objects.equals(policy, that.policy)
+                    && Objects.equals(keyAccessObj, that.keyAccessObj) && Objects.equals(method, that.method)
+                    && Objects.equals(integrityInformation, that.integrityInformation);
         }
 
         @Override
@@ -219,10 +252,14 @@ public class Manifest {
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
             Payload payload = (Payload) o;
-            return Objects.equals(type, payload.type) && Objects.equals(url, payload.url) && Objects.equals(protocol, payload.protocol) && Objects.equals(mimeType, payload.mimeType) && Objects.equals(isEncrypted, payload.isEncrypted);
+            return Objects.equals(type, payload.type) && Objects.equals(url, payload.url)
+                    && Objects.equals(protocol, payload.protocol) && Objects.equals(mimeType, payload.mimeType)
+                    && Objects.equals(isEncrypted, payload.isEncrypted);
         }
 
         @Override
@@ -237,8 +274,10 @@ public class Manifest {
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
             Binding binding = (Binding) o;
             return Objects.equals(method, binding.method) && Objects.equals(signature, binding.signature);
         }
@@ -266,15 +305,21 @@ public class Manifest {
                 this.signature = signature;
             }
 
-            public String getAssertionHash() { return assertionHash; }
-            public String getSignature() { return signature; }
-        }
+            public String getAssertionHash() {
+                return assertionHash;
+            }
 
+            public String getSignature() {
+                return signature;
+            }
+        }
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
             Assertion that = (Assertion) o;
             return Objects.equals(id, that.id) && Objects.equals(type, that.type) &&
                     Objects.equals(scope, that.scope) && Objects.equals(appliesToState, that.appliesToState) &&
@@ -287,7 +332,6 @@ public class Manifest {
         }
 
         public String hash() throws IOException {
-            Gson gson = new Gson();
             MessageDigest digest;
             try {
                 digest = MessageDigest.getInstance("SHA-256");
@@ -303,7 +347,8 @@ public class Manifest {
         // Sign the assertion with the given hash and signature using the key.
         // It returns an error if the signing fails.
         // The assertion binding is updated with the method and the signature.
-        public void sign(final HashValues hashValues, final AssertionConfig.AssertionKey assertionKey) throws KeyLengthException {
+        public void sign(final HashValues hashValues, final AssertionConfig.AssertionKey assertionKey)
+                throws KeyLengthException {
             // Build JWT claims
             final JWTClaimsSet claims = new JWTClaimsSet.Builder()
                     .claim(kAssertionHash, hashValues.assertionHash)
@@ -327,8 +372,10 @@ public class Manifest {
         }
 
         // Checks the binding signature of the assertion and
-        // returns the hash and the signature. It returns an error if the verification fails.
-        public Assertion.HashValues verify(AssertionConfig.AssertionKey assertionKey) throws ParseException, JOSEException {
+        // returns the hash and the signature. It returns an error if the verification
+        // fails.
+        public Assertion.HashValues verify(AssertionConfig.AssertionKey assertionKey)
+                throws ParseException, JOSEException {
             if (binding == null) {
                 throw new SDKException("Binding is null in assertion");
             }
@@ -350,7 +397,8 @@ public class Manifest {
             return new Assertion.HashValues(assertionHash, signature);
         }
 
-        private SignedJWT createSignedJWT(final JWTClaimsSet claims, final AssertionConfig.AssertionKey assertionKey) throws SDKException {
+        private SignedJWT createSignedJWT(final JWTClaimsSet claims, final AssertionConfig.AssertionKey assertionKey)
+                throws SDKException {
             final JWSHeader jwsHeader;
             switch (assertionKey.alg) {
                 case RS256:
@@ -366,7 +414,8 @@ public class Manifest {
             return new SignedJWT(jwsHeader, claims);
         }
 
-        private JWSSigner createSigner(final AssertionConfig.AssertionKey assertionKey) throws SDKException, KeyLengthException {
+        private JWSSigner createSigner(final AssertionConfig.AssertionKey assertionKey)
+                throws SDKException, KeyLengthException {
             switch (assertionKey.alg) {
                 case RS256:
                     if (!(assertionKey.key instanceof PrivateKey)) {
@@ -397,5 +446,18 @@ public class Manifest {
 
     public EncryptionInformation encryptionInformation;
     public Payload payload;
-    public  List<Assertion> assertions = new ArrayList<>();
+    public List<Assertion> assertions = new ArrayList<>();
+
+    private static Manifest readManifest(Reader reader) {
+        return gson.fromJson(reader, Manifest.class);
+    }
+
+    static PolicyObject readPolicyObject(Reader reader) {
+        var manifest = readManifest(reader);
+        var policyBase64 = manifest.encryptionInformation.policy;
+        var policyBytes = Base64.getDecoder().decode(policyBase64);
+        var policyJson = new String(policyBytes, StandardCharsets.UTF_8);
+
+        return gson.fromJson(policyJson, PolicyObject.class);
+    }
 }

@@ -15,16 +15,17 @@ import com.google.gson.GsonBuilder;
 import org.bouncycastle.jce.interfaces.ECPublicKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 public class NanoTDF {
 
     public static Logger logger = LoggerFactory.getLogger(NanoTDF.class);
 
-    public static final byte[] MAGIC_NUMBER_AND_VERSION = new byte[]{0x4C, 0x31, 0x4C};
-    private static final int kMaxTDFSize = ((16 * 1024 * 1024) - 3 - 32);  // 16 mb - 3(iv) - 32(max auth tag)
+    public static final byte[] MAGIC_NUMBER_AND_VERSION = new byte[] { 0x4C, 0x31, 0x4C };
+    private static final int kMaxTDFSize = ((16 * 1024 * 1024) - 3 - 32); // 16 mb - 3(iv) - 32(max auth tag)
     private static final int kNanoTDFGMACLength = 8;
     private static final int kIvPadding = 9;
     private static final int kNanoTDFIvSize = 3;
-    private static final byte[] kEmptyIV = new byte[] { 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
+    private static final byte[] kEmptyIV = new byte[] { 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 };
 
     public static class NanoTDFMaxSizeLimit extends Exception {
         public NanoTDFMaxSizeLimit(String errorMessage) {
@@ -45,8 +46,8 @@ public class NanoTDF {
     }
 
     public int createNanoTDF(ByteBuffer data, OutputStream outputStream,
-                             Config.NanoTDFConfig nanoTDFConfig,
-                             SDK.KAS kas) throws IOException, NanoTDFMaxSizeLimit, InvalidNanoTDFConfig,
+            Config.NanoTDFConfig nanoTDFConfig,
+            SDK.KAS kas) throws IOException, NanoTDFMaxSizeLimit, InvalidNanoTDFConfig,
             NoSuchAlgorithmException, UnsupportedNanoTDFFeature {
 
         int nanoTDFSize = 0;
@@ -137,7 +138,7 @@ public class NanoTDF {
 
         // Write the length of the payload as int24
         int cipherDataLengthWithoutPadding = cipherData.length - kIvPadding;
-        byte[] bgIntAsBytes =  ByteBuffer.allocate(4).putInt(cipherDataLengthWithoutPadding).array();
+        byte[] bgIntAsBytes = ByteBuffer.allocate(4).putInt(cipherDataLengthWithoutPadding).array();
         outputStream.write(bgIntAsBytes, 1, 3);
         nanoTDFSize += 3;
 
@@ -151,7 +152,7 @@ public class NanoTDF {
     }
 
     public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream,
-                            SDK.KAS kas) throws IOException {
+            SDK.KAS kas) throws IOException {
 
         Header header = new Header(nanoTDF);
 
@@ -164,7 +165,7 @@ public class NanoTDF {
 
         String kasUrl = header.getKasLocator().getResourceUrl();
 
-        byte[] key =  kas.unwrapNanoTDF(header.getECCMode().getEllipticCurveType(),
+        byte[] key = kas.unwrapNanoTDF(header.getECCMode().getEllipticCurveType(),
                 base64HeaderData,
                 kasUrl);
         logger.debug("readNanoTDF key is {}", Base64.getEncoder().encodeToString(key));
@@ -200,7 +201,7 @@ public class NanoTDF {
         policyObject.body.dataAttributes = new ArrayList<>();
         policyObject.body.dissem = new ArrayList<>();
 
-        for (String attribute: attributes) {
+        for (String attribute : attributes) {
             PolicyObject.AttributeObject attributeObject = new PolicyObject.AttributeObject();
             attributeObject.attribute = attribute;
             policyObject.body.dataAttributes.add(attributeObject);

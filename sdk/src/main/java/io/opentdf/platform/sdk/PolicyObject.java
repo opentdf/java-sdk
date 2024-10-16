@@ -1,7 +1,6 @@
 package io.opentdf.platform.sdk;
 
 import java.util.List;
-import java.util.UUID;
 
 public class PolicyObject {
     static public class AttributeObject {
