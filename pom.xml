@@ -344,6 +344,11 @@
         </profile>
         <profile>
             <id>coverage</id>
+            <properties>
+                <sonar.organization>opentdf</sonar.organization>
+                <sonar.projectKey>opentdf_java-sdk</sonar.projectKey>
+                <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+            </properties>
             <build>
                 <plugins>
                     <plugin>
