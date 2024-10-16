@@ -53,6 +53,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      - uses: bufbuild/buf-setup-action@2211e06e8cf26d628cda2eea15c95f8c42b080b3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up JDK
         uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
         with:
