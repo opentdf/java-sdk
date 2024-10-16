@@ -22,10 +22,8 @@ import java.nio.channels.SeekableByteChannel;
 import java.util.Optional;
 
 /**
- * The SDK class represents a software development kit for interacting with the
- * opentdf platform. It
- * provides various services and stubs for making API calls to the opentdf
- * platform.
+ * SDK provides an interface for interacting with various services
+ * and managing resources in a streamlined manner.
  */
 public class SDK implements AutoCloseable {
     private final Services services;
@@ -34,11 +32,20 @@ public class SDK implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(SDK.class);
 
+    /**
+     * Closes the SDK, including its associated services.
+     *
+     * @throws Exception if an error occurs while closing the services.
+     */
     @Override
     public void close() throws Exception {
         services.close();
     }
 
+    /**
+     * KAS (Key Access Service) interface to define methods related to key access and management.
+     * This interface extends AutoCloseable to allow for resource management during close operations.
+     */
     public interface KAS extends AutoCloseable {
         Config.KASInfo getPublicKey(Config.KASInfo kasInfo);
 
@@ -51,7 +58,10 @@ public class SDK implements AutoCloseable {
         KASKeyCache getKeyCache();
     }
 
-    // TODO: add KAS
+    /**
+     * The Services interface provides access to various gRPC service stubs and a Key Authority Service (KAS).
+     * It extends the AutoCloseable interface, allowing for the release of resources when no longer needed.
+     */
     public interface Services extends AutoCloseable {
         AuthorizationServiceFutureStub authorization();
 

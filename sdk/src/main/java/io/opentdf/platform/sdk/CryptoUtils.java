@@ -5,6 +5,9 @@ import javax.crypto.spec.SecretKeySpec;
 import java.security.*;
 import java.util.Base64;
 
+/**
+ * Utility class for cryptographic operations such as generating RSA key pairs and calculating HMAC.
+ */
 public class CryptoUtils {
     private static final int KEYPAIR_SIZE = 2048;
 

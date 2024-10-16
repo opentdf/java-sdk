@@ -10,6 +10,10 @@ import io.opentdf.platform.policy.Value;
 import java.util.*;
 import java.util.function.Consumer;
 
+/**
+ * Configuration class for setting various configurations related to TDF.
+ * Contains nested classes and enums for specific configuration settings.
+ */
 public class Config {
 
     public static final int TDF3_KEY_SIZE = 2048;
