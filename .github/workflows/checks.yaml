@@ -42,11 +42,28 @@ jobs:
           distribution: "adopt"
           server-id: github
       - name: Maven Verify
-        run: |
-          mvn --batch-mode verify
+        run: mvn --batch-mode verify
         env:
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+
+  sonarcloud:
+    name: SonarCloud Scan
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      - name: Set up JDK
+        uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
+        with:
+          java-version: "11"
+          distribution: "adopt"
+          server-id: github
+      - name: Maven Test Coverage
+        env:
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+        run: mvn --batch-mode clean sonar:sonar -P coverage
 
   platform-integration:
     runs-on: ubuntu-22.04
