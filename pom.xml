@@ -373,6 +373,7 @@
                                     <goal>report</goal>
                                 </goals>
                                 <configuration>
+                                    <dataFile>${project.parent.basedir}/target/jacoco.exec</dataFile>
                                     <formats>
                                         <format>XML</format>
                                     </formats>
