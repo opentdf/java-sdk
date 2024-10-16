@@ -22,8 +22,10 @@ import java.nio.channels.SeekableByteChannel;
 import java.util.Optional;
 
 /**
- * SDK provides an interface for interacting with various services
- * and managing resources in a streamlined manner.
+ * The SDK class represents a software development kit for interacting with the
+ * opentdf platform. It
+ * provides various services and stubs for making API calls to the opentdf
+ * platform.
  */
 public class SDK implements AutoCloseable {
     private final Services services;
