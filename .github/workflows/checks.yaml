@@ -63,7 +63,7 @@ jobs:
         env:
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
-        run: mvn --batch-mode clean sonar:sonar -P coverage
+        run: mvn --batch-mode clean verify -P coverage
 
   platform-integration:
     runs-on: ubuntu-22.04
