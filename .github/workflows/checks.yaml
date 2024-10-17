@@ -53,6 +53,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          fetch-depth: 0
       - uses: bufbuild/buf-setup-action@2211e06e8cf26d628cda2eea15c95f8c42b080b3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -62,11 +64,23 @@ jobs:
           java-version: "17"
           distribution: "temurin"
           server-id: github
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
       - name: Maven Test Coverage
         env:
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
-        run: mvn --batch-mode clean verify -P coverage
+        run: mvn --batch-mode clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=opentdf_java-sdk -P coverage
 
   platform-integration:
     runs-on: ubuntu-22.04
