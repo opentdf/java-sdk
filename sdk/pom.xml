@@ -297,7 +297,7 @@
                         </goals>
                         <configuration>
                             <dataFile>${project.parent.basedir}/target/jacoco.exec</dataFile>
-                            <outputDirectory>${project.parent.basedir}/target/</outputDirectory>
+                            <outputDirectory>${project.parent.basedir}/target/site/jacoco/</outputDirectory>
                             <formats>
                                 <format>XML</format>
                             </formats>
