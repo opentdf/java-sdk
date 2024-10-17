@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.4](https://github.com/opentdf/java-sdk/compare/v0.7.3...v0.7.4) (2024-10-17)
+
+
+### Documentation
+
+* minor Java SDK README updates ([#193](https://github.com/opentdf/java-sdk/issues/193)) ([e9dc738](https://github.com/opentdf/java-sdk/commit/e9dc738cc40ffc97d3f0084086b1afa1c283850c))
+
 ## [0.7.3](https://github.com/opentdf/java-sdk/compare/v0.7.2...v0.7.3) (2024-10-09)
 
 
