@@ -12,6 +12,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * The ZipReader class provides functionality to read basic ZIP file
+ * structures, such as the End of Central Directory Record and the
+ * Local File Header. This class supports standard ZIP archives as well
+ * as ZIP64 format.
+ */
 public class ZipReader {
 
     public static final Logger logger = LoggerFactory.getLogger(ZipReader.class);

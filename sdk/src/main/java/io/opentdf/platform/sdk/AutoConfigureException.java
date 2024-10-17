@@ -1,5 +1,8 @@
 package io.opentdf.platform.sdk;
 
+/**
+ * Exception thrown when automatic configuration fails.
+ */
 public class AutoConfigureException extends RuntimeException  {
     public AutoConfigureException(String message) {
         super(message);

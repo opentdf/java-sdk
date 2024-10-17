@@ -12,6 +12,11 @@ import java.util.stream.Collectors;
 import static io.opentdf.platform.sdk.TDFWriter.TDF_MANIFEST_FILE_NAME;
 import static io.opentdf.platform.sdk.TDFWriter.TDF_PAYLOAD_FILE_NAME;
 
+/**
+ * TDFReader is responsible for reading and processing Trusted Data Format (TDF) files.
+ * The class initializes with a TDF file channel, extracts the manifest and payload entries,
+ * and provides methods to retrieve the manifest content, read payload bytes, and read policy objects.
+ */
 public class TDFReader {
 
     private final ZipReader.Entry manifestEntry;

@@ -3,6 +3,10 @@ package io.opentdf.platform.sdk;
 
 import java.util.Objects;
 
+/**
+ * Represents the configuration for assertions, encapsulating various types, scopes, states, keys,
+ * and statements involved in assertion handling.
+ */
 public class AssertionConfig {
 
     public enum Type {

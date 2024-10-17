@@ -35,7 +35,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-// Attribute rule types: operators!
+/**
+ * The RuleType class defines a set of constants that represent various types of attribute rules.
+ * These constants are used to specify the nature and behavior of attribute rules in the context
+ * of key management and policy enforcement.
+ */
 class RuleType {
     public static final String HIERARCHY = "hierarchy";
     public static final String ALL_OF = "allOf";
@@ -44,6 +48,12 @@ class RuleType {
     public static final String EMPTY_TERM = "DEFAULT";
 }
 
+/**
+ * The Autoconfigure class provides methods for configuring and retrieving
+ * grants related to attribute values and KAS (Key Access Server) keys.
+ * This class includes functionality to create granter instances based on
+ * attributes either from a list of attribute values or from a service.
+ */
 public class Autoconfigure {
 
     public static Logger logger = LoggerFactory.getLogger(Autoconfigure.class);

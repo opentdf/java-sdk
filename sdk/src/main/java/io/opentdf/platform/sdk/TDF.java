@@ -28,10 +28,23 @@ import java.text.ParseException;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 
+/**
+ * The TDF class is responsible for handling operations related to
+ * Trusted Data Format (TDF). It includes methods to create and load
+ * TDF objects, as well as utility functions to handle cryptographic
+ * operations and configurations.
+ */
 public class TDF {
 
     private final long maximumSize;
 
+    /**
+     * Constructs a new TDF instance using the default maximum input size defined by MAX_TDF_INPUT_SIZE.
+     * <p>
+     * This constructor is primarily used to initialize the TDF object with the standard maximum
+     * input size, which controls the maximum size of the input data that can be processed.
+     * For test purposes, an alternative constructor allows for setting a custom maximum input size.
+     */
     public TDF() {
         this(MAX_TDF_INPUT_SIZE);
     }

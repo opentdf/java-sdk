@@ -2,6 +2,9 @@ package io.opentdf.platform.sdk;
 
 import java.util.List;
 
+/**
+ * The PolicyObject class represents a policy with a unique identifier and a body containing data attributes.
+ */
 public class PolicyObject {
     static public class AttributeObject {
         public String attribute;

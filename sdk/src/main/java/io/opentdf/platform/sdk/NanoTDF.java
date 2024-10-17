@@ -16,6 +16,11 @@ import org.bouncycastle.jce.interfaces.ECPublicKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * The NanoTDF class provides methods to create and read NanoTDF (Tiny Data Format) files.
+ * The NanoTDF format is intended for securely encrypting small data payloads using elliptic-curve cryptography
+ * and authenticated encryption.
+ */
 public class NanoTDF {
 
     public static Logger logger = LoggerFactory.getLogger(NanoTDF.class);

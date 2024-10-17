@@ -69,7 +69,6 @@ public class SDKBuilder {
      * Add SSL Context with trusted certs from certDirPath
      * 
      * @param certsDirPath Path to a directory containing .pem or .crt trusted certs
-     * @return
      */
     public SDKBuilder sslFactoryFromDirectory(String certsDirPath) throws Exception {
         File certsDir = new File(certsDirPath);
@@ -91,7 +90,6 @@ public class SDKBuilder {
      * 
      * @param keystorePath     Path to keystore
      * @param keystorePassword Password to keystore
-     * @return
      */
     public SDKBuilder sslFactoryFromKeyStore(String keystorePath, String keystorePassword) {
         this.sslFactory = SSLFactory.builder().withDefaultTrustMaterial().withSystemTrustMaterial()
