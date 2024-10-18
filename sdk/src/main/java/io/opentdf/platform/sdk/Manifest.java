@@ -27,6 +27,10 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * The Manifest class represents a detailed structure encapsulating various aspects
+ * of data integrity, encryption, payload, and assertions within a certain context.
+ */
 public class Manifest {
 
     private static final String kAssertionHash = "assertionHash";

@@ -30,6 +30,11 @@ import java.util.function.Function;
 
 import static java.lang.String.format;
 
+/**
+ * A client implementation that communicates with a Key Access Service (KAS).
+ * This class provides methods to retrieve public keys, unwrap encrypted keys,
+ * and manage key caches.
+ */
 public class KASClient implements SDK.KAS {
 
     private final Function<String, ManagedChannel> channelFactory;
