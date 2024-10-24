@@ -1,9 +1,12 @@
 package io.opentdf.platform.sdk;
 
+import org.apache.commons.codec.binary.Hex;
+import org.erdtman.jcs.JsonCanonicalizer;
 import org.junit.jupiter.api.Test;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -12,6 +15,8 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ManifestTest {
+    private static final Gson gson = new Gson();
+
     @Test
     void testManifestMarshalAndUnMarshal() {
         String kManifestJsonFromTDF = "{\n" +
@@ -89,5 +94,40 @@ public class ManifestTest {
         var deserializedAgain = gson.fromJson(serialized, Manifest.class);
 
         assertEquals(manifest, deserializedAgain, "something changed when we deserialized -> serialized -> deserialized");
+    }
+
+    @Test
+    void testAssertionHasdh() {
+        var assertionConfig = new AssertionConfig();
+        assertionConfig.id = "424ff3a3-50ca-4f01-a2ae-ef851cd3cac0";
+        assertionConfig.type = AssertionConfig.Type.HandlingAssertion;
+        assertionConfig.scope = AssertionConfig.Scope.TrustedDataObj;
+        assertionConfig.appliesToState = AssertionConfig.AppliesToState.Encrypted;
+        assertionConfig.statement = new AssertionConfig.Statement();
+        assertionConfig.statement.format = "json+stanag5636";
+        assertionConfig.statement.schema = "urn:nato:stanag:5636:A:1:elements:json";
+        assertionConfig.statement.value = "{\"ocl\":{\"pol\":\"62c76c68-d73d-4628-8ccc-4c1e18118c22\",\"cls\":\"SECRET\",\"catl\":[{\"type\":\"P\",\"name\":\"Releasable To\",\"vals\":[\"usa\"]}],\"dcr\":\"2024-10-21T20:47:36Z\"},\"context\":{\"@base\":\"urn:nato:stanag:5636:A:1:elements:json\"}}";
+
+        var assertion = new Manifest.Assertion();
+        assertion.id = assertionConfig.id;
+        assertion.type = assertionConfig.type.toString();
+        assertion.scope = assertionConfig.scope.toString();
+        assertion.statement = assertionConfig.statement;
+        assertion.appliesToState = assertionConfig.appliesToState.toString();
+
+        final String jsonCanonicalizerString = "{\"appliesToState\":\"encrypted\",\"id\":\"424ff3a3-50ca-4f01-a2ae-ef851cd3cac0\",\"scope\":\"tdo\",\"statement\":{\"format\":\"json+stanag5636\",\"schema\":\"urn:nato:stanag:5636:A:1:elements:json\",\"value\":\"{\\\"ocl\\\":{\\\"pol\\\":\\\"62c76c68-d73d-4628-8ccc-4c1e18118c22\\\",\\\"cls\\\":\\\"SECRET\\\",\\\"catl\\\":[{\\\"type\\\":\\\"P\\\",\\\"name\\\":\\\"Releasable To\\\",\\\"vals\\\":[\\\"usa\\\"]}],\\\"dcr\\\":\\\"2024-10-21T20:47:36Z\\\"},\\\"context\\\":{\\\"@base\\\":\\\"urn:nato:stanag:5636:A:1:elements:json\\\"}}\"},\"type\":\"handling\"}";
+        try {
+            var assertionAsJson = gson.toJson(assertion);
+            var jc = new JsonCanonicalizer(assertionAsJson);
+            var assertionBytes = jc.getEncodedUTF8();
+            String assertionString = new String(assertionBytes, StandardCharsets.UTF_8);
+            assertEquals(jsonCanonicalizerString, assertionString);
+            //System.out.println("Encoded UTF-8: " + assertionString);
+
+            var assertionHash = assertion.hash();
+            assertEquals(assertionHash, "4a447a13c5a32730d20bdf7feecb9ffe16649bc731914b574d80035a3927f860");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
