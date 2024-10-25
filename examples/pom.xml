@@ -47,13 +47,7 @@
     <dependency>
       <groupId>io.opentdf.platform</groupId>
       <artifactId>sdk</artifactId>
-      <version>0.7.3</version>
-      <exclusions>
-        <exclusion>
-          <groupId>com.google.code.gson</groupId>
-          <artifactId>gson</artifactId>
-        </exclusion>
-      </exclusions>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>com.google.code.gson</groupId>
