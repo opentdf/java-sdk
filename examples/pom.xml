@@ -4,12 +4,12 @@
   <parent>
     <artifactId>sdk-pom</artifactId>
     <groupId>io.opentdf.platform</groupId>
-    <version>0.7.4-SNAPSHOT</version>
+    <version>0.7.4</version>
   </parent>
 
   <groupId>io.opentdf.platform</groupId>
   <artifactId>examples</artifactId>
-  <version>0.7.4-SNAPSHOT</version>
+  <version>0.7.4</version>
 
   <name>examples</name>
   <!-- FIXME change it to the project's website -->
