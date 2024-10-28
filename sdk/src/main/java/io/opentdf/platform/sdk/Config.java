@@ -92,11 +92,13 @@ public class Config {
     public static class TDFReaderConfig {
         // Optional Map of Assertion Verification Keys
         AssertionVerificationKeys assertionVerificationKeys;
+        boolean disableAssertionVerification;
     }
 
     @SafeVarargs
     public static TDFReaderConfig newTDFReaderConfig(Consumer<TDFReaderConfig>... options) {
         TDFReaderConfig config = new TDFReaderConfig();
+        config.disableAssertionVerification = false;
         for (Consumer<TDFReaderConfig> option : options) {
             option.accept(config);
         }
@@ -106,6 +108,10 @@ public class Config {
     public static Consumer<TDFReaderConfig> withAssertionVerificationKeys(
             AssertionVerificationKeys assertionVerificationKeys) {
         return (TDFReaderConfig config) -> config.assertionVerificationKeys = assertionVerificationKeys;
+    }
+
+    public static Consumer<TDFReaderConfig> withDisableAssertionVerification(boolean disable) {
+        return (TDFReaderConfig config) -> config.disableAssertionVerification = disable;
     }
 
     public static class TDFConfig {

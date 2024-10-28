@@ -114,7 +114,7 @@ class Command {
         var sdk = buildSDK();
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
             try (var stdout = new BufferedOutputStream(System.out)) {
-                var reader = new TDF().loadTDF(in, sdk.getServices().kas());
+                var reader = new TDF().loadTDF(in, sdk.getServices().kas(), new Config.TDFReaderConfig());
                 reader.readPayload(stdout);
             }
         }
@@ -127,7 +127,7 @@ class Command {
 
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
             try (var stdout = new PrintWriter(System.out)) {
-                var reader = new TDF().loadTDF(in, sdk.getServices().kas());
+                var reader = new TDF().loadTDF(in, sdk.getServices().kas(), new Config.TDFReaderConfig());
                 stdout.write(reader.getMetadata() == null ? "" : reader.getMetadata());
             }
         }

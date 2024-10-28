@@ -136,8 +136,10 @@ public class TDFTest {
                 key);
 
         var unwrappedData = new ByteArrayOutputStream();
+        Config.TDFReaderConfig readerConfig = Config.newTDFReaderConfig(
+                Config.withAssertionVerificationKeys(assertionVerificationKeys));
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas,
-                assertionVerificationKeys);
+                readerConfig);
         assertThat(reader.getManifest().payload.mimeType).isEqualTo("application/octet-stream");
 
         reader.readPayload(unwrappedData);
@@ -192,8 +194,10 @@ public class TDFTest {
                 new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256, keypair.getPublic()));
 
         var unwrappedData = new ByteArrayOutputStream();
+        Config.TDFReaderConfig readerConfig = Config.newTDFReaderConfig(
+                Config.withAssertionVerificationKeys(assertionVerificationKeys));
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas,
-                assertionVerificationKeys);
+                readerConfig);
         reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
@@ -244,7 +248,8 @@ public class TDFTest {
         tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
 
         var unwrappedData = new ByteArrayOutputStream();
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()),
+                kas,  new Config.TDFReaderConfig());
         reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
@@ -296,7 +301,8 @@ public class TDFTest {
         var tdf = new TDF();
         tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
         var unwrappedData = new ByteArrayOutputStream();
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()),
+                kas,  new Config.TDFReaderConfig());
         reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toByteArray())
@@ -380,7 +386,8 @@ public class TDFTest {
         TDF tdf = new TDF();
         tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
 
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()),
+                kas, new Config.TDFReaderConfig());
         assertThat(reader.getManifest().payload.mimeType).isEqualTo(mimeType);
     }
 
