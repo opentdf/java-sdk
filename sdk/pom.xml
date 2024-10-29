@@ -6,7 +6,7 @@
     <parent>
         <artifactId>sdk-pom</artifactId>
         <groupId>io.opentdf.platform</groupId>
-        <version>0.7.4-SNAPSHOT</version>
+        <version>0.7.4</version>
     </parent>
     <packaging>jar</packaging>
     <dependencies>
@@ -271,6 +271,36 @@
                             <sources>
                                 <source>target/generated-sources</source>
                             </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                        <configuration>
+                            <destFile>${project.parent.basedir}/target/jacoco.exec</destFile>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                        <configuration>
+                            <dataFile>${project.parent.basedir}/target/jacoco.exec</dataFile>
+                            <outputDirectory>${project.parent.basedir}/target/site/jacoco/</outputDirectory>
+                            <formats>
+                                <format>XML</format>
+                            </formats>
                         </configuration>
                     </execution>
                 </executions>

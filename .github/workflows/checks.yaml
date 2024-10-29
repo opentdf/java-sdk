@@ -42,11 +42,47 @@ jobs:
           distribution: "adopt"
           server-id: github
       - name: Maven Verify
-        run: |
-          mvn --batch-mode verify
+        run: mvn --batch-mode verify
         env:
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+
+  sonarcloud:
+    name: SonarCloud Scan
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          fetch-depth: 0
+      - uses: bufbuild/buf-setup-action@2211e06e8cf26d628cda2eea15c95f8c42b080b3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up JDK
+        uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          server-id: github
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+      - name: Maven Test Coverage
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+        run: mvn --batch-mode clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=opentdf_java-sdk -P coverage
 
   platform-integration:
     runs-on: ubuntu-22.04
@@ -257,6 +293,7 @@ jobs:
       - platform-integration
       - platform-xtest
       - mavenverify
+      - sonarcloud
       - pr
     runs-on: ubuntu-latest
     if: always()
