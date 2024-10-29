@@ -375,11 +375,13 @@ public class TDFTest {
         var assertionVerificationKeys = new Config.AssertionVerificationKeys();
         assertionVerificationKeys.defaultKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256,
             notkey);
+        Config.TDFReaderConfig readerConfig = Config.newTDFReaderConfig(
+            Config.withAssertionVerificationKeys(assertionVerificationKeys));
 
         var unwrappedData = new ByteArrayOutputStream();
         Reader reader;
         try {
-            reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas, assertionVerificationKeys);
+            reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas, readerConfig);
             throw new RuntimeException("assertion verify key error thrown");
 
         } catch (SDKException e) {
