@@ -267,6 +267,7 @@
             <modules>
                 <module>sdk</module>
                 <module>cmdline</module>
+                <module>examples</module>
             </modules>
             <activation>
                 <activeByDefault>true</activeByDefault>
