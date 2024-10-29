@@ -206,6 +206,55 @@ public class TDFTest {
     }
 
     @Test
+    void testWithAssertionVerificationDisabled() throws Exception {
+
+        ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
+        lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
+        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
+                .thenReturn(resp1);
+
+        String assertion1Id = "assertion1";
+        var keypair = CryptoUtils.generateRSAKeypair();
+        var assertionConfig = new AssertionConfig();
+        assertionConfig.id = assertion1Id;
+        assertionConfig.type = AssertionConfig.Type.BaseAssertion;
+        assertionConfig.scope = AssertionConfig.Scope.TrustedDataObj;
+        assertionConfig.appliesToState = AssertionConfig.AppliesToState.Unencrypted;
+        assertionConfig.statement = new AssertionConfig.Statement();
+        assertionConfig.statement.format = "base64binary";
+        assertionConfig.statement.schema = "text";
+        assertionConfig.statement.value = "ICAgIDxlZGoOkVkaD4=";
+        assertionConfig.assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256,
+                keypair.getPrivate());
+
+        Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
+                Config.withKasInformation(getKASInfos()),
+                Config.withAssertionConfig(assertionConfig));
+
+        String plainText = "this is extremely sensitive stuff!!!";
+        InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+
+        TDF tdf = new TDF();
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
+
+        var assertionVerificationKeys = new Config.AssertionVerificationKeys();
+        assertionVerificationKeys.keys.put(assertion1Id,
+                new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256, keypair.getPublic()));
+
+        var unwrappedData = new ByteArrayOutputStream();
+        Config.TDFReaderConfig readerConfig = Config.newTDFReaderConfig(
+                Config.withDisableAssertionVerification(true));
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas,
+                readerConfig);
+        reader.readPayload(unwrappedData);
+
+        assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
+                .withFailMessage("extracted data does not match")
+                .isEqualTo(plainText);
+    }
+    @Test
     void testSimpleTDFWithAssertionWithHS256() throws Exception {
 
         ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);

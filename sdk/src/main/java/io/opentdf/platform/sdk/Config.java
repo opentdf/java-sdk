@@ -91,7 +91,7 @@ public class Config {
 
     public static class TDFReaderConfig {
         // Optional Map of Assertion Verification Keys
-        AssertionVerificationKeys assertionVerificationKeys;
+        AssertionVerificationKeys assertionVerificationKeys = new AssertionVerificationKeys();
         boolean disableAssertionVerification;
     }
 
