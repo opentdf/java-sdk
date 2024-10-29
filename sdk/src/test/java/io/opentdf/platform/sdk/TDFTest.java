@@ -2,6 +2,7 @@ package io.opentdf.platform.sdk;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
+import com.nimbusds.jose.JOSEException;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
@@ -244,6 +245,12 @@ public class TDFTest {
                 new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256, keypair.getPublic()));
 
         var unwrappedData = new ByteArrayOutputStream();
+        assertThrows(JOSEException.class, () -> {
+            tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas,
+                    new Config.TDFReaderConfig());
+        });
+
+        //  try with assertion verification disabled and not passing the assertion verification keys
         Config.TDFReaderConfig readerConfig = Config.newTDFReaderConfig(
                 Config.withDisableAssertionVerification(true));
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas,
