@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.5](https://github.com/opentdf/java-sdk/compare/v0.7.4...v0.7.5) (2024-10-29)
+
+
+### Features
+
+* Examples module ([#202](https://github.com/opentdf/java-sdk/issues/202)) ([ac13a0a](https://github.com/opentdf/java-sdk/commit/ac13a0a7c82caed920238244cf7adaca3039fdea))
+
+
+### Bug Fixes
+
+* **sdk:** option to disable assertion verification ([#205](https://github.com/opentdf/java-sdk/issues/205)) ([78d7b66](https://github.com/opentdf/java-sdk/commit/78d7b66e40bb52340e604ab645830287c91ba534))
+
 ## [0.7.4](https://github.com/opentdf/java-sdk/compare/v0.7.3...v0.7.4) (2024-10-24)
 
 
