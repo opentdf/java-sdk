@@ -35,7 +35,7 @@ public class DecryptExample {
 
         Path path = Paths.get("my.ciphertext");
         try (var in = FileChannel.open(path, StandardOpenOption.READ)) {
-            var reader = new TDF().loadTDF(in, sdk.getServices().kas());
+            var reader = new TDF().loadTDF(in, sdk.getServices().kas(), new Config.TDFReaderConfig());
             reader.readPayload(System.out);
         }
     }
