@@ -550,6 +550,12 @@ public class TDF {
         return defk;
     }
 
+    public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas)
+            throws DecoderException, IOException, ParseException, NoSuchAlgorithmException, JOSEException {
+        return loadTDF(tdf, kas, new Config.TDFReaderConfig());
+    }
+
+
     public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas,
                           Config.TDFReaderConfig tdfReaderConfig)
             throws NotValidateRootSignature, SegmentSizeMismatch,

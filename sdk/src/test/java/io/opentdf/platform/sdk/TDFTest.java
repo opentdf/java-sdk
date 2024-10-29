@@ -350,8 +350,7 @@ public class TDFTest {
         var tdf = new TDF();
         tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
         var unwrappedData = new ByteArrayOutputStream();
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()),
-                kas,  new Config.TDFReaderConfig());
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
         reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toByteArray())
@@ -435,8 +434,7 @@ public class TDFTest {
         TDF tdf = new TDF();
         tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
 
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()),
-                kas, new Config.TDFReaderConfig());
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
         assertThat(reader.getManifest().payload.mimeType).isEqualTo(mimeType);
     }
 
