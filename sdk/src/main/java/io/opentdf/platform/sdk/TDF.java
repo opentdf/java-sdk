@@ -678,8 +678,9 @@ public class TDF {
 
         // Validate assertions
         for (var assertion : manifest.assertions) {
+            // Skip assertion verification if disabled
             if (tdfReaderConfig.disableAssertionVerification) {
-                continue;
+                break;
             }
 
             // Set default to HS256
