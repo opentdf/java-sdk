@@ -9,7 +9,7 @@
 
   <groupId>io.opentdf.platform</groupId>
   <artifactId>examples</artifactId>
-  <version>0.7.4</version>
+  <version>0.7.4-SNAPSHOT</version>
 
   <name>examples</name>
   <!-- FIXME change it to the project's website -->
