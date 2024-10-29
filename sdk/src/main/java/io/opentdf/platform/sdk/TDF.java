@@ -568,8 +568,14 @@ public class TDF {
         return defk;
     }
 
+    public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas)
+            throws DecoderException, IOException, ParseException, NoSuchAlgorithmException, JOSEException {
+        return loadTDF(tdf, kas, new Config.TDFReaderConfig());
+    }
+
+
     public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas,
-            Config.AssertionVerificationKeys... assertionVerificationKeys)
+                          Config.TDFReaderConfig tdfReaderConfig)
             throws RootSignatureValidationException, SegmentSizeMismatch,
             IOException, FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException, DecoderException {
 
@@ -690,10 +696,16 @@ public class TDF {
 
         // Validate assertions
         for (var assertion : manifest.assertions) {
+            // Skip assertion verification if disabled
+            if (tdfReaderConfig.disableAssertionVerification) {
+                break;
+            }
+
             // Set default to HS256
             var assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, payloadKey);
-            if (assertionVerificationKeys != null && assertionVerificationKeys.length > 0) {
-                var keyForAssertion = assertionVerificationKeys[0].getKey(assertion.id);
+            Config.AssertionVerificationKeys assertionVerificationKeys = tdfReaderConfig.assertionVerificationKeys;
+            if (!assertionVerificationKeys.isEmpty()) {
+                var keyForAssertion = assertionVerificationKeys.getKey(assertion.id);
                 if (keyForAssertion != null) {
                     assertionKey = keyForAssertion;
                 }
