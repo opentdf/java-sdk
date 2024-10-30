@@ -119,27 +119,45 @@ public class TDF {
         }
     }
 
-    public static class NotValidateRootSignature extends RuntimeException {
-        public NotValidateRootSignature(String errorMessage) {
+    public static class TDFReadFailed extends RuntimeException {
+        public TDFReadFailed(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class SegmentSizeMismatch extends RuntimeException {
+    public static class TamperException extends SDKException {
+        public TamperException(String errorMessage) {
+            super("[tamper detected] "+errorMessage);
+        }
+    }
+
+    public static class RootSignatureValidationException extends TamperException {
+        public RootSignatureValidationException(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    public static class SegmentSizeMismatch extends TamperException {
         public SegmentSizeMismatch(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class SegmentSignatureMismatch extends RuntimeException {
+    public static class SegmentSignatureMismatch extends TamperException {
         public SegmentSignatureMismatch(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class TDFReadFailed extends RuntimeException {
-        public TDFReadFailed(String errorMessage) {
+    public static class KasBadRequestException extends TamperException {
+        public KasBadRequestException(String errorMessage) {
             super(errorMessage);
+        }
+    }
+
+    public static class AssertionException extends TamperException {
+        public AssertionException(String errorMessage, String id) {
+            super("assertion id: "+ id + "; " + errorMessage);
         }
     }
 
@@ -558,7 +576,7 @@ public class TDF {
 
     public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas,
                           Config.TDFReaderConfig tdfReaderConfig)
-            throws NotValidateRootSignature, SegmentSizeMismatch,
+            throws RootSignatureValidationException, SegmentSizeMismatch,
             IOException, FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException, DecoderException {
 
         TDFReader tdfReader = new TDFReader(tdf);
@@ -666,7 +684,7 @@ public class TDF {
         }
 
         if (rootSignature.compareTo(rootSigValue) != 0) {
-            throw new NotValidateRootSignature("root signature validation failed");
+            throw new RootSignatureValidationException("root signature validation failed");
         }
 
         int segmentSize = manifest.encryptionInformation.integrityInformation.segmentSizeDefault;
@@ -701,11 +719,11 @@ public class TDF {
             var encodeSignature = Base64.getEncoder().encodeToString(signature.getBytes());
 
             if (!Objects.equals(hashOfAssertion, hashValues.getAssertionHash())) {
-                throw new SDKException("assertion hash mismatch");
+                throw new AssertionException("assertion hash mismatch", assertion.id);
             }
 
             if (!Objects.equals(encodeSignature, hashValues.getSignature())) {
-                throw new SDKException("failed integrity check on assertion signature");
+                throw new AssertionException("failed integrity check on assertion signature", assertion.id);
             }
         }
 

@@ -10,6 +10,9 @@ import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+
+import io.opentdf.platform.sdk.TDF.AssertionException;
+
 import org.apache.commons.codec.binary.Hex;
 import org.erdtman.jcs.JsonCanonicalizer;
 
@@ -381,7 +384,7 @@ public class Manifest {
         public Assertion.HashValues verify(AssertionConfig.AssertionKey assertionKey)
                 throws ParseException, JOSEException {
             if (binding == null) {
-                throw new SDKException("Binding is null in assertion");
+                throw new AssertionException("Binding is null in assertion", this.id);
             }
 
             String signatureString = binding.signature;
