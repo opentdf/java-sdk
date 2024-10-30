@@ -195,10 +195,8 @@ public class KASClient implements SDK.KAS {
             if (e.getStatus().getCode() == Status.Code.INVALID_ARGUMENT) {
                 // 400 Bad Request
                 throw new KasBadRequestException("rewrap request 400: " + e.toString());
-            } else {
-                // Other errors
-                throw e;
             }
+            throw e;
         }
         
     }
