@@ -88,7 +88,6 @@ public class NanoTDF {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         byte[] hashOfSalt = digest.digest(MAGIC_NUMBER_AND_VERSION);
         byte[] key = ECKeyPair.calculateHKDF(hashOfSalt, symmetricKey);
-        logger.debug("createNanoTDF key is - {}", Base64.getEncoder().encodeToString(key));
 
         // Encrypt policy
         PolicyObject policyObject = createPolicyObject(nanoTDFConfig.attributes);
@@ -135,9 +134,11 @@ public class NanoTDF {
 
         // Encrypt the data
         byte[] actualIV = new byte[kIvPadding + kNanoTDFIvSize];
-        byte[] iv = new byte[kNanoTDFIvSize];
-        SecureRandom.getInstanceStrong().nextBytes(iv);
-        System.arraycopy(iv, 0, actualIV, kIvPadding, iv.length);
+        do {
+            byte[] iv = new byte[kNanoTDFIvSize];
+            SecureRandom.getInstanceStrong().nextBytes(iv);
+            System.arraycopy(iv, 0, actualIV, kIvPadding, iv.length);
+        } while (Arrays.equals(actualIV, kEmptyIV));	// if match, we need to retry to prevent key + iv reuse with the policy
 
         byte[] cipherData = gcm.encrypt(actualIV, authTagSize, data.array(), 0, dataSize);
 
@@ -173,7 +174,6 @@ public class NanoTDF {
         byte[] key = kas.unwrapNanoTDF(header.getECCMode().getEllipticCurveType(),
                 base64HeaderData,
                 kasUrl);
-        logger.debug("readNanoTDF key is {}", Base64.getEncoder().encodeToString(key));
 
         byte[] payloadLengthBuf = new byte[4];
         nanoTDF.get(payloadLengthBuf, 1, 3);
