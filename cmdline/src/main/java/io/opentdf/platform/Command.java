@@ -1,9 +1,11 @@
 package io.opentdf.platform;
 
+import com.google.gson.JsonSyntaxException;
 import com.nimbusds.jose.JOSEException;
 import io.opentdf.platform.sdk.*;
 import io.opentdf.platform.sdk.TDF;
 
+import com.google.gson.Gson;
 import org.apache.commons.codec.DecoderException;
 import picocli.CommandLine;
 import picocli.CommandLine.HelpCommand;
@@ -64,7 +66,9 @@ class Command {
             @Option(names = { "-a", "--attr" }, defaultValue = Option.NULL_VALUE) Optional<String> attributes,
             @Option(names = { "-c",
                     "--autoconfigure" }, defaultValue = Option.NULL_VALUE) Optional<Boolean> autoconfigure,
-            @Option(names = { "--mime-type" }, defaultValue = Option.NULL_VALUE) Optional<String> mimeType)
+            @Option(names = { "--mime-type" }, defaultValue = Option.NULL_VALUE) Optional<String> mimeType,
+            @Option(names = { "--with-assertions" }, defaultValue = Option.NULL_VALUE) Optional<String> assertion)
+
             throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException {
 
         var sdk = buildSDK();
@@ -79,6 +83,21 @@ class Command {
         metadata.map(Config::withMetaData).ifPresent(configs::add);
         autoconfigure.map(Config::withAutoconfigure).ifPresent(configs::add);
         mimeType.map(Config::withMimeType).ifPresent(configs::add);
+
+        if (assertion.isPresent()) {
+            var assertionConfig = assertion.get();
+            Gson gson = new Gson();
+
+            AssertionConfig[] assertionConfigs;
+            try {
+                assertionConfigs = gson.fromJson(assertionConfig, AssertionConfig[].class);
+            } catch (JsonSyntaxException e) {
+                throw new RuntimeException("Failed to parse assertion, expects an list of assertions", e);
+            }
+
+            configs.add(Config.withAssertionConfig(assertionConfigs));
+        }
+
         if (attributes.isPresent()) {
             configs.add(Config.withDataAttributes(attributes.get().split(",")));
         }
