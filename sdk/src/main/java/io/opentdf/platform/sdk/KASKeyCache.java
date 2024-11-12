@@ -8,6 +8,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Class representing a cache for KAS (Key Access Server) information.
+ * It stores key information along with a timestamp to manage the freshness of cached data.
+ */
 public class KASKeyCache {
     private static final Logger log = LoggerFactory.getLogger(KASKeyCache.class);
     Map<KASKeyRequest, TimeStampedKASInfo> cache;
@@ -50,6 +54,17 @@ public class KASKeyCache {
     }
 }
 
+/**
+ * A class representing Key Aggregation Service (KAS) information along with a timestamp.
+ * <p>
+ * This class holds information related to KAS, as well as a timestamp indicating when the
+ * information was recorded or generated. It encapsulates two main attributes: {@code kasInfo}
+ * and {@code timestamp}.
+ * <p>
+ * The {@code kasInfo} field is an instance of {@code Config.KASInfo}, which contains the KAS-specific
+ * data. The {@code timestamp} field is an instance of {@code LocalDateTime}, representing
+ * the date and time when the KAS information was recorded.
+ */
 class TimeStampedKASInfo {
     Config.KASInfo kasInfo;
     LocalDateTime timestamp;
@@ -60,6 +75,13 @@ class TimeStampedKASInfo {
     }
 }
 
+/**
+ * Represents a request for a Key Access Server (KAS) key.
+ * This class is used to request keys using a specified URL and algorithm.
+ *
+ * This class also overrides equals and hashCode methods
+ * to ensure proper functioning within hash-based collections.
+ */
 class KASKeyRequest {
     private String url;
     private String algorithm;

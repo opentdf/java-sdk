@@ -3,6 +3,10 @@ package io.opentdf.platform.sdk;
 
 import java.util.Objects;
 
+/**
+ * Represents the configuration for assertions, encapsulating various types, scopes, states, keys,
+ * and statements involved in assertion handling.
+ */
 public class AssertionConfig {
 
     public enum Type {
@@ -30,6 +34,11 @@ public class AssertionConfig {
         Scope(String scope) {
             this.scope = scope;
         }
+
+        @Override
+        public String toString() {
+            return scope;
+        }
     }
 
     public enum AssertionKeyAlg {
@@ -47,6 +56,11 @@ public class AssertionConfig {
         AppliesToState(String state) {
             this.state = state;
         }
+
+        @Override
+        public String toString() {
+            return state;
+        }
     }
 
     public enum BindingMethod {
@@ -56,6 +70,11 @@ public class AssertionConfig {
 
         BindingMethod(String method) {
             this.method = method;
+        }
+
+        @Override
+        public String toString() {
+            return method;
         }
     }
 

@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.7.5](https://github.com/opentdf/java-sdk/compare/v0.7.4...v0.7.5) (2024-10-29)
+
+
+### Features
+
+* Examples module ([#202](https://github.com/opentdf/java-sdk/issues/202)) ([ac13a0a](https://github.com/opentdf/java-sdk/commit/ac13a0a7c82caed920238244cf7adaca3039fdea))
+
+
+### Bug Fixes
+
+* **sdk:** option to disable assertion verification ([#205](https://github.com/opentdf/java-sdk/issues/205)) ([78d7b66](https://github.com/opentdf/java-sdk/commit/78d7b66e40bb52340e604ab645830287c91ba534))
+
+## [0.7.4](https://github.com/opentdf/java-sdk/compare/v0.7.3...v0.7.4) (2024-10-24)
+
+
+### Bug Fixes
+
+* **sdk:** returns the correct string associated with enums ([#200](https://github.com/opentdf/java-sdk/issues/200)) ([1dffd35](https://github.com/opentdf/java-sdk/commit/1dffd35374c40ebaa095594d2a5db138957c6e38))
+
+
+### Documentation
+
+* JavaDoc ([#196](https://github.com/opentdf/java-sdk/issues/196)) ([33c9513](https://github.com/opentdf/java-sdk/commit/33c9513de68954cccba854d501ba26b62216df89))
+* minor Java SDK README updates ([#193](https://github.com/opentdf/java-sdk/issues/193)) ([e9dc738](https://github.com/opentdf/java-sdk/commit/e9dc738cc40ffc97d3f0084086b1afa1c283850c))
+
 ## [0.7.3](https://github.com/opentdf/java-sdk/compare/v0.7.2...v0.7.3) (2024-10-09)
 
 

@@ -28,10 +28,23 @@ import java.text.ParseException;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 
+/**
+ * The TDF class is responsible for handling operations related to
+ * Trusted Data Format (TDF). It includes methods to create and load
+ * TDF objects, as well as utility functions to handle cryptographic
+ * operations and configurations.
+ */
 public class TDF {
 
     private final long maximumSize;
 
+    /**
+     * Constructs a new TDF instance using the default maximum input size defined by MAX_TDF_INPUT_SIZE.
+     * <p>
+     * This constructor is primarily used to initialize the TDF object with the standard maximum
+     * input size, which controls the maximum size of the input data that can be processed.
+     * For test purposes, an alternative constructor allows for setting a custom maximum input size.
+     */
     public TDF() {
         this(MAX_TDF_INPUT_SIZE);
     }
@@ -106,27 +119,45 @@ public class TDF {
         }
     }
 
-    public static class NotValidateRootSignature extends RuntimeException {
-        public NotValidateRootSignature(String errorMessage) {
+    public static class TDFReadFailed extends RuntimeException {
+        public TDFReadFailed(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class SegmentSizeMismatch extends RuntimeException {
+    public static class TamperException extends SDKException {
+        public TamperException(String errorMessage) {
+            super("[tamper detected] "+errorMessage);
+        }
+    }
+
+    public static class RootSignatureValidationException extends TamperException {
+        public RootSignatureValidationException(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    public static class SegmentSizeMismatch extends TamperException {
         public SegmentSizeMismatch(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class SegmentSignatureMismatch extends RuntimeException {
+    public static class SegmentSignatureMismatch extends TamperException {
         public SegmentSignatureMismatch(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class TDFReadFailed extends RuntimeException {
-        public TDFReadFailed(String errorMessage) {
+    public static class KasBadRequestException extends TamperException {
+        public KasBadRequestException(String errorMessage) {
             super(errorMessage);
+        }
+    }
+
+    public static class AssertionException extends TamperException {
+        public AssertionException(String errorMessage, String id) {
+            super("assertion id: "+ id + "; " + errorMessage);
         }
     }
 
@@ -537,9 +568,15 @@ public class TDF {
         return defk;
     }
 
+    public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas)
+            throws DecoderException, IOException, ParseException, NoSuchAlgorithmException, JOSEException {
+        return loadTDF(tdf, kas, new Config.TDFReaderConfig());
+    }
+
+
     public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas,
-            Config.AssertionVerificationKeys... assertionVerificationKeys)
-            throws NotValidateRootSignature, SegmentSizeMismatch,
+                          Config.TDFReaderConfig tdfReaderConfig)
+            throws RootSignatureValidationException, SegmentSizeMismatch,
             IOException, FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException, DecoderException {
 
         TDFReader tdfReader = new TDFReader(tdf);
@@ -647,7 +684,7 @@ public class TDF {
         }
 
         if (rootSignature.compareTo(rootSigValue) != 0) {
-            throw new NotValidateRootSignature("root signature validation failed");
+            throw new RootSignatureValidationException("root signature validation failed");
         }
 
         int segmentSize = manifest.encryptionInformation.integrityInformation.segmentSizeDefault;
@@ -659,10 +696,16 @@ public class TDF {
 
         // Validate assertions
         for (var assertion : manifest.assertions) {
+            // Skip assertion verification if disabled
+            if (tdfReaderConfig.disableAssertionVerification) {
+                break;
+            }
+
             // Set default to HS256
             var assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, payloadKey);
-            if (assertionVerificationKeys != null && assertionVerificationKeys.length > 0) {
-                var keyForAssertion = assertionVerificationKeys[0].getKey(assertion.id);
+            Config.AssertionVerificationKeys assertionVerificationKeys = tdfReaderConfig.assertionVerificationKeys;
+            if (!assertionVerificationKeys.isEmpty()) {
+                var keyForAssertion = assertionVerificationKeys.getKey(assertion.id);
                 if (keyForAssertion != null) {
                     assertionKey = keyForAssertion;
                 }
@@ -676,11 +719,11 @@ public class TDF {
             var encodeSignature = Base64.getEncoder().encodeToString(signature.getBytes());
 
             if (!Objects.equals(hashOfAssertion, hashValues.getAssertionHash())) {
-                throw new SDKException("assertion hash mismatch");
+                throw new AssertionException("assertion hash mismatch", assertion.id);
             }
 
             if (!Objects.equals(encodeSignature, hashValues.getSignature())) {
-                throw new SDKException("failed integrity check on assertion signature");
+                throw new AssertionException("failed integrity check on assertion signature", assertion.id);
             }
         }
 
