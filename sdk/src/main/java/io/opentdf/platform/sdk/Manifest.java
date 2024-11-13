@@ -31,8 +31,10 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * The Manifest class represents a detailed structure encapsulating various aspects
- * of data integrity, encryption, payload, and assertions within a certain context.
+ * The Manifest class represents a detailed structure encapsulating various
+ * aspects
+ * of data integrity, encryption, payload, and assertions within a certain
+ * context.
  */
 public class Manifest {
 
@@ -203,6 +205,7 @@ public class Manifest {
     static public class Method {
         public String algorithm;
         public String iv;
+        @SerializedName(value = "isStreamable")
         public Boolean IsStreamable;
 
         @Override
