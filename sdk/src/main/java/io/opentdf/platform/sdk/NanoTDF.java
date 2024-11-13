@@ -140,7 +140,7 @@ public class NanoTDF {
             System.arraycopy(iv, 0, actualIV, kIvPadding, iv.length);
         } while (Arrays.equals(actualIV, kEmptyIV));	// if match, we need to retry to prevent key + iv reuse with the policy
 
-        byte[] cipherData = gcm.encrypt(actualIV, authTagSize, data.array(), 0, dataSize);
+        byte[] cipherData = gcm.encrypt(actualIV, authTagSize, data.array(), data.arrayOffset(), dataSize);
 
         // Write the length of the payload as int24
         int cipherDataLengthWithoutPadding = cipherData.length - kIvPadding;
