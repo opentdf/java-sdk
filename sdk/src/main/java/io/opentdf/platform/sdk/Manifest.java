@@ -51,7 +51,8 @@ public class Manifest {
             return false;
         Manifest manifest = (Manifest) o;
         return Objects.equals(encryptionInformation, manifest.encryptionInformation)
-                && Objects.equals(payload, manifest.payload) && Objects.equals(assertions, manifest.assertions);
+                && Objects.equals(payload, manifest.payload) 
+                && (manifest.assertions != null && Objects.equals(assertions, manifest.assertions));
     }
 
     @Override
