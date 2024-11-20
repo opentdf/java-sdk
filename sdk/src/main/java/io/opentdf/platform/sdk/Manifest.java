@@ -1,6 +1,7 @@
 package io.opentdf.platform.sdk;
 
 import com.google.gson.*;
+// import com.google.gson.reflect.TypeToken;
 import com.google.gson.annotations.JsonAdapter;
 import com.google.gson.annotations.SerializedName;
 import com.nimbusds.jose.*;
@@ -11,14 +12,15 @@ import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 
+// import io.opentdf.platform.sdk.Manifest.ManifestDeserializer;
 import io.opentdf.platform.sdk.TDF.AssertionException;
 
 import org.apache.commons.codec.binary.Hex;
 import org.erdtman.jcs.JsonCanonicalizer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+// import org.slf4j.Logger;
+// import org.slf4j.LoggerFactory;
+// import org.slf4j.Logger;
+// import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -502,12 +504,47 @@ public class Manifest {
     // @JsonAdapter(AssertionSerializer.class)
     public List<Assertion> assertions = new ArrayList<>();
 
-    // Ensure assertions is never null after deserialization
-    private Object readResolve() {
-        if (assertions == null) {
-            assertions = new ArrayList<>();
+    // // Ensure assertions is never null after deserialization
+    // private Object readResolve() {
+    //     if (assertions == null) {
+    //         assertions = new ArrayList<>();
+    //     }
+    //     return this;
+    // }
+
+    // @JsonAdapter(ManifestDeserializer.class)
+    // class ManifestDeserializer implements JsonDeserializer<Manifest> {
+    //     @Override
+    //     public Manifest deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+    //         JsonObject jsonObject = json.getAsJsonObject();
+    //         Manifest manifest = new Manifest();
+    
+    //         // Handle the `assertions` field, replacing null with an empty list
+    //         JsonElement assertionsElement = jsonObject.get("assertions");
+    //         if (assertionsElement == null || assertionsElement.isJsonNull()) {
+    //             manifest.assertions = new ArrayList<>();
+    //         } else {
+    //             // Deserialize the list normally
+    //             manifest.assertions = new Gson().fromJson(assertionsElement, new TypeToken<List<Assertion>>() {}.getType());            }
+    
+    //         return manifest;
+    //     }
+    // }
+
+    @JsonAdapter(ManifestDeserializer.class)  // Custom deserializer
+    public static class ManifestDeserializer implements JsonDeserializer<Manifest> {
+        @Override
+        public Manifest deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+            // Let Gson handle the default deserialization of the object first
+            Manifest manifest = new Gson().fromJson(json, typeOfT);
+
+            // Now check if the `assertions` field is null and replace it with an empty list if necessary
+            if (manifest.assertions == null) {
+                manifest.assertions = new ArrayList<>();  // Replace null with empty list
+            }
+
+            return manifest;
         }
-        return this;
     }
 
     private static Manifest readManifest(Reader reader) {
