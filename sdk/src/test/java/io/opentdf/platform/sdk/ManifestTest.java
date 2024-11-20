@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Test;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import io.opentdf.platform.sdk.Manifest.ManifestDeserializer;
+
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -63,7 +65,9 @@ public class ManifestTest {
                 "}";
 
         GsonBuilder gsonBuilder = new GsonBuilder();
-        Gson gson = gsonBuilder.setPrettyPrinting().create();
+        Gson gson = gsonBuilder.setPrettyPrinting()
+                        .registerTypeAdapter(Manifest.class, new ManifestDeserializer())
+                        .create();
         Manifest manifest = gson.fromJson(kManifestJsonFromTDF, Manifest.class);
 
         // Test payload
@@ -143,7 +147,9 @@ public class ManifestTest {
                 "}";
 
         GsonBuilder gsonBuilder = new GsonBuilder();
-        Gson gson = gsonBuilder.setPrettyPrinting().create();
+        Gson gson = gsonBuilder.setPrettyPrinting()
+                        .registerTypeAdapter(Manifest.class, new ManifestDeserializer())
+                        .create();
         Manifest manifest = gson.fromJson(kManifestJsonFromTDF, Manifest.class);
 
         // Test payload for sanity check
