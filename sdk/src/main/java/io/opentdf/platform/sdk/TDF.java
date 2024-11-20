@@ -695,37 +695,37 @@ public class TDF {
         }
 
         // Validate assertions
-        if (manifest.assertions != null) {
-            for (var assertion : manifest.assertions) {
-                // Skip assertion verification if disabled
-                if (tdfReaderConfig.disableAssertionVerification) {
-                    break;
-                }
+        logger.info("ASS:");
+        logger.info(manifest.assertions.toString());
+        for (var assertion : manifest.assertions) {
+            // Skip assertion verification if disabled
+            if (tdfReaderConfig.disableAssertionVerification) {
+                break;
+            }
 
-                // Set default to HS256
-                var assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, payloadKey);
-                Config.AssertionVerificationKeys assertionVerificationKeys = tdfReaderConfig.assertionVerificationKeys;
-                if (!assertionVerificationKeys.isEmpty()) {
-                    var keyForAssertion = assertionVerificationKeys.getKey(assertion.id);
-                    if (keyForAssertion != null) {
-                        assertionKey = keyForAssertion;
-                    }
+            // Set default to HS256
+            var assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, payloadKey);
+            Config.AssertionVerificationKeys assertionVerificationKeys = tdfReaderConfig.assertionVerificationKeys;
+            if (!assertionVerificationKeys.isEmpty()) {
+                var keyForAssertion = assertionVerificationKeys.getKey(assertion.id);
+                if (keyForAssertion != null) {
+                    assertionKey = keyForAssertion;
                 }
+            }
 
-                var hashValues = assertion.verify(assertionKey);
-                var assertionAsJson = gson.toJson(assertion);
-                JsonCanonicalizer jc = new JsonCanonicalizer(assertionAsJson);
-                var hashOfAssertion = Hex.encodeHexString(digest.digest(jc.getEncodedUTF8()));
-                var signature = aggregateHash + hashOfAssertion;
-                var encodeSignature = Base64.getEncoder().encodeToString(signature.getBytes());
+            var hashValues = assertion.verify(assertionKey);
+            var assertionAsJson = gson.toJson(assertion);
+            JsonCanonicalizer jc = new JsonCanonicalizer(assertionAsJson);
+            var hashOfAssertion = Hex.encodeHexString(digest.digest(jc.getEncodedUTF8()));
+            var signature = aggregateHash + hashOfAssertion;
+            var encodeSignature = Base64.getEncoder().encodeToString(signature.getBytes());
 
-                if (!Objects.equals(hashOfAssertion, hashValues.getAssertionHash())) {
-                    throw new AssertionException("assertion hash mismatch", assertion.id);
-                }
+            if (!Objects.equals(hashOfAssertion, hashValues.getAssertionHash())) {
+                throw new AssertionException("assertion hash mismatch", assertion.id);
+            }
 
-                if (!Objects.equals(encodeSignature, hashValues.getSignature())) {
-                    throw new AssertionException("failed integrity check on assertion signature", assertion.id);
-                }
+            if (!Objects.equals(encodeSignature, hashValues.getSignature())) {
+                throw new AssertionException("failed integrity check on assertion signature", assertion.id);
             }
         }
 

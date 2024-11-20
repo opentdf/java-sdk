@@ -15,6 +15,10 @@ import io.opentdf.platform.sdk.TDF.AssertionException;
 
 import org.apache.commons.codec.binary.Hex;
 import org.erdtman.jcs.JsonCanonicalizer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -454,9 +458,57 @@ public class Manifest {
         }
     }
 
+    // // Cpublic static Logger logger = LoggerFactory.getLogger(TDF.class);ustom deserializer for the assertions field
+    // private static class AssertionSerializer implements JsonDeserializer<Object>, JsonSerializer<Object> {
+    //     public static Logger logger = LoggerFactory.getLogger(AssertionSerializer.class);
+    //     @Override
+    //     public List<Assertion> deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+    //         logger.info("deserializing json assertions");
+    //         logger.info(json.toString());
+    //         if (json == null || json.isJsonNull()) {
+    //             logger.info("found null");
+    //             return new ArrayList<>(); // Replace null with an empty list
+    //         }
+    //         // Deserialize the list normally if it exists
+    //         return new Gson().fromJson(json, typeOfT);
+    //     }
+    //     @Override
+    //     public JsonElement serialize(Object src, Type typeOfSrc, JsonSerializationContext context) {
+    //         return context.serialize(src, typeOfSrc);
+    //     }
+    // }
+
+    // private static class PolicyBindingSerializer implements JsonDeserializer<Object>, JsonSerializer<Object> {
+    //     @Override
+    //     public Object deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context)
+    //             throws JsonParseException {
+    //         if (json.isJsonObject()) {
+    //             return context.deserialize(json, Manifest.PolicyBinding.class);
+    //         } else if (json.isJsonPrimitive() && json.getAsJsonPrimitive().isString()) {
+    //             return json.getAsString();
+    //         } else {
+    //             throw new JsonParseException("Unexpected type for policyBinding");
+    //         }
+    //     }
+
+    //     @Override
+    //     public JsonElement serialize(Object src, Type typeOfSrc, JsonSerializationContext context) {
+    //         return context.serialize(src, typeOfSrc);
+    //     }
+    // }
+
     public EncryptionInformation encryptionInformation;
     public Payload payload;
+    // @JsonAdapter(AssertionSerializer.class)
     public List<Assertion> assertions = new ArrayList<>();
+
+    // Ensure assertions is never null after deserialization
+    private Object readResolve() {
+        if (assertions == null) {
+            assertions = new ArrayList<>();
+        }
+        return this;
+    }
 
     private static Manifest readManifest(Reader reader) {
         return gson.fromJson(reader, Manifest.class);
