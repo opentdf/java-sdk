@@ -32,6 +32,19 @@ public class NanoTDF {
     private static final int kIvPadding = 9;
     private static final int kNanoTDFIvSize = 3;
     private static final byte[] kEmptyIV = new byte[] { 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 };
+    private final CollectionStore collectionStore;
+
+    public NanoTDF() {
+        this(null);
+    }
+
+    public NanoTDF(boolean collectionStoreEnabled) {
+        this(collectionStoreEnabled ? new CollectionStoreImpl() : null);
+    }
+
+    public NanoTDF(CollectionStore collectionStore) {
+        this.collectionStore = collectionStore;
+    }
 
     public static class NanoTDFMaxSizeLimit extends Exception {
         public NanoTDFMaxSizeLimit(String errorMessage) {
@@ -51,9 +64,7 @@ public class NanoTDF {
         }
     }
 
-    record HeaderInfo(Header header, AesGcm gcm, int iteration) {}
-
-    private HeaderInfo getHeaderInfo(Config.NanoTDFConfig nanoTDFConfig, SDK.KAS kas)
+    private Config.HeaderInfo getHeaderInfo(Config.NanoTDFConfig nanoTDFConfig, SDK.KAS kas)
             throws InvalidNanoTDFConfig, UnsupportedNanoTDFFeature, NoSuchAlgorithmException, InterruptedException {
         if (nanoTDFConfig.collectionConfig.useCollection) {
             Config.HeaderInfo headerInfo = nanoTDFConfig.collectionConfig.getHeaderInfo();
@@ -188,23 +199,30 @@ public class NanoTDF {
         return nanoTDFSize;
     }
 
+
     public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream,
             SDK.KAS kas) throws IOException {
 
         Header header = new Header(nanoTDF);
+        CollectionKey cachedKey = collectionStore.getKey(header);
+        byte[] key = cachedKey.getKey();
 
-        // create base64 encoded
-        byte[] headerData = new byte[header.getTotalSize()];
-        header.writeIntoBuffer(ByteBuffer.wrap(headerData));
-        String base64HeaderData = Base64.getEncoder().encodeToString(headerData);
+        // perform unwrap is not in collectionStore;
+        if (key == null) {
+            // create base64 encoded
+            byte[] headerData = new byte[header.getTotalSize()];
+            header.writeIntoBuffer(ByteBuffer.wrap(headerData));
+            String base64HeaderData = Base64.getEncoder().encodeToString(headerData);
 
-        logger.debug("readNanoTDF header length {}", headerData.length);
+            logger.debug("readNanoTDF header length {}", headerData.length);
 
-        String kasUrl = header.getKasLocator().getResourceUrl();
+            String kasUrl = header.getKasLocator().getResourceUrl();
 
-        byte[] key = kas.unwrapNanoTDF(header.getECCMode().getEllipticCurveType(),
-                base64HeaderData,
-                kasUrl);
+            key = kas.unwrapNanoTDF(header.getECCMode().getEllipticCurveType(),
+                    base64HeaderData,
+                    kasUrl);
+            collectionStore.store(header, new CollectionKey(key));
+        }
 
         byte[] payloadLengthBuf = new byte[4];
         nanoTDF.get(payloadLengthBuf, 1, 3);
@@ -243,5 +261,16 @@ public class NanoTDF {
             policyObject.body.dataAttributes.add(attributeObject);
         }
         return policyObject;
+    }
+
+    public static class CollectionKey {
+        private final byte[] key;
+    
+        public CollectionKey(byte[] key) {
+            this.key = key;
+        }
+        protected byte[] getKey() {
+            return key;
+        }
     }
 }
