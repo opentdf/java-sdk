@@ -699,8 +699,6 @@ public class TDF {
         }
 
         // Validate assertions
-        logger.info("ASS:");
-        logger.info(manifest.assertions.toString());
         for (var assertion : manifest.assertions) {
             // Skip assertion verification if disabled
             if (tdfReaderConfig.disableAssertionVerification) {
