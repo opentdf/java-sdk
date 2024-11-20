@@ -42,6 +42,7 @@ import java.util.Objects;
  * of data integrity, encryption, payload, and assertions within a certain
  * context.
  */
+@JsonAdapter(Manifest.ManifestDeserializer.class)  // Custom deserializer
 public class Manifest {
 
     private static final String kAssertionHash = "assertionHash";
@@ -531,7 +532,6 @@ public class Manifest {
     //     }
     // }
 
-    @JsonAdapter(ManifestDeserializer.class)  // Custom deserializer
     public static class ManifestDeserializer implements JsonDeserializer<Manifest> {
         @Override
         public Manifest deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
