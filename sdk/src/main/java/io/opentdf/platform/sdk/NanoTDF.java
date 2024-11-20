@@ -35,7 +35,7 @@ public class NanoTDF {
     private final CollectionStore collectionStore;
 
     public NanoTDF() {
-        this(null);
+        this(new CollectionStore.NoOpCollectionStore());
     }
 
     public NanoTDF(boolean collectionStoreEnabled) {
