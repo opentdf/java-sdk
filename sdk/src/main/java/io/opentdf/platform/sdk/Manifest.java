@@ -17,10 +17,10 @@ import io.opentdf.platform.sdk.TDF.AssertionException;
 
 import org.apache.commons.codec.binary.Hex;
 import org.erdtman.jcs.JsonCanonicalizer;
-// import org.slf4j.Logger;
-// import org.slf4j.LoggerFactory;
-// import org.slf4j.Logger;
-// import org.slf4j.LoggerFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -533,16 +533,20 @@ public class Manifest {
     //     }
     // }
 
-    public static class ManifestDeserializer implements JsonDeserializer<Manifest> {
+    public static class ManifestDeserializer implements JsonDeserializer<Object> {
+        public static Logger logger = LoggerFactory.getLogger(ManifestDeserializer.class);
         @Override
         public Manifest deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+            logger.info("deserializing manifest");
             // Let Gson handle the default deserialization of the object first
             Manifest manifest = new Gson().fromJson(json, typeOfT);
-
+            logger.info("after gson");
             // Now check if the `assertions` field is null and replace it with an empty list if necessary
             if (manifest.assertions == null) {
+                logger.info("found null");
                 manifest.assertions = new ArrayList<>();  // Replace null with empty list
             }
+            logger.info(manifest.assertions.toString());
 
             return manifest;
         }
