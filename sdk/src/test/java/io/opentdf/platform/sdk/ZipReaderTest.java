@@ -1,5 +1,9 @@
 package io.opentdf.platform.sdk;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
+import io.opentdf.platform.sdk.Manifest.ManifestDeserializer;
+
 import org.apache.commons.compress.archivers.zip.Zip64Mode;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
@@ -36,7 +40,11 @@ public class ZipReaderTest {
                 if (entry.getName().endsWith(".json")) {
                     entry.getData().transferTo(stream);
                     var data = stream.toString(StandardCharsets.UTF_8);
-                    var map = new Gson().fromJson(data, Map.class);
+                    var gson = new GsonBuilder()
+                                        .registerTypeAdapter(Manifest.class, new ManifestDeserializer())
+                                        .create();
+                    var map = gson.fromJson(data, Map.class);
+                    
                     assertThat(map.get("encryptionInformation")).isNotNull();
                 }
             }

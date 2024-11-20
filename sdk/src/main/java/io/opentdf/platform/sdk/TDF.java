@@ -1,11 +1,13 @@
 package io.opentdf.platform.sdk;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.nimbusds.jose.*;
 
 import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
 import io.opentdf.platform.sdk.Config.TDFConfig;
+import io.opentdf.platform.sdk.Manifest.ManifestDeserializer;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
 import io.opentdf.platform.sdk.Config.KASInfo;
 
@@ -75,7 +77,9 @@ public class TDF {
 
     private static final SecureRandom sRandom = new SecureRandom();
 
-    private static final Gson gson = new Gson();
+    private static final Gson gson = new GsonBuilder()
+                                        .registerTypeAdapter(Manifest.class, new ManifestDeserializer())
+                                        .create();
 
     public class SplitKeyException extends IOException {
         public SplitKeyException(String errorMessage) {

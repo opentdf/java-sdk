@@ -42,13 +42,14 @@ import java.util.Objects;
  * of data integrity, encryption, payload, and assertions within a certain
  * context.
  */
-@JsonAdapter(Manifest.ManifestDeserializer.class)  // Custom deserializer
 public class Manifest {
 
     private static final String kAssertionHash = "assertionHash";
     private static final String kAssertionSignature = "assertionSig";
 
-    private static final Gson gson = new Gson();
+    private static final Gson gson = new GsonBuilder()
+                                        .registerTypeAdapter(Manifest.class, new ManifestDeserializer())
+                                        .create();
 
     @Override
     public boolean equals(Object o) {
