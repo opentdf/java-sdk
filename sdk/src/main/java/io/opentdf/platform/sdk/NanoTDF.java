@@ -5,6 +5,7 @@ import io.opentdf.platform.sdk.nanotdf.*;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.util.*;
@@ -50,19 +51,18 @@ public class NanoTDF {
         }
     }
 
-    public int createNanoTDF(ByteBuffer data, OutputStream outputStream,
-            Config.NanoTDFConfig nanoTDFConfig,
-            SDK.KAS kas) throws IOException, NanoTDFMaxSizeLimit, InvalidNanoTDFConfig,
-            NoSuchAlgorithmException, UnsupportedNanoTDFFeature {
+    record HeaderInfo(Header header, AesGcm gcm, int iteration) {}
 
-        int nanoTDFSize = 0;
-        Gson gson = new GsonBuilder().create();
-
-        int dataSize = data.limit();
-        if (dataSize > kMaxTDFSize) {
-            throw new NanoTDFMaxSizeLimit("exceeds max size for nano tdf");
+    private HeaderInfo getHeaderInfo(Config.NanoTDFConfig nanoTDFConfig, SDK.KAS kas)
+            throws InvalidNanoTDFConfig, UnsupportedNanoTDFFeature, NoSuchAlgorithmException, InterruptedException {
+        if (nanoTDFConfig.collectionConfig.useCollection) {
+            Config.HeaderInfo headerInfo = nanoTDFConfig.collectionConfig.getHeaderInfo();
+            if (headerInfo != null) {
+                return headerInfo;
+            }
         }
 
+        Gson gson = new GsonBuilder().create();
         if (nanoTDFConfig.kasInfoList.isEmpty()) {
             throw new InvalidNanoTDFConfig("kas url is missing");
         }
@@ -120,8 +120,31 @@ public class NanoTDF {
         header.setPayloadConfig(nanoTDFConfig.config);
         header.setEphemeralKey(compressedPubKey);
         header.setKasLocator(kasURL);
-
         header.setPolicyInfo(policyInfo);
+
+        Config.HeaderInfo headerInfo = new Config.HeaderInfo(header, gcm, 0);
+        if (nanoTDFConfig.collectionConfig.useCollection) {
+            nanoTDFConfig.collectionConfig.updateHeaderInfo(headerInfo);
+        }
+
+        return headerInfo;
+    }
+
+    public int createNanoTDF(ByteBuffer data, OutputStream outputStream,
+            Config.NanoTDFConfig nanoTDFConfig,
+            SDK.KAS kas) throws IOException, NanoTDFMaxSizeLimit, InvalidNanoTDFConfig,
+            NoSuchAlgorithmException, UnsupportedNanoTDFFeature, InterruptedException {
+        int nanoTDFSize = 0;
+
+        int dataSize = data.limit();
+        if (dataSize > kMaxTDFSize) {
+            throw new NanoTDFMaxSizeLimit("exceeds max size for nano tdf");
+        }
+
+        Config.HeaderInfo headerKeyPair = getHeaderInfo(nanoTDFConfig, kas);
+        Header header = headerKeyPair.getHeader();
+        AesGcm gcm = headerKeyPair.getKey();
+        int iteration = headerKeyPair.getIteration();
 
         int headerSize = header.getTotalSize();
         ByteBuffer bufForHeader = ByteBuffer.allocate(headerSize);
@@ -132,13 +155,21 @@ public class NanoTDF {
         nanoTDFSize += headerSize;
         logger.debug("createNanoTDF header length {}", headerSize);
 
+        int authTagSize = SymmetricAndPayloadConfig.sizeOfAuthTagForCipher(nanoTDFConfig.config.getCipherType());
         // Encrypt the data
         byte[] actualIV = new byte[kIvPadding + kNanoTDFIvSize];
-        do {
-            byte[] iv = new byte[kNanoTDFIvSize];
-            SecureRandom.getInstanceStrong().nextBytes(iv);
-            System.arraycopy(iv, 0, actualIV, kIvPadding, iv.length);
-        } while (Arrays.equals(actualIV, kEmptyIV));	// if match, we need to retry to prevent key + iv reuse with the policy
+        if (nanoTDFConfig.collectionConfig.useCollection) {
+            ByteBuffer b = ByteBuffer.allocate(4);
+            b.order(ByteOrder.LITTLE_ENDIAN);
+            b.putInt(iteration);
+            System.arraycopy(b.array(), 0, actualIV, kIvPadding, kNanoTDFIvSize);
+        } else {
+            do {
+                byte[] iv = new byte[kNanoTDFIvSize];
+                SecureRandom.getInstanceStrong().nextBytes(iv);
+                System.arraycopy(iv, 0, actualIV, kIvPadding, iv.length);
+            } while (Arrays.equals(actualIV, kEmptyIV));    // if match, we need to retry to prevent key + iv reuse with the policy
+        }
 
         byte[] cipherData = gcm.encrypt(actualIV, authTagSize, data.array(), data.arrayOffset(), dataSize);
 
