@@ -41,7 +41,9 @@ public class Manifest {
     private static final String kAssertionHash = "assertionHash";
     private static final String kAssertionSignature = "assertionSig";
 
-    private static final Gson gson = new Gson();
+    private static final Gson gson = new GsonBuilder()
+                                        .registerTypeAdapter(Manifest.class, new ManifestDeserializer())
+                                        .create();
 
     @Override
     public boolean equals(Object o) {
@@ -457,6 +459,19 @@ public class Manifest {
     public EncryptionInformation encryptionInformation;
     public Payload payload;
     public List<Assertion> assertions = new ArrayList<>();
+
+    public static class ManifestDeserializer implements JsonDeserializer<Object> {
+        @Override
+        public Manifest deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+            // Let Gson handle the default deserialization of the object first
+            Manifest manifest = new Gson().fromJson(json, typeOfT);
+            // Now check if the `assertions` field is null and replace it with an empty list if necessary
+            if (manifest.assertions == null) {
+                manifest.assertions = new ArrayList<>();  // Replace null with empty list
+            }
+            return manifest;
+        }
+    }
 
     private static Manifest readManifest(Reader reader) {
         return gson.fromJson(reader, Manifest.class);
