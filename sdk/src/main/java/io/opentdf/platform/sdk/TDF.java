@@ -188,7 +188,7 @@ public class TDF {
             PolicyObject policyObject = new PolicyObject();
             policyObject.body = new PolicyObject.Body();
             policyObject.uuid = UUID.randomUUID().toString();
-            policyObject.body.dataAttributes = new ArrayList<>();
+            policyObject.body.dataAttributes = new ArrayList<>(attributes.size());
             policyObject.body.dissem = new ArrayList<>();
 
             for (Autoconfigure.AttributeValueFQN attribute : attributes) {
@@ -208,7 +208,6 @@ public class TDF {
             PolicyObject policyObject = createPolicyObject(tdfConfig.attributes);
             String base64PolicyObject = encoder
                     .encodeToString(gson.toJson(policyObject).getBytes(StandardCharsets.UTF_8));
-            List<byte[]> symKeys = new ArrayList<>();
             Map<String, Config.KASInfo> latestKASInfo = new HashMap<>();
             if (tdfConfig.splitPlan == null || tdfConfig.splitPlan.isEmpty()) {
                 // Default split plan: Split keys across all KASes
@@ -261,6 +260,7 @@ public class TDF {
                 }
             }
 
+            List<byte[]> symKeys = new ArrayList<>(splitIDs.size());
             for (String splitID : splitIDs) {
                 // Symmetric key
                 byte[] symKey = new byte[GCM_KEY_SIZE];
@@ -520,8 +520,7 @@ public class TDF {
         tdfObject.manifest.payload.url = TDFWriter.TDF_PAYLOAD_FILE_NAME;
         tdfObject.manifest.payload.isEncrypted = true;
 
-        List<Manifest.Assertion> signedAssertions = new ArrayList<>();
-
+        List<Manifest.Assertion> signedAssertions = new ArrayList<>(tdfConfig.assertionConfigList.size());
         for (var assertionConfig : tdfConfig.assertionConfigList) {
             var assertion = new Manifest.Assertion();
             assertion.id = assertionConfig.id;
