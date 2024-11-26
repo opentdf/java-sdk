@@ -29,7 +29,8 @@ public class PolicyInfo {
             byte[] policyLengthBuf = new byte[Short.BYTES];
             buffer.get(policyLengthBuf);
 
-            short policyLength = ByteBuffer.wrap(policyLengthBuf).getShort();
+            // read short value into int to prevent possible overflow resulting in negative length
+            int policyLength = ByteBuffer.wrap(policyLengthBuf).getShort();
 
             if (this.type == NanoTDFType.PolicyType.EMBEDDED_POLICY_PLAIN_TEXT ||
                     this.type == NanoTDFType.PolicyType.EMBEDDED_POLICY_ENCRYPTED) {
