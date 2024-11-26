@@ -21,6 +21,8 @@ public class Config {
 
     public static final int TDF3_KEY_SIZE = 2048;
     public static final int DEFAULT_SEGMENT_SIZE = 2 * 1024 * 1024; // 2mb
+    public static final int MAX_SEGMENT_SIZE = DEFAULT_SEGMENT_SIZE * 2;
+    public static final int MIN_SEGMENT_SIZE = 16 * 1024;
     public static final String KAS_PUBLIC_KEY_PATH = "/kas_public_key";
     public static final String DEFAULT_MIME_TYPE = "application/octet-stream";
     public static final int MAX_COLLECTION_ITERATION = (1 << 24) - 1;
@@ -228,6 +230,12 @@ public class Config {
     }
 
     public static Consumer<TDFConfig> withSegmentSize(int size) {
+        if (size > MAX_SEGMENT_SIZE) {
+            throw new IllegalArgumentException("Segment size " + size + " exceeds the maximum " + MAX_SEGMENT_SIZE);
+        } else if (size < MIN_SEGMENT_SIZE) {
+            throw new IllegalArgumentException("Segment size " + size + " is under the minimum " + MIN_SEGMENT_SIZE);
+        }
+
         return (TDFConfig config) -> config.defaultSegmentSize = size;
     }
 

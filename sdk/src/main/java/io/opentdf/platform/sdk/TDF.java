@@ -359,6 +359,12 @@ public class TDF {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
 
             for (Manifest.Segment segment : manifest.encryptionInformation.integrityInformation.segments) {
+                if (segment.encryptedSegmentSize > Config.MAX_SEGMENT_SIZE) {
+                    throw new IllegalStateException("Segment size " + segment.encryptedSegmentSize + " exceeded limit " + Config.MAX_SEGMENT_SIZE);
+                } else if (segment.encryptedSegmentSize < Config.MIN_SEGMENT_SIZE) {
+                    throw new IllegalStateException("Segment size " + segment.encryptedSegmentSize + " is under minimum " + Config.MIN_SEGMENT_SIZE);
+                }
+
                 byte[] readBuf = new byte[(int) segment.encryptedSegmentSize];
                 int bytesRead = tdfReader.readPayloadBytes(readBuf);
 
