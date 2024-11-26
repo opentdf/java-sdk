@@ -260,7 +260,7 @@ public class Manifest {
         public String url;
         public String protocol;
         public String mimeType;
-        public Boolean isEncrypted;
+        public boolean isEncrypted;
 
         @Override
         public boolean equals(Object o) {
@@ -473,8 +473,43 @@ public class Manifest {
         }
     }
 
-    private static Manifest readManifest(Reader reader) {
-        return gson.fromJson(reader, Manifest.class);
+    protected static Manifest readManifest(Reader reader) {
+        Manifest result = gson.fromJson(reader, Manifest.class);
+        if (result == null) {
+            throw new IllegalArgumentException("Manifest is null");
+        } else if (result.payload == null) {
+            throw new IllegalArgumentException("Manifest with null payload");
+        } else if (result.encryptionInformation == null) {
+            throw new IllegalArgumentException("Manifest with null encryptionInformation");
+        } else if (result.encryptionInformation.integrityInformation == null) {
+            throw new IllegalArgumentException("Manifest with null integrityInformation");
+        } else if (result.encryptionInformation.integrityInformation.segments == null) {
+            throw new IllegalArgumentException("Manifest with invalid integrityInformation");
+        } else if (result.encryptionInformation.integrityInformation.rootSignature == null) {
+            throw new IllegalArgumentException("Manifest with null rootSignature");
+        } else if (result.encryptionInformation.integrityInformation.rootSignature.algorithm == null
+                || result.encryptionInformation.integrityInformation.rootSignature.signature == null) {
+            throw new IllegalArgumentException("Manifest with invalid rootSignature");
+        } else if (result.encryptionInformation.integrityInformation.segments == null) {
+            throw new IllegalArgumentException("Manifest with null segments");
+        } else if (result.encryptionInformation.keyAccessObj == null) {
+            throw new IllegalArgumentException("Manifest with null keyAccessObj");
+        } else if (result.encryptionInformation.policy == null) {
+            throw new IllegalArgumentException("Manifest with null policy");
+        }
+
+        for (Manifest.Segment segment : result.encryptionInformation.integrityInformation.segments) {
+            if (segment == null || segment.hash == null) {
+                throw new IllegalArgumentException("Invalid integrity segment");
+            }
+        }
+        for (Manifest.KeyAccess keyAccess : result.encryptionInformation.keyAccessObj) {
+            if (keyAccess == null) {
+                throw new IllegalArgumentException("Invalid null KeyAccess in manifest");
+            }
+        }
+
+        return result;
     }
 
     static PolicyObject readPolicyObject(Reader reader) {
