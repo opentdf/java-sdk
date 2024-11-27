@@ -18,27 +18,27 @@ import io.opentdf.platform.sdk.TDF.FailedToCreateGMAC;
 import io.opentdf.platform.sdk.TDF.Reader;
 
 public class Fuzzing {
-    private static final String testDuration = "600s";
-    private static final OutputStream ignoreOutputStream = new OutputStream() {
+    private static final String TEST_DURATION = "600s";
+    private static final OutputStream IGNORE_OUTPUT_STREAM = new OutputStream() {
         @Override
         public void write(int b) {
             // ignored
         }
 
         @Override
-        public void write(byte b[], int off, int len) {
+        public void write(byte[] b, int off, int len) {
             // ignored
         }
     };
 
-    @FuzzTest(maxDuration=testDuration)
+    @FuzzTest(maxDuration=TEST_DURATION)
     public void fuzzNanoTDF(FuzzedDataProvider data) throws IOException {
         byte[] fuzzBytes = data.consumeRemainingAsBytes();
         NanoTDF nanoTDF = new NanoTDF();
-        nanoTDF.readNanoTDF(ByteBuffer.wrap(fuzzBytes), ignoreOutputStream, NanoTDFTest.kas);
+        nanoTDF.readNanoTDF(ByteBuffer.wrap(fuzzBytes), IGNORE_OUTPUT_STREAM, NanoTDFTest.kas);
     }
 
-    @FuzzTest(maxDuration=testDuration)
+    @FuzzTest(maxDuration=TEST_DURATION)
     public void fuzzTDF(FuzzedDataProvider data) throws FailedToCreateGMAC, NoSuchAlgorithmException, IOException, JOSEException, ParseException, DecoderException {
         byte[] fuzzBytes = data.consumeRemainingAsBytes();
         byte[] key = new byte[32];      // use consistent zero key for performance and so fuzz can relate to seed
@@ -51,13 +51,13 @@ public class Fuzzing {
         try {
             Reader reader = tdf.loadTDF(new SeekableInMemoryByteChannel(fuzzBytes), TDFTest.kas, readerConfig);
 
-            reader.readPayload(ignoreOutputStream);
+            reader.readPayload(IGNORE_OUTPUT_STREAM);
         } catch (SDKException | InvalidZipException | JsonParseException | IOException | IllegalArgumentException e) {
             // expected failure cases
         }
     }
 
-    @FuzzTest(maxDuration=testDuration)
+    @FuzzTest(maxDuration=TEST_DURATION)
     public void fuzzZipRead(FuzzedDataProvider data) {
         byte[] fuzzBytes = data.consumeRemainingAsBytes();
         try {

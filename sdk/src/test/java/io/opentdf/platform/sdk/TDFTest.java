@@ -1,11 +1,6 @@
 package io.opentdf.platform.sdk;
 
-import com.google.common.util.concurrent.ListenableFuture;
-
 import com.nimbusds.jose.JOSEException;
-import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
-import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
-import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
 import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.TDF.Reader;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;

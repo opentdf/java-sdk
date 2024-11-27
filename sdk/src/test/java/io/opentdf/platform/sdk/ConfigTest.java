@@ -54,7 +54,7 @@ class ConfigTest {
     @Test
     void withSegmentSize_shouldIgnoreSegmentSize() {
         try {
-            Config.newTDFConfig(Config.withSegmentSize(1024));
+            Config.withSegmentSize(1024);
             fail("Expected exception");
         } catch (IllegalArgumentException e) {
             // expected

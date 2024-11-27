@@ -1,5 +1,4 @@
 package io.opentdf.platform.sdk;
-import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 import io.opentdf.platform.sdk.Manifest.ManifestDeserializer;
@@ -12,13 +11,10 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;

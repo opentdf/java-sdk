@@ -361,9 +361,7 @@ public class TDF {
             for (Manifest.Segment segment : manifest.encryptionInformation.integrityInformation.segments) {
                 if (segment.encryptedSegmentSize > Config.MAX_SEGMENT_SIZE) {
                     throw new IllegalStateException("Segment size " + segment.encryptedSegmentSize + " exceeded limit " + Config.MAX_SEGMENT_SIZE);
-                }/* else if (segment.encryptedSegmentSize < Config.MIN_SEGMENT_SIZE) {
-                    throw new IllegalStateException("Segment size " + segment.encryptedSegmentSize + " is under minimum " + Config.MIN_SEGMENT_SIZE);
-                }*/ // Commented out due to tests needing small segment sizes with existing payloads
+                } // MIN_SEGMENT_SIZE NOT validated out due to tests needing small segment sizes with existing payloads
 
                 byte[] readBuf = new byte[(int) segment.encryptedSegmentSize];
                 int bytesRead = tdfReader.readPayloadBytes(readBuf);

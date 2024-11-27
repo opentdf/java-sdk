@@ -483,8 +483,6 @@ public class Manifest {
             throw new IllegalArgumentException("Manifest with null encryptionInformation");
         } else if (result.encryptionInformation.integrityInformation == null) {
             throw new IllegalArgumentException("Manifest with null integrityInformation");
-        } else if (result.encryptionInformation.integrityInformation.segments == null) {
-            throw new IllegalArgumentException("Manifest with invalid integrityInformation");
         } else if (result.encryptionInformation.integrityInformation.rootSignature == null) {
             throw new IllegalArgumentException("Manifest with null rootSignature");
         } else if (result.encryptionInformation.integrityInformation.rootSignature.algorithm == null
