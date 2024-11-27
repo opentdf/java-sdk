@@ -12,9 +12,13 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
@@ -32,21 +36,31 @@ public class ZipReaderTest {
     public void testReadingExistingZip() throws Exception {
         try (RandomAccessFile raf = new RandomAccessFile("src/test/resources/sample.txt.tdf", "r")) {
             var fileChannel = raf.getChannel();
-            var zipReader = new ZipReader(fileChannel);
-            var entries = zipReader.getEntries();
+            ZipReaderTest.testReadingZipChannel(fileChannel, true);
+        }
+    }
+
+    protected static void testReadingZipChannel(SeekableByteChannel fileChannel, boolean test) throws IOException {
+        var zipReader = new ZipReader(fileChannel);
+        var entries = zipReader.getEntries();
+        if (test) {
             assertThat(entries.size()).isEqualTo(2);
-            for (var entry: entries) {
-                var stream = new ByteArrayOutputStream();
-                if (entry.getName().endsWith(".json")) {
-                    entry.getData().transferTo(stream);
-                    var data = stream.toString(StandardCharsets.UTF_8);
-                    var gson = new GsonBuilder()
-                                        .registerTypeAdapter(Manifest.class, new ManifestDeserializer())
-                                        .create();
-                    var map = gson.fromJson(data, Map.class);
-                    
+        }
+        for (var entry: entries) {
+            var stream = new ByteArrayOutputStream();
+            if (entry.getName().endsWith(".json")) {
+                entry.getData().transferTo(stream);
+                var data = stream.toString(StandardCharsets.UTF_8);
+                var gson = new GsonBuilder()
+                                    .registerTypeAdapter(Manifest.class, new ManifestDeserializer())
+                                    .create();
+                var map = gson.fromJson(data, Map.class);
+                
+                if (test) {
                     assertThat(map.get("encryptionInformation")).isNotNull();
                 }
+            } else if (!test) {
+                entry.getData().transferTo(stream);        // still invoke getData logic
             }
         }
     }
