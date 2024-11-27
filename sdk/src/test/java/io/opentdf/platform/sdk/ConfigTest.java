@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 class ConfigTest {
 
@@ -46,8 +47,18 @@ class ConfigTest {
 
     @Test
     void withSegmentSize_shouldSetSegmentSize() {
-        Config.TDFConfig config = Config.newTDFConfig(Config.withSegmentSize(1024));
-        assertEquals(1024, config.defaultSegmentSize);
+        Config.TDFConfig config = Config.newTDFConfig(Config.withSegmentSize(Config.MIN_SEGMENT_SIZE));
+        assertEquals(Config.MIN_SEGMENT_SIZE, config.defaultSegmentSize);
+    }
+
+    @Test
+    void withSegmentSize_shouldIgnoreSegmentSize() {
+        try {
+            Config.newTDFConfig(Config.withSegmentSize(1024));
+            fail("Expected exception");
+        } catch (IllegalArgumentException e) {
+            // expected
+        }
     }
 
     @Test

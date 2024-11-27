@@ -22,7 +22,7 @@ public class Config {
     public static final int TDF3_KEY_SIZE = 2048;
     public static final int DEFAULT_SEGMENT_SIZE = 2 * 1024 * 1024; // 2mb
     public static final int MAX_SEGMENT_SIZE = DEFAULT_SEGMENT_SIZE * 2;
-    public static final int MIN_SEGMENT_SIZE = 16 * 1024;
+    public static final int MIN_SEGMENT_SIZE = 16 * 1024;       // not currently enforced in parsing due to existing payloads in testing
     public static final String KAS_PUBLIC_KEY_PATH = "/kas_public_key";
     public static final String DEFAULT_MIME_TYPE = "application/octet-stream";
     public static final int MAX_COLLECTION_ITERATION = (1 << 24) - 1;

@@ -359,11 +359,10 @@ public class TDFTest {
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
-                // use a random segment size that makes sure that we will use multiple segments
-                Config.withSegmentSize(1 + random.nextInt(20)));
+                Config.withSegmentSize(Config.MIN_SEGMENT_SIZE));
 
-        // data should be bigger than the largest segment
-        var data = new byte[21 + random.nextInt(2048)];
+        // data should be large enough to have multiple complete and a partial segment
+        var data = new byte[(int)(Config.MIN_SEGMENT_SIZE * 2.8)];
         random.nextBytes(data);
         var plainTextInputStream = new ByteArrayInputStream(data);
         var tdfOutputStream = new ByteArrayOutputStream();
@@ -418,7 +417,7 @@ public class TDFTest {
         var tdfConfig = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
-                Config.withSegmentSize(1 + random.nextInt(128)));
+                Config.withSegmentSize(Config.MIN_SEGMENT_SIZE));
         assertThrows(TDF.DataSizeNotSupported.class,
                 () -> tdf.createTDF(is, os, tdfConfig, kas, null),
                 "didn't throw an exception when we created TDF that was too large");
