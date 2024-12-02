@@ -104,67 +104,20 @@ jobs:
         env:
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
-      - name: Check out platform
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Check out and start up platform with deps/containers
+        id: run-platform
+        uses: opentdf/platform/test/start-up-with-containers@main
         with:
-          repository: opentdf/platform
-          ref: main
-          path: platform
-      - name: Set up go
-        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491
-        with:
-          go-version: "1.22.3"
-          check-latest: false
-          cache-dependency-path: |
-            platform/service/go.sum
-            platform/examples/go.sum
-            platform/protocol/go/go.sum
-            platform/sdk/go.sum
-      - run: go mod download
-        working-directory: platform
-      - run: go mod verify
-        working-directory: platform
-      - name: Create keys
-        run: |
-          .github/scripts/init-temp-keys.sh
-          cp opentdf-dev.yaml opentdf.yaml
-          sudo chmod -R 777 ./keys
-        working-directory: platform
-      - name: Trust the locally issued cert
-        run: |
-          keytool \
-            -importcert \
-            -storepass changeit \
-            -noprompt \
-            -file localhost.crt \
-            -keystore $JAVA_HOME/lib/security/cacerts \
-            -alias localhost-for-tests
-        working-directory: platform/keys
-      - name: Bring the services up
-        run: docker compose up -d --wait --wait-timeout 240
-        working-directory: platform
-      - name: Provision keycloak
-        run: go run ./service provision keycloak
-        working-directory: platform
-      - name: Provision fixtures
-        run: go run ./service provision fixtures
-        working-directory: platform
-      - name: Start server in background
-        uses: JarvusInnovations/background-action@2428e7b970a846423095c79d43f759abf979a635
-        with:
-          run: |
-            go run ./service start
-          wait-on: |
-            tcp:localhost:8080
-          log-output-if: true
-          wait-for: 90s
-          working-directory: platform
+          platform-ref: main
+        
       - name: Get grpcurl
         run: go install github.com/fullstorydev/grpcurl/cmd/grpcurl@v1.8.9
       - name: Make sure that the platform is up
         run: |
           grpcurl -plaintext localhost:8080 list && \
           grpcurl -plaintext localhost:8080 kas.AccessService/PublicKey
+      
       - name: Validate the SDK through the command line interface
         run: |
           printf 'here is some data to encrypt' > data
