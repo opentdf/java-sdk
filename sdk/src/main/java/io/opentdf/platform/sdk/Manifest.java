@@ -343,7 +343,7 @@ public class Manifest {
             return Objects.hash(id, type, scope, appliesToState, statement, binding);
         }
 
-        public String hash() throws IOException {
+        public byte[] hash() throws IOException {
             MessageDigest digest;
             try {
                 digest = MessageDigest.getInstance("SHA-256");
@@ -353,7 +353,7 @@ public class Manifest {
 
             var assertionAsJson = gson.toJson(this);
             JsonCanonicalizer jc = new JsonCanonicalizer(assertionAsJson);
-            return Hex.encodeHexString(digest.digest(jc.getEncodedUTF8()));
+            return digest.digest(jc.getEncodedUTF8());
         }
 
         // Sign the assertion with the given hash and signature using the key.
