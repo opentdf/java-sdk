@@ -38,6 +38,7 @@ import java.util.concurrent.ExecutionException;
  */
 public class TDF {
 
+    private static final String TDF_VERSION = "x.x.x";
     private final long maximumSize;
 
     /**
@@ -450,6 +451,7 @@ public class TDF {
         byte[] readBuf = new byte[tdfConfig.defaultSegmentSize];
 
         tdfObject.manifest.encryptionInformation.integrityInformation.segments = new ArrayList<>();
+        tdfObject.manifest.version = TDF_VERSION;
         long totalSize = 0;
         boolean finished;
         try (var payloadOutput = tdfWriter.payload()) {
@@ -682,8 +684,10 @@ public class TDF {
             }
 
             var sig = calculateSignature(aggregateHash.toByteArray(), payloadKey, sigAlg);
+            if (manifest.version == null || manifest.version.isEmpty()) {
+                sig = Hex.encodeHexString(sig).getBytes(StandardCharsets.UTF_8);
+            }
             rootSigValue = Base64.getEncoder().encodeToString(sig);
-
         } else {
             rootSigValue = Base64.getEncoder().encodeToString(digest.digest(aggregateHash.toString().getBytes()));
         }
@@ -721,14 +725,18 @@ public class TDF {
             var assertionAsJson = gson.toJson(assertion);
             JsonCanonicalizer jc = new JsonCanonicalizer(assertionAsJson);
             var hashOfAssertion = digest.digest(jc.getEncodedUTF8());
-            var signature = new byte[aggregateSignatureBytes.length + hashOfAssertion.length];
-            System.arraycopy(aggregateSignatureBytes, 0, signature, 0, aggregateSignatureBytes.length);
-            System.arraycopy(hashOfAssertion, 0, signature, aggregateSignatureBytes.length, hashOfAssertion.length);
-            var encodeSignature = Base64.getEncoder().encodeToString(signature);
+            if (manifest.version == null || manifest.version.isEmpty()) {
+                hashOfAssertion = Hex.encodeHexString(hashOfAssertion).getBytes(StandardCharsets.UTF_8);
+            }
 
             if (!Objects.equals(Base64.getEncoder().encodeToString(hashOfAssertion), hashValues.getAssertionHash())) {
                 throw new AssertionException("assertion hash mismatch", assertion.id);
             }
+
+            var signature = new byte[aggregateSignatureBytes.length + hashOfAssertion.length];
+            System.arraycopy(aggregateSignatureBytes, 0, signature, 0, aggregateSignatureBytes.length);
+            System.arraycopy(hashOfAssertion, 0, signature, aggregateSignatureBytes.length, hashOfAssertion.length);
+            var encodeSignature = Base64.getEncoder().encodeToString(signature);
 
             if (!Objects.equals(encodeSignature, hashValues.getSignature())) {
                 throw new AssertionException("failed integrity check on assertion signature", assertion.id);
