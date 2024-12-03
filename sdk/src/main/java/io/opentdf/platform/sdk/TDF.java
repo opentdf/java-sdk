@@ -675,6 +675,7 @@ public class TDF {
         }
 
         String rootSigValue;
+        boolean isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
         if (manifest.payload.isEncrypted) {
             Config.IntegrityAlgorithm sigAlg = Config.IntegrityAlgorithm.HS256;
             if (rootAlgorithm.compareToIgnoreCase(kGmacIntegrityAlgorithm) == 0) {
@@ -682,7 +683,7 @@ public class TDF {
             }
 
             var sig = calculateSignature(aggregateHash.toByteArray(), payloadKey, sigAlg);
-            if (manifest.tdfVersion == null || manifest.tdfVersion.isEmpty()) {
+            if (isLegacyTdf) {
                 sig = Hex.encodeHexString(sig).getBytes(StandardCharsets.UTF_8);
             }
             rootSigValue = Base64.getEncoder().encodeToString(sig);
@@ -723,7 +724,7 @@ public class TDF {
             var assertionAsJson = gson.toJson(assertion);
             JsonCanonicalizer jc = new JsonCanonicalizer(assertionAsJson);
             var hashOfAssertion = digest.digest(jc.getEncodedUTF8());
-            if (manifest.tdfVersion == null || manifest.tdfVersion.isEmpty()) {
+            if (isLegacyTdf) {
                 hashOfAssertion = Hex.encodeHexString(hashOfAssertion).getBytes(StandardCharsets.UTF_8);
             }
 
