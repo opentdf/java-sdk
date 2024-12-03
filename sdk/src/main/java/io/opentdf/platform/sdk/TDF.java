@@ -201,6 +201,7 @@ public class TDF {
         private static final Base64.Encoder encoder = Base64.getEncoder();
 
         private void prepareManifest(Config.TDFConfig tdfConfig, SDK.KAS kas) {
+            manifest.tdfVersion = TDF_VERSION;
             manifest.encryptionInformation.keyAccessType = kSplitKeyType;
             manifest.encryptionInformation.keyAccessObj = new ArrayList<>();
 
@@ -449,7 +450,6 @@ public class TDF {
         byte[] readBuf = new byte[tdfConfig.defaultSegmentSize];
 
         tdfObject.manifest.encryptionInformation.integrityInformation.segments = new ArrayList<>();
-        tdfObject.manifest.tdfVersion = TDF_VERSION;
         long totalSize = 0;
         boolean finished;
         try (var payloadOutput = tdfWriter.payload()) {
