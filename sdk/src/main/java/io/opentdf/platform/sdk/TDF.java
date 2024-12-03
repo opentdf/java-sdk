@@ -628,7 +628,7 @@ public class TDF {
                     AesGcm aesGcm = new AesGcm(unwrappedKey);
 
                     String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata),
-                            "UTF-8");
+                            StandardCharsets.UTF_8);
                     EncryptedMetadata encryptedMetadata = gson.fromJson(decodedMetadata, EncryptedMetadata.class);
 
                     var encryptedData = new AesGcm.Encrypted(
