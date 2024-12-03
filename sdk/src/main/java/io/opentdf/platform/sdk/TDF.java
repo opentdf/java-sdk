@@ -730,6 +730,10 @@ public class TDF {
                 throw new AssertionException("assertion hash mismatch", assertion.id);
             }
 
+            if (isLegacyTdf) {
+                hashOfAssertion = Hex.encodeHexString(hashOfAssertion).getBytes(StandardCharsets.UTF_8);
+            }
+
             var signature = new byte[aggregateSignatureBytes.length + hashOfAssertion.length];
             System.arraycopy(aggregateSignatureBytes, 0, signature, 0, aggregateSignatureBytes.length);
             System.arraycopy(hashOfAssertion, 0, signature, aggregateSignatureBytes.length, hashOfAssertion.length);
