@@ -724,11 +724,9 @@ public class TDF {
             var assertionAsJson = gson.toJson(assertion);
             JsonCanonicalizer jc = new JsonCanonicalizer(assertionAsJson);
             var hashOfAssertion = digest.digest(jc.getEncodedUTF8());
-            if (isLegacyTdf) {
-                hashOfAssertion = Hex.encodeHexString(hashOfAssertion).getBytes(StandardCharsets.UTF_8);
-            }
+            var assertionCompare = isLegacyTdf ? Hex.encodeHexString(hashOfAssertion) : Base64.getEncoder().encodeToString(hashOfAssertion);
 
-            if (!Objects.equals(Base64.getEncoder().encodeToString(hashOfAssertion), hashValues.getAssertionHash())) {
+            if (!Objects.equals(assertionCompare, hashValues.getAssertionHash())) {
                 throw new AssertionException("assertion hash mismatch", assertion.id);
             }
 
