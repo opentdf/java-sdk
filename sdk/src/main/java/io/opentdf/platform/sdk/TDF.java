@@ -365,6 +365,8 @@ public class TDF {
                     throw new TDFReadFailed("failed to read payload");
                 }
 
+                var isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
+
                 if (manifest.payload.isEncrypted) {
                     String segHashAlg = manifest.encryptionInformation.integrityInformation.segmentHashAlg;
                     Config.IntegrityAlgorithm sigAlg = Config.IntegrityAlgorithm.HS256;
@@ -373,6 +375,9 @@ public class TDF {
                     }
 
                     var payloadSig = calculateSignature(readBuf, payloadKey, sigAlg);
+                    if (isLegacyTdf) {
+                        payloadSig = Hex.encodeHexString(payloadSig).getBytes(StandardCharsets.UTF_8);
+                    }
 
                     if (segment.hash.compareTo(Base64.getEncoder().encodeToString(payloadSig)) != 0) {
                         throw new SegmentSignatureMismatch("segment signature miss match");
