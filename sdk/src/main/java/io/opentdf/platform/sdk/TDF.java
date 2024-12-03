@@ -17,11 +17,9 @@ import org.erdtman.jcs.JsonCanonicalizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
@@ -451,7 +449,7 @@ public class TDF {
         byte[] readBuf = new byte[tdfConfig.defaultSegmentSize];
 
         tdfObject.manifest.encryptionInformation.integrityInformation.segments = new ArrayList<>();
-        tdfObject.manifest.version = TDF_VERSION;
+        tdfObject.manifest.tdfVersion = TDF_VERSION;
         long totalSize = 0;
         boolean finished;
         try (var payloadOutput = tdfWriter.payload()) {
@@ -684,7 +682,7 @@ public class TDF {
             }
 
             var sig = calculateSignature(aggregateHash.toByteArray(), payloadKey, sigAlg);
-            if (manifest.version == null || manifest.version.isEmpty()) {
+            if (manifest.tdfVersion == null || manifest.tdfVersion.isEmpty()) {
                 sig = Hex.encodeHexString(sig).getBytes(StandardCharsets.UTF_8);
             }
             rootSigValue = Base64.getEncoder().encodeToString(sig);
@@ -725,7 +723,7 @@ public class TDF {
             var assertionAsJson = gson.toJson(assertion);
             JsonCanonicalizer jc = new JsonCanonicalizer(assertionAsJson);
             var hashOfAssertion = digest.digest(jc.getEncodedUTF8());
-            if (manifest.version == null || manifest.version.isEmpty()) {
+            if (manifest.tdfVersion == null || manifest.tdfVersion.isEmpty()) {
                 hashOfAssertion = Hex.encodeHexString(hashOfAssertion).getBytes(StandardCharsets.UTF_8);
             }
 

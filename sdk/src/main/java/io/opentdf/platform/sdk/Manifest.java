@@ -53,19 +53,19 @@ public class Manifest {
     private static final Gson gson = new GsonBuilder()
                                         .registerTypeAdapter(Manifest.class, new ManifestDeserializer())
                                         .create();
-    String version;
+    String tdfVersion;
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Manifest manifest = (Manifest) o;
-        return Objects.equals(version, manifest.version) && Objects.equals(encryptionInformation, manifest.encryptionInformation) && Objects.equals(payload, manifest.payload) && Objects.equals(assertions, manifest.assertions);
+        return Objects.equals(tdfVersion, manifest.tdfVersion) && Objects.equals(encryptionInformation, manifest.encryptionInformation) && Objects.equals(payload, manifest.payload) && Objects.equals(assertions, manifest.assertions);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(version, encryptionInformation, payload, assertions);
+        return Objects.hash(tdfVersion, encryptionInformation, payload, assertions);
     }
 
     private static class PolicyBindingSerializer implements JsonDeserializer<Object>, JsonSerializer<Object> {
