@@ -684,7 +684,7 @@ public class TDF {
 
             var sig = calculateSignature(aggregateHash.toByteArray(), payloadKey, sigAlg);
             if (isLegacyTdf) {
-                sig = Hex.encodeHexString(sig).getBytes(StandardCharsets.UTF_8);
+                sig = Hex.encodeHexString(sig).getBytes();
             }
             rootSigValue = Base64.getEncoder().encodeToString(sig);
         } else {
@@ -731,7 +731,7 @@ public class TDF {
             }
 
             if (isLegacyTdf) {
-                hashOfAssertion = Hex.encodeHexString(hashOfAssertion).getBytes(StandardCharsets.UTF_8);
+                hashOfAssertion = Hex.encodeHexString(hashOfAssertion).getBytes();
             }
 
             var signature = new byte[aggregateSignatureBytes.length + hashOfAssertion.length];
