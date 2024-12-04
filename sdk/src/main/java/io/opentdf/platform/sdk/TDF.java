@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.StringReader;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
@@ -188,7 +189,7 @@ public class TDF {
             PolicyObject policyObject = new PolicyObject();
             policyObject.body = new PolicyObject.Body();
             policyObject.uuid = UUID.randomUUID().toString();
-            policyObject.body.dataAttributes = new ArrayList<>();
+            policyObject.body.dataAttributes = new ArrayList<>(attributes.size());
             policyObject.body.dissem = new ArrayList<>();
 
             for (Autoconfigure.AttributeValueFQN attribute : attributes) {
@@ -208,7 +209,6 @@ public class TDF {
             PolicyObject policyObject = createPolicyObject(tdfConfig.attributes);
             String base64PolicyObject = encoder
                     .encodeToString(gson.toJson(policyObject).getBytes(StandardCharsets.UTF_8));
-            List<byte[]> symKeys = new ArrayList<>();
             Map<String, Config.KASInfo> latestKASInfo = new HashMap<>();
             if (tdfConfig.splitPlan == null || tdfConfig.splitPlan.isEmpty()) {
                 // Default split plan: Split keys across all KASes
@@ -261,6 +261,7 @@ public class TDF {
                 }
             }
 
+            List<byte[]> symKeys = new ArrayList<>(splitIDs.size());
             for (String splitID : splitIDs) {
                 // Symmetric key
                 byte[] symKey = new byte[GCM_KEY_SIZE];
@@ -358,6 +359,10 @@ public class TDF {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
 
             for (Manifest.Segment segment : manifest.encryptionInformation.integrityInformation.segments) {
+                if (segment.encryptedSegmentSize > Config.MAX_SEGMENT_SIZE) {
+                    throw new IllegalStateException("Segment size " + segment.encryptedSegmentSize + " exceeded limit " + Config.MAX_SEGMENT_SIZE);
+                } // MIN_SEGMENT_SIZE NOT validated out due to tests needing small segment sizes with existing payloads
+
                 byte[] readBuf = new byte[(int) segment.encryptedSegmentSize];
                 int bytesRead = tdfReader.readPayloadBytes(readBuf);
 
@@ -520,8 +525,7 @@ public class TDF {
         tdfObject.manifest.payload.url = TDFWriter.TDF_PAYLOAD_FILE_NAME;
         tdfObject.manifest.payload.isEncrypted = true;
 
-        List<Manifest.Assertion> signedAssertions = new ArrayList<>();
-
+        List<Manifest.Assertion> signedAssertions = new ArrayList<>(tdfConfig.assertionConfigList.size());
         for (var assertionConfig : tdfConfig.assertionConfigList) {
             var assertion = new Manifest.Assertion();
             assertion.id = assertionConfig.id;
@@ -585,7 +589,8 @@ public class TDF {
 
         TDFReader tdfReader = new TDFReader(tdf);
         String manifestJson = tdfReader.manifest();
-        Manifest manifest = gson.fromJson(manifestJson, Manifest.class);
+        // use Manifest.readManifest in order to validate the Manifest input
+        Manifest manifest = Manifest.readManifest(new StringReader(manifestJson));
         byte[] payloadKey = new byte[GCM_KEY_SIZE];
         String unencryptedMetadata = null;
 

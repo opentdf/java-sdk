@@ -37,7 +37,7 @@ public class NanoTDFTest {
 
     private static final String KID = "r1";
     
-    private static SDK.KAS kas = new SDK.KAS() {
+    protected static SDK.KAS kas = new SDK.KAS() {
         @Override
         public void close() throws Exception {
         }

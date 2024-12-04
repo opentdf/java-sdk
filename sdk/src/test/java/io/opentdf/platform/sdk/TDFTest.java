@@ -1,11 +1,6 @@
 package io.opentdf.platform.sdk;
 
-import com.google.common.util.concurrent.ListenableFuture;
-
 import com.nimbusds.jose.JOSEException;
-import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
-import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
-import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
 import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.TDF.Reader;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
@@ -35,13 +30,7 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TDFTest {
-
-    @BeforeEach
-    public void setup() {
-        attributeGrpcStub = mock(AttributesServiceGrpc.AttributesServiceFutureStub.class);
-    }
-
-    private static SDK.KAS kas = new SDK.KAS() {
+    protected static SDK.KAS kas = new SDK.KAS() {
         @Override
         public void close() {
         }
@@ -84,8 +73,6 @@ public class TDFTest {
         }
     };
 
-    AttributesServiceGrpc.AttributesServiceFutureStub attributeGrpcStub;
-
     private static ArrayList<KeyPair> keypairs = new ArrayList<>();
 
     @BeforeAll
@@ -97,12 +84,6 @@ public class TDFTest {
 
     @Test
     void testSimpleTDFEncryptAndDecrypt() throws Exception {
-
-        ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
-        lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
-        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
-                .thenReturn(resp1);
-
         SecureRandom secureRandom = new SecureRandom();
         byte[] key = new byte[32];
         secureRandom.nextBytes(key);
@@ -130,7 +111,7 @@ public class TDFTest {
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
         TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, null);
 
         var assertionVerificationKeys = new Config.AssertionVerificationKeys();
         assertionVerificationKeys.defaultKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256,
@@ -139,6 +120,7 @@ public class TDFTest {
         var unwrappedData = new ByteArrayOutputStream();
         Config.TDFReaderConfig readerConfig = Config.newTDFReaderConfig(
                 Config.withAssertionVerificationKeys(assertionVerificationKeys));
+
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas,
                 readerConfig);
         assertThat(reader.getManifest().payload.mimeType).isEqualTo("application/octet-stream");
@@ -158,12 +140,6 @@ public class TDFTest {
 
     @Test
     void testSimpleTDFWithAssertionWithRS256() throws Exception {
-
-        ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
-        lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
-        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
-                .thenReturn(resp1);
-
         String assertion1Id = "assertion1";
         var keypair = CryptoUtils.generateRSAKeypair();
         var assertionConfig = new AssertionConfig();
@@ -188,7 +164,7 @@ public class TDFTest {
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
         TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, null);
 
         var assertionVerificationKeys = new Config.AssertionVerificationKeys();
         assertionVerificationKeys.keys.put(assertion1Id,
@@ -208,12 +184,6 @@ public class TDFTest {
 
     @Test
     void testWithAssertionVerificationDisabled() throws Exception {
-
-        ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
-        lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
-        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
-                .thenReturn(resp1);
-
         String assertion1Id = "assertion1";
         var keypair = CryptoUtils.generateRSAKeypair();
         var assertionConfig = new AssertionConfig();
@@ -238,7 +208,7 @@ public class TDFTest {
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
         TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, null);
 
         var assertionVerificationKeys = new Config.AssertionVerificationKeys();
         assertionVerificationKeys.keys.put(assertion1Id,
@@ -263,12 +233,6 @@ public class TDFTest {
     }
     @Test
     void testSimpleTDFWithAssertionWithHS256() throws Exception {
-
-        ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
-        lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
-        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
-                .thenReturn(resp1);
-
         String assertion1Id = "assertion1";
         var assertionConfig1 = new AssertionConfig();
         assertionConfig1.id = assertion1Id;
@@ -301,7 +265,7 @@ public class TDFTest {
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
         TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, null);
 
         var unwrappedData = new ByteArrayOutputStream();
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()),
@@ -335,12 +299,6 @@ public class TDFTest {
 
     @Test
     void testSimpleTDFWithAssertionWithHS256Failure() throws Exception {
-
-        ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
-        lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
-        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
-                .thenReturn(resp1);
-
         // var keypair = CryptoUtils.generateRSAKeypair();
         SecureRandom secureRandom = new SecureRandom();
         byte[] key = new byte[32];
@@ -368,7 +326,7 @@ public class TDFTest {
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
         TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, null);
 
         byte[] notkey = new byte[32];
         secureRandom.nextBytes(notkey);
@@ -391,27 +349,20 @@ public class TDFTest {
 
     @Test
     public void testCreatingTDFWithMultipleSegments() throws Exception {
-
-        ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
-        lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
-        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
-                .thenReturn(resp1);
-
         var random = new Random();
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
-                // use a random segment size that makes sure that we will use multiple segments
-                Config.withSegmentSize(1 + random.nextInt(20)));
+                Config.withSegmentSize(Config.MIN_SEGMENT_SIZE));
 
-        // data should be bigger than the largest segment
-        var data = new byte[21 + random.nextInt(2048)];
+        // data should be large enough to have multiple complete and a partial segment
+        var data = new byte[(int)(Config.MIN_SEGMENT_SIZE * 2.8)];
         random.nextBytes(data);
         var plainTextInputStream = new ByteArrayInputStream(data);
         var tdfOutputStream = new ByteArrayOutputStream();
         var tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, null);
         var unwrappedData = new ByteArrayOutputStream();
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
         reader.readPayload(unwrappedData);
@@ -424,11 +375,6 @@ public class TDFTest {
 
     @Test
     public void testCreatingTooLargeTDF() throws Exception {
-        ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
-        lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
-        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
-                .thenReturn(resp1);
-
         var random = new Random();
         var maxSize = random.nextInt(1024);
         var numReturned = new AtomicInteger(0);
@@ -466,9 +412,9 @@ public class TDFTest {
         var tdfConfig = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
                 Config.withKasInformation(getKASInfos()),
-                Config.withSegmentSize(1 + random.nextInt(128)));
+                Config.withSegmentSize(Config.MIN_SEGMENT_SIZE));
         assertThrows(TDF.DataSizeNotSupported.class,
-                () -> tdf.createTDF(is, os, tdfConfig, kas, attributeGrpcStub),
+                () -> tdf.createTDF(is, os, tdfConfig, kas, null),
                 "didn't throw an exception when we created TDF that was too large");
         assertThat(numReturned.get())
                 .withFailMessage("test returned the wrong number of bytes")
@@ -477,12 +423,6 @@ public class TDFTest {
 
     @Test
     public void testCreateTDFWithMimeType() throws Exception {
-
-        ListenableFuture<GetAttributeValuesByFqnsResponse> resp1 = mock(ListenableFuture.class);
-        lenient().when(resp1.get()).thenReturn(GetAttributeValuesByFqnsResponse.newBuilder().build());
-        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
-                .thenReturn(resp1);
-
         final String mimeType = "application/pdf";
 
         Config.TDFConfig config = Config.newTDFConfig(
@@ -495,7 +435,7 @@ public class TDFTest {
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
         TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, attributeGrpcStub);
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, null);
 
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
         assertThat(reader.getManifest().payload.mimeType).isEqualTo(mimeType);
