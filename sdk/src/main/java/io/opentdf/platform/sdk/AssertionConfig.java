@@ -3,6 +3,8 @@ package io.opentdf.platform.sdk;
 
 import java.util.Objects;
 
+import com.google.gson.annotations.SerializedName;
+
 /**
  * Represents the configuration for assertions, encapsulating various types, scopes, states, keys,
  * and statements involved in assertion handling.
@@ -119,5 +121,6 @@ public class AssertionConfig {
     public Scope scope;
     public AppliesToState appliesToState;
     public Statement statement;
+    @SerializedName(value = "signingKey")
     public AssertionKey assertionKey;
 }
