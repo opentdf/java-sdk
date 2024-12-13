@@ -8,6 +8,8 @@ import io.opentdf.platform.sdk.Config.AssertionVerificationKeys;
 
 import com.google.gson.Gson;
 import org.apache.commons.codec.DecoderException;
+import org.bouncycastle.crypto.RuntimeCryptoException;
+
 import picocli.CommandLine;
 import picocli.CommandLine.HelpCommand;
 import picocli.CommandLine.Option;
@@ -24,7 +26,9 @@ import java.io.PrintWriter;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
@@ -169,7 +173,15 @@ class Command {
             try {
                 assertionConfigs = gson.fromJson(assertionConfig, AssertionConfig[].class);
             } catch (JsonSyntaxException e) {
-                throw new RuntimeException("Failed to parse assertion, expects an list of assertions", e);
+                // try it as a file path
+                try {
+                    String fielJson = new String(Files.readAllBytes(Paths.get(assertionConfig)));
+                    assertionConfigs = gson.fromJson(fielJson, AssertionConfig[].class);
+                } catch (JsonSyntaxException e2) {
+                    throw new RuntimeException("Failed to parse assertion from file, expects an list of assertions", e2);
+                } catch(Exception e3) {
+                    throw new RuntimeException("Could not parse assertion as json string or path to file", e3);
+                }
             }
             // iterate through the assertions and correct the key types
             for (int i = 0; i < assertionConfigs.length; i++) {
@@ -232,7 +244,15 @@ class Command {
                     try {
                         assertionVerificationKeys = gson.fromJson(assertionVerificationInput, AssertionVerificationKeys.class);
                     } catch (JsonSyntaxException e) {
-                        throw new RuntimeException("Failed to parse assertion, expects an list of assertions", e);
+                        // try it as a file path
+                        try {
+                            String fileJson = new String(Files.readAllBytes(Paths.get(assertionVerificationInput)));
+                            assertionVerificationKeys = gson.fromJson(fileJson, AssertionVerificationKeys.class);
+                        } catch (JsonSyntaxException e2) {
+                            throw new RuntimeException("Failed to parse assertion verification keys from file", e2);
+                        } catch(Exception e3) {
+                            throw new RuntimeException("Could not parse assertion verification keys as json string or path to file", e3);
+                        }
                     }
 
                     for (Map.Entry<String, AssertionConfig.AssertionKey> entry : assertionVerificationKeys.keys.entrySet()){
