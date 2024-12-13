@@ -121,6 +121,5 @@ public class AssertionConfig {
     public Scope scope;
     public AppliesToState appliesToState;
     public Statement statement;
-    @SerializedName(value = "signingKey")
-    public AssertionKey assertionKey;
+    public AssertionKey signingKey;
 }

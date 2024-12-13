@@ -186,10 +186,10 @@ class Command {
             // iterate through the assertions and correct the key types
             for (int i = 0; i < assertionConfigs.length; i++) {
                 AssertionConfig config = assertionConfigs[i];
-                if (config.assertionKey != null && config.assertionKey.isDefined()) {
+                if (config.signingKey != null && config.signingKey.isDefined()) {
                     try {
-                        Object correctedKey = correctKeyType(config.assertionKey.alg, config.assertionKey.key, false);
-                        config.assertionKey.key = correctedKey;
+                        Object correctedKey = correctKeyType(config.signingKey.alg, config.signingKey.key, false);
+                        config.signingKey.key = correctedKey;
                     } catch (Exception e) {
                         throw new RuntimeException("Error with assertion signing key: " + e.getMessage(), e);
                     }
