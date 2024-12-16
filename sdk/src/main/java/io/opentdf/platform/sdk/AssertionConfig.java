@@ -119,5 +119,5 @@ public class AssertionConfig {
     public Scope scope;
     public AppliesToState appliesToState;
     public Statement statement;
-    public AssertionKey assertionKey;
+    public AssertionKey signingKey;
 }

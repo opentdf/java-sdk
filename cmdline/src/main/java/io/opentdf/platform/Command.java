@@ -4,9 +4,12 @@ import com.google.gson.JsonSyntaxException;
 import com.nimbusds.jose.JOSEException;
 import io.opentdf.platform.sdk.*;
 import io.opentdf.platform.sdk.TDF;
+import io.opentdf.platform.sdk.Config.AssertionVerificationKeys;
 
 import com.google.gson.Gson;
 import org.apache.commons.codec.DecoderException;
+import org.bouncycastle.crypto.RuntimeCryptoException;
+
 import picocli.CommandLine;
 import picocli.CommandLine.HelpCommand;
 import picocli.CommandLine.Option;
@@ -22,14 +25,24 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
@@ -39,8 +52,14 @@ import nl.altindag.ssl.util.TrustManagerUtils;
 
 import javax.net.ssl.TrustManager;
 
+
 @CommandLine.Command(name = "tdf", subcommands = {HelpCommand.class})
 class Command {
+
+    private static final String PRIVATE_KEY_HEADER = "-----BEGIN PRIVATE KEY-----";
+    private static final String PRIVATE_KEY_FOOTER = "-----END PRIVATE KEY-----";
+    private static final String PEM_HEADER = "-----BEGIN (.*)-----";
+    private static final String PEM_FOOTER = "-----END (.*)-----";
 
     @Option(names = { "--client-secret" }, required = true)
     private String clientSecret;
@@ -56,6 +75,68 @@ class Command {
 
     @Option(names = { "-p", "--platform-endpoint" }, required = true)
     private String platformEndpoint;
+
+    private Object correctKeyType(AssertionConfig.AssertionKeyAlg alg, Object key, boolean publicKey) throws RuntimeException{
+        if (alg == AssertionConfig.AssertionKeyAlg.HS256) {
+            if (key instanceof String) {
+                key = ((String) key).getBytes(StandardCharsets.UTF_8);
+                return key;
+            } else if (key instanceof byte[]) {
+                return key;
+            } else {
+                throw new RuntimeException("Unexpected type for assertion key");
+            }
+        } else if (alg == AssertionConfig.AssertionKeyAlg.RS256) {
+            if (!(key instanceof String)) {
+                throw new RuntimeException("Unexpected type for assertion key");
+            }
+            String pem = (String) key;
+            String pemWithNewlines = pem.replace("\\n", "\n");
+            if (publicKey){
+                String base64EncodedPem= pemWithNewlines
+                .replaceAll(PEM_HEADER, "")
+                .replaceAll(PEM_FOOTER, "")
+                .replaceAll("\\s", "")
+                .replaceAll("\r\n", "")
+                .replaceAll("\n", "")
+                .trim();
+                byte[] decoded = Base64.getDecoder().decode(base64EncodedPem);
+                X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
+                KeyFactory kf = null;
+                try {
+                    kf = KeyFactory.getInstance("RSA");
+                } catch (NoSuchAlgorithmException e) {
+                    throw new RuntimeException(e);
+                }
+                try {
+                    return kf.generatePublic(spec);
+                } catch (InvalidKeySpecException e) {
+                    throw new RuntimeException(e);
+                }
+            }else {
+                String privateKeyPEM = pemWithNewlines
+                        .replace(PRIVATE_KEY_HEADER, "")
+                        .replace(PRIVATE_KEY_FOOTER, "")
+                        .replaceAll("\\s", ""); // remove whitespaces
+
+                byte[] decoded = Base64.getDecoder().decode(privateKeyPEM);
+
+                PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(decoded);
+                KeyFactory kf = null;
+                try {
+                    kf = KeyFactory.getInstance("RSA");
+                } catch (NoSuchAlgorithmException e) {
+                    throw new RuntimeException(e);
+                }
+                try {
+                    return kf.generatePrivate(spec);
+                } catch (InvalidKeySpecException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+        return null;
+    }
 
     @CommandLine.Command(name = "encrypt")
     void encrypt(
@@ -92,9 +173,29 @@ class Command {
             try {
                 assertionConfigs = gson.fromJson(assertionConfig, AssertionConfig[].class);
             } catch (JsonSyntaxException e) {
-                throw new RuntimeException("Failed to parse assertion, expects an list of assertions", e);
+                // try it as a file path
+                try {
+                    String fielJson = new String(Files.readAllBytes(Paths.get(assertionConfig)));
+                    assertionConfigs = gson.fromJson(fielJson, AssertionConfig[].class);
+                } catch (JsonSyntaxException e2) {
+                    throw new RuntimeException("Failed to parse assertion from file, expects an list of assertions", e2);
+                } catch(Exception e3) {
+                    throw new RuntimeException("Could not parse assertion as json string or path to file", e3);
+                }
             }
-
+            // iterate through the assertions and correct the key types
+            for (int i = 0; i < assertionConfigs.length; i++) {
+                AssertionConfig config = assertionConfigs[i];
+                if (config.signingKey != null && config.signingKey.isDefined()) {
+                    try {
+                        Object correctedKey = correctKeyType(config.signingKey.alg, config.signingKey.key, false);
+                        config.signingKey.key = correctedKey;
+                    } catch (Exception e) {
+                        throw new RuntimeException("Error with assertion signing key: " + e.getMessage(), e);
+                    }
+                }
+                assertionConfigs[i] = config;
+            }
             configs.add(Config.withAssertionConfig(assertionConfigs));
         }
 
@@ -126,15 +227,50 @@ class Command {
     }
 
     @CommandLine.Command(name = "decrypt")
-    void decrypt(@Option(names = { "-f", "--file" }, required = true) Path tdfPath) throws IOException,
+    void decrypt(@Option(names = { "-f", "--file" }, required = true) Path tdfPath,
+            @Option(names = { "--with-assertion-verification-keys" }, defaultValue = Option.NULL_VALUE) Optional<String> assertionVerification)
+             throws IOException,
             InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException,
             BadPaddingException, InvalidKeyException, TDF.FailedToCreateGMAC,
             JOSEException, ParseException, NoSuchAlgorithmException, DecoderException {
         var sdk = buildSDK();
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
             try (var stdout = new BufferedOutputStream(System.out)) {
-                var reader = new TDF().loadTDF(in, sdk.getServices().kas());
-                reader.readPayload(stdout);
+                if (assertionVerification.isPresent()) {
+                    var assertionVerificationInput = assertionVerification.get();
+                    Gson gson = new Gson();
+
+                    AssertionVerificationKeys assertionVerificationKeys;
+                    try {
+                        assertionVerificationKeys = gson.fromJson(assertionVerificationInput, AssertionVerificationKeys.class);
+                    } catch (JsonSyntaxException e) {
+                        // try it as a file path
+                        try {
+                            String fileJson = new String(Files.readAllBytes(Paths.get(assertionVerificationInput)));
+                            assertionVerificationKeys = gson.fromJson(fileJson, AssertionVerificationKeys.class);
+                        } catch (JsonSyntaxException e2) {
+                            throw new RuntimeException("Failed to parse assertion verification keys from file", e2);
+                        } catch(Exception e3) {
+                            throw new RuntimeException("Could not parse assertion verification keys as json string or path to file", e3);
+                        }
+                    }
+
+                    for (Map.Entry<String, AssertionConfig.AssertionKey> entry : assertionVerificationKeys.keys.entrySet()){
+                        try {
+                            Object correctedKey = correctKeyType(entry.getValue().alg, entry.getValue().key, true);
+                            entry.setValue(new AssertionConfig.AssertionKey(entry.getValue().alg, correctedKey));
+                        } catch (Exception e) {
+                            throw new RuntimeException("Error with assertion verification key: " + e.getMessage(), e);
+                        }
+                    }
+                    Config.TDFReaderConfig readerConfig = Config.newTDFReaderConfig(
+                        Config.withAssertionVerificationKeys(assertionVerificationKeys));
+                    var reader = new TDF().loadTDF(in, sdk.getServices().kas(), readerConfig);
+                    reader.readPayload(stdout);
+                } else {
+                    var reader = new TDF().loadTDF(in, sdk.getServices().kas());
+                    reader.readPayload(stdout);
+                }
             }
         }
     }

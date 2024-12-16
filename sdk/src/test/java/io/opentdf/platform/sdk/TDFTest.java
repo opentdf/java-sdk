@@ -97,7 +97,7 @@ public class TDFTest {
         assertion1.statement.format = "base64binary";
         assertion1.statement.schema = "text";
         assertion1.statement.value = "ICAgIDxlZGoOkVkaD4=";
-        assertion1.assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, key);
+        assertion1.signingKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, key);
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
@@ -151,7 +151,7 @@ public class TDFTest {
         assertionConfig.statement.format = "base64binary";
         assertionConfig.statement.schema = "text";
         assertionConfig.statement.value = "ICAgIDxlZGoOkVkaD4=";
-        assertionConfig.assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256,
+        assertionConfig.signingKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256,
                 keypair.getPrivate());
 
         Config.TDFConfig config = Config.newTDFConfig(
@@ -195,7 +195,7 @@ public class TDFTest {
         assertionConfig.statement.format = "base64binary";
         assertionConfig.statement.schema = "text";
         assertionConfig.statement.value = "ICAgIDxlZGoOkVkaD4=";
-        assertionConfig.assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256,
+        assertionConfig.signingKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256,
                 keypair.getPrivate());
 
         Config.TDFConfig config = Config.newTDFConfig(
@@ -314,7 +314,7 @@ public class TDFTest {
         assertionConfig1.statement.format = "base64binary";
         assertionConfig1.statement.schema = "text";
         assertionConfig1.statement.value = "ICAgIDxlZGoOkVkaD4=";
-        assertionConfig1.assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, key);
+        assertionConfig1.signingKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, key);
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),

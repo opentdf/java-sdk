@@ -542,8 +542,8 @@ public class TDF {
 
             var assertionSigningKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256,
                     tdfObject.aesGcm.getKey());
-            if (assertionConfig.assertionKey != null && assertionConfig.assertionKey.isDefined()) {
-                assertionSigningKey = assertionConfig.assertionKey;
+            if (assertionConfig.signingKey != null && assertionConfig.signingKey.isDefined()) {
+                assertionSigningKey = assertionConfig.signingKey;
             }
 
             assertion.sign(new Manifest.Assertion.HashValues(assertionHash, encodedHash), assertionSigningKey);
