@@ -417,7 +417,7 @@ public class TDF {
     public TDFObject createTDF(InputStream payload,
             OutputStream outputStream,
             Config.TDFConfig tdfConfig, SDK.KAS kas, AttributesServiceFutureStub attrService)
-            throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException {
+            throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException, DecoderException {
 
         if (tdfConfig.autoconfigure) {
             Autoconfigure.Granter granter = new Autoconfigure.Granter(new ArrayList<>());
@@ -532,7 +532,8 @@ public class TDF {
             assertion.statement = assertionConfig.statement;
             assertion.appliesToState = assertionConfig.appliesToState.toString();
 
-            var assertionHash = assertion.hash();
+            var assertionHashAsHex = assertion.hash();
+            var assertionHash = Hex.decodeHex(assertionHashAsHex);
             byte[] completeHash = new byte[aggregateHash.size() + assertionHash.length];
             System.arraycopy(aggregateHash.toByteArray(), 0, completeHash, 0, aggregateHash.size());
             System.arraycopy(assertionHash, 0, completeHash, aggregateHash.size(), assertionHash.length);
@@ -545,7 +546,7 @@ public class TDF {
                 assertionSigningKey = assertionConfig.assertionKey;
             }
             var hashValues = new Manifest.Assertion.HashValues(
-                    Base64.getEncoder().encodeToString(assertionHash),
+                    assertionHashAsHex,
                     encodedHash
             );
             assertion.sign(hashValues, assertionSigningKey);
@@ -707,7 +708,7 @@ public class TDF {
             throw new SegmentSizeMismatch("mismatch encrypted segment size in manifest");
         }
 
-        var aggregateSignatureBytes = aggregateHash.toByteArray();
+        var aggregateHashByteArrayBytes = aggregateHash.toByteArray();
         // Validate assertions
         for (var assertion : manifest.assertions) {
             // Skip assertion verification if disabled
@@ -726,22 +727,17 @@ public class TDF {
             }
 
             var hashValues = assertion.verify(assertionKey);
-            var assertionAsJson = gson.toJson(assertion);
-            JsonCanonicalizer jc = new JsonCanonicalizer(assertionAsJson);
-            var hashOfAssertion = digest.digest(jc.getEncodedUTF8());
-            var assertionCompare = isLegacyTdf ? Hex.encodeHexString(hashOfAssertion) : Base64.getEncoder().encodeToString(hashOfAssertion);
+            var hashOfAssertionAsHex = assertion.hash();
 
-            if (!Objects.equals(assertionCompare, hashValues.getAssertionHash())) {
+            if (!Objects.equals(hashOfAssertionAsHex, hashValues.getAssertionHash())) {
                 throw new AssertionException("assertion hash mismatch", assertion.id);
             }
 
-            if (isLegacyTdf) {
-                hashOfAssertion = Hex.encodeHexString(hashOfAssertion).getBytes();
-            }
+            var hashOfAssertion = Hex.decodeHex(hashOfAssertionAsHex);
 
-            var signature = new byte[aggregateSignatureBytes.length + hashOfAssertion.length];
-            System.arraycopy(aggregateSignatureBytes, 0, signature, 0, aggregateSignatureBytes.length);
-            System.arraycopy(hashOfAssertion, 0, signature, aggregateSignatureBytes.length, hashOfAssertion.length);
+            var signature = new byte[aggregateHashByteArrayBytes.length + hashOfAssertion.length];
+            System.arraycopy(aggregateHashByteArrayBytes, 0, signature, 0, aggregateHashByteArrayBytes.length);
+            System.arraycopy(hashOfAssertion, 0, signature, aggregateHashByteArrayBytes.length, hashOfAssertion.length);
             var encodeSignature = Base64.getEncoder().encodeToString(signature);
 
             if (!Objects.equals(encodeSignature, hashValues.getSignature())) {

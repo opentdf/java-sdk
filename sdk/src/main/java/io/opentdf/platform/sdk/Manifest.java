@@ -23,6 +23,7 @@ import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import io.opentdf.platform.sdk.TDF.AssertionException;
+import org.apache.commons.codec.binary.Hex;
 import org.erdtman.jcs.JsonCanonicalizer;
 
 import java.io.IOException;
@@ -351,7 +352,7 @@ public class Manifest {
             return Objects.hash(id, type, scope, appliesToState, statement, binding);
         }
 
-        public byte[] hash() throws IOException {
+        public String hash() throws IOException {
             MessageDigest digest;
             try {
                 digest = MessageDigest.getInstance("SHA-256");
@@ -361,7 +362,7 @@ public class Manifest {
 
             var assertionAsJson = gson.toJson(this);
             JsonCanonicalizer jc = new JsonCanonicalizer(assertionAsJson);
-            return digest.digest(jc.getEncodedUTF8());
+            return Hex.encodeHexString(digest.digest(jc.getEncodedUTF8()));
         }
 
         // Sign the assertion with the given hash and signature using the key.
