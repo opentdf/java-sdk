@@ -53,6 +53,7 @@ public class Manifest {
     private static final Gson gson = new GsonBuilder()
                                         .registerTypeAdapter(Manifest.class, new ManifestDeserializer())
                                         .create();
+    @SerializedName(value = "tdf_spec_version")
     String tdfVersion;
 
     @Override
