@@ -69,7 +69,7 @@ class Command {
             @Option(names = { "--mime-type" }, defaultValue = Option.NULL_VALUE) Optional<String> mimeType,
             @Option(names = { "--with-assertions" }, defaultValue = Option.NULL_VALUE) Optional<String> assertion)
 
-            throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException {
+            throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException, DecoderException {
 
         var sdk = buildSDK();
         var kasInfos = kas.stream().map(k -> {
