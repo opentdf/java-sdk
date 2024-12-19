@@ -36,7 +36,7 @@ import java.util.concurrent.ExecutionException;
  */
 public class TDF {
 
-    private static final String TDF_VERSION = "x.x.x";
+    private static final String TDF_VERSION = "1.0.0";
     private final long maximumSize;
 
     /**
