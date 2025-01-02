@@ -36,7 +36,7 @@ import java.util.concurrent.ExecutionException;
  */
 public class TDF {
 
-    private static final String TDF_VERSION = "1.0.0";
+    private static final String TDF_VERSION = "4.3.0";
     private final long maximumSize;
 
     /**
@@ -733,8 +733,7 @@ public class TDF {
                 throw new AssertionException("assertion hash mismatch", assertion.id);
             }
 
-            var hashOfAssertion = Hex.decodeHex(hashOfAssertionAsHex);
-
+            byte[] hashOfAssertion = isLegacyTdf ? hashOfAssertionAsHex.getBytes(StandardCharsets.UTF_8) : Hex.decodeHex(hashOfAssertionAsHex);
             var signature = new byte[aggregateHashByteArrayBytes.length + hashOfAssertion.length];
             System.arraycopy(aggregateHashByteArrayBytes, 0, signature, 0, aggregateHashByteArrayBytes.length);
             System.arraycopy(hashOfAssertion, 0, signature, aggregateHashByteArrayBytes.length, hashOfAssertion.length);
