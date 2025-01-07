@@ -39,8 +39,15 @@ import nl.altindag.ssl.util.TrustManagerUtils;
 
 import javax.net.ssl.TrustManager;
 
-@CommandLine.Command(name = "tdf", subcommands = {HelpCommand.class})
+@CommandLine.Command(
+    name = "tdf",
+    subcommands = {HelpCommand.class},
+    version = "{\"version\":\"0.7.5\",\"tdfSpecVersion\":\"4.3.0\"}"
+)
 class Command {
+
+    @Option(names = {"-V", "--version"}, versionHelp = true, description = "display version info")
+    boolean versionInfoRequested;
 
     @Option(names = { "--client-secret" }, required = true)
     private String clientSecret;
