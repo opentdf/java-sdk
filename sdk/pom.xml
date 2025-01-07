@@ -9,6 +9,10 @@
         <version>0.7.5</version>
     </parent>
     <packaging>jar</packaging>
+    <properties>
+        <jazzer.version>0.22.1</jazzer.version>
+        <jazzer.baseurl>https://github.com/CodeIntelligenceTesting/jazzer/releases/download/v${jazzer.version}</jazzer.baseurl>
+    </properties>
     <dependencies>
         <!-- Logging Dependencies -->
         <dependency>
@@ -119,6 +123,18 @@
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <version>4.13.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.code-intelligence</groupId>
+            <artifactId>jazzer-api</artifactId>
+            <version>${jazzer.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.code-intelligence</groupId>
+            <artifactId>jazzer-junit</artifactId>
+            <version>${jazzer.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -307,4 +323,110 @@
             </plugin>
         </plugins>
     </build>
+    <!--profile to execute fuzz test -->
+    <profiles>
+        <profile>
+            <id>fuzz</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <properties>
+                <skipTests>true</skipTests>
+            </properties>
+            <build>
+                <plugins>
+                    <!-- Plugin to download and unpack the Jazzer agent -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <executions>
+                            <execution>
+                                <id>download-and-unpack-jazzer</id>
+                                <phase>process-test-classes</phase>
+                                <configuration>
+                                    <target>
+                                        <condition property="jazzer.os" value="windows">
+                                            <os family="windows"/>
+                                        </condition>
+                                        <condition property="jazzer.os" value="macos">
+                                            <os family="mac"/>
+                                        </condition>
+                                        <condition property="jazzer.os" value="linux">
+                                            <os family="unix"/>
+                                        </condition>
+                                        <echo message="Detected OS: ${jazzer.os}"/>
+                                        <mkdir dir="${project.build.directory}/jazzer"/>
+                                        <get src="${jazzer.baseurl}/jazzer-${jazzer.os}.tar.gz" dest="${project.build.directory}/jazzer/jazzer.tar.gz"/>
+                                        <untar compression="gzip" src="${project.build.directory}/jazzer/jazzer.tar.gz" dest="${project.build.directory}/jazzer"/>
+                                    </target>
+                                </configuration>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <!-- Copy dependencies to a directory for Jazzer to reference -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-dependency-plugin</artifactId>
+                        <version>3.4.0</version>
+                        <executions>
+                            <execution>
+                                <id>copy-dependencies</id>
+                                <phase>process-test-classes</phase>
+                                <goals>
+                                    <goal>copy-dependencies</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>${project.build.directory}/dependency-jars</outputDirectory>
+                                    <includeScope>test</includeScope>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <!-- Plugin to execute Jazzer -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <executions>
+                            <execution>
+                                <id>run-jazzer-fuzzing</id>
+                                <phase>verify</phase>
+                                <configuration>
+                                    <target>
+                                        <path id="project.classpath">
+                                            <pathelement location="${project.build.directory}/classes"/>
+                                            <pathelement location="${project.build.directory}/test-classes"/>
+                                            <fileset dir="${project.build.directory}/dependency-jars">
+                                                <include name="**/*.jar"/>
+                                            </fileset>
+                                        </path>
+                                        <pathconvert property="project.classpath.string" pathsep="${path.separator}">
+                                            <path refid="project.classpath"/>
+                                        </pathconvert>
+                                        <property environment="env"/>
+
+                                        <chmod file="${project.build.directory}/jazzer/jazzer" perm="777"/>
+
+                                        <exec executable="bash">
+                                            <arg value="-c"/>
+                                            <arg value="if [ -z &quot;${JAVA_HOME}&quot; ]; then JAVA_HOME=$(dirname $(dirname $(which java))); fi; DYLD_LIBRARY_PATH=$(find &quot;${JAVA_HOME}&quot; -type d | grep 'libexec/openjdk.jdk/Contents/Home/lib/server' 2&gt;/dev/null | head -n 1); if [ -z &quot;${DYLD_LIBRARY_PATH}&quot; ]; then DYLD_LIBRARY_PATH=&quot;${JAVA_HOME}/lib/server&quot;; fi; export DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH}; ${project.build.directory}/jazzer/jazzer --cp='${project.classpath.string}' --target_class='io.opentdf.platform.sdk.Fuzzing' --instrumentation_includes='io.opentdf.platform.sdk.**' ${jazzer.testDir}"/>
+                                        </exec>
+                                    </target>
+                                </configuration>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

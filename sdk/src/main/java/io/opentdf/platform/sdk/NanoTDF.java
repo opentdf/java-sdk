@@ -252,7 +252,7 @@ public class NanoTDF {
         PolicyObject policyObject = new PolicyObject();
         policyObject.body = new PolicyObject.Body();
         policyObject.uuid = UUID.randomUUID().toString();
-        policyObject.body.dataAttributes = new ArrayList<>();
+        policyObject.body.dataAttributes = new ArrayList<>(attributes.size());
         policyObject.body.dissem = new ArrayList<>();
 
         for (String attribute : attributes) {
