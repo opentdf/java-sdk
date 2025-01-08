@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.nimbusds.jose.*;
 
+import com.vdurmont.semver4j.Semver;
 import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
 import io.opentdf.platform.sdk.Config.TDFConfig;
@@ -202,7 +203,13 @@ public class TDF {
         private static final Base64.Encoder encoder = Base64.getEncoder();
 
         private void prepareManifest(Config.TDFConfig tdfConfig, SDK.KAS kas) {
-            manifest.tdfVersion = TDF_VERSION;
+            Semver semver = new Semver(TDF_VERSION);
+
+            if (tdfConfig.buildMetadata != null && !tdfConfig.buildMetadata.trim().isEmpty()) {
+                semver = semver.withBuild(tdfConfig.buildMetadata.trim());
+            }
+
+            manifest.tdfVersion = semver.toString();
             manifest.encryptionInformation.keyAccessType = kSplitKeyType;
             manifest.encryptionInformation.keyAccessObj = new ArrayList<>();
 

@@ -1,6 +1,10 @@
 package io.opentdf.platform.sdk;
 
 import com.nimbusds.jose.JOSEException;
+import com.vdurmont.semver4j.Semver;
+import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
+import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
+import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
 import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.TDF.Reader;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
@@ -88,6 +92,7 @@ public class TDFTest {
         byte[] key = new byte[32];
         secureRandom.nextBytes(key);
 
+        var buildMetadata = "test.01";
         var assertion1 = new AssertionConfig();
         assertion1.id = "assertion1";
         assertion1.type = AssertionConfig.Type.BaseAssertion;
@@ -104,7 +109,8 @@ public class TDFTest {
                 Config.withKasInformation(getKASInfos()),
                 Config.withMetaData("here is some metadata"),
                 Config.withDataAttributes("https://example.org/attr/a/value/b", "https://example.org/attr/c/value/d"),
-                Config.withAssertionConfig(assertion1));
+                Config.withAssertionConfig(assertion1),
+                Config.withBuildMetadata(buildMetadata));
 
         String plainText = "this is extremely sensitive stuff!!!";
         InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
@@ -131,6 +137,9 @@ public class TDFTest {
                 .withFailMessage("extracted data does not match")
                 .isEqualTo(plainText);
         assertThat(reader.getMetadata()).isEqualTo("here is some metadata");
+
+        Semver semver = new Semver( reader.getManifest().tdfVersion);
+        assertThat(semver.getBuild()).isEqualTo(buildMetadata);
 
         var policyObject = reader.readPolicyObject();
         assertThat(policyObject).isNotNull();
