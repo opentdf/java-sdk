@@ -39,6 +39,7 @@ import java.util.concurrent.ExecutionException;
 public class TDF {
 
     private static final String TDF_VERSION = "4.3.0";
+    private static final String KEY_ACCESS_SECHMA_VERSION = "4.3.0";
     private final long maximumSize;
 
     /**
@@ -314,6 +315,7 @@ public class TDF {
                     keyAccess.wrappedKey = encoder.encodeToString(wrappedKey);
                     keyAccess.encryptedMetadata = encryptedMetadata;
                     keyAccess.sid = splitID;
+                    keyAccess.schemaVersion = KEY_ACCESS_SECHMA_VERSION;
 
                     manifest.encryptionInformation.keyAccessObj.add(keyAccess);
                 }

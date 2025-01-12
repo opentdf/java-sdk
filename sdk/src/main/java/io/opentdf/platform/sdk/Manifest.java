@@ -192,6 +192,7 @@ public class Manifest {
         public String encryptedMetadata;
         public String kid;
         public String sid;
+        public String schemaVersion;
 
         @Override
         public boolean equals(Object o) {
@@ -204,12 +205,13 @@ public class Manifest {
                     && Objects.equals(protocol, keyAccess.protocol) && Objects.equals(wrappedKey, keyAccess.wrappedKey)
                     && Objects.equals(policyBinding, keyAccess.policyBinding)
                     && Objects.equals(encryptedMetadata, keyAccess.encryptedMetadata)
-                    && Objects.equals(kid, keyAccess.kid);
+                    && Objects.equals(kid, keyAccess.kid)
+                    && Objects.equals(schemaVersion, keyAccess.schemaVersion);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(keyType, url, protocol, wrappedKey, policyBinding, encryptedMetadata, kid);
+            return Objects.hash(keyType, url, protocol, wrappedKey, policyBinding, encryptedMetadata, kid, schemaVersion);
         }
     }
 
