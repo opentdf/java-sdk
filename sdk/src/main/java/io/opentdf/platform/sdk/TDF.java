@@ -39,6 +39,7 @@ import java.util.concurrent.ExecutionException;
  */
 public class TDF {
 
+    private static final String EMPTY_SPLIT_ID = "[empty]";
     private final long maximumSize;
 
     /**
@@ -598,29 +599,22 @@ public class TDF {
         Set<String> foundSplits = new HashSet<>();
 
         Map<Autoconfigure.KeySplitStep, Exception> skippedSplits = new HashMap<>();
-        boolean mixedSplits = manifest.encryptionInformation.keyAccessObj.size() > 1 &&
-                (manifest.encryptionInformation.keyAccessObj.get(0).sid != null) &&
-                !manifest.encryptionInformation.keyAccessObj.get(0).sid.isEmpty();
-
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
 
         if (manifest.payload.isEncrypted) {
             for (Manifest.KeyAccess keyAccess : manifest.encryptionInformation.keyAccessObj) {
-                Autoconfigure.KeySplitStep ss = new Autoconfigure.KeySplitStep(keyAccess.url, keyAccess.sid);
+                String splitId = keyAccess.sid == null || keyAccess.sid.isEmpty() ? EMPTY_SPLIT_ID : keyAccess.sid;
+                Autoconfigure.KeySplitStep ss = new Autoconfigure.KeySplitStep(keyAccess.url, splitId);
                 byte[] unwrappedKey;
-                if (!mixedSplits) {
+                if (foundSplits.contains(ss.splitID)) {
+                    continue;
+                }
+                knownSplits.add(ss.splitID);
+                try {
                     unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy);
-                } else {
-                    if (foundSplits.contains(ss.splitID)) {
-                        continue;
-                    }
-                    knownSplits.add(ss.splitID);
-                    try {
-                        unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy);
-                    } catch (Exception e) {
-                        skippedSplits.put(ss, e);
-                        continue;
-                    }
+                } catch (Exception e) {
+                    skippedSplits.put(ss, e);
+                    continue;
                 }
 
                 for (int index = 0; index < unwrappedKey.length; index++) {
@@ -631,8 +625,7 @@ public class TDF {
                 if (keyAccess.encryptedMetadata != null && !keyAccess.encryptedMetadata.isEmpty()) {
                     AesGcm aesGcm = new AesGcm(unwrappedKey);
 
-                    String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata),
-                            "UTF-8");
+                    String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata), StandardCharsets.UTF_8);
                     EncryptedMetadata encryptedMetadata = gson.fromJson(decodedMetadata, EncryptedMetadata.class);
 
                     var encryptedData = new AesGcm.Encrypted(
@@ -647,7 +640,7 @@ public class TDF {
                 }
             }
 
-            if (mixedSplits && knownSplits.size() > foundSplits.size()) {
+            if (knownSplits.size() > foundSplits.size()) {
                 List<Exception> exceptionList = new ArrayList<>(skippedSplits.size() + 1);
                 exceptionList.add(new Exception("splitKey.unable to reconstruct split key: " + skippedSplits));
 

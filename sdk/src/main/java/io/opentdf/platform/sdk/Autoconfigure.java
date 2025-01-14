@@ -77,14 +77,11 @@ public class Autoconfigure {
             if (this == obj) {
                 return true;
             }
-            if (obj == null || !(obj instanceof KeySplitStep)) {
+            if (!(obj instanceof KeySplitStep)) {
                 return false;
             }
             KeySplitStep ss = (KeySplitStep) obj;
-            if ((this.kas.equals(ss.kas)) && (this.splitID.equals(ss.splitID))) {
-                return true;
-            }
-            return false;
+            return (this.kas.equals(ss.kas)) && (this.splitID.equals(ss.splitID));
         }
 
         @Override
