@@ -39,7 +39,7 @@ import java.util.concurrent.ExecutionException;
  */
 public class TDF {
 
-    private static final String EMPTY_SPLIT_ID = "[empty]";
+    private static final String EMPTY_SPLIT_ID = null;
     private final long maximumSize;
 
     /**
