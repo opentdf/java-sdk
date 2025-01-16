@@ -1,16 +1,11 @@
 package io.opentdf.platform.sdk;
 
 import com.nimbusds.jose.JOSEException;
-import com.vdurmont.semver4j.Semver;
-import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
-import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
-import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
 import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.TDF.Reader;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import javax.annotation.Nonnull;
@@ -27,9 +22,6 @@ import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -92,8 +84,7 @@ public class TDFTest {
         byte[] key = new byte[32];
         secureRandom.nextBytes(key);
 
-        var buildMetadata = "test.01";
-        var assertion1 = new AssertionConfig();
+           var assertion1 = new AssertionConfig();
         assertion1.id = "assertion1";
         assertion1.type = AssertionConfig.Type.BaseAssertion;
         assertion1.scope = AssertionConfig.Scope.TrustedDataObj;
@@ -109,8 +100,7 @@ public class TDFTest {
                 Config.withKasInformation(getKASInfos()),
                 Config.withMetaData("here is some metadata"),
                 Config.withDataAttributes("https://example.org/attr/a/value/b", "https://example.org/attr/c/value/d"),
-                Config.withAssertionConfig(assertion1),
-                Config.withBuildMetadata(buildMetadata));
+                Config.withAssertionConfig(assertion1));
 
         String plainText = "this is extremely sensitive stuff!!!";
         InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
@@ -137,9 +127,6 @@ public class TDFTest {
                 .withFailMessage("extracted data does not match")
                 .isEqualTo(plainText);
         assertThat(reader.getMetadata()).isEqualTo("here is some metadata");
-
-        Semver semver = new Semver( reader.getManifest().tdfVersion);
-        assertThat(semver.getBuild()).isEqualTo(buildMetadata);
 
         var policyObject = reader.readPolicyObject();
         assertThat(policyObject).isNotNull();

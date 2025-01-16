@@ -128,7 +128,6 @@ public class Config {
         public String tdfPublicKey;
         public String tdfPrivateKey;
         public String metaData;
-        public String buildMetadata;
         public IntegrityAlgorithm integrityAlgorithm;
         public IntegrityAlgorithm segmentIntegrityAlgorithm;
         public List<Autoconfigure.AttributeValueFQN> attributes;
@@ -228,10 +227,6 @@ public class Config {
 
     public static Consumer<TDFConfig> withMetaData(String metaData) {
         return (TDFConfig config) -> config.metaData = metaData;
-    }
-
-    public static Consumer<TDFConfig> withBuildMetadata(String buildMetadata) {
-        return (TDFConfig config) -> config.buildMetadata = buildMetadata;
     }
 
     public static Consumer<TDFConfig> withSegmentSize(int size) {
