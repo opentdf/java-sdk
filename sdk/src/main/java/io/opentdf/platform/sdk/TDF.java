@@ -634,7 +634,6 @@ public class TDF {
                 if (keyAccess.encryptedMetadata != null && !keyAccess.encryptedMetadata.isEmpty()) {
                     AesGcm aesGcm = new AesGcm(unwrappedKey);
 
-
                     String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata),
                             StandardCharsets.UTF_8);
                     EncryptedMetadata encryptedMetadata = gson.fromJson(decodedMetadata, EncryptedMetadata.class);
