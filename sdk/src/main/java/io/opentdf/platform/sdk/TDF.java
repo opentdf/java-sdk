@@ -17,11 +17,9 @@ import org.erdtman.jcs.JsonCanonicalizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.StringReader;
 import java.nio.channels.SeekableByteChannel;
@@ -39,6 +37,8 @@ import java.util.concurrent.ExecutionException;
  */
 public class TDF {
 
+    private static final String TDF_VERSION = "4.3.0";
+    private static final String KEY_ACCESS_SECHMA_VERSION = "4.3.0";
     private final long maximumSize;
 
     /**
@@ -203,6 +203,7 @@ public class TDF {
         private static final Base64.Encoder encoder = Base64.getEncoder();
 
         private void prepareManifest(Config.TDFConfig tdfConfig, SDK.KAS kas) {
+            manifest.tdfVersion = TDF_VERSION;
             manifest.encryptionInformation.keyAccessType = kSplitKeyType;
             manifest.encryptionInformation.keyAccessObj = new ArrayList<>();
 
@@ -307,6 +308,7 @@ public class TDF {
                     keyAccess.wrappedKey = encoder.encodeToString(wrappedKey);
                     keyAccess.encryptedMetadata = encryptedMetadata;
                     keyAccess.sid = splitID;
+                    keyAccess.schemaVersion = KEY_ACCESS_SECHMA_VERSION;
 
                     manifest.encryptionInformation.keyAccessObj.add(keyAccess);
                 }
@@ -370,6 +372,8 @@ public class TDF {
                     throw new TDFReadFailed("failed to read payload");
                 }
 
+                var isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
+
                 if (manifest.payload.isEncrypted) {
                     String segHashAlg = manifest.encryptionInformation.integrityInformation.segmentHashAlg;
                     Config.IntegrityAlgorithm sigAlg = Config.IntegrityAlgorithm.HS256;
@@ -378,9 +382,11 @@ public class TDF {
                     }
 
                     var payloadSig = calculateSignature(readBuf, payloadKey, sigAlg);
-                    byte[] payloadSigAsBytes = payloadSig.getBytes(StandardCharsets.UTF_8);
+                    if (isLegacyTdf) {
+                        payloadSig = Hex.encodeHexString(payloadSig).getBytes(StandardCharsets.UTF_8);
+                    }
 
-                    if (segment.hash.compareTo(Base64.getEncoder().encodeToString(payloadSigAsBytes)) != 0) {
+                    if (segment.hash.compareTo(Base64.getEncoder().encodeToString(payloadSig)) != 0) {
                         throw new SegmentSignatureMismatch("segment signature miss match");
                     }
 
@@ -403,24 +409,22 @@ public class TDF {
         }
     }
 
-    private static String calculateSignature(byte[] data, byte[] secret, Config.IntegrityAlgorithm algorithm) {
+    private static byte[] calculateSignature(byte[] data, byte[] secret, Config.IntegrityAlgorithm algorithm) {
         if (algorithm == Config.IntegrityAlgorithm.HS256) {
-            byte[] hmac = CryptoUtils.CalculateSHA256Hmac(secret, data);
-            return Hex.encodeHexString(hmac);
+            return CryptoUtils.CalculateSHA256Hmac(secret, data);
         }
 
         if (kGMACPayloadLength > data.length) {
             throw new FailedToCreateGMAC("fail to create gmac signature");
         }
 
-        byte[] gmacPayload = Arrays.copyOfRange(data, data.length - kGMACPayloadLength, data.length);
-        return Hex.encodeHexString(gmacPayload);
+        return Arrays.copyOfRange(data, data.length - kGMACPayloadLength, data.length);
     }
 
     public TDFObject createTDF(InputStream payload,
             OutputStream outputStream,
             Config.TDFConfig tdfConfig, SDK.KAS kas, AttributesServiceFutureStub attrService)
-            throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException {
+            throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException, DecoderException {
 
         if (tdfConfig.autoconfigure) {
             Autoconfigure.Granter granter = new Autoconfigure.Granter(new ArrayList<>());
@@ -454,7 +458,7 @@ public class TDF {
         long encryptedSegmentSize = tdfConfig.defaultSegmentSize + kGcmIvSize + kAesBlockSize;
         TDFWriter tdfWriter = new TDFWriter(outputStream);
 
-        StringBuilder aggregateHash = new StringBuilder();
+        ByteArrayOutputStream aggregateHash = new ByteArrayOutputStream();
         byte[] readBuf = new byte[tdfConfig.defaultSegmentSize];
 
         tdfObject.manifest.encryptionInformation.integrityInformation.segments = new ArrayList<>();
@@ -476,7 +480,7 @@ public class TDF {
                 }
 
                 byte[] cipherData;
-                String segmentSig;
+                byte[] segmentSig;
                 Manifest.Segment segmentInfo = new Manifest.Segment();
 
                 // encrypt
@@ -484,9 +488,9 @@ public class TDF {
                 payloadOutput.write(cipherData);
 
                 segmentSig = calculateSignature(cipherData, tdfObject.payloadKey, tdfConfig.segmentIntegrityAlgorithm);
-                segmentInfo.hash = Base64.getEncoder().encodeToString(segmentSig.getBytes(StandardCharsets.UTF_8));
+                segmentInfo.hash = Base64.getEncoder().encodeToString(segmentSig);
 
-                aggregateHash.append(segmentSig);
+                aggregateHash.write(segmentSig);
                 segmentInfo.segmentSize = readThisLoop;
                 segmentInfo.encryptedSegmentSize = cipherData.length;
 
@@ -496,9 +500,9 @@ public class TDF {
 
         Manifest.RootSignature rootSignature = new Manifest.RootSignature();
 
-        String rootSig = calculateSignature(aggregateHash.toString().getBytes(),
+        byte[] rootSig = calculateSignature(aggregateHash.toByteArray(),
                 tdfObject.payloadKey, tdfConfig.integrityAlgorithm);
-        rootSignature.signature = Base64.getEncoder().encodeToString(rootSig.getBytes(StandardCharsets.UTF_8));
+        rootSignature.signature = Base64.getEncoder().encodeToString(rootSig);
 
         String alg = kGmacIntegrityAlgorithm;
         if (tdfConfig.integrityAlgorithm == Config.IntegrityAlgorithm.HS256) {
@@ -534,19 +538,24 @@ public class TDF {
             assertion.statement = assertionConfig.statement;
             assertion.appliesToState = assertionConfig.appliesToState.toString();
 
-            var assertionHash = assertion.hash();
-            var completeHashBuilder = new StringBuilder(aggregateHash);
-            completeHashBuilder.append(assertionHash);
+            var assertionHashAsHex = assertion.hash();
+            var assertionHash = Hex.decodeHex(assertionHashAsHex);
+            byte[] completeHash = new byte[aggregateHash.size() + assertionHash.length];
+            System.arraycopy(aggregateHash.toByteArray(), 0, completeHash, 0, aggregateHash.size());
+            System.arraycopy(assertionHash, 0, completeHash, aggregateHash.size(), assertionHash.length);
 
-            var encodedHash = Base64.getEncoder().encodeToString(completeHashBuilder.toString().getBytes());
+            var encodedHash = Base64.getEncoder().encodeToString(completeHash);
 
             var assertionSigningKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256,
                     tdfObject.aesGcm.getKey());
             if (assertionConfig.signingKey != null && assertionConfig.signingKey.isDefined()) {
                 assertionSigningKey = assertionConfig.signingKey;
             }
-
-            assertion.sign(new Manifest.Assertion.HashValues(assertionHash, encodedHash), assertionSigningKey);
+            var hashValues = new Manifest.Assertion.HashValues(
+                    assertionHashAsHex,
+                    encodedHash
+            );
+            assertion.sign(hashValues, assertionSigningKey);
             signedAssertions.add(assertion);
         }
 
@@ -594,7 +603,7 @@ public class TDF {
         byte[] payloadKey = new byte[GCM_KEY_SIZE];
         String unencryptedMetadata = null;
 
-        Set<String> knownSplits = new HashSet<String>();
+        Set<String> knownSplits = new HashSet<>();
         Set<String> foundSplits = new HashSet<>();
 
         Map<Autoconfigure.KeySplitStep, Exception> skippedSplits = new HashMap<>();
@@ -632,7 +641,7 @@ public class TDF {
                     AesGcm aesGcm = new AesGcm(unwrappedKey);
 
                     String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata),
-                            "UTF-8");
+                            StandardCharsets.UTF_8);
                     EncryptedMetadata encryptedMetadata = gson.fromJson(decodedMetadata, EncryptedMetadata.class);
 
                     var encryptedData = new AesGcm.Encrypted(
@@ -679,6 +688,7 @@ public class TDF {
         }
 
         String rootSigValue;
+        boolean isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
         if (manifest.payload.isEncrypted) {
             Config.IntegrityAlgorithm sigAlg = Config.IntegrityAlgorithm.HS256;
             if (rootAlgorithm.compareToIgnoreCase(kGmacIntegrityAlgorithm) == 0) {
@@ -686,8 +696,10 @@ public class TDF {
             }
 
             var sig = calculateSignature(aggregateHash.toByteArray(), payloadKey, sigAlg);
-            rootSigValue = Base64.getEncoder().encodeToString(sig.getBytes(StandardCharsets.UTF_8));
-
+            if (isLegacyTdf) {
+                sig = Hex.encodeHexString(sig).getBytes();
+            }
+            rootSigValue = Base64.getEncoder().encodeToString(sig);
         } else {
             rootSigValue = Base64.getEncoder().encodeToString(digest.digest(aggregateHash.toString().getBytes()));
         }
@@ -703,6 +715,7 @@ public class TDF {
             throw new SegmentSizeMismatch("mismatch encrypted segment size in manifest");
         }
 
+        var aggregateHashByteArrayBytes = aggregateHash.toByteArray();
         // Validate assertions
         for (var assertion : manifest.assertions) {
             // Skip assertion verification if disabled
@@ -721,15 +734,17 @@ public class TDF {
             }
 
             var hashValues = assertion.verify(assertionKey);
-            var assertionAsJson = gson.toJson(assertion);
-            JsonCanonicalizer jc = new JsonCanonicalizer(assertionAsJson);
-            var hashOfAssertion = Hex.encodeHexString(digest.digest(jc.getEncodedUTF8()));
-            var signature = aggregateHash + hashOfAssertion;
-            var encodeSignature = Base64.getEncoder().encodeToString(signature.getBytes());
+            var hashOfAssertionAsHex = assertion.hash();
 
-            if (!Objects.equals(hashOfAssertion, hashValues.getAssertionHash())) {
+            if (!Objects.equals(hashOfAssertionAsHex, hashValues.getAssertionHash())) {
                 throw new AssertionException("assertion hash mismatch", assertion.id);
             }
+
+            byte[] hashOfAssertion = isLegacyTdf ? hashOfAssertionAsHex.getBytes(StandardCharsets.UTF_8) : Hex.decodeHex(hashOfAssertionAsHex);
+            var signature = new byte[aggregateHashByteArrayBytes.length + hashOfAssertion.length];
+            System.arraycopy(aggregateHashByteArrayBytes, 0, signature, 0, aggregateHashByteArrayBytes.length);
+            System.arraycopy(hashOfAssertion, 0, signature, aggregateHashByteArrayBytes.length, hashOfAssertion.length);
+            var encodeSignature = Base64.getEncoder().encodeToString(signature);
 
             if (!Objects.equals(encodeSignature, hashValues.getSignature())) {
                 throw new AssertionException("failed integrity check on assertion signature", assertion.id);

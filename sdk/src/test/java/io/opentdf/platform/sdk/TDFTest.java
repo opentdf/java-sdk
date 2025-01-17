@@ -6,7 +6,6 @@ import io.opentdf.platform.sdk.TDF.Reader;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import javax.annotation.Nonnull;
@@ -23,9 +22,6 @@ import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -88,7 +84,7 @@ public class TDFTest {
         byte[] key = new byte[32];
         secureRandom.nextBytes(key);
 
-        var assertion1 = new AssertionConfig();
+           var assertion1 = new AssertionConfig();
         assertion1.id = "assertion1";
         assertion1.type = AssertionConfig.Type.BaseAssertion;
         assertion1.scope = AssertionConfig.Scope.TrustedDataObj;

@@ -6,11 +6,13 @@ import java.nio.charset.StandardCharsets;
 import java.io.FileOutputStream;
 
 import com.nimbusds.jose.JOSEException;
+import org.apache.commons.codec.DecoderException;
+
 import java.io.IOException;
 import java.util.concurrent.ExecutionException;
 
 public class EncryptExample {
-    public static void main(String[] args) throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException {
+    public static void main(String[] args) throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException, DecoderException {
         String clientId = "opentdf";
         String clientSecret = "secret";
         String platformEndpoint = "localhost:8080";
