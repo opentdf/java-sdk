@@ -1,18 +1,28 @@
 package io.opentdf.platform.sdk;
 
-import com.google.gson.*;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonSerializationContext;
+import com.google.gson.JsonSerializer;
 import com.google.gson.annotations.JsonAdapter;
 import com.google.gson.annotations.SerializedName;
-import com.nimbusds.jose.*;
+import com.nimbusds.jose.JOSEException;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.JWSSigner;
+import com.nimbusds.jose.JWSVerifier;
+import com.nimbusds.jose.KeyLengthException;
 import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
-
 import io.opentdf.platform.sdk.TDF.AssertionException;
-
 import org.apache.commons.codec.binary.Hex;
 import org.erdtman.jcs.JsonCanonicalizer;
 
@@ -44,21 +54,20 @@ public class Manifest {
     private static final Gson gson = new GsonBuilder()
                                         .registerTypeAdapter(Manifest.class, new ManifestDeserializer())
                                         .create();
+    @SerializedName(value = "schemaVersion")
+    String tdfVersion;
 
     @Override
     public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
         Manifest manifest = (Manifest) o;
-        return Objects.equals(encryptionInformation, manifest.encryptionInformation)
-                && Objects.equals(payload, manifest.payload) && Objects.equals(assertions, manifest.assertions);
+        return Objects.equals(tdfVersion, manifest.tdfVersion) && Objects.equals(encryptionInformation, manifest.encryptionInformation) && Objects.equals(payload, manifest.payload) && Objects.equals(assertions, manifest.assertions);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(encryptionInformation, payload, assertions);
+        return Objects.hash(tdfVersion, encryptionInformation, payload, assertions);
     }
 
     private static class PolicyBindingSerializer implements JsonDeserializer<Object>, JsonSerializer<Object> {
@@ -183,6 +192,7 @@ public class Manifest {
         public String encryptedMetadata;
         public String kid;
         public String sid;
+        public String schemaVersion;
 
         @Override
         public boolean equals(Object o) {
@@ -195,12 +205,13 @@ public class Manifest {
                     && Objects.equals(protocol, keyAccess.protocol) && Objects.equals(wrappedKey, keyAccess.wrappedKey)
                     && Objects.equals(policyBinding, keyAccess.policyBinding)
                     && Objects.equals(encryptedMetadata, keyAccess.encryptedMetadata)
-                    && Objects.equals(kid, keyAccess.kid);
+                    && Objects.equals(kid, keyAccess.kid)
+                    && Objects.equals(schemaVersion, keyAccess.schemaVersion);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(keyType, url, protocol, wrappedKey, policyBinding, encryptedMetadata, kid);
+            return Objects.hash(keyType, url, protocol, wrappedKey, policyBinding, encryptedMetadata, kid, schemaVersion);
         }
     }
 

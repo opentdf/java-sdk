@@ -52,9 +52,15 @@ import nl.altindag.ssl.util.TrustManagerUtils;
 
 import javax.net.ssl.TrustManager;
 
-
-@CommandLine.Command(name = "tdf", subcommands = {HelpCommand.class})
+@CommandLine.Command(
+    name = "tdf",
+    subcommands = {HelpCommand.class},
+    version = "{\"version\":\"0.7.5\",\"tdfSpecVersion\":\"4.3.0\"}"
+)
 class Command {
+
+    @Option(names = {"-V", "--version"}, versionHelp = true, description = "display version info")
+    boolean versionInfoRequested;
 
     private static final String PRIVATE_KEY_HEADER = "-----BEGIN PRIVATE KEY-----";
     private static final String PRIVATE_KEY_FOOTER = "-----END PRIVATE KEY-----";
@@ -150,7 +156,7 @@ class Command {
             @Option(names = { "--mime-type" }, defaultValue = Option.NULL_VALUE) Optional<String> mimeType,
             @Option(names = { "--with-assertions" }, defaultValue = Option.NULL_VALUE) Optional<String> assertion)
 
-            throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException {
+            throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException, DecoderException {
 
         var sdk = buildSDK();
         var kasInfos = kas.stream().map(k -> {
