@@ -9,7 +9,7 @@ import java.io.StringReader;
 import java.util.List;
 import java.util.Map;
 
-import static org.assertj.core.api.Java6Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -153,7 +153,7 @@ public class ManifestTest {
     }
 
     @Test
-    public void testReadingManifestWithObjectStatementValue() throws IOException {
+    void testReadingManifestWithObjectStatementValue() throws IOException {
         final Manifest manifest;
         try (var mStream = getClass().getResourceAsStream("/io.opentdf.platform.sdk.TestData/manifest-with-object-statement-value.json")) {
             assert mStream != null;
