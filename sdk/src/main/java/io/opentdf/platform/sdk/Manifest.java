@@ -8,12 +8,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
-import com.google.gson.TypeAdapter;
 import com.google.gson.annotations.JsonAdapter;
 import com.google.gson.annotations.SerializedName;
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonToken;
-import com.google.gson.stream.JsonWriter;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -490,7 +486,10 @@ public class Manifest {
                 statement.schema = obj.get("schema").getAsString();
             }
             if (obj.has("value")) {
-                statement.value = obj.get("value").toString();
+                var value = obj.get("value");
+                statement.value = value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()
+                        ? value.getAsString()
+                        : value.toString();
             }
             return statement;
         }
