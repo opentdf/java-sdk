@@ -1,18 +1,18 @@
 package io.opentdf.platform.sdk;
 
-import org.junit.jupiter.api.Test;
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import org.junit.jupiter.api.Test;
 
-import io.opentdf.platform.sdk.Manifest.ManifestDeserializer;
-
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.StringReader;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.Assert.assertNotNull;
+import static org.assertj.core.api.Java6Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ManifestTest {
     @Test
@@ -64,15 +64,11 @@ public class ManifestTest {
                 "  }\n" +
                 "}";
 
-        GsonBuilder gsonBuilder = new GsonBuilder();
-        Gson gson = gsonBuilder.setPrettyPrinting()
-                        .registerTypeAdapter(Manifest.class, new ManifestDeserializer())
-                        .create();
-        Manifest manifest = gson.fromJson(kManifestJsonFromTDF, Manifest.class);
+        Manifest manifest = Manifest.readManifest(new StringReader(kManifestJsonFromTDF));
 
         // Test payload
         assertEquals(manifest.payload.url, "0.payload");
-        assertEquals(manifest.payload.isEncrypted, true);
+        assertTrue(manifest.payload.isEncrypted);
 
         // Test encryptionInformation
         assertEquals(manifest.encryptionInformation.keyAccessType, "split");
@@ -90,8 +86,8 @@ public class ManifestTest {
         assertEquals(manifest.encryptionInformation.integrityInformation.segmentHashAlg, "GMAC");
         assertEquals(manifest.encryptionInformation.integrityInformation.segments.get(0).segmentSize, 1048576);
 
-        var serialized = gson.toJson(manifest);
-        var deserializedAgain = gson.fromJson(serialized, Manifest.class);
+        var serialized = Manifest.toJson(manifest);
+        var deserializedAgain = Manifest.readManifest(new StringReader(serialized));
 
         assertEquals(manifest, deserializedAgain, "something changed when we deserialized -> serialized -> deserialized");
     }
@@ -146,18 +142,43 @@ public class ManifestTest {
                 "   \"assertions\": null\n"+
                 "}";
 
-        GsonBuilder gsonBuilder = new GsonBuilder();
-        Gson gson = gsonBuilder.setPrettyPrinting()
-                        .registerTypeAdapter(Manifest.class, new ManifestDeserializer())
-                        .create();
-        Manifest manifest = gson.fromJson(kManifestJsonFromTDF, Manifest.class);
+        Manifest manifest = Manifest.readManifest(new StringReader(kManifestJsonFromTDF));
 
         // Test payload for sanity check
         assertEquals(manifest.payload.url, "0.payload");
-        assertEquals(manifest.payload.isEncrypted, true);
+        assertTrue(manifest.payload.isEncrypted);
         // Test assertion deserialization
         assertNotNull(manifest.assertions);
         assertEquals(manifest.assertions.size(), 0);
+    }
 
+    @Test
+    public void testReadingManifestWithObjectStatementValue() throws IOException {
+        final Manifest manifest;
+        try (var mStream = getClass().getResourceAsStream("/io.opentdf.platform.sdk.TestData/manifest-with-object-statement-value.json")) {
+            assert mStream != null;
+            manifest = Manifest.readManifest(new InputStreamReader(mStream)) ;
+        }
+
+        assertThat(manifest.assertions).hasSize(2);
+
+        var statementValStr = manifest.assertions.get(0).statement.value;
+        var statementVal = new Gson().fromJson(statementValStr, Map.class);
+        assertThat(statementVal).isEqualTo(
+                Map.of("ocl",
+                        Map.of("pol", "2ccf11cb-6c9a-4e49-9746-a7f0a295945d",
+                                "cls", "SECRET",
+                                "catl", List.of(
+                                        Map.of(
+                                                "type", "P",
+                                                "name", "Releasable To",
+                                                "vals", List.of("usa")
+                                        )
+                                ),
+                                "dcr", "2024-12-17T13:00:52Z"
+                                ),
+                        "context", Map.of("@base", "urn:nato:stanag:5636:A:1:elements:json")
+                        )
+        );
     }
 }

@@ -1,8 +1,6 @@
 package io.opentdf.platform.sdk;
-import com.google.gson.GsonBuilder;
 
-import io.opentdf.platform.sdk.Manifest.ManifestDeserializer;
-
+import com.google.gson.Gson;
 import org.apache.commons.compress.archivers.zip.Zip64Mode;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
@@ -22,9 +20,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class ZipReaderTest {
 
@@ -47,9 +42,7 @@ public class ZipReaderTest {
             if (entry.getName().endsWith(".json")) {
                 entry.getData().transferTo(stream);
                 var data = stream.toString(StandardCharsets.UTF_8);
-                var gson = new GsonBuilder()
-                                    .registerTypeAdapter(Manifest.class, new ManifestDeserializer())
-                                    .create();
+                var gson = new Gson();
                 var map = gson.fromJson(data, Map.class);
                 
                 if (test) {
