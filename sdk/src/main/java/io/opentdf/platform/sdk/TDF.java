@@ -39,7 +39,7 @@ public class TDF {
 
     private static final String EMPTY_SPLIT_ID = "";
     private static final String TDF_VERSION = "4.3.0";
-    private static final String KEY_ACCESS_SECHMA_VERSION = "4.3.0";
+    private static final String KEY_ACCESS_SECHMA_VERSION = "1.0";
     private final long maximumSize;
 
     /**
