@@ -475,7 +475,7 @@ public class Manifest {
         @Override
         public AssertionConfig.Statement deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
             if (!json.isJsonObject()) {
-                throw new IllegalArgumentException(String.format("%s must be json objects", AssertionConfig.Statement.class.getName()));
+                throw new IllegalArgumentException(String.format("%s is not a JSON object", AssertionConfig.Statement.class.getName()));
             }
             var obj = json.getAsJsonObject();
             var statement = new AssertionConfig.Statement();
@@ -487,9 +487,18 @@ public class Manifest {
             }
             if (obj.has("value")) {
                 var value = obj.get("value");
-                statement.value = value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()
-                        ? value.getAsString()
-                        : value.toString();
+                if (value.isJsonPrimitive()) {
+                    assert value.getAsJsonPrimitive().isString();
+                    statement.value = value.getAsString();
+                } else {
+                    assert value.isJsonObject();
+                    var valueJson = value.toString();
+                    try {
+                        statement.value = new JsonCanonicalizer(valueJson).getEncodedString();
+                    } catch (IOException e) {
+                        throw new SDKException("error canonicalizing JSON", e);
+                    }
+                }
             }
             return statement;
         }
