@@ -533,7 +533,6 @@ public class TDF {
             assertion.type = assertionConfig.type.toString();
             assertion.scope = assertionConfig.scope.toString();
             assertion.statement = assertionConfig.statement;
-            assertion.statement.format = "string";
             assertion.appliesToState = assertionConfig.appliesToState.toString();
 
             var assertionHashAsHex = assertion.hash();
