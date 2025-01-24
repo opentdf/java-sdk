@@ -1,22 +1,22 @@
 package io.opentdf.platform;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.nimbusds.jose.JOSEException;
-import io.opentdf.platform.sdk.*;
-import io.opentdf.platform.sdk.TDF;
+import io.opentdf.platform.sdk.AssertionConfig;
+import io.opentdf.platform.sdk.AutoConfigureException;
+import io.opentdf.platform.sdk.Config;
 import io.opentdf.platform.sdk.Config.AssertionVerificationKeys;
-
-import com.google.gson.Gson;
+import io.opentdf.platform.sdk.NanoTDF;
+import io.opentdf.platform.sdk.SDK;
+import io.opentdf.platform.sdk.SDKBuilder;
+import io.opentdf.platform.sdk.TDF;
+import nl.altindag.ssl.SSLFactory;
 import org.apache.commons.codec.DecoderException;
-import org.bouncycastle.crypto.RuntimeCryptoException;
-
 import picocli.CommandLine;
 import picocli.CommandLine.HelpCommand;
 import picocli.CommandLine.Option;
 
-import javax.crypto.BadPaddingException;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.NoSuchPaddingException;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -30,14 +30,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
+import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
-import java.security.KeyFactory;
-import java.security.PrivateKey;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -46,11 +43,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
-
-import nl.altindag.ssl.SSLFactory;
-import nl.altindag.ssl.util.TrustManagerUtils;
-
-import javax.net.ssl.TrustManager;
 
 @CommandLine.Command(
     name = "tdf",
@@ -234,12 +226,11 @@ class Command {
 
     @CommandLine.Command(name = "decrypt")
     void decrypt(@Option(names = { "-f", "--file" }, required = true) Path tdfPath,
+            @Option(names = { "--with-assertion-verification-disabled" }, defaultValue = "false") boolean disableAssertionVerification,
             @Option(names = { "--with-assertion-verification-keys" }, defaultValue = Option.NULL_VALUE) Optional<String> assertionVerification)
-             throws IOException,
-            InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException,
-            BadPaddingException, InvalidKeyException, TDF.FailedToCreateGMAC,
-            JOSEException, ParseException, NoSuchAlgorithmException, DecoderException {
+             throws IOException, TDF.FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException, DecoderException {
         var sdk = buildSDK();
+        var opts = new ArrayList<Consumer<Config.TDFReaderConfig>>();
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
             try (var stdout = new BufferedOutputStream(System.out)) {
                 if (assertionVerification.isPresent()) {
@@ -269,14 +260,17 @@ class Command {
                             throw new RuntimeException("Error with assertion verification key: " + e.getMessage(), e);
                         }
                     }
-                    Config.TDFReaderConfig readerConfig = Config.newTDFReaderConfig(
-                        Config.withAssertionVerificationKeys(assertionVerificationKeys));
-                    var reader = new TDF().loadTDF(in, sdk.getServices().kas(), readerConfig);
-                    reader.readPayload(stdout);
-                } else {
-                    var reader = new TDF().loadTDF(in, sdk.getServices().kas());
-                    reader.readPayload(stdout);
+                    opts.add(Config.withAssertionVerificationKeys(assertionVerificationKeys));
                 }
+
+                if (disableAssertionVerification) {
+                    opts.add(Config.withDisableAssertionVerification(true));
+                }
+
+                var arrayOpts = (Consumer<Config.TDFReaderConfig>[])opts.toArray();
+                var readerConfig = Config.newTDFReaderConfig(arrayOpts);
+                var reader = new TDF().loadTDF(in, sdk.getServices().kas(), readerConfig);
+                reader.readPayload(stdout);
             }
         }
     }
