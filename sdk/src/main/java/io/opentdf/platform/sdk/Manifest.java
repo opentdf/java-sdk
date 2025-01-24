@@ -322,7 +322,6 @@ public class Manifest {
         public String appliesToState;
         public AssertionConfig.Statement statement;
         public Binding binding;
-
         static public class HashValues {
             private final String assertionHash;
             private final String signature;
@@ -492,12 +491,7 @@ public class Manifest {
                     statement.value = value.getAsString();
                 } else {
                     assert value.isJsonObject();
-                    var valueJson = value.toString();
-                    try {
-                        statement.value = new JsonCanonicalizer(valueJson).getEncodedString();
-                    } catch (IOException e) {
-                        throw new SDKException("error canonicalizing JSON", e);
-                    }
+                    statement.value = value.toString();
                 }
             }
             return statement;
