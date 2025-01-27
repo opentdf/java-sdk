@@ -11,8 +11,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ManifestTest {
     @Test
@@ -68,7 +66,7 @@ public class ManifestTest {
 
         // Test payload
         assertEquals(manifest.payload.url, "0.payload");
-        assertTrue(manifest.payload.isEncrypted);
+        assertThat(manifest.payload.isEncrypted).isTrue();
 
         // Test encryptionInformation
         assertEquals(manifest.encryptionInformation.keyAccessType, "split");
@@ -146,9 +144,9 @@ public class ManifestTest {
 
         // Test payload for sanity check
         assertEquals(manifest.payload.url, "0.payload");
-        assertTrue(manifest.payload.isEncrypted);
+        assertThat(manifest.payload.isEncrypted).isTrue();
         // Test assertion deserialization
-        assertNotNull(manifest.assertions);
+        assertThat(manifest.assertions).isNotNull();
         assertEquals(manifest.assertions.size(), 0);
     }
 
