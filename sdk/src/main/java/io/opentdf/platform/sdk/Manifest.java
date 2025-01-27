@@ -487,10 +487,9 @@ public class Manifest {
             if (obj.has("value")) {
                 var value = obj.get("value");
                 if (value.isJsonPrimitive()) {
-                    assert value.getAsJsonPrimitive().isString();
+                    // it's already a primitive (hopefully string) so we don't need its escaped value here
                     statement.value = value.getAsString();
                 } else {
-                    assert value.isJsonObject();
                     statement.value = value.toString();
                 }
             }
