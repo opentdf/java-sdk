@@ -267,8 +267,7 @@ class Command {
                     opts.add(Config.withDisableAssertionVerification(true));
                 }
 
-                var arrayOpts = (Consumer<Config.TDFReaderConfig>[])opts.toArray();
-                var readerConfig = Config.newTDFReaderConfig(arrayOpts);
+                var readerConfig = Config.newTDFReaderConfig(opts.toArray(new Consumer[0]));
                 var reader = new TDF().loadTDF(in, sdk.getServices().kas(), readerConfig);
                 reader.readPayload(stdout);
             }
