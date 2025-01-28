@@ -7,13 +7,11 @@ import com.nimbusds.jose.*;
 import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
 import io.opentdf.platform.sdk.Config.TDFConfig;
-import io.opentdf.platform.sdk.Manifest.ManifestDeserializer;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
 import io.opentdf.platform.sdk.Config.KASInfo;
 
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
-import org.erdtman.jcs.JsonCanonicalizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,9 +77,7 @@ public class TDF {
 
     private static final SecureRandom sRandom = new SecureRandom();
 
-    private static final Gson gson = new GsonBuilder()
-                                        .registerTypeAdapter(Manifest.class, new ManifestDeserializer())
-                                        .create();
+    private static final Gson gson = new GsonBuilder().create();
 
     public class SplitKeyException extends IOException {
         public SplitKeyException(String errorMessage) {
@@ -561,7 +557,7 @@ public class TDF {
         }
 
         tdfObject.manifest.assertions = signedAssertions;
-        String manifestAsStr = gson.toJson(tdfObject.manifest);
+        String manifestAsStr = Manifest.toJson(tdfObject.manifest);
 
         tdfWriter.appendManifest(manifestAsStr);
         tdfObject.size = tdfWriter.finish();

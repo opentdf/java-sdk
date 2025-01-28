@@ -52,10 +52,14 @@ public class Manifest {
     private static final String kAssertionSignature = "assertionSig";
 
     private static final Gson gson = new GsonBuilder()
-                                        .registerTypeAdapter(Manifest.class, new ManifestDeserializer())
-                                        .create();
+            .registerTypeAdapter(AssertionConfig.Statement.class, new AssertionValueAdapter())
+            .create();
     @SerializedName(value = "schemaVersion")
     String tdfVersion;
+
+    public static String toJson(Manifest manifest) {
+        return gson.toJson(manifest);
+    }
 
     @Override
     public boolean equals(Object o) {
@@ -318,7 +322,6 @@ public class Manifest {
         public String appliesToState;
         public AssertionConfig.Statement statement;
         public Binding binding;
-
         static public class HashValues {
             private final String assertionHash;
             private final String signature;
@@ -467,28 +470,43 @@ public class Manifest {
         }
     }
 
-    public EncryptionInformation encryptionInformation;
-    public Payload payload;
-    public List<Assertion> assertions = new ArrayList<>();
-
-    public static class ManifestDeserializer implements JsonDeserializer<Object> {
+    public static class AssertionValueAdapter implements JsonDeserializer<AssertionConfig.Statement> {
         @Override
-        public Manifest deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
-            // Let Gson handle the default deserialization of the object first
-            Manifest manifest = new Gson().fromJson(json, typeOfT);
-            // Now check if the `assertions` field is null and replace it with an empty list if necessary
-            if (manifest.assertions == null) {
-                manifest.assertions = new ArrayList<>();  // Replace null with empty list
+        public AssertionConfig.Statement deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+            if (!json.isJsonObject()) {
+                throw new IllegalArgumentException(String.format("%s is not a JSON object", AssertionConfig.Statement.class.getName()));
             }
-            return manifest;
+            var obj = json.getAsJsonObject();
+            var statement = new AssertionConfig.Statement();
+            if (obj.has("format")) {
+                statement.format = obj.get("format").getAsString();
+            }
+            if (obj.has("schema")) {
+                statement.schema = obj.get("schema").getAsString();
+            }
+            if (obj.has("value")) {
+                var value = obj.get("value");
+                if (value.isJsonPrimitive()) {
+                    // it's already a primitive (hopefully string) so we don't need its escaped value here
+                    statement.value = value.getAsString();
+                } else {
+                    statement.value = value.toString();
+                }
+            }
+            return statement;
         }
     }
 
+    public EncryptionInformation encryptionInformation;
+    public Payload payload;
+    public List<Assertion> assertions = new ArrayList<>();
     protected static Manifest readManifest(Reader reader) {
         Manifest result = gson.fromJson(reader, Manifest.class);
-        if (result == null) {
-            throw new IllegalArgumentException("Manifest is null");
-        } else if (result.payload == null) {
+        if (result.assertions == null) {
+            result.assertions = new ArrayList<>();
+        }
+
+        if (result.payload == null) {
             throw new IllegalArgumentException("Manifest with null payload");
         } else if (result.encryptionInformation == null) {
             throw new IllegalArgumentException("Manifest with null encryptionInformation");
