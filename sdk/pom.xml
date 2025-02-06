@@ -6,7 +6,7 @@
     <parent>
         <artifactId>sdk-pom</artifactId>
         <groupId>io.opentdf.platform</groupId>
-        <version>0.7.6</version>
+        <version>0.7.7-SNAPSHOT</version>
     </parent>
     <packaging>jar</packaging>
     <properties>
