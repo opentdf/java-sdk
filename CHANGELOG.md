@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.7.6](https://github.com/opentdf/java-sdk/compare/v0.7.5...v0.7.6) (2025-02-06)
+
+
+### Features
+
+* Add assertion verification ([#216](https://github.com/opentdf/java-sdk/issues/216)) ([e0f8caf](https://github.com/opentdf/java-sdk/commit/e0f8caf34055a829a5f40dc3608b7573bfbd5f71))
+* **cmdline:** assertions cli support ([#204](https://github.com/opentdf/java-sdk/issues/204)) ([3325114](https://github.com/opentdf/java-sdk/commit/332511402d9cdaf57e3e25f5030dbc0107994d9b))
+* **sdk:** Add and expose tamper error types ([#187](https://github.com/opentdf/java-sdk/issues/187)) ([b4f95e6](https://github.com/opentdf/java-sdk/commit/b4f95e6756f1f60fdfc8b0c2addc4e51aca4352b))
+* **sdk:** adds Collections API ([#212](https://github.com/opentdf/java-sdk/issues/212)) ([1ee1367](https://github.com/opentdf/java-sdk/commit/1ee13672aa22cad1d6ca391508eb859c5617a9a0))
+
+
+### Bug Fixes
+
+* Correct null assertions when deserializing ([#211](https://github.com/opentdf/java-sdk/issues/211)) ([b075194](https://github.com/opentdf/java-sdk/commit/b07519407ee128c6fed0596a679cdf637cf749fc))
+* incorrect isStreamable serialized name ([#210](https://github.com/opentdf/java-sdk/issues/210)) ([32825b0](https://github.com/opentdf/java-sdk/commit/32825b0b79e004a19f5099e4af2bcc8754d78622))
+* NanoTDF secure key from debug logging and iv conflict risk ([#208](https://github.com/opentdf/java-sdk/issues/208)) ([6301d32](https://github.com/opentdf/java-sdk/commit/6301d32c17b31c710073d898edcc2fb4ff1d3e36))
+* **sdk:** deserialize object statement values correctly ([#219](https://github.com/opentdf/java-sdk/issues/219)) ([c513e8c](https://github.com/opentdf/java-sdk/commit/c513e8c7204d1c0b15a0031d9b829be3a98d04e6))
+* **sdk:** Fuzz testing and protocol fixes ([#214](https://github.com/opentdf/java-sdk/issues/214)) ([cf6f932](https://github.com/opentdf/java-sdk/commit/cf6f9328ef32efbb130ce0f2ba39f5655125282c))
+* **sdk:** group splits with empty/missing split IDs together ([#217](https://github.com/opentdf/java-sdk/issues/217)) ([0f47702](https://github.com/opentdf/java-sdk/commit/0f477029ce355eced8710b9d7f09ab5840ba680e))
+* **sdk:** remove hex encoding ([#213](https://github.com/opentdf/java-sdk/issues/213)) ([e076d11](https://github.com/opentdf/java-sdk/commit/e076d1174edbcf9e03b52d356a4b3f73d7fea6eb))
+* **sdk:** uses offset for ByteBuffer array offset ([#209](https://github.com/opentdf/java-sdk/issues/209)) ([0d6e761](https://github.com/opentdf/java-sdk/commit/0d6e7616f0d57d461a0f9002f395f8e2c7365cd3))
+* Use reusable start-additional-kas workflow ([#215](https://github.com/opentdf/java-sdk/issues/215)) ([cb6f757](https://github.com/opentdf/java-sdk/commit/cb6f757b170e326872767bc0b68a7d1dcf9ac24c))
+
 ## [0.7.5](https://github.com/opentdf/java-sdk/compare/v0.7.4...v0.7.5) (2024-10-29)
 
 
