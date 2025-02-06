@@ -5,6 +5,7 @@ import io.opentdf.platform.sdk.nanotdf.*;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.util.*;
@@ -31,6 +32,19 @@ public class NanoTDF {
     private static final int kIvPadding = 9;
     private static final int kNanoTDFIvSize = 3;
     private static final byte[] kEmptyIV = new byte[] { 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 };
+    private final CollectionStore collectionStore;
+
+    public NanoTDF() {
+        this(new CollectionStore.NoOpCollectionStore());
+    }
+
+    public NanoTDF(boolean collectionStoreEnabled) {
+        this(collectionStoreEnabled ? new CollectionStoreImpl() : null);
+    }
+
+    public NanoTDF(CollectionStore collectionStore) {
+        this.collectionStore = collectionStore;
+    }
 
     public static class NanoTDFMaxSizeLimit extends Exception {
         public NanoTDFMaxSizeLimit(String errorMessage) {
@@ -50,19 +64,16 @@ public class NanoTDF {
         }
     }
 
-    public int createNanoTDF(ByteBuffer data, OutputStream outputStream,
-            Config.NanoTDFConfig nanoTDFConfig,
-            SDK.KAS kas) throws IOException, NanoTDFMaxSizeLimit, InvalidNanoTDFConfig,
-            NoSuchAlgorithmException, UnsupportedNanoTDFFeature {
-
-        int nanoTDFSize = 0;
-        Gson gson = new GsonBuilder().create();
-
-        int dataSize = data.limit();
-        if (dataSize > kMaxTDFSize) {
-            throw new NanoTDFMaxSizeLimit("exceeds max size for nano tdf");
+    private Config.HeaderInfo getHeaderInfo(Config.NanoTDFConfig nanoTDFConfig, SDK.KAS kas)
+            throws InvalidNanoTDFConfig, UnsupportedNanoTDFFeature, NoSuchAlgorithmException, InterruptedException {
+        if (nanoTDFConfig.collectionConfig.useCollection) {
+            Config.HeaderInfo headerInfo = nanoTDFConfig.collectionConfig.getHeaderInfo();
+            if (headerInfo != null) {
+                return headerInfo;
+            }
         }
 
+        Gson gson = new GsonBuilder().create();
         if (nanoTDFConfig.kasInfoList.isEmpty()) {
             throw new InvalidNanoTDFConfig("kas url is missing");
         }
@@ -88,7 +99,6 @@ public class NanoTDF {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         byte[] hashOfSalt = digest.digest(MAGIC_NUMBER_AND_VERSION);
         byte[] key = ECKeyPair.calculateHKDF(hashOfSalt, symmetricKey);
-        logger.debug("createNanoTDF key is - {}", Base64.getEncoder().encodeToString(key));
 
         // Encrypt policy
         PolicyObject policyObject = createPolicyObject(nanoTDFConfig.attributes);
@@ -121,8 +131,31 @@ public class NanoTDF {
         header.setPayloadConfig(nanoTDFConfig.config);
         header.setEphemeralKey(compressedPubKey);
         header.setKasLocator(kasURL);
-
         header.setPolicyInfo(policyInfo);
+
+        Config.HeaderInfo headerInfo = new Config.HeaderInfo(header, gcm, 0);
+        if (nanoTDFConfig.collectionConfig.useCollection) {
+            nanoTDFConfig.collectionConfig.updateHeaderInfo(headerInfo);
+        }
+
+        return headerInfo;
+    }
+
+    public int createNanoTDF(ByteBuffer data, OutputStream outputStream,
+            Config.NanoTDFConfig nanoTDFConfig,
+            SDK.KAS kas) throws IOException, NanoTDFMaxSizeLimit, InvalidNanoTDFConfig,
+            NoSuchAlgorithmException, UnsupportedNanoTDFFeature, InterruptedException {
+        int nanoTDFSize = 0;
+
+        int dataSize = data.limit();
+        if (dataSize > kMaxTDFSize) {
+            throw new NanoTDFMaxSizeLimit("exceeds max size for nano tdf");
+        }
+
+        Config.HeaderInfo headerKeyPair = getHeaderInfo(nanoTDFConfig, kas);
+        Header header = headerKeyPair.getHeader();
+        AesGcm gcm = headerKeyPair.getKey();
+        int iteration = headerKeyPair.getIteration();
 
         int headerSize = header.getTotalSize();
         ByteBuffer bufForHeader = ByteBuffer.allocate(headerSize);
@@ -133,13 +166,23 @@ public class NanoTDF {
         nanoTDFSize += headerSize;
         logger.debug("createNanoTDF header length {}", headerSize);
 
+        int authTagSize = SymmetricAndPayloadConfig.sizeOfAuthTagForCipher(nanoTDFConfig.config.getCipherType());
         // Encrypt the data
         byte[] actualIV = new byte[kIvPadding + kNanoTDFIvSize];
-        byte[] iv = new byte[kNanoTDFIvSize];
-        SecureRandom.getInstanceStrong().nextBytes(iv);
-        System.arraycopy(iv, 0, actualIV, kIvPadding, iv.length);
+        if (nanoTDFConfig.collectionConfig.useCollection) {
+            ByteBuffer b = ByteBuffer.allocate(4);
+            b.order(ByteOrder.LITTLE_ENDIAN);
+            b.putInt(iteration);
+            System.arraycopy(b.array(), 0, actualIV, kIvPadding, kNanoTDFIvSize);
+        } else {
+            do {
+                byte[] iv = new byte[kNanoTDFIvSize];
+                SecureRandom.getInstanceStrong().nextBytes(iv);
+                System.arraycopy(iv, 0, actualIV, kIvPadding, iv.length);
+            } while (Arrays.equals(actualIV, kEmptyIV));    // if match, we need to retry to prevent key + iv reuse with the policy
+        }
 
-        byte[] cipherData = gcm.encrypt(actualIV, authTagSize, data.array(), 0, dataSize);
+        byte[] cipherData = gcm.encrypt(actualIV, authTagSize, data.array(), data.arrayOffset(), dataSize);
 
         // Write the length of the payload as int24
         int cipherDataLengthWithoutPadding = cipherData.length - kIvPadding;
@@ -156,24 +199,30 @@ public class NanoTDF {
         return nanoTDFSize;
     }
 
+
     public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream,
             SDK.KAS kas) throws IOException {
 
         Header header = new Header(nanoTDF);
+        CollectionKey cachedKey = collectionStore.getKey(header);
+        byte[] key = cachedKey.getKey();
 
-        // create base64 encoded
-        byte[] headerData = new byte[header.getTotalSize()];
-        header.writeIntoBuffer(ByteBuffer.wrap(headerData));
-        String base64HeaderData = Base64.getEncoder().encodeToString(headerData);
+        // perform unwrap is not in collectionStore;
+        if (key == null) {
+            // create base64 encoded
+            byte[] headerData = new byte[header.getTotalSize()];
+            header.writeIntoBuffer(ByteBuffer.wrap(headerData));
+            String base64HeaderData = Base64.getEncoder().encodeToString(headerData);
 
-        logger.debug("readNanoTDF header length {}", headerData.length);
+            logger.debug("readNanoTDF header length {}", headerData.length);
 
-        String kasUrl = header.getKasLocator().getResourceUrl();
+            String kasUrl = header.getKasLocator().getResourceUrl();
 
-        byte[] key = kas.unwrapNanoTDF(header.getECCMode().getEllipticCurveType(),
-                base64HeaderData,
-                kasUrl);
-        logger.debug("readNanoTDF key is {}", Base64.getEncoder().encodeToString(key));
+            key = kas.unwrapNanoTDF(header.getECCMode().getEllipticCurveType(),
+                    base64HeaderData,
+                    kasUrl);
+            collectionStore.store(header, new CollectionKey(key));
+        }
 
         byte[] payloadLengthBuf = new byte[4];
         nanoTDF.get(payloadLengthBuf, 1, 3);
@@ -203,7 +252,7 @@ public class NanoTDF {
         PolicyObject policyObject = new PolicyObject();
         policyObject.body = new PolicyObject.Body();
         policyObject.uuid = UUID.randomUUID().toString();
-        policyObject.body.dataAttributes = new ArrayList<>();
+        policyObject.body.dataAttributes = new ArrayList<>(attributes.size());
         policyObject.body.dissem = new ArrayList<>();
 
         for (String attribute : attributes) {
@@ -212,5 +261,16 @@ public class NanoTDF {
             policyObject.body.dataAttributes.add(attributeObject);
         }
         return policyObject;
+    }
+
+    public static class CollectionKey {
+        private final byte[] key;
+    
+        public CollectionKey(byte[] key) {
+            this.key = key;
+        }
+        protected byte[] getKey() {
+            return key;
+        }
     }
 }

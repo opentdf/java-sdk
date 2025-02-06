@@ -74,7 +74,7 @@ public class SDKBuilder {
         File certsDir = new File(certsDirPath);
         File[] certFiles = certsDir.listFiles((dir, name) -> name.endsWith(".pem") || name.endsWith(".crt"));
         logger.info("Loading certificates from: " + certsDir.getAbsolutePath());
-        List<InputStream> certStreams = new ArrayList<>();
+        List<InputStream> certStreams = new ArrayList<>(certFiles.length);
         for (File certFile : certFiles) {
             certStreams.add(new FileInputStream(certFile));
         }

@@ -37,7 +37,7 @@ public class NanoTDFTest {
 
     private static final String KID = "r1";
     
-    private static SDK.KAS kas = new SDK.KAS() {
+    protected static SDK.KAS kas = new SDK.KAS() {
         @Override
         public void close() throws Exception {
         }
@@ -153,5 +153,46 @@ public class NanoTDFTest {
             nanoTDF.readNanoTDF(ByteBuffer.wrap(nTDFBytes), dataStream, kas);
             assertThat(dataStream.toByteArray()).isEqualTo(data);
         }
+    }
+
+    @Test
+    void collection() throws Exception {
+        var kasInfos = new ArrayList<>();
+        var kasInfo = new Config.KASInfo();
+        kasInfo.URL = "https://api.example.com/kas";
+        kasInfo.PublicKey = null;
+        kasInfo.KID = KID;
+        kasInfos.add(kasInfo);
+
+        Config.NanoTDFConfig config = Config.newNanoTDFConfig(
+                Config.withNanoKasInformation(kasInfos.toArray(new Config.KASInfo[0])),
+                Config.witDataAttributes("https://example.com/attr/Classification/value/S",
+                        "https://example.com/attr/Classification/value/X"),
+                Config.withCollection()
+        );
+
+        ByteBuffer byteBuffer = ByteBuffer.wrap(new byte[]{});
+
+        NanoTDF nanoTDF = new NanoTDF();
+        ByteBuffer header = getHeaderBuffer(byteBuffer,nanoTDF, config);
+        for (int i = 0; i < Config.MAX_COLLECTION_ITERATION - 10; i++) {
+            config.collectionConfig.getHeaderInfo();
+
+        }
+        for (int i = 1; i < 10; i++) {
+            ByteBuffer newHeader = getHeaderBuffer(byteBuffer,nanoTDF, config);
+            assertThat(header).isEqualTo(newHeader);
+        }
+
+        ByteBuffer newHeader = getHeaderBuffer(byteBuffer,nanoTDF, config);
+        assertThat(header).isNotEqualTo(newHeader);
+    }
+
+    private ByteBuffer getHeaderBuffer(ByteBuffer input, NanoTDF nanoTDF, Config.NanoTDFConfig config) throws Exception {
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+        nanoTDF.createNanoTDF(input, tdfOutputStream, config, kas);
+        ByteBuffer tdf = ByteBuffer.wrap(tdfOutputStream.toByteArray());
+        Header header = new Header(tdf);
+        return tdf.position(0).slice().limit(header.getTotalSize());
     }
 }

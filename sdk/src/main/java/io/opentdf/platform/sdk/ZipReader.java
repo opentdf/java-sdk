@@ -3,6 +3,7 @@ package io.opentdf.platform.sdk;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -25,17 +26,17 @@ public class ZipReader {
     public static final int ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIZE = 20;
 
     final ByteBuffer longBuf = ByteBuffer.allocate(Long.BYTES).order(ByteOrder.LITTLE_ENDIAN);
-    private Long readLong() throws IOException {
+    private long readLong() throws IOException {
         longBuf.clear();
         if (this.zipChannel.read(longBuf) != 8) {
-            return null;
+            throw new InvalidZipException("Expected long value");
         }
         longBuf.flip();
         return longBuf.getLong();
     }
 
     final ByteBuffer intBuf = ByteBuffer.allocate(Integer.BYTES).order(ByteOrder.LITTLE_ENDIAN);
-    private Integer readInt() throws IOException {
+    private Integer readInteger() throws IOException {
         intBuf.clear();
         if (this.zipChannel.read(intBuf) != 4) {
             return null;
@@ -43,13 +44,20 @@ public class ZipReader {
         intBuf.flip();
         return intBuf.getInt();
     }
+    private int readInt() throws IOException {
+        Integer result = readInteger();
+        if (result == null) {
+            throw new InvalidZipException("Expected int value");
+        }
+        return result.intValue();
+    }
 
     final ByteBuffer shortBuf = ByteBuffer.allocate(Short.BYTES).order(ByteOrder.LITTLE_ENDIAN);
 
-    private Short readShort() throws IOException {
+    private short readShort() throws IOException {
         shortBuf.clear();
         if (this.zipChannel.read(shortBuf) != 2) {
-            return null;
+            throw new InvalidZipException("Expected short value");
         }
         shortBuf.flip();
         return shortBuf.getShort();
@@ -79,8 +87,8 @@ public class ZipReader {
 
         while (eoCDRStart >= 0) {
             zipChannel.position(eoCDRStart);
-            int signature = readInt();
-            if (signature == END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
+            Integer signature = readInteger();
+            if (signature == null || signature == END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
                 if (logger.isDebugEnabled()) {
                     logger.debug("Found end of central directory signature at {}", zipChannel.position() - Integer.BYTES);
                 }
@@ -113,8 +121,8 @@ public class ZipReader {
 
     private CentralDirectoryRecord extractZIP64CentralDirectoryInfo() throws IOException {
         // buffer's position at the start of the Central Directory
-        int signature = readInt();
-        if (signature != ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIGNATURE) {
+        Integer signature = readInteger();
+        if (signature == null || signature != ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIGNATURE) {
             throw new InvalidZipException("Invalid Zip64 End of Central Directory Record Signature");
         }
 
@@ -157,7 +165,8 @@ public class ZipReader {
 
         public InputStream getData() throws IOException {
             zipChannel.position(offsetToLocalHeader);
-            if (readInt() != LOCAL_FILE_HEADER_SIGNATURE) {
+            Integer signature = readInteger();
+            if (signature == null || signature != LOCAL_FILE_HEADER_SIGNATURE) {
                 throw new InvalidZipException("Invalid Local Header Signature");
             }
             zipChannel.position(zipChannel.position()
@@ -184,8 +193,8 @@ public class ZipReader {
                         return -1;
                     }
                     setChannelPosition();
-                    while (buf.position() != buf.capacity()) {
-                        if (zipChannel.read(buf) < 0) {
+                    while (buf.hasRemaining()) {
+                        if (zipChannel.read(buf) <= 0) {
                             return -1;
                         }
                     }
@@ -222,8 +231,8 @@ public class ZipReader {
         }
     }
     public Entry readCentralDirectoryFileHeader() throws IOException {
-        int signature = readInt();
-        if (signature != CENTRAL_FILE_HEADER_SIGNATURE) {
+        Integer signature = readInteger();
+        if (signature == null || signature != CENTRAL_FILE_HEADER_SIGNATURE) {
             throw new InvalidZipException("Invalid Central Directory File Header Signature");
         }
         short versionMadeBy = readShort();
@@ -244,8 +253,10 @@ public class ZipReader {
         long relativeOffsetOfLocalHeader = readInt();
 
         ByteBuffer fileName = ByteBuffer.allocate(fileNameLength);
-        while (fileName.position() != fileName.capacity()) {
-            zipChannel.read(fileName);
+        while (fileName.hasRemaining()) {
+            if (zipChannel.read(fileName) <= 0) {
+                throw new EOFException("Unexpected EOF when reading filename of length: " + fileNameLength);
+            }
         }
 
         // Parse the extra field
@@ -277,7 +288,6 @@ public class ZipReader {
         return new Entry(fileName.array(), relativeOffsetOfLocalHeader, uncompressedSize);
     }
 
-
     public ZipReader(SeekableByteChannel channel) throws IOException {
         zipChannel = channel;
         var centralDirectoryRecord = readEndOfCentralDirectory();
@@ -286,7 +296,7 @@ public class ZipReader {
             entries.add(readCentralDirectoryFileHeader());
         }
     }
-    
+
     final SeekableByteChannel zipChannel;
     final ArrayList<Entry> entries = new ArrayList<>();
 

@@ -2,12 +2,15 @@ package io.opentdf.platform.sdk;
 
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
 import io.opentdf.platform.sdk.nanotdf.ECCMode;
+import io.opentdf.platform.sdk.nanotdf.Header;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import io.opentdf.platform.sdk.nanotdf.SymmetricAndPayloadConfig;
 
 import io.opentdf.platform.policy.Value;
+import org.bouncycastle.oer.its.ieee1609dot2.HeaderInfo;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
@@ -18,8 +21,11 @@ public class Config {
 
     public static final int TDF3_KEY_SIZE = 2048;
     public static final int DEFAULT_SEGMENT_SIZE = 2 * 1024 * 1024; // 2mb
+    public static final int MAX_SEGMENT_SIZE = DEFAULT_SEGMENT_SIZE * 2;
+    public static final int MIN_SEGMENT_SIZE = 16 * 1024;       // not currently enforced in parsing due to existing payloads in testing
     public static final String KAS_PUBLIC_KEY_PATH = "/kas_public_key";
     public static final String DEFAULT_MIME_TYPE = "application/octet-stream";
+    public static final int MAX_COLLECTION_ITERATION = (1 << 24) - 1;
 
     public enum TDFFormat {
         JSONFormat,
@@ -224,6 +230,12 @@ public class Config {
     }
 
     public static Consumer<TDFConfig> withSegmentSize(int size) {
+        if (size > MAX_SEGMENT_SIZE) {
+            throw new IllegalArgumentException("Segment size " + size + " exceeds the maximum " + MAX_SEGMENT_SIZE);
+        } else if (size < MIN_SEGMENT_SIZE) {
+            throw new IllegalArgumentException("Segment size " + size + " is under the minimum " + MIN_SEGMENT_SIZE);
+        }
+
         return (TDFConfig config) -> config.defaultSegmentSize = size;
     }
 
@@ -248,6 +260,7 @@ public class Config {
         public SymmetricAndPayloadConfig config;
         public List<String> attributes;
         public List<KASInfo> kasInfoList;
+        public CollectionConfig collectionConfig;
 
         public NanoTDFConfig() {
             this.eccMode = new ECCMode();
@@ -262,6 +275,7 @@ public class Config {
 
             this.attributes = new ArrayList<>();
             this.kasInfoList = new ArrayList<>();
+            this.collectionConfig = new CollectionConfig(false);
         }
     }
 
@@ -271,6 +285,12 @@ public class Config {
             option.accept(config);
         }
         return config;
+    }
+
+    public static Consumer<NanoTDFConfig> withCollection() {
+        return (NanoTDFConfig config) -> {
+            config.collectionConfig = new CollectionConfig(true);
+        };
     }
 
     public static Consumer<NanoTDFConfig> witDataAttributes(String... attributes) {
@@ -303,5 +323,61 @@ public class Config {
 
     public static Consumer<NanoTDFConfig> WithECDSAPolicyBinding() {
         return (NanoTDFConfig config) -> config.eccMode.setECDSABinding(false);
+    }
+
+    public static class HeaderInfo {
+        private final Header header;
+        private final AesGcm key;
+        private final int iteration;
+
+        public HeaderInfo(Header header,AesGcm key, int iteration) {
+            this.header = header;
+            this.key = key;
+            this.iteration = iteration;
+        }
+
+        public Header getHeader() {
+            return header;
+        }
+
+        public int getIteration() {
+            return iteration;
+        }
+
+        public AesGcm getKey() {
+            return key;
+        }
+    }
+
+    public static class CollectionConfig {
+        private int iterationCounter;
+        private HeaderInfo headerInfo;
+        public final boolean useCollection;
+        private Boolean updatedHeaderInfo;
+
+
+        public CollectionConfig(boolean useCollection) {
+            this.useCollection = useCollection;
+        }
+
+        public synchronized HeaderInfo getHeaderInfo() throws InterruptedException {
+            int iteration = iterationCounter;
+            iterationCounter = (iterationCounter + 1) % MAX_COLLECTION_ITERATION;
+
+            if (iteration == 0) {
+                updatedHeaderInfo = false;
+                return null;
+            }
+            while (!updatedHeaderInfo) {
+                this.wait();
+            }
+            return new HeaderInfo(headerInfo.getHeader(), headerInfo.getKey(), iteration);
+        }
+
+        public synchronized void updateHeaderInfo(HeaderInfo headerInfo) {
+            this.headerInfo = headerInfo;
+            updatedHeaderInfo = true;
+            this.notifyAll();
+        }
     }
 }

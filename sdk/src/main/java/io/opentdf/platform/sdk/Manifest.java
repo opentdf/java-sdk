@@ -1,15 +1,28 @@
 package io.opentdf.platform.sdk;
 
-import com.google.gson.*;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonSerializationContext;
+import com.google.gson.JsonSerializer;
 import com.google.gson.annotations.JsonAdapter;
 import com.google.gson.annotations.SerializedName;
-import com.nimbusds.jose.*;
+import com.nimbusds.jose.JOSEException;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.JWSSigner;
+import com.nimbusds.jose.JWSVerifier;
+import com.nimbusds.jose.KeyLengthException;
 import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import io.opentdf.platform.sdk.TDF.AssertionException;
 import org.apache.commons.codec.binary.Hex;
 import org.erdtman.jcs.JsonCanonicalizer;
 
@@ -28,30 +41,37 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * The Manifest class represents a detailed structure encapsulating various aspects
- * of data integrity, encryption, payload, and assertions within a certain context.
+ * The Manifest class represents a detailed structure encapsulating various
+ * aspects
+ * of data integrity, encryption, payload, and assertions within a certain
+ * context.
  */
 public class Manifest {
 
     private static final String kAssertionHash = "assertionHash";
     private static final String kAssertionSignature = "assertionSig";
 
-    private static final Gson gson = new Gson();
+    private static final Gson gson = new GsonBuilder()
+            .registerTypeAdapter(AssertionConfig.Statement.class, new AssertionValueAdapter())
+            .create();
+    @SerializedName(value = "schemaVersion")
+    String tdfVersion;
+
+    public static String toJson(Manifest manifest) {
+        return gson.toJson(manifest);
+    }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
         Manifest manifest = (Manifest) o;
-        return Objects.equals(encryptionInformation, manifest.encryptionInformation)
-                && Objects.equals(payload, manifest.payload) && Objects.equals(assertions, manifest.assertions);
+        return Objects.equals(tdfVersion, manifest.tdfVersion) && Objects.equals(encryptionInformation, manifest.encryptionInformation) && Objects.equals(payload, manifest.payload) && Objects.equals(assertions, manifest.assertions);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(encryptionInformation, payload, assertions);
+        return Objects.hash(tdfVersion, encryptionInformation, payload, assertions);
     }
 
     private static class PolicyBindingSerializer implements JsonDeserializer<Object>, JsonSerializer<Object> {
@@ -176,6 +196,7 @@ public class Manifest {
         public String encryptedMetadata;
         public String kid;
         public String sid;
+        public String schemaVersion;
 
         @Override
         public boolean equals(Object o) {
@@ -188,18 +209,20 @@ public class Manifest {
                     && Objects.equals(protocol, keyAccess.protocol) && Objects.equals(wrappedKey, keyAccess.wrappedKey)
                     && Objects.equals(policyBinding, keyAccess.policyBinding)
                     && Objects.equals(encryptedMetadata, keyAccess.encryptedMetadata)
-                    && Objects.equals(kid, keyAccess.kid);
+                    && Objects.equals(kid, keyAccess.kid)
+                    && Objects.equals(schemaVersion, keyAccess.schemaVersion);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(keyType, url, protocol, wrappedKey, policyBinding, encryptedMetadata, kid);
+            return Objects.hash(keyType, url, protocol, wrappedKey, policyBinding, encryptedMetadata, kid, schemaVersion);
         }
     }
 
     static public class Method {
         public String algorithm;
         public String iv;
+        @SerializedName(value = "isStreamable")
         public Boolean IsStreamable;
 
         @Override
@@ -252,7 +275,7 @@ public class Manifest {
         public String url;
         public String protocol;
         public String mimeType;
-        public Boolean isEncrypted;
+        public boolean isEncrypted;
 
         @Override
         public boolean equals(Object o) {
@@ -299,7 +322,6 @@ public class Manifest {
         public String appliesToState;
         public AssertionConfig.Statement statement;
         public Binding binding;
-
         static public class HashValues {
             private final String assertionHash;
             private final String signature;
@@ -381,7 +403,7 @@ public class Manifest {
         public Assertion.HashValues verify(AssertionConfig.AssertionKey assertionKey)
                 throws ParseException, JOSEException {
             if (binding == null) {
-                throw new SDKException("Binding is null in assertion");
+                throw new AssertionException("Binding is null in assertion", this.id);
             }
 
             String signatureString = binding.signature;
@@ -448,12 +470,73 @@ public class Manifest {
         }
     }
 
+    public static class AssertionValueAdapter implements JsonDeserializer<AssertionConfig.Statement> {
+        @Override
+        public AssertionConfig.Statement deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+            if (!json.isJsonObject()) {
+                throw new IllegalArgumentException(String.format("%s is not a JSON object", AssertionConfig.Statement.class.getName()));
+            }
+            var obj = json.getAsJsonObject();
+            var statement = new AssertionConfig.Statement();
+            if (obj.has("format")) {
+                statement.format = obj.get("format").getAsString();
+            }
+            if (obj.has("schema")) {
+                statement.schema = obj.get("schema").getAsString();
+            }
+            if (obj.has("value")) {
+                var value = obj.get("value");
+                if (value.isJsonPrimitive()) {
+                    // it's already a primitive (hopefully string) so we don't need its escaped value here
+                    statement.value = value.getAsString();
+                } else {
+                    statement.value = value.toString();
+                }
+            }
+            return statement;
+        }
+    }
+
     public EncryptionInformation encryptionInformation;
     public Payload payload;
     public List<Assertion> assertions = new ArrayList<>();
+    protected static Manifest readManifest(Reader reader) {
+        Manifest result = gson.fromJson(reader, Manifest.class);
+        if (result.assertions == null) {
+            result.assertions = new ArrayList<>();
+        }
 
-    private static Manifest readManifest(Reader reader) {
-        return gson.fromJson(reader, Manifest.class);
+        if (result.payload == null) {
+            throw new IllegalArgumentException("Manifest with null payload");
+        } else if (result.encryptionInformation == null) {
+            throw new IllegalArgumentException("Manifest with null encryptionInformation");
+        } else if (result.encryptionInformation.integrityInformation == null) {
+            throw new IllegalArgumentException("Manifest with null integrityInformation");
+        } else if (result.encryptionInformation.integrityInformation.rootSignature == null) {
+            throw new IllegalArgumentException("Manifest with null rootSignature");
+        } else if (result.encryptionInformation.integrityInformation.rootSignature.algorithm == null
+                || result.encryptionInformation.integrityInformation.rootSignature.signature == null) {
+            throw new IllegalArgumentException("Manifest with invalid rootSignature");
+        } else if (result.encryptionInformation.integrityInformation.segments == null) {
+            throw new IllegalArgumentException("Manifest with null segments");
+        } else if (result.encryptionInformation.keyAccessObj == null) {
+            throw new IllegalArgumentException("Manifest with null keyAccessObj");
+        } else if (result.encryptionInformation.policy == null) {
+            throw new IllegalArgumentException("Manifest with null policy");
+        }
+
+        for (Manifest.Segment segment : result.encryptionInformation.integrityInformation.segments) {
+            if (segment == null || segment.hash == null) {
+                throw new IllegalArgumentException("Invalid integrity segment");
+            }
+        }
+        for (Manifest.KeyAccess keyAccess : result.encryptionInformation.keyAccessObj) {
+            if (keyAccess == null) {
+                throw new IllegalArgumentException("Invalid null KeyAccess in manifest");
+            }
+        }
+
+        return result;
     }
 
     static PolicyObject readPolicyObject(Reader reader) {
