@@ -6,3 +6,9 @@
 
 CODEOWNERS     @opentdf/architecture @opentdf/security
 LICENSE        @opentdf/architecture
+
+# @opentdf/security added on 2025-02-04 pom.xml
+examples/pom.xml @opentdf/java-sdk @opentdf/architecture @opentdf/security
+pom.xml @opentdf/java-sdk @opentdf/architecture @opentdf/security
+cmdline/pom.xml @opentdf/java-sdk @opentdf/architecture @opentdf/security
+sdk/pom.xml @opentdf/java-sdk @opentdf/architecture @opentdf/security
