@@ -93,7 +93,7 @@ public class TDFTest {
 
     @BeforeAll
     static void createKeypairs() {
-        for (int i = 0; i < 1 + new Random().nextInt(5); i++) {
+        for (int i = 0; i < 2 + new Random().nextInt(5); i++) {
             if (i % 2 == 0) {
                 keypairs.add(CryptoUtils.generateRSAKeypair());
             } else {
