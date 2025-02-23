@@ -17,7 +17,6 @@ import io.opentdf.platform.kas.PublicKeyResponse;
 import io.opentdf.platform.kas.RewrapRequest;
 import io.opentdf.platform.kas.RewrapResponse;
 import io.opentdf.platform.sdk.Config.KASInfo;
-import io.opentdf.platform.sdk.nanotdf.CryptoKeyPair;
 import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import io.opentdf.platform.sdk.TDF.KasBadRequestException;
@@ -48,8 +47,7 @@ public class KASClient implements SDK.KAS {
     private final RSASSASigner signer;
     private final AsymDecryption decryptor;
     private final String publicKeyPEM;
-    private CryptoKeyPair keyPair;
-    private KASKeyCache kasKeyCache;
+       private KASKeyCache kasKeyCache;
 
     /***
      * A client that communicates with KAS
