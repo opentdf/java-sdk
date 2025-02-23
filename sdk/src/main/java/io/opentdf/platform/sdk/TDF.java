@@ -10,8 +10,10 @@ import io.opentdf.platform.sdk.Config.TDFConfig;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
 import io.opentdf.platform.sdk.Config.KASInfo;
 
+import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
+import org.bouncycastle.jce.interfaces.ECPublicKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,9 +37,10 @@ import java.util.concurrent.ExecutionException;
  */
 public class TDF {
 
+    public static final byte[] GLOBAL_KEY_SALT = "salt".getBytes(StandardCharsets.UTF_8);
     private static final String EMPTY_SPLIT_ID = "";
     private static final String TDF_VERSION = "4.3.0";
-    private static final String KEY_ACCESS_SECHMA_VERSION = "4.3.0";
+    private static final String KEY_ACCESS_SECHMA_VERSION = "1.0";
     private final long maximumSize;
 
     /**
@@ -63,6 +66,7 @@ public class TDF {
     private static final int GCM_KEY_SIZE = 32;
     private static final String kSplitKeyType = "split";
     private static final String kWrapped = "wrapped";
+    private static final String kECWrapped = "ec-wrapped";
     private static final String kKasProtocol = "kas";
     private static final int kGcmIvSize = 12;
     private static final int kAesBlockSize = 16;
@@ -168,6 +172,11 @@ public class TDF {
         private String iv;
     }
 
+    public static class ECKeyWrappedKeyInfo {
+        private String publicKey;
+        private String wrappedKey;
+    }
+
     public static class TDFObject {
         private Manifest manifest;
         private long size;
@@ -244,7 +253,7 @@ public class TDF {
                     logger.info("no public key provided for KAS at {}, retrieving", splitInfo.kas);
                     var getKI = new Config.KASInfo();
                     getKI.URL = splitInfo.kas;
-                    getKI.Algorithm = "rsa:2048";
+                    getKI.Algorithm = tdfConfig.wrappingKeyType.toString();
                     getKI = kas.getPublicKey(getKI);
                     latestKASInfo.put(splitInfo.kas, getKI);
                     ki = getKI;
@@ -292,21 +301,7 @@ public class TDF {
                         throw new KasPublicKeyMissing("Kas public key is missing in kas information list");
                     }
 
-                    // Wrap the key with kas public key
-                    AsymEncryption asymmetricEncrypt = new AsymEncryption(kasInfo.PublicKey);
-                    byte[] wrappedKey = asymmetricEncrypt.encrypt(symKey);
-
-                    Manifest.KeyAccess keyAccess = new Manifest.KeyAccess();
-                    keyAccess.keyType = kWrapped;
-                    keyAccess.url = kasInfo.URL;
-                    keyAccess.kid = kasInfo.KID;
-                    keyAccess.protocol = kKasProtocol;
-                    keyAccess.policyBinding = policyBinding;
-                    keyAccess.wrappedKey = encoder.encodeToString(wrappedKey);
-                    keyAccess.encryptedMetadata = encryptedMetadata;
-                    keyAccess.sid = splitID;
-                    keyAccess.schemaVersion = KEY_ACCESS_SECHMA_VERSION;
-
+                    var keyAccess = createKeyAccess(tdfConfig, kasInfo, symKey, policyBinding, encryptedMetadata, splitID);
                     manifest.encryptionInformation.keyAccessObj.add(keyAccess);
                 }
             }
@@ -323,7 +318,55 @@ public class TDF {
 
             this.aesGcm = new AesGcm(this.payloadKey);
         }
+
+        private Manifest.KeyAccess createKeyAccess(Config.TDFConfig tdfConfig, Config.KASInfo kasInfo, byte[] symKey, Manifest.PolicyBinding policyBinding, String encryptedMetadata, String splitID) {
+            Manifest.KeyAccess keyAccess = new Manifest.KeyAccess();
+            keyAccess.keyType = kWrapped;
+            keyAccess.url = kasInfo.URL;
+            keyAccess.kid = kasInfo.KID;
+            keyAccess.protocol = kKasProtocol;
+            keyAccess.policyBinding = policyBinding;
+            keyAccess.encryptedMetadata = encryptedMetadata;
+            keyAccess.sid = splitID;
+            keyAccess.schemaVersion = KEY_ACCESS_SECHMA_VERSION;
+
+            if (tdfConfig.wrappingKeyType != KeyType.RSA2048Key) {
+                var ecKeyWrappedKeyInfo =createECWrappedKey(tdfConfig, kasInfo, symKey);
+                keyAccess.wrappedKey = ecKeyWrappedKeyInfo.wrappedKey;
+                keyAccess.ephemeralPublicKey = ecKeyWrappedKeyInfo.publicKey;
+                keyAccess.keyType = kECWrapped;
+            } else {
+                keyAccess.wrappedKey = createRSAWrappedKey(kasInfo, symKey);
+                keyAccess.keyType = kWrapped;
+            }
+            return keyAccess;
+        }
+
+        private ECKeyWrappedKeyInfo createECWrappedKey(Config.TDFConfig tdfConfig, Config.KASInfo kasInfo, byte[] symKey)  {
+            var curveName = tdfConfig.wrappingKeyType.getCurveName();
+            var keyPair = new ECKeyPair(curveName, ECKeyPair.ECAlgorithm.ECDH);
+
+            ECPublicKey kasPubKey = ECKeyPair.publicKeyFromPem(kasInfo.PublicKey);
+            byte[] symmetricKey = ECKeyPair.computeECDHKey(kasPubKey, keyPair.getPrivateKey());
+
+            var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symmetricKey);
+
+            AesGcm gcm = new AesGcm(sessionKey);
+            AesGcm.Encrypted wrappedKey = gcm.encrypt(symKey);
+
+            ECKeyWrappedKeyInfo wrappedKeyInfo = new ECKeyWrappedKeyInfo();
+            wrappedKeyInfo.publicKey = keyPair.publicKeyInPEMFormat();
+            wrappedKeyInfo.wrappedKey = Base64.getEncoder().encodeToString(wrappedKey.asBytes());
+            return wrappedKeyInfo;
+        }
+
+        private String createRSAWrappedKey(Config.KASInfo kasInfo, byte[] symKey)  {
+            AsymEncryption asymEncrypt = new AsymEncryption(kasInfo.PublicKey);
+            byte[] wrappedKey = asymEncrypt.encrypt(symKey);
+            return Base64.getEncoder().encodeToString(wrappedKey);
+        }
     }
+
 
     private static final Base64.Decoder decoder = Base64.getDecoder();
 
@@ -419,8 +462,8 @@ public class TDF {
     }
 
     public TDFObject createTDF(InputStream payload,
-            OutputStream outputStream,
-            Config.TDFConfig tdfConfig, SDK.KAS kas, AttributesServiceFutureStub attrService)
+                               OutputStream outputStream,
+                               Config.TDFConfig tdfConfig, SDK.KAS kas, AttributesServiceFutureStub attrService)
             throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException, DecoderException {
 
         if (tdfConfig.autoconfigure) {
@@ -441,7 +484,7 @@ public class TDF {
 
             if (tdfConfig.splitPlan == null) {
                 throw new AutoConfigureException("Failed to generate Split Plan"); // Replace with appropriate error
-                                                                                   // handling
+                // handling
             }
         }
 
@@ -557,7 +600,7 @@ public class TDF {
         }
 
         tdfObject.manifest.assertions = signedAssertions;
-        String manifestAsStr = Manifest.toJson(tdfObject.manifest);
+        String manifestAsStr = gson.toJson(tdfObject.manifest);
 
         tdfWriter.appendManifest(manifestAsStr);
         tdfObject.size = tdfWriter.finish();
@@ -616,7 +659,7 @@ public class TDF {
                 }
                 knownSplits.add(ss.splitID);
                 try {
-                    unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy);
+                    unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy, tdfReaderConfig.sessionKeyType);
                 } catch (Exception e) {
                     skippedSplits.put(ss, e);
                     continue;

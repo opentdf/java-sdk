@@ -17,10 +17,12 @@ import io.opentdf.platform.kas.PublicKeyResponse;
 import io.opentdf.platform.kas.RewrapRequest;
 import io.opentdf.platform.kas.RewrapResponse;
 import io.opentdf.platform.sdk.Config.KASInfo;
+import io.opentdf.platform.sdk.nanotdf.CryptoKeyPair;
 import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import io.opentdf.platform.sdk.TDF.KasBadRequestException;
 
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.net.MalformedURLException;
@@ -32,6 +34,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.function.Function;
 
+import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
 import static java.lang.String.format;
 
 /**
@@ -45,7 +48,7 @@ public class KASClient implements SDK.KAS {
     private final RSASSASigner signer;
     private final AsymDecryption decryptor;
     private final String publicKeyPEM;
-
+    private CryptoKeyPair keyPair;
     private KASKeyCache kasKeyCache;
 
     /***
@@ -86,8 +89,9 @@ public class KASClient implements SDK.KAS {
         if (cachedValue != null) {
             return cachedValue;
         }
-        PublicKeyResponse resp = getStub(kasInfo.URL).publicKey(PublicKeyRequest.getDefaultInstance());
-
+        var resp = getStub(kasInfo.URL)
+                .publicKey(
+                        PublicKeyRequest.newBuilder().setAlgorithm(kasInfo.Algorithm).build());
         var kiCopy = new Config.KASInfo();
         kiCopy.KID = resp.getKid();
         kiCopy.PublicKey = resp.getPublicKey();
@@ -161,11 +165,19 @@ public class KASClient implements SDK.KAS {
     private static final Gson gson = new Gson();
 
     @Override
-    public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy) {
+    public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy,  KeyType sessionKeyType) {
+        ECKeyPair ecKeyPair = null;
         RewrapRequestBody body = new RewrapRequestBody();
         body.policy = policy;
         body.clientPublicKey = publicKeyPEM;
         body.keyAccess = keyAccess;
+
+        if  (sessionKeyType != KeyType.RSA2048Key) {
+            var curveName =sessionKeyType.getCurveName();
+            ecKeyPair = new ECKeyPair(curveName, ECKeyPair.ECAlgorithm.ECDH);
+            body.clientPublicKey = ecKeyPair.publicKeyInPEMFormat();
+        }
+
         var requestBody = gson.toJson(body);
 
         var claims = new JWTClaimsSet.Builder()
@@ -190,7 +202,24 @@ public class KASClient implements SDK.KAS {
         try {
             response = getStub(keyAccess.url).rewrap(request);
             var wrappedKey = response.getEntityWrappedKey().toByteArray();
-            return decryptor.decrypt(wrappedKey);
+            if (sessionKeyType != KeyType.RSA2048Key) {
+
+                if (ecKeyPair == null) {
+                    throw new SDKException("ECKeyPair is null. Unable to proceed with the unwrap operation.");
+                }
+
+                var kasEphemeralPublicKey = response.getSessionPublicKey();
+                var publicKey = ECKeyPair.publicKeyFromPem(kasEphemeralPublicKey);
+                byte[] symKey = ECKeyPair.computeECDHKey(publicKey, ecKeyPair.getPrivateKey());
+
+                var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symKey);
+
+                AesGcm gcm = new AesGcm(sessionKey);
+                AesGcm.Encrypted encrypted = new AesGcm.Encrypted(wrappedKey);
+                return gcm.decrypt(encrypted);
+            } else {
+                return decryptor.decrypt(wrappedKey);
+            }
         } catch (StatusRuntimeException e) {
             if (e.getStatus().getCode() == Status.Code.INVALID_ARGUMENT) {
                 // 400 Bad Request

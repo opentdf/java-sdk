@@ -1,5 +1,6 @@
 package io.opentdf.platform.sdk.nanotdf;
 
+import io.opentdf.platform.sdk.KeyType;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cert.X509CertificateHolder;
@@ -143,6 +144,17 @@ public class ECKeyPair {
         }
 
         return writer.toString();
+    }
+
+    public KeyType getKeyType() {
+        if (curveName.equalsIgnoreCase(NanoTDFECCurve.SECP256R1.toString())) {
+            return KeyType.EC256Key;
+        } else if (curveName.equalsIgnoreCase(NanoTDFECCurve.SECP384R1.toString())) {
+            return KeyType.EC384Key;
+        } else if (curveName.equalsIgnoreCase(NanoTDFECCurve.SECP521R1.toString())) {
+            return KeyType.EC521Key;
+        }
+        return null;
     }
 
     public int keySize() {

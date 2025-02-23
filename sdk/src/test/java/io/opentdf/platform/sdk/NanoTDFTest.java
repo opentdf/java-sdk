@@ -61,7 +61,7 @@ public class NanoTDFTest {
         }
 
         @Override
-        public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy) {
+        public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy, KeyType sessionKeyType) {
             int index = Integer.parseInt(keyAccess.url);
             var decryptor = new AsymDecryption(keypairs.get(index).getPrivate());
             var bytes = Base64.getDecoder().decode(keyAccess.wrappedKey);

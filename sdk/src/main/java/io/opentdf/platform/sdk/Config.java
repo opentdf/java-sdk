@@ -7,10 +7,8 @@ import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import io.opentdf.platform.sdk.nanotdf.SymmetricAndPayloadConfig;
 
 import io.opentdf.platform.policy.Value;
-import org.bouncycastle.oer.its.ieee1609dot2.HeaderInfo;
 
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
@@ -99,12 +97,14 @@ public class Config {
         // Optional Map of Assertion Verification Keys
         AssertionVerificationKeys assertionVerificationKeys = new AssertionVerificationKeys();
         boolean disableAssertionVerification;
+        KeyType sessionKeyType;;
     }
 
     @SafeVarargs
     public static TDFReaderConfig newTDFReaderConfig(Consumer<TDFReaderConfig>... options) {
         TDFReaderConfig config = new TDFReaderConfig();
         config.disableAssertionVerification = false;
+        config.sessionKeyType = KeyType.RSA2048Key;
         for (Consumer<TDFReaderConfig> option : options) {
             option.accept(config);
         }
@@ -120,6 +120,9 @@ public class Config {
         return (TDFReaderConfig config) -> config.disableAssertionVerification = disable;
     }
 
+    public static Consumer<TDFReaderConfig> WithSessionKeyType(KeyType keyType) {
+        return (TDFReaderConfig config) -> config.sessionKeyType = keyType;
+    }
     public static class TDFConfig {
         public Boolean autoconfigure;
         public int defaultSegmentSize;
@@ -136,6 +139,7 @@ public class Config {
         public List<io.opentdf.platform.sdk.AssertionConfig> assertionConfigList;
         public String mimeType;
         public List<Autoconfigure.KeySplitStep> splitPlan;
+        public KeyType wrappingKeyType;
 
         public TDFConfig() {
             this.autoconfigure = true;
@@ -149,6 +153,7 @@ public class Config {
             this.assertionConfigList = new ArrayList<>();
             this.mimeType = DEFAULT_MIME_TYPE;
             this.splitPlan = new ArrayList<>();
+            this.wrappingKeyType = KeyType.RSA2048Key;
         }
     }
 
@@ -244,6 +249,10 @@ public class Config {
             config.autoconfigure = enable;
             config.splitPlan = null;
         };
+    }
+
+    public static Consumer<TDFConfig> WithWrappingKeyAlg(KeyType    keyType) {
+        return (TDFConfig config) -> config.wrappingKeyType = keyType;
     }
 
     // public static Consumer<TDFConfig> withDisableEncryption() {
