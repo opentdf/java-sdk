@@ -23,6 +23,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
@@ -133,24 +134,16 @@ public class TDFTest {
         assertionVerificationKeys.defaultKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256,
                 key);
 
-        // odd - RSA
-        var rsaKasInfo = new Config.KASInfo();
-        rsaKasInfo.URL = Integer.toString(0);
-
-        // even - EC
-        var ecKasInfo = new Config.KASInfo();
-        ecKasInfo.URL =Integer.toString(1);
-
         List<TDFConfigPair> tdfConfigPairs = List.of(
                 new TDFConfigPair(
-                        Config.newTDFConfig( Config.withAutoconfigure(false),  Config.withKasInformation(rsaKasInfo),
+                        Config.newTDFConfig( Config.withAutoconfigure(false),  Config.withKasInformation(getRSAKASInfos()),
                                 Config.withMetaData("here is some metadata"),
                                 Config.withDataAttributes("https://example.org/attr/a/value/b", "https://example.org/attr/c/value/d"),
                                 Config.withAssertionConfig(assertion1)),
                         Config.newTDFReaderConfig(Config.withAssertionVerificationKeys(assertionVerificationKeys))
                 ),
                 new TDFConfigPair(
-                        Config.newTDFConfig( Config.withAutoconfigure(false),  Config.withKasInformation(ecKasInfo),
+                        Config.newTDFConfig( Config.withAutoconfigure(false),  Config.withKasInformation(getECKASInfos()),
                                 Config.withMetaData("here is some metadata"),
                                 Config.WithWrappingKeyAlg(KeyType.EC256Key),
                                 Config.withDataAttributes("https://example.org/attr/a/value/b", "https://example.org/attr/c/value/d"),
@@ -203,9 +196,12 @@ public class TDFTest {
         assertionConfig.signingKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256,
                 keypair.getPrivate());
 
+        var rsaKasInfo = new Config.KASInfo();
+        rsaKasInfo.URL = Integer.toString(0);
+
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
-                Config.withKasInformation(getKASInfos()),
+                Config.withKasInformation(rsaKasInfo),
                 Config.withAssertionConfig(assertionConfig));
 
         String plainText = "this is extremely sensitive stuff!!!";
@@ -249,7 +245,7 @@ public class TDFTest {
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
-                Config.withKasInformation(getKASInfos()),
+                Config.withKasInformation(getRSAKASInfos()),
                 Config.withAssertionConfig(assertionConfig));
 
         String plainText = "this is extremely sensitive stuff!!!";
@@ -266,7 +262,7 @@ public class TDFTest {
         var unwrappedData = new ByteArrayOutputStream();
         assertThrows(JOSEException.class, () -> {
             tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas,
-                    new Config.TDFReaderConfig());
+                    Config.newTDFReaderConfig());
         });
 
         //  try with assertion verification disabled and not passing the assertion verification keys
@@ -304,9 +300,12 @@ public class TDFTest {
         assertionConfig2.statement.schema = "urn:nato:stanag:5636:A:1:elements:json";
         assertionConfig2.statement.value = "{\"uuid\":\"f74efb60-4a9a-11ef-a6f1-8ee1a61c148a\",\"body\":{\"dataAttributes\":null,\"dissem\":null}}";
 
+        var rsaKasInfo = new Config.KASInfo();
+        rsaKasInfo.URL = Integer.toString(0);
+
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
-                Config.withKasInformation(getKASInfos()),
+                Config.withKasInformation(rsaKasInfo),
                 Config.withAssertionConfig(assertionConfig1, assertionConfig2));
 
         String plainText = "this is extremely sensitive stuff!!!";
@@ -318,7 +317,7 @@ public class TDFTest {
 
         var unwrappedData = new ByteArrayOutputStream();
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()),
-                kas,  new Config.TDFReaderConfig());
+                kas, Config.newTDFReaderConfig());
         reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
@@ -365,9 +364,12 @@ public class TDFTest {
         assertionConfig1.statement.value = "ICAgIDxlZGoOkVkaD4=";
         assertionConfig1.signingKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, key);
 
+        var rsaKasInfo = new Config.KASInfo();
+        rsaKasInfo.URL = Integer.toString(0);
+
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
-                Config.withKasInformation(getKASInfos()),
+                Config.withKasInformation(rsaKasInfo),
                 Config.withAssertionConfig(assertionConfig1));
 
         String plainText = "this is extremely sensitive stuff!!!";
@@ -402,7 +404,7 @@ public class TDFTest {
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
-                Config.withKasInformation(getKASInfos()),
+                Config.withKasInformation(getRSAKASInfos()),
                 Config.withSegmentSize(Config.MIN_SEGMENT_SIZE));
 
         // data should be large enough to have multiple complete and a partial segment
@@ -460,7 +462,7 @@ public class TDFTest {
         var tdf = new TDF(maxSize);
         var tdfConfig = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
-                Config.withKasInformation(getKASInfos()),
+                Config.withKasInformation(getRSAKASInfos()),
                 Config.withSegmentSize(Config.MIN_SEGMENT_SIZE));
         assertThrows(TDF.DataSizeNotSupported.class,
                 () -> tdf.createTDF(is, os, tdfConfig, kas, null),
@@ -476,7 +478,7 @@ public class TDFTest {
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
-                Config.withKasInformation(getKASInfos()),
+                Config.withKasInformation(getRSAKASInfos()),
                 Config.withMimeType(mimeType));
 
         String plainText = "this is extremely sensitive stuff!!!";
@@ -491,14 +493,26 @@ public class TDFTest {
     }
 
     @Nonnull
-    private static Config.KASInfo[] getKASInfos() {
-        var kasInfos = new ArrayList<>();
+    private static Config.KASInfo[] getKASInfos(Predicate<Integer> filter) {
+        var kasInfos = new ArrayList<Config.KASInfo>();
         for (int i = 0; i < keypairs.size(); i++) {
-            var kasInfo = new Config.KASInfo();
-            kasInfo.URL = Integer.toString(i);
-            kasInfo.PublicKey = null;
-            kasInfos.add(kasInfo);
+            if (filter.test(i)) {
+                var kasInfo = new Config.KASInfo();
+                kasInfo.URL = Integer.toString(i);
+                kasInfo.PublicKey = null;
+                kasInfos.add(kasInfo);
+            }
         }
         return kasInfos.toArray(Config.KASInfo[]::new);
+    }
+
+    @Nonnull
+    private static Config.KASInfo[] getRSAKASInfos() {
+        return getKASInfos(i -> i % 2 == 0);
+    }
+
+    @Nonnull
+    private static Config.KASInfo[] getECKASInfos() {
+        return getKASInfos(i -> i % 2 != 0);
     }
 }

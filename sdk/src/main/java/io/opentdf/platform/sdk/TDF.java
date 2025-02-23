@@ -627,7 +627,7 @@ public class TDF {
 
     public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas)
             throws DecoderException, IOException, ParseException, NoSuchAlgorithmException, JOSEException {
-        return loadTDF(tdf, kas, new Config.TDFReaderConfig());
+        return loadTDF(tdf, kas, Config.newTDFReaderConfig());
     }
 
 

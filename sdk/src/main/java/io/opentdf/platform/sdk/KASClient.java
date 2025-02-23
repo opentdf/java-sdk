@@ -47,7 +47,7 @@ public class KASClient implements SDK.KAS {
     private final RSASSASigner signer;
     private final AsymDecryption decryptor;
     private final String publicKeyPEM;
-       private KASKeyCache kasKeyCache;
+    private KASKeyCache kasKeyCache;
 
     /***
      * A client that communicates with KAS
@@ -87,9 +87,13 @@ public class KASClient implements SDK.KAS {
         if (cachedValue != null) {
             return cachedValue;
         }
-        var resp = getStub(kasInfo.URL)
-                .publicKey(
-                        PublicKeyRequest.newBuilder().setAlgorithm(kasInfo.Algorithm).build());
+
+        PublicKeyRequest request = (kasInfo.Algorithm == null || kasInfo.Algorithm.isEmpty())
+                ? PublicKeyRequest.getDefaultInstance()
+                : PublicKeyRequest.newBuilder().setAlgorithm(kasInfo.Algorithm).build();
+
+        PublicKeyResponse resp = getStub(kasInfo.URL).publicKey(request);
+
         var kiCopy = new Config.KASInfo();
         kiCopy.KID = resp.getKid();
         kiCopy.PublicKey = resp.getPublicKey();
