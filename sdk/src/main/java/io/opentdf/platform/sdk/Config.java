@@ -97,7 +97,7 @@ public class Config {
         // Optional Map of Assertion Verification Keys
         AssertionVerificationKeys assertionVerificationKeys = new AssertionVerificationKeys();
         boolean disableAssertionVerification;
-        KeyType sessionKeyType;;
+        KeyType sessionKeyType;
     }
 
     @SafeVarargs

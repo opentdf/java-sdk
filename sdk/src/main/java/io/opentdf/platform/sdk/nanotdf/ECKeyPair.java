@@ -41,20 +41,26 @@ public class ECKeyPair {
     private static final BouncyCastleProvider BOUNCY_CASTLE_PROVIDER = new BouncyCastleProvider();
 
     public enum NanoTDFECCurve {
-        SECP256R1("secp256r1"),
-        PRIME256V1("prime256v1"),
-        SECP384R1("secp384r1"),
-        SECP521R1("secp521r1");
+        SECP256R1("secp256r1", KeyType.EC256Key),
+        PRIME256V1("prime256v1", KeyType.EC256Key),
+        SECP384R1("secp384r1", KeyType.EC384Key),
+        SECP521R1("secp521r1", KeyType.EC521Key);
 
         private String name;
+        private KeyType keyType;
 
-        NanoTDFECCurve(String curveName) {
+        NanoTDFECCurve(String curveName, KeyType keyType) {
             this.name = curveName;
+            this.keyType = keyType;
         }
 
         @Override
         public String toString() {
             return name;
+        }
+
+        public KeyType getKeyType() {
+            return keyType;
         }
     }
 
@@ -144,17 +150,6 @@ public class ECKeyPair {
         }
 
         return writer.toString();
-    }
-
-    public KeyType getKeyType() {
-        if (curveName.equalsIgnoreCase(NanoTDFECCurve.SECP256R1.toString())) {
-            return KeyType.EC256Key;
-        } else if (curveName.equalsIgnoreCase(NanoTDFECCurve.SECP384R1.toString())) {
-            return KeyType.EC384Key;
-        } else if (curveName.equalsIgnoreCase(NanoTDFECCurve.SECP521R1.toString())) {
-            return KeyType.EC521Key;
-        }
-        return null;
     }
 
     public int keySize() {

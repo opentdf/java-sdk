@@ -38,4 +38,8 @@ public enum KeyType {
         }
         throw new IllegalArgumentException("No enum constant for key type: " + keyType);
     }
+
+    public boolean isEc() {
+        return this != RSA2048Key;
+    }
 }

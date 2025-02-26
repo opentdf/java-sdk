@@ -330,8 +330,8 @@ public class TDF {
             keyAccess.sid = splitID;
             keyAccess.schemaVersion = KEY_ACCESS_SECHMA_VERSION;
 
-            if (tdfConfig.wrappingKeyType != KeyType.RSA2048Key) {
-                var ecKeyWrappedKeyInfo =createECWrappedKey(tdfConfig, kasInfo, symKey);
+            if (tdfConfig.wrappingKeyType.isEc()) {
+                var ecKeyWrappedKeyInfo = createECWrappedKey(tdfConfig, kasInfo, symKey);
                 keyAccess.wrappedKey = ecKeyWrappedKeyInfo.wrappedKey;
                 keyAccess.ephemeralPublicKey = ecKeyWrappedKeyInfo.publicKey;
                 keyAccess.keyType = kECWrapped;

@@ -45,8 +45,8 @@ public class KASClient implements SDK.KAS {
 
     private final Function<String, ManagedChannel> channelFactory;
     private final RSASSASigner signer;
-    private final AsymDecryption decryptor;
-    private final String publicKeyPEM;
+    private AsymDecryption decryptor;
+    private String clientPublicKey;
     private KASKeyCache kasKeyCache;
 
     /***
@@ -63,10 +63,6 @@ public class KASClient implements SDK.KAS {
         } catch (JOSEException e) {
             throw new SDKException("error creating dpop signer", e);
         }
-        var encryptionKeypair = CryptoUtils.generateRSAKeypair();
-        decryptor = new AsymDecryption(encryptionKeypair.getPrivate());
-        publicKeyPEM = CryptoUtils.getRSAPublicKeyPEM(encryptionKeypair.getPublic());
-
         this.kasKeyCache = new KASKeyCache();
     }
 
@@ -169,19 +165,26 @@ public class KASClient implements SDK.KAS {
     @Override
     public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy,  KeyType sessionKeyType) {
         ECKeyPair ecKeyPair = null;
-        RewrapRequestBody body = new RewrapRequestBody();
-        body.policy = policy;
-        body.clientPublicKey = publicKeyPEM;
-        body.keyAccess = keyAccess;
-
-        if  (sessionKeyType != KeyType.RSA2048Key) {
-            var curveName =sessionKeyType.getCurveName();
+        
+        if (sessionKeyType.isEc()) {
+            var curveName = sessionKeyType.getCurveName();
             ecKeyPair = new ECKeyPair(curveName, ECKeyPair.ECAlgorithm.ECDH);
-            body.clientPublicKey = ecKeyPair.publicKeyInPEMFormat();
+            clientPublicKey = ecKeyPair.publicKeyInPEMFormat();
+        } else {
+            // Initialize the RSA key pair only once and reuse it for future unwrap operations
+            if (decryptor == null) {
+                var encryptionKeypair = CryptoUtils.generateRSAKeypair();
+                decryptor = new AsymDecryption(encryptionKeypair.getPrivate());
+                clientPublicKey = CryptoUtils.getRSAPublicKeyPEM(encryptionKeypair.getPublic());
+            }
         }
 
-        var requestBody = gson.toJson(body);
+        RewrapRequestBody body = new RewrapRequestBody();
+        body.policy = policy;
+        body.clientPublicKey = clientPublicKey;
+        body.keyAccess = keyAccess;
 
+        var requestBody = gson.toJson(body);
         var claims = new JWTClaimsSet.Builder()
                 .claim("requestBody", requestBody)
                 .issueTime(Date.from(Instant.now()))

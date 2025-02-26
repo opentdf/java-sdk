@@ -52,7 +52,7 @@ public class TDFTest {
             try {
                 int index = Integer.parseInt(keyAccess.url);
                 var bytes = Base64.getDecoder().decode(keyAccess.wrappedKey);
-                if (sessionKeyType != KeyType.RSA2048Key) {
+                if (sessionKeyType.isEc()) {
                     var  kasPrivateKey = CryptoUtils.getPrivateKeyPEM(keypairs.get(index).getPrivate());
                     var privateKey = ECKeyPair.privateKeyFromPem(kasPrivateKey);
                     var clientEphemeralPublicKey = keyAccess.ephemeralPublicKey;
