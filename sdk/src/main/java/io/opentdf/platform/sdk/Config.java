@@ -331,7 +331,11 @@ public class Config {
     }
 
     public static Consumer<NanoTDFConfig> WithECDSAPolicyBinding() {
-        return (NanoTDFConfig config) -> config.eccMode.setECDSABinding(false);
+        return (NanoTDFConfig config) -> config.eccMode.setECDSABinding(true);
+    }
+
+    public static Consumer<NanoTDFConfig> WithECDSAPolicyBinding(boolean enable) {
+        return (NanoTDFConfig config) -> config.eccMode.setECDSABinding(enable);
     }
 
     public static class HeaderInfo {
