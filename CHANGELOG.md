@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.7](https://github.com/opentdf/java-sdk/compare/v0.7.6...v0.7.7) (2025-03-03)
+
+
+### Features
+
+* **sdk:** EC-wrapped key support for ZTDF ([#224](https://github.com/opentdf/java-sdk/issues/224)) ([d062691](https://github.com/opentdf/java-sdk/commit/d062691887320b16e4271a63de6bae3bb8645000))
+
+
+### Bug Fixes
+
+* **cmdline:** Disable failing encryptnano ecdsa ([#227](https://github.com/opentdf/java-sdk/issues/227)) ([80ca207](https://github.com/opentdf/java-sdk/commit/80ca207bf663f2797bfc02b3f9135e169ef5f66d))
+* **sdk:** Fixes nano ECDSA policy binding config ([#225](https://github.com/opentdf/java-sdk/issues/225)) ([f3e9fed](https://github.com/opentdf/java-sdk/commit/f3e9fedcc68c85625e4a1aab46600c046d65e244))
+
 ## [0.7.6](https://github.com/opentdf/java-sdk/compare/v0.7.5...v0.7.6) (2025-02-06)
 
 
