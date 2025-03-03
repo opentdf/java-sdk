@@ -37,7 +37,7 @@ import java.util.concurrent.ExecutionException;
  */
 public class TDF {
 
-    public static final byte[] GLOBAL_KEY_SALT = "salt".getBytes(StandardCharsets.UTF_8);
+    public static final byte[] GLOBAL_KEY_SALT = null;
     private static final String EMPTY_SPLIT_ID = "";
     private static final String TDF_VERSION = "4.3.0";
     private static final String KEY_ACCESS_SECHMA_VERSION = "1.0";
