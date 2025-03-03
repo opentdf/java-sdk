@@ -197,25 +197,25 @@ public class Manifest {
         public String kid;
         public String sid;
         public String schemaVersion;
+        public String ephemeralPublicKey;
 
         @Override
         public boolean equals(Object o) {
-            if (this == o)
-                return true;
-            if (o == null || getClass() != o.getClass())
-                return false;
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
             KeyAccess keyAccess = (KeyAccess) o;
             return Objects.equals(keyType, keyAccess.keyType) && Objects.equals(url, keyAccess.url)
                     && Objects.equals(protocol, keyAccess.protocol) && Objects.equals(wrappedKey, keyAccess.wrappedKey)
                     && Objects.equals(policyBinding, keyAccess.policyBinding)
                     && Objects.equals(encryptedMetadata, keyAccess.encryptedMetadata)
                     && Objects.equals(kid, keyAccess.kid)
-                    && Objects.equals(schemaVersion, keyAccess.schemaVersion);
+                    && Objects.equals(schemaVersion, keyAccess.schemaVersion)
+                    && Objects.equals(ephemeralPublicKey, keyAccess.ephemeralPublicKey);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(keyType, url, protocol, wrappedKey, policyBinding, encryptedMetadata, kid, schemaVersion);
+            return Objects.hash(keyType, url, protocol, wrappedKey, policyBinding, encryptedMetadata, kid, schemaVersion, ephemeralPublicKey);
         }
     }
 

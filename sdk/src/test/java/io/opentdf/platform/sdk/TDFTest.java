@@ -3,8 +3,10 @@ package io.opentdf.platform.sdk;
 import com.nimbusds.jose.JOSEException;
 import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.TDF.Reader;
+import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
+import org.bouncycastle.jce.interfaces.ECPrivateKey;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -18,10 +20,13 @@ import java.security.KeyPair;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -36,18 +41,33 @@ public class TDFTest {
             int index = Integer.parseInt(kasInfo.URL);
             var kiCopy = new Config.KASInfo();
             kiCopy.KID = "r1";
-            kiCopy.PublicKey = CryptoUtils.getRSAPublicKeyPEM(keypairs.get(index).getPublic());
+            kiCopy.PublicKey = CryptoUtils.getPublicKeyPEM(keypairs.get(index).getPublic());
             kiCopy.URL = kasInfo.URL;
             return kiCopy;
         }
 
         @Override
-        public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy) {
-            int index = Integer.parseInt(keyAccess.url);
-            var decryptor = new AsymDecryption(keypairs.get(index).getPrivate());
-            var bytes = Base64.getDecoder().decode(keyAccess.wrappedKey);
+        public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy, KeyType sessionKeyType) {
+
             try {
-                return decryptor.decrypt(bytes);
+                int index = Integer.parseInt(keyAccess.url);
+                var bytes = Base64.getDecoder().decode(keyAccess.wrappedKey);
+                if (sessionKeyType.isEc()) {
+                    var  kasPrivateKey = CryptoUtils.getPrivateKeyPEM(keypairs.get(index).getPrivate());
+                    var privateKey = ECKeyPair.privateKeyFromPem(kasPrivateKey);
+                    var clientEphemeralPublicKey = keyAccess.ephemeralPublicKey;
+                    var publicKey = ECKeyPair.publicKeyFromPem(clientEphemeralPublicKey);
+                    byte[] symKey = ECKeyPair.computeECDHKey(publicKey, privateKey);
+
+                    var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symKey);
+
+                    AesGcm gcm = new AesGcm(sessionKey);
+                    AesGcm.Encrypted encrypted = new AesGcm.Encrypted(bytes);
+                    return gcm.decrypt(encrypted);
+                } else {
+                    var decryptor = new AsymDecryption(keypairs.get(index).getPrivate());
+                    return decryptor.decrypt(bytes);
+                }
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -73,18 +93,33 @@ public class TDFTest {
 
     @BeforeAll
     static void createKeypairs() {
-        for (int i = 0; i < 1 + new Random().nextInt(5); i++) {
-            keypairs.add(CryptoUtils.generateRSAKeypair());
+        for (int i = 0; i < 2 + new Random().nextInt(5); i++) {
+            if (i % 2 == 0) {
+                keypairs.add(CryptoUtils.generateRSAKeypair());
+            } else {
+                keypairs.add(CryptoUtils.generateECKeypair(KeyType.EC256Key.getCurveName()));
+            }
         }
     }
 
     @Test
     void testSimpleTDFEncryptAndDecrypt() throws Exception {
+
+        class TDFConfigPair {
+            public final Config.TDFConfig tdfConfig;
+            public final Config.TDFReaderConfig tdfReaderConfig;
+
+            public TDFConfigPair(Config.TDFConfig tdfConfig, Config.TDFReaderConfig tdfReaderConfig) {
+                this.tdfConfig = tdfConfig;
+                this.tdfReaderConfig = tdfReaderConfig;
+            }
+        }
+
         SecureRandom secureRandom = new SecureRandom();
         byte[] key = new byte[32];
         secureRandom.nextBytes(key);
 
-           var assertion1 = new AssertionConfig();
+        var assertion1 = new AssertionConfig();
         assertion1.id = "assertion1";
         assertion1.type = AssertionConfig.Type.BaseAssertion;
         assertion1.scope = AssertionConfig.Scope.TrustedDataObj;
@@ -95,43 +130,54 @@ public class TDFTest {
         assertion1.statement.value = "ICAgIDxlZGoOkVkaD4=";
         assertion1.signingKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, key);
 
-        Config.TDFConfig config = Config.newTDFConfig(
-                Config.withAutoconfigure(false),
-                Config.withKasInformation(getKASInfos()),
-                Config.withMetaData("here is some metadata"),
-                Config.withDataAttributes("https://example.org/attr/a/value/b", "https://example.org/attr/c/value/d"),
-                Config.withAssertionConfig(assertion1));
-
-        String plainText = "this is extremely sensitive stuff!!!";
-        InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
-        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
-
-        TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, null);
-
         var assertionVerificationKeys = new Config.AssertionVerificationKeys();
         assertionVerificationKeys.defaultKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256,
                 key);
 
-        var unwrappedData = new ByteArrayOutputStream();
-        Config.TDFReaderConfig readerConfig = Config.newTDFReaderConfig(
-                Config.withAssertionVerificationKeys(assertionVerificationKeys));
+        List<TDFConfigPair> tdfConfigPairs = List.of(
+                new TDFConfigPair(
+                        Config.newTDFConfig( Config.withAutoconfigure(false),  Config.withKasInformation(getRSAKASInfos()),
+                                Config.withMetaData("here is some metadata"),
+                                Config.withDataAttributes("https://example.org/attr/a/value/b", "https://example.org/attr/c/value/d"),
+                                Config.withAssertionConfig(assertion1)),
+                        Config.newTDFReaderConfig(Config.withAssertionVerificationKeys(assertionVerificationKeys))
+                ),
+                new TDFConfigPair(
+                        Config.newTDFConfig( Config.withAutoconfigure(false),  Config.withKasInformation(getECKASInfos()),
+                                Config.withMetaData("here is some metadata"),
+                                Config.WithWrappingKeyAlg(KeyType.EC256Key),
+                                Config.withDataAttributes("https://example.org/attr/a/value/b", "https://example.org/attr/c/value/d"),
+                                Config.withAssertionConfig(assertion1)),
+                        Config.newTDFReaderConfig(Config.withAssertionVerificationKeys(assertionVerificationKeys),
+                                Config.WithSessionKeyType(KeyType.EC256Key))
+                )
+        );
 
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas,
-                readerConfig);
-        assertThat(reader.getManifest().payload.mimeType).isEqualTo("application/octet-stream");
+        for (TDFConfigPair configPair : tdfConfigPairs) {
+            String plainText = "this is extremely sensitive stuff!!!";
+            InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
+            ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
-        reader.readPayload(unwrappedData);
+            TDF tdf = new TDF();
+            tdf.createTDF(plainTextInputStream, tdfOutputStream, configPair.tdfConfig, kas, null);
 
-        assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
-                .withFailMessage("extracted data does not match")
-                .isEqualTo(plainText);
-        assertThat(reader.getMetadata()).isEqualTo("here is some metadata");
+            var unwrappedData = new ByteArrayOutputStream();
+            var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas,
+                    configPair.tdfReaderConfig);
+            assertThat(reader.getManifest().payload.mimeType).isEqualTo("application/octet-stream");
 
-        var policyObject = reader.readPolicyObject();
-        assertThat(policyObject).isNotNull();
-        assertThat(policyObject.body.dataAttributes.stream().map(a -> a.attribute).collect(Collectors.toList())).asList()
-                .containsExactlyInAnyOrder("https://example.org/attr/a/value/b", "https://example.org/attr/c/value/d");
+            reader.readPayload(unwrappedData);
+
+            assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
+                    .withFailMessage("extracted data does not match")
+                    .isEqualTo(plainText);
+            assertThat(reader.getMetadata()).isEqualTo("here is some metadata");
+
+            var policyObject = reader.readPolicyObject();
+            assertThat(policyObject).isNotNull();
+            assertThat(policyObject.body.dataAttributes.stream().map(a -> a.attribute).collect(Collectors.toList())).asList()
+                    .containsExactlyInAnyOrder("https://example.org/attr/a/value/b", "https://example.org/attr/c/value/d");
+        }
     }
 
     @Test
@@ -150,9 +196,12 @@ public class TDFTest {
         assertionConfig.signingKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256,
                 keypair.getPrivate());
 
+        var rsaKasInfo = new Config.KASInfo();
+        rsaKasInfo.URL = Integer.toString(0);
+
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
-                Config.withKasInformation(getKASInfos()),
+                Config.withKasInformation(rsaKasInfo),
                 Config.withAssertionConfig(assertionConfig));
 
         String plainText = "this is extremely sensitive stuff!!!";
@@ -196,7 +245,7 @@ public class TDFTest {
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
-                Config.withKasInformation(getKASInfos()),
+                Config.withKasInformation(getRSAKASInfos()),
                 Config.withAssertionConfig(assertionConfig));
 
         String plainText = "this is extremely sensitive stuff!!!";
@@ -213,7 +262,7 @@ public class TDFTest {
         var unwrappedData = new ByteArrayOutputStream();
         assertThrows(JOSEException.class, () -> {
             tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas,
-                    new Config.TDFReaderConfig());
+                    Config.newTDFReaderConfig());
         });
 
         //  try with assertion verification disabled and not passing the assertion verification keys
@@ -251,9 +300,12 @@ public class TDFTest {
         assertionConfig2.statement.schema = "urn:nato:stanag:5636:A:1:elements:json";
         assertionConfig2.statement.value = "{\"uuid\":\"f74efb60-4a9a-11ef-a6f1-8ee1a61c148a\",\"body\":{\"dataAttributes\":null,\"dissem\":null}}";
 
+        var rsaKasInfo = new Config.KASInfo();
+        rsaKasInfo.URL = Integer.toString(0);
+
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
-                Config.withKasInformation(getKASInfos()),
+                Config.withKasInformation(rsaKasInfo),
                 Config.withAssertionConfig(assertionConfig1, assertionConfig2));
 
         String plainText = "this is extremely sensitive stuff!!!";
@@ -265,7 +317,7 @@ public class TDFTest {
 
         var unwrappedData = new ByteArrayOutputStream();
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()),
-                kas,  new Config.TDFReaderConfig());
+                kas, Config.newTDFReaderConfig());
         reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
@@ -312,9 +364,12 @@ public class TDFTest {
         assertionConfig1.statement.value = "ICAgIDxlZGoOkVkaD4=";
         assertionConfig1.signingKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, key);
 
+        var rsaKasInfo = new Config.KASInfo();
+        rsaKasInfo.URL = Integer.toString(0);
+
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
-                Config.withKasInformation(getKASInfos()),
+                Config.withKasInformation(rsaKasInfo),
                 Config.withAssertionConfig(assertionConfig1));
 
         String plainText = "this is extremely sensitive stuff!!!";
@@ -349,7 +404,7 @@ public class TDFTest {
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
-                Config.withKasInformation(getKASInfos()),
+                Config.withKasInformation(getRSAKASInfos()),
                 Config.withSegmentSize(Config.MIN_SEGMENT_SIZE));
 
         // data should be large enough to have multiple complete and a partial segment
@@ -407,7 +462,7 @@ public class TDFTest {
         var tdf = new TDF(maxSize);
         var tdfConfig = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
-                Config.withKasInformation(getKASInfos()),
+                Config.withKasInformation(getRSAKASInfos()),
                 Config.withSegmentSize(Config.MIN_SEGMENT_SIZE));
         assertThrows(TDF.DataSizeNotSupported.class,
                 () -> tdf.createTDF(is, os, tdfConfig, kas, null),
@@ -423,7 +478,7 @@ public class TDFTest {
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
-                Config.withKasInformation(getKASInfos()),
+                Config.withKasInformation(getRSAKASInfos()),
                 Config.withMimeType(mimeType));
 
         String plainText = "this is extremely sensitive stuff!!!";
@@ -438,14 +493,26 @@ public class TDFTest {
     }
 
     @Nonnull
-    private static Config.KASInfo[] getKASInfos() {
-        var kasInfos = new ArrayList<>();
+    private static Config.KASInfo[] getKASInfos(Predicate<Integer> filter) {
+        var kasInfos = new ArrayList<Config.KASInfo>();
         for (int i = 0; i < keypairs.size(); i++) {
-            var kasInfo = new Config.KASInfo();
-            kasInfo.URL = Integer.toString(i);
-            kasInfo.PublicKey = null;
-            kasInfos.add(kasInfo);
+            if (filter.test(i)) {
+                var kasInfo = new Config.KASInfo();
+                kasInfo.URL = Integer.toString(i);
+                kasInfo.PublicKey = null;
+                kasInfos.add(kasInfo);
+            }
         }
         return kasInfos.toArray(Config.KASInfo[]::new);
+    }
+
+    @Nonnull
+    private static Config.KASInfo[] getRSAKASInfos() {
+        return getKASInfos(i -> i % 2 == 0);
+    }
+
+    @Nonnull
+    private static Config.KASInfo[] getECKASInfos() {
+        return getKASInfos(i -> i % 2 != 0);
     }
 }

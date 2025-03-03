@@ -165,7 +165,7 @@ public class KASClientTest {
                 var serverWrappedKey = new AsymEncryption(serverKeypair.getPublic()).encrypt(plaintextKey);
                 keyAccess.wrappedKey = Base64.getEncoder().encodeToString(serverWrappedKey);
 
-                rewrapResponse = kas.unwrap(keyAccess, "the policy");
+                rewrapResponse = kas.unwrap(keyAccess, "the policy", KeyType.RSA2048Key);
             }
             assertThat(rewrapResponse).containsExactly(plaintextKey);
         } finally {

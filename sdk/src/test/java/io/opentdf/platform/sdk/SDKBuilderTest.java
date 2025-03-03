@@ -300,7 +300,7 @@ public class SDKBuilderTest {
             keyAccess.url = "localhost:" + kasServer.getPort();
 
             try {
-                services.kas().unwrap(keyAccess, "");
+                services.kas().unwrap(keyAccess, "", KeyType.RSA2048Key);
             } catch (Exception ignoredException) {
                 // not going to bother making a real request with real crypto, just make sure
                 // that

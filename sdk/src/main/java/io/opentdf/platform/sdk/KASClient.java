@@ -21,6 +21,7 @@ import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import io.opentdf.platform.sdk.TDF.KasBadRequestException;
 
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.net.MalformedURLException;
@@ -32,6 +33,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.function.Function;
 
+import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
 import static java.lang.String.format;
 
 /**
@@ -43,9 +45,8 @@ public class KASClient implements SDK.KAS {
 
     private final Function<String, ManagedChannel> channelFactory;
     private final RSASSASigner signer;
-    private final AsymDecryption decryptor;
-    private final String publicKeyPEM;
-
+    private AsymDecryption decryptor;
+    private String clientPublicKey;
     private KASKeyCache kasKeyCache;
 
     /***
@@ -62,10 +63,6 @@ public class KASClient implements SDK.KAS {
         } catch (JOSEException e) {
             throw new SDKException("error creating dpop signer", e);
         }
-        var encryptionKeypair = CryptoUtils.generateRSAKeypair();
-        decryptor = new AsymDecryption(encryptionKeypair.getPrivate());
-        publicKeyPEM = CryptoUtils.getRSAPublicKeyPEM(encryptionKeypair.getPublic());
-
         this.kasKeyCache = new KASKeyCache();
     }
 
@@ -86,7 +83,12 @@ public class KASClient implements SDK.KAS {
         if (cachedValue != null) {
             return cachedValue;
         }
-        PublicKeyResponse resp = getStub(kasInfo.URL).publicKey(PublicKeyRequest.getDefaultInstance());
+
+        PublicKeyRequest request = (kasInfo.Algorithm == null || kasInfo.Algorithm.isEmpty())
+                ? PublicKeyRequest.getDefaultInstance()
+                : PublicKeyRequest.newBuilder().setAlgorithm(kasInfo.Algorithm).build();
+
+        PublicKeyResponse resp = getStub(kasInfo.URL).publicKey(request);
 
         var kiCopy = new Config.KASInfo();
         kiCopy.KID = resp.getKid();
@@ -161,13 +163,28 @@ public class KASClient implements SDK.KAS {
     private static final Gson gson = new Gson();
 
     @Override
-    public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy) {
+    public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy,  KeyType sessionKeyType) {
+        ECKeyPair ecKeyPair = null;
+        
+        if (sessionKeyType.isEc()) {
+            var curveName = sessionKeyType.getCurveName();
+            ecKeyPair = new ECKeyPair(curveName, ECKeyPair.ECAlgorithm.ECDH);
+            clientPublicKey = ecKeyPair.publicKeyInPEMFormat();
+        } else {
+            // Initialize the RSA key pair only once and reuse it for future unwrap operations
+            if (decryptor == null) {
+                var encryptionKeypair = CryptoUtils.generateRSAKeypair();
+                decryptor = new AsymDecryption(encryptionKeypair.getPrivate());
+                clientPublicKey = CryptoUtils.getRSAPublicKeyPEM(encryptionKeypair.getPublic());
+            }
+        }
+
         RewrapRequestBody body = new RewrapRequestBody();
         body.policy = policy;
-        body.clientPublicKey = publicKeyPEM;
+        body.clientPublicKey = clientPublicKey;
         body.keyAccess = keyAccess;
-        var requestBody = gson.toJson(body);
 
+        var requestBody = gson.toJson(body);
         var claims = new JWTClaimsSet.Builder()
                 .claim("requestBody", requestBody)
                 .issueTime(Date.from(Instant.now()))
@@ -190,7 +207,24 @@ public class KASClient implements SDK.KAS {
         try {
             response = getStub(keyAccess.url).rewrap(request);
             var wrappedKey = response.getEntityWrappedKey().toByteArray();
-            return decryptor.decrypt(wrappedKey);
+            if (sessionKeyType != KeyType.RSA2048Key) {
+
+                if (ecKeyPair == null) {
+                    throw new SDKException("ECKeyPair is null. Unable to proceed with the unwrap operation.");
+                }
+
+                var kasEphemeralPublicKey = response.getSessionPublicKey();
+                var publicKey = ECKeyPair.publicKeyFromPem(kasEphemeralPublicKey);
+                byte[] symKey = ECKeyPair.computeECDHKey(publicKey, ecKeyPair.getPrivateKey());
+
+                var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symKey);
+
+                AesGcm gcm = new AesGcm(sessionKey);
+                AesGcm.Encrypted encrypted = new AesGcm.Encrypted(wrappedKey);
+                return gcm.decrypt(encrypted);
+            } else {
+                return decryptor.decrypt(wrappedKey);
+            }
         } catch (StatusRuntimeException e) {
             if (e.getStatus().getCode() == Status.Code.INVALID_ARGUMENT) {
                 // 400 Bad Request
