@@ -13,6 +13,7 @@ import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
+import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.jce.interfaces.ECPublicKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,7 +38,19 @@ import java.util.concurrent.ExecutionException;
  */
 public class TDF {
 
-    public static final byte[] GLOBAL_KEY_SALT = null;
+    private static byte[] tdfECKeySaltCompute() {
+        byte[] salt;
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update("TDF".getBytes());
+            salt = digest.digest();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("failed to compute salt for TDF", e);
+        }
+        return salt;
+    }
+
+    public static final byte[] GLOBAL_KEY_SALT = tdfECKeySaltCompute();
     private static final String EMPTY_SPLIT_ID = "";
     private static final String TDF_VERSION = "4.3.0";
     private static final String KEY_ACCESS_SECHMA_VERSION = "1.0";
