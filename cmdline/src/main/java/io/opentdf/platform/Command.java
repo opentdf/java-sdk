@@ -6,7 +6,9 @@ import com.nimbusds.jose.JOSEException;
 import io.opentdf.platform.sdk.AssertionConfig;
 import io.opentdf.platform.sdk.AutoConfigureException;
 import io.opentdf.platform.sdk.Config;
+import io.opentdf.platform.sdk.KeyType;
 import io.opentdf.platform.sdk.Config.AssertionVerificationKeys;
+import io.opentdf.platform.sdk.Config.TDFReaderConfig;
 import io.opentdf.platform.sdk.NanoTDF;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
@@ -145,6 +147,7 @@ class Command {
             @Option(names = { "-a", "--attr" }, defaultValue = Option.NULL_VALUE) Optional<String> attributes,
             @Option(names = { "-c",
                     "--autoconfigure" }, defaultValue = Option.NULL_VALUE) Optional<Boolean> autoconfigure,
+            @Option(names = { "--encapKeyType" }, defaultValue = Option.NULL_VALUE, description="Preferred key access key wrap algorithm") Optional<KeyType> encapKeyType,
             @Option(names = { "--mime-type" }, defaultValue = Option.NULL_VALUE) Optional<String> mimeType,
             @Option(names = { "--with-assertions" }, defaultValue = Option.NULL_VALUE) Optional<String> assertion)
 
@@ -161,6 +164,7 @@ class Command {
         configs.add(Config.withKasInformation(kasInfos));
         metadata.map(Config::withMetaData).ifPresent(configs::add);
         autoconfigure.map(Config::withAutoconfigure).ifPresent(configs::add);
+        encapKeyType.map(Config::WithWrappingKeyAlg).ifPresent(configs::add);
         mimeType.map(Config::withMimeType).ifPresent(configs::add);
 
         if (assertion.isPresent()) {
@@ -226,6 +230,7 @@ class Command {
 
     @CommandLine.Command(name = "decrypt")
     void decrypt(@Option(names = { "-f", "--file" }, required = true) Path tdfPath,
+            @Option(names = { "--rewrap-key-type" }, defaultValue = Option.NULL_VALUE, description="Preferred rewrap algorithm") Optional<KeyType> rewrapKeyType,
             @Option(names = { "--with-assertion-verification-disabled" }, defaultValue = "false") boolean disableAssertionVerification,
             @Option(names = { "--with-assertion-verification-keys" }, defaultValue = Option.NULL_VALUE) Optional<String> assertionVerification)
              throws IOException, TDF.FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException, DecoderException {
@@ -266,6 +271,7 @@ class Command {
                 if (disableAssertionVerification) {
                     opts.add(Config.withDisableAssertionVerification(true));
                 }
+                rewrapKeyType.map(Config::WithSessionKeyType).ifPresent(opts::add);
 
                 var readerConfig = Config.newTDFReaderConfig(opts.toArray(new Consumer[0]));
                 var reader = new TDF().loadTDF(in, sdk.getServices().kas(), readerConfig);
