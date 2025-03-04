@@ -8,7 +8,6 @@ import io.opentdf.platform.sdk.AutoConfigureException;
 import io.opentdf.platform.sdk.Config;
 import io.opentdf.platform.sdk.KeyType;
 import io.opentdf.platform.sdk.Config.AssertionVerificationKeys;
-import io.opentdf.platform.sdk.Config.TDFReaderConfig;
 import io.opentdf.platform.sdk.NanoTDF;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
@@ -147,7 +146,8 @@ class Command {
             @Option(names = { "-a", "--attr" }, defaultValue = Option.NULL_VALUE) Optional<String> attributes,
             @Option(names = { "-c",
                     "--autoconfigure" }, defaultValue = Option.NULL_VALUE) Optional<Boolean> autoconfigure,
-            @Option(names = { "--encapKeyType" }, defaultValue = Option.NULL_VALUE, description="Preferred key access key wrap algorithm") Optional<KeyType> encapKeyType,
+            @Option(names = {
+                    "--encap-key-type" }, defaultValue = Option.NULL_VALUE, description = "Preferred key access key wrap algorithm, one of ${COMPLETION-CANDIDATES}") Optional<KeyType> encapKeyType,
             @Option(names = { "--mime-type" }, defaultValue = Option.NULL_VALUE) Optional<String> mimeType,
             @Option(names = { "--with-assertions" }, defaultValue = Option.NULL_VALUE) Optional<String> assertion)
 
@@ -230,7 +230,7 @@ class Command {
 
     @CommandLine.Command(name = "decrypt")
     void decrypt(@Option(names = { "-f", "--file" }, required = true) Path tdfPath,
-            @Option(names = { "--rewrap-key-type" }, defaultValue = Option.NULL_VALUE, description="Preferred rewrap algorithm") Optional<KeyType> rewrapKeyType,
+            @Option(names = { "--rewrap-key-type" }, defaultValue = Option.NULL_VALUE, description = "Preferred rewrap algorithm, one of ${COMPLETION-CANDIDATES}") Optional<KeyType> rewrapKeyType,
             @Option(names = { "--with-assertion-verification-disabled" }, defaultValue = "false") boolean disableAssertionVerification,
             @Option(names = { "--with-assertion-verification-keys" }, defaultValue = Option.NULL_VALUE) Optional<String> assertionVerification)
              throws IOException, TDF.FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException, DecoderException {
