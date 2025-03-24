@@ -55,6 +55,30 @@
             <version>1.17.0</version>
         </dependency>
         <dependency>
+            <groupId>com.connectrpc</groupId>
+            <artifactId>connect-kotlin</artifactId>
+            <version>0.7.2</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.jetbrains.kotlin</groupId>
+                    <artifactId>kotlin-stdlib</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.squareup.okio</groupId>
+                    <artifactId>okio-jvm</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.jetbrains</groupId>
+                    <artifactId>annotations</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.squareup.okio</groupId>
+            <artifactId>okio-jvm</artifactId>
+            <version>3.9.1</version>
+        </dependency>
+        <dependency>
             <groupId>io.github.erdtman</groupId>
             <artifactId>java-json-canonicalization</artifactId>
             <version>1.1</version>
@@ -123,6 +147,12 @@
             <artifactId>mockwebserver</artifactId>
             <version>5.0.0-alpha.14</version>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.squareup.okio</groupId>
+                    <artifactId>okio-jvm</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>junit</groupId>
@@ -143,15 +173,21 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.apache.commons</groupId>
-            <artifactId>commons-compress</artifactId>
-            <version>1.26.1</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>okhttp-tls</artifactId>
             <version>5.0.0-alpha.14</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.squareup.okio</groupId>
+                    <artifactId>okio-jvm</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
+            <version>1.26.1</version>
             <scope>test</scope>
         </dependency>
         <dependency>

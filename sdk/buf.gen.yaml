@@ -10,5 +10,5 @@ managed:
 plugins:
   - plugin: buf.build/protocolbuffers/java:v25.3
     out: ./
-  - plugin: buf.build/grpc/java:v1.61.1
-    out: ./
+  - plugin: buf.build/connectrpc/kotlin
+    out: app/src/main/java
