@@ -12,6 +12,7 @@
     <properties>
         <jazzer.version>0.22.1</jazzer.version>
         <jazzer.baseurl>https://github.com/CodeIntelligenceTesting/jazzer/releases/download/v${jazzer.version}</jazzer.baseurl>
+        <kotlin.version>2.1.20</kotlin.version>
     </properties>
     <dependencies>
         <!-- Logging Dependencies -->
@@ -216,9 +217,50 @@
             <version>${grpc.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-stdlib-jdk8</artifactId>
+            <version>${kotlin.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-test</artifactId>
+            <version>${kotlin.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
+            <plugin>
+                <artifactId>kotlin-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>compile</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                        <configuration>
+                            <sourceDirs>
+                                <source>src/main/java</source>
+                                <source>target/generated-sources</source>
+                            </sourceDirs>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>test-compile</id>
+                        <phase>test-compile</phase>
+                        <goals>
+                            <goal>test-compile</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <jvmTarget>1.8</jvmTarget>
+                </configuration>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <version>${kotlin.version}</version>
+            </plugin>
             <!-- Plugin to create source JAR -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -279,39 +321,39 @@
                     </execution>
                 </executions>
             </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-antrun-plugin</artifactId>
-                <version>3.1.0</version>
-                <executions>
-                    <!-- Generate Sources Execution under target/generated-sources -->
-                    <execution>
-                        <id>generateSources</id>
-                        <phase>generate-sources</phase>
-                        <configuration>
-                            <target>
-                                <!-- Generate OpenTDF Platform Protobuf -->
-                                <exec executable="buf" dir="." failOnError="true">
-                                    <arg value="generate"/>
-                                    <arg value="https://github.com/opentdf/platform.git#branch=main,subdir=service"/>
-                                    <arg value="-o"/>
-                                    <arg value="target/generated-sources"/>
-                                </exec>
-                                <!-- Generate gRPC Protobuf -->
-                                <exec executable="buf" dir="." failOnError="true">
-                                    <arg value="generate"/>
-                                    <arg value="buf.build/grpc-ecosystem/grpc-gateway"/>
-                                    <arg value="-o"/>
-                                    <arg value="target/generated-sources"/>
-                                </exec>
-                            </target>
-                        </configuration>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
+<!--            <plugin>-->
+<!--                <groupId>org.apache.maven.plugins</groupId>-->
+<!--                <artifactId>maven-antrun-plugin</artifactId>-->
+<!--                <version>3.1.0</version>-->
+<!--                <executions>-->
+<!--                    &lt;!&ndash; Generate Sources Execution under target/generated-sources &ndash;&gt;-->
+<!--                    <execution>-->
+<!--                        <id>generateSources</id>-->
+<!--                        <phase>generate-sources</phase>-->
+<!--                        <configuration>-->
+<!--                            <target>-->
+<!--                                &lt;!&ndash; Generate OpenTDF Platform Protobuf &ndash;&gt;-->
+<!--                                <exec executable="buf" dir="." failOnError="true">-->
+<!--                                    <arg value="generate"/>-->
+<!--                                    <arg value="https://github.com/opentdf/platform.git#branch=main,subdir=service"/>-->
+<!--                                    <arg value="-o"/>-->
+<!--                                    <arg value="target/generated-sources"/>-->
+<!--                                </exec>-->
+<!--                                &lt;!&ndash; Generate gRPC Protobuf &ndash;&gt;-->
+<!--                                <exec executable="buf" dir="." failOnError="true">-->
+<!--                                    <arg value="generate"/>-->
+<!--                                    <arg value="buf.build/grpc-ecosystem/grpc-gateway"/>-->
+<!--                                    <arg value="-o"/>-->
+<!--                                    <arg value="target/generated-sources"/>-->
+<!--                                </exec>-->
+<!--                            </target>-->
+<!--                        </configuration>-->
+<!--                        <goals>-->
+<!--                            <goal>run</goal>-->
+<!--                        </goals>-->
+<!--                    </execution>-->
+<!--                </executions>-->
+<!--            </plugin>-->
             <!-- Add Generate Sources Directory -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
@@ -359,6 +401,34 @@
                                 <format>XML</format>
                             </formats>
                         </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>default-compile</id>
+                        <phase>none</phase>
+                    </execution>
+                    <execution>
+                        <id>default-testCompile</id>
+                        <phase>none</phase>
+                    </execution>
+                    <execution>
+                        <id>compile</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>testCompile</id>
+                        <phase>test-compile</phase>
+                        <goals>
+                            <goal>testCompile</goal>
+                        </goals>
                     </execution>
                 </executions>
             </plugin>

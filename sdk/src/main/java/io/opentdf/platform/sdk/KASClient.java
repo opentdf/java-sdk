@@ -1,5 +1,7 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.ResponseMessage;
+import com.connectrpc.ResponseMessageKt;
 import com.google.gson.Gson;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -11,6 +13,7 @@ import com.nimbusds.jwt.SignedJWT;
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
 import io.grpc.Status;
+import io.opentdf.platform.kas.AccessServiceClient;
 import io.opentdf.platform.kas.AccessServiceGrpc;
 import io.opentdf.platform.kas.PublicKeyRequest;
 import io.opentdf.platform.kas.PublicKeyResponse;
@@ -21,7 +24,7 @@ import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import io.opentdf.platform.sdk.TDF.KasBadRequestException;
 
-import java.nio.charset.StandardCharsets;
+import kotlin.collections.MapsKt;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.net.MalformedURLException;
@@ -33,6 +36,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.function.Function;
 
+import static com.connectrpc.ResponseMessageKt.getOrThrow;
 import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
 import static java.lang.String.format;
 
@@ -43,7 +47,7 @@ import static java.lang.String.format;
  */
 public class KASClient implements SDK.KAS {
 
-    private final Function<String, ManagedChannel> channelFactory;
+    private final Function<String, AccessServiceClient> channelFactory;
     private final RSASSASigner signer;
     private AsymDecryption decryptor;
     private String clientPublicKey;
@@ -56,7 +60,7 @@ public class KASClient implements SDK.KAS {
      *                       communicate
      * @param dpopKey
      */
-    public KASClient(Function<String, ManagedChannel> channelFactory, RSAKey dpopKey) {
+    public KASClient(Function<String, AccessServiceClient> channelFactory, RSAKey dpopKey) {
         this.channelFactory = channelFactory;
         try {
             this.signer = new RSASSASigner(dpopKey);
@@ -68,12 +72,17 @@ public class KASClient implements SDK.KAS {
 
     @Override
     public KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
-        var r = getStub(kasInfo.URL)
-                .publicKey(
-                        PublicKeyRequest.newBuilder().setAlgorithm(String.format("ec:%s", curve.toString())).build());
+        var req = PublicKeyRequest.newBuilder().setAlgorithm(String.format("ec:%s", curve.toString())).build();
+        var r = getStub(kasInfo.URL).publicKeyBlocking(req, MapsKt.mapOf()).execute();
+        PublicKeyResponse res;
+        try {
+            res = ResponseMessageKt.getOrThrow(r);
+        } catch (Exception e) {
+            throw new SDKException("error getting public key", e);
+        }
         var k2 = kasInfo.clone();
-        k2.KID = r.getKid();
-        k2.PublicKey = r.getPublicKey();
+        k2.KID = res.getKid();
+        k2.PublicKey = res.getPublicKey();
         return k2;
     }
 
@@ -88,7 +97,13 @@ public class KASClient implements SDK.KAS {
                 ? PublicKeyRequest.getDefaultInstance()
                 : PublicKeyRequest.newBuilder().setAlgorithm(kasInfo.Algorithm).build();
 
-        PublicKeyResponse resp = getStub(kasInfo.URL).publicKey(request);
+        var req= getStub(kasInfo.URL).publicKeyBlocking(request, MapsKt.mapOf()).execute();
+        PublicKeyResponse resp;
+        try {
+            resp = getOrThrow(req);
+        } catch (Exception e) {
+            throw new SDKException("error getting public key", e);
+        }
 
         var kiCopy = new Config.KASInfo();
         kiCopy.KID = resp.getKid();
@@ -134,11 +149,6 @@ public class KASClient implements SDK.KAS {
 
     @Override
     public synchronized void close() {
-        var entries = new ArrayList<>(stubs.values());
-        stubs.clear();
-        for (var entry : entries) {
-            entry.channel.shutdownNow();
-        }
     }
 
     static class RewrapRequestBody {
@@ -205,7 +215,12 @@ public class KASClient implements SDK.KAS {
                 .build();
         RewrapResponse response;
         try {
-            response = getStub(keyAccess.url).rewrap(request);
+            var req = getStub(keyAccess.url).rewrapBlocking(request, MapsKt.mapOf()).execute();
+            try {
+                response = getOrThrow(req);
+            } catch (Exception e) {
+                throw new SDKException("error unwrapping key", e);
+            }
             var wrappedKey = response.getEntityWrappedKey().toByteArray();
             if (sessionKeyType != KeyType.RSA2048Key) {
 
@@ -264,12 +279,18 @@ public class KASClient implements SDK.KAS {
             throw new SDKException("error signing KAS request", e);
         }
 
-        var request = RewrapRequest
+        var req = RewrapRequest
                 .newBuilder()
                 .setSignedRequestToken(jwt.serialize())
                 .build();
 
-        var response = getStub(keyAccess.url).rewrap(request);
+        var request = getStub(keyAccess.url).rewrapBlocking(req, MapsKt.mapOf()).execute();
+        RewrapResponse response;
+        try {
+            response = getOrThrow(request);
+        } catch (Exception e) {
+            throw new SDKException("error rewrapping key", e);
+        }
         var wrappedKey = response.getEntityWrappedKey().toByteArray();
 
         // Generate symmetric key
@@ -291,7 +312,7 @@ public class KASClient implements SDK.KAS {
         return gcm.decrypt(encrypted);
     }
 
-    private final HashMap<String, CacheEntry> stubs = new HashMap<>();
+    private final HashMap<String, AccessServiceClient> stubs = new HashMap<>();
 
     private static class CacheEntry {
         final ManagedChannel channel;
@@ -304,14 +325,10 @@ public class KASClient implements SDK.KAS {
     }
 
     // make this protected so we can test the address normalization logic
-    synchronized AccessServiceGrpc.AccessServiceBlockingStub getStub(String url) {
+    synchronized AccessServiceClient getStub(String url) {
         var realAddress = normalizeAddress(url);
-        if (!stubs.containsKey(realAddress)) {
-            var channel = channelFactory.apply(realAddress);
-            var stub = AccessServiceGrpc.newBlockingStub(channel);
-            stubs.put(realAddress, new CacheEntry(channel, stub));
-        }
+        stubs.computeIfAbsent(realAddress, channelFactory);
 
-        return stubs.get(realAddress).stub;
+        return stubs.get(realAddress);
     }
 }
