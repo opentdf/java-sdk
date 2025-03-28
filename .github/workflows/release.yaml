@@ -21,7 +21,7 @@ jobs:
         with:
           app-id: "${{ secrets.APP_ID }}"
           private-key: "${{ secrets.AUTOMATION_KEY }}"
-      - uses: google-github-actions/release-please-action@v4
+      - uses: googleapis/release-please-action@7987652d64b4581673a76e33ad5e98e3dd56832f
         with:
           token: "${{ steps.generate_token.outputs.token }}"
           config-file: release-please.json
