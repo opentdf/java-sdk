@@ -75,6 +75,11 @@
             </exclusions>
         </dependency>
         <dependency>
+            <groupId>com.connectrpc</groupId>
+            <artifactId>connect-kotlin-okhttp</artifactId>
+            <version>0.7.2</version>
+        </dependency>
+        <dependency>
             <groupId>com.squareup.okio</groupId>
             <artifactId>okio-jvm</artifactId>
             <version>3.9.1</version>

@@ -1,5 +1,8 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.ProtocolClientInterface;
+import com.connectrpc.impl.ProtocolClient;
+import com.connectrpc.okhttp.ConnectOkHttpClient;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.RSAKey;
@@ -17,11 +20,13 @@ import com.nimbusds.oauth2.sdk.token.TokenTypeURI;
 import com.nimbusds.oauth2.sdk.tokenexchange.TokenExchangeGrant;
 import com.nimbusds.openid.connect.sdk.op.OIDCProviderMetadata;
 import io.grpc.*;
+import io.opentdf.platform.kas.AccessServiceClient;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRequest;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceGrpc;
 import nl.altindag.ssl.SSLFactory;
 import nl.altindag.ssl.pem.util.PemUtils;
+import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -234,6 +239,15 @@ public class SDKBuilder {
             managedChannelFactory = (String endpoint) -> getManagedChannelBuilder(endpoint).intercept(authInterceptor)
                     .build();
         }
+        var c = new OkHttpClient.Builder()
+                .protocols(OkHttpClient.Companion.getDEFAULT_PROTOCOLS$okhttp())
+                .connectionSpecs(OkHttpClient.Companion.getDEFAULT_CONNECTION_SPECS$okhttp())
+                .sslSocketFactory()
+                .build();
+
+        var as = new ProtocolClient(
+                new ConnectOkHttpClient(),
+        )
         var client = new KASClient(managedChannelFactory, dpopKey);
         return new ServicesAndInternals(
                 authInterceptor,

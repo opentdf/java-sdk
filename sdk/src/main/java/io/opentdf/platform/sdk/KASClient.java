@@ -1,6 +1,5 @@
 package io.opentdf.platform.sdk;
 
-import com.connectrpc.ResponseMessage;
 import com.connectrpc.ResponseMessageKt;
 import com.google.gson.Gson;
 import com.nimbusds.jose.JOSEException;
@@ -31,7 +30,6 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.function.Function;
