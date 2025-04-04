@@ -255,8 +255,8 @@ public class Config {
         };
     }
 
-    // specify TDF version for TDF creation to target. Versions less than 4.3.0 will add a layer of
-    // hex encoding to their segment hashes and will not include version informration
+    // specify TDF version for TDF creation to target. Versions less than 4.3.0 will add a
+    // layer of hex encoding to their segment hashes and will not include version information
     // in their manifests.
     public static Consumer<TDFConfig> withTargetMode(String targetVersion) {
         Version version = new Version(targetVersion == null ? "0.0.0" : targetVersion);
