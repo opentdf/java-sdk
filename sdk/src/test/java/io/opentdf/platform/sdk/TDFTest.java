@@ -33,6 +33,7 @@ import java.util.stream.Collectors;
 
 import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TDFTest {
@@ -507,15 +508,20 @@ public class TDFTest {
                 Config.withTargetMode("4.2.1"),
                 Config.withMimeType(mimeType));
 
-        String plainText = "this is extremely sensitive stuff!!!";
-        InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
+        byte[] data = new byte[129];
+        new Random().nextBytes(data);
+        InputStream plainTextInputStream = new ByteArrayInputStream(data);
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
         TDF tdf = new TDF();
         tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, null);
 
+        var dataOutputStream = new ByteArrayOutputStream();
+
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
+        reader.readPayload(dataOutputStream);
         assertThat(reader.getManifest().payload.mimeType).isEqualTo(mimeType);
+        assertArrayEquals(data, dataOutputStream.toByteArray(), "extracted data does not match");
     }
 
     @Nonnull
