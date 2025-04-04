@@ -5,6 +5,7 @@ import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.TDF.Reader;
 import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
+import org.apache.commons.codec.DecoderException;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.bouncycastle.jce.interfaces.ECPrivateKey;
 import org.junit.jupiter.api.BeforeAll;
@@ -13,21 +14,26 @@ import org.junit.jupiter.api.Test;
 import javax.annotation.Nonnull;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TDFTest {
@@ -490,6 +496,32 @@ public class TDFTest {
 
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
         assertThat(reader.getManifest().payload.mimeType).isEqualTo(mimeType);
+    }
+
+    @Test
+    public void legacyTDFRoundTrips() throws DecoderException, IOException, ExecutionException, JOSEException, InterruptedException, ParseException, NoSuchAlgorithmException {
+        final String mimeType = "application/pdf";
+
+        Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
+                Config.withKasInformation(getRSAKASInfos()),
+                Config.withTargetMode("4.2.1"),
+                Config.withMimeType(mimeType));
+
+        byte[] data = new byte[129];
+        new Random().nextBytes(data);
+        InputStream plainTextInputStream = new ByteArrayInputStream(data);
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+
+        TDF tdf = new TDF();
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, null);
+
+        var dataOutputStream = new ByteArrayOutputStream();
+
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
+        reader.readPayload(dataOutputStream);
+        assertThat(reader.getManifest().payload.mimeType).isEqualTo(mimeType);
+        assertArrayEquals(data, dataOutputStream.toByteArray(), "extracted data does not match");
     }
 
     @Nonnull
