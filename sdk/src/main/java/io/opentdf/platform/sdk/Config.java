@@ -255,8 +255,11 @@ public class Config {
         };
     }
 
+    // specify a version for the TDF. Versions less that 4.3.0 will add a layer of
+    // hex encoding to their segment hashes and will not include version informration
+    // in their manifests.
     public static Consumer<TDFConfig> withTargetMode(String targetVersion) {
-        Version version = new Version(targetVersion);
+        Version version = new Version(targetVersion == null ? "0.0.0" : targetVersion);
         return (TDFConfig config) -> {
             var legacyTDF = version.compareTo(new Version("4.3.0")) < 0;
             config.renderVersionInfoInManifest = !legacyTDF;
