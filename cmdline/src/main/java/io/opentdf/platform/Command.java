@@ -45,10 +45,23 @@ import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
+/**
+ * Constants for the TDF command line tool.
+ * These must be compile-time constants to appear in annotations.
+ */
+class Versions {
+    // Version of the SDK, managed by release-please.
+    public static final String SDK = "0.7.6"; // x-release-please-version
+
+    // This sdk aims to support this version of the TDF spec; currently 4.3.0.
+    public static final String TDF_SPEC = "4.3.0";
+}
+
 @CommandLine.Command(
     name = "tdf",
     subcommands = {HelpCommand.class},
-    version = "{\"version\":\"0.7.5\",\"tdfSpecVersion\":\"4.3.0\"}"
+    version =
+        "{\"version\":\"" + Versions.SDK + "\",\"tdfSpecVersion\":\"" + Versions.TDF_SPEC + "\"}"
 )
 class Command {
 

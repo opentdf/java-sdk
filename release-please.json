@@ -8,5 +8,11 @@
   "group-pull-request-title-pattern": "chore(${branch}): release ${version}",
   "packages": {
     ".": {}
-  }
+  },
+  "extra-files": [
+    {
+      "type": "generic",
+      "path": "cmdline/src/main/java/io/opentdf/platform/Command.java"
+    }
+  ]
 }
