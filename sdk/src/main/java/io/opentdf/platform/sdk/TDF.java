@@ -555,11 +555,7 @@ public class TDF {
 
         Manifest.RootSignature rootSignature = new Manifest.RootSignature();
 
-        byte[] encodedAggregateHash = tdfConfig.hexEncodeRootAndSegmentHashes
-                ? aggregateHash.toString(StandardCharsets.UTF_8).getBytes(StandardCharsets.UTF_8)
-                : aggregateHash.toByteArray();
-        byte[] rootSig = calculateSignature(encodedAggregateHash,
-                tdfObject.payloadKey, tdfConfig.integrityAlgorithm);
+        byte[] rootSig = calculateSignature(aggregateHash.toByteArray(), tdfObject.payloadKey, tdfConfig.integrityAlgorithm);
         byte[] encodedRootSig = tdfConfig.hexEncodeRootAndSegmentHashes
                 ? Hex.encodeHexString(rootSig).getBytes(StandardCharsets.UTF_8)
                 : rootSig;
