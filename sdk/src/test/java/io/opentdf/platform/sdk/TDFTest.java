@@ -7,7 +7,6 @@ import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
-import org.bouncycastle.jce.interfaces.ECPrivateKey;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -519,6 +518,22 @@ public class TDFTest {
         var dataOutputStream = new ByteArrayOutputStream();
 
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
+        var integrityInformation = reader.getManifest().encryptionInformation.integrityInformation;
+        assertThat(reader.getManifest().tdfVersion).isNull();
+        var decodedSignature = Base64.getDecoder().decode(integrityInformation.rootSignature.signature);
+        for (var b: decodedSignature) {
+            assertThat(isHexChar(b))
+                    .withFailMessage("non-hex byte in signature: " + b)
+                    .isTrue();
+        }
+        for (var s: integrityInformation.segments) {
+            var decodedSegmentSignature = Base64.getDecoder().decode(s.hash);
+            for (var b: decodedSegmentSignature) {
+                assertThat(isHexChar(b))
+                        .withFailMessage("non-hex byte in segment signature: " + b)
+                        .isTrue();
+            }
+        }
         reader.readPayload(dataOutputStream);
         assertThat(reader.getManifest().payload.mimeType).isEqualTo(mimeType);
         assertArrayEquals(data, dataOutputStream.toByteArray(), "extracted data does not match");
@@ -546,5 +561,9 @@ public class TDFTest {
     @Nonnull
     private static Config.KASInfo[] getECKASInfos() {
         return getKASInfos(i -> i % 2 != 0);
+    }
+
+    private static boolean isHexChar(byte b) {
+        return (b >= 'a' && b <= 'f') || (b >= '0' && b <= '9');
     }
 }
