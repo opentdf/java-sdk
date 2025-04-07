@@ -1,29 +1,41 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.opentdf.platform</groupId>
     <artifactId>sdk-pom</artifactId>
-    <version>0.1.0-SNAPSHOT</version><!-- {x-version-update:java-sdk:current} -->
-    <name>sdk-pom</name>
+    <version>0.7.7-SNAPSHOT</version>
+    <name>io.opentdf.platform:sdk-pom</name>
+    <description>OpenTDF Java SDK</description>
+    <url>https://github.com/opentdf/java-sdk</url>
     <packaging>pom</packaging>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-<!--        TODO: Move to new version of Java-->
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
         <log4j.version>2.20.0</log4j.version>
-        <grpc.version>1.63.0</grpc.version>
+        <grpc.version>1.68.0</grpc.version>
         <protobuf.version>3.25.3</protobuf.version>
         <sslcontext.version>8.3.5</sslcontext.version>
     </properties>
-    <modules>
-        <module>protocol</module>
-        <module>sdk</module>
-        <module>cmdline</module>
-    </modules>
+    <licenses>
+        <license>
+            <name>BSD 3-Clause Clear License</name>
+            <url>https://spdx.org/licenses/BSD-3-Clause-Clear.html</url>
+        </license>
+    </licenses>
+    <developers>
+        <developer>
+            <organization>Virtru</organization>
+            <organizationUrl>https://www.virtru.com</organizationUrl>
+        </developer>
+    </developers>
+    <scm>
+        <connection>scm:git:https://github.com/opentdf/java-sdk.git</connection>
+        <developerConnection>scm:git:git@github.com:opentdf/java-sdk.git</developerConnection>
+        <url>https://github.com/opentdf/java-sdk</url>
+    </scm>
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -52,18 +64,6 @@
                 <artifactId>lombok</artifactId>
                 <version>1.18.30</version>
                 <scope>provided</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.mockito</groupId>
-                <artifactId>mockito-core</artifactId>
-                <version>5.2.0</version>
-                <scope>test</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.mockito</groupId>
-                <artifactId>mockito-junit-jupiter</artifactId>
-                <version>5.2.0</version>
-                <scope>test</scope>
             </dependency>
             <dependency>
                 <groupId>org.apache.maven.plugin-tools</groupId>
@@ -110,22 +110,51 @@
                 <version>${grpc.version}</version>
                 <scope>runtime</scope>
             </dependency>
+            <dependency>
+                <groupId>com.google.errorprone</groupId>
+                <artifactId>error_prone_annotations</artifactId>
+                <version>2.28.0</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>33.2.1-android</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>3.25.5</version>
+            </dependency>
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>2.0.13</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-codec</groupId>
+                <artifactId>commons-codec</artifactId>
+                <version>1.17.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <artifactId>kotlin-stdlib</artifactId>
+                <version>1.9.23</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
     <build>
-        <pluginManagement><!-- lock down plugins versions to avoid using Maven defaults (may be moved to parent pom) -->
+        <pluginManagement><!-- lock down plugins versions to avoid using Maven defaults (may be
+            moved to parent pom) -->
             <plugins>
-                <!-- clean lifecycle, see https://maven.apache.org/ref/current/maven-core/lifecycles.html#clean_Lifecycle -->
+                <!-- clean lifecycle, see
+                https://maven.apache.org/ref/current/maven-core/lifecycles.html#clean_Lifecycle -->
                 <plugin>
                     <artifactId>maven-clean-plugin</artifactId>
                     <version>3.1.0</version>
                 </plugin>
-                <!-- default lifecycle, jar packaging: see https://maven.apache.org/ref/current/maven-core/default-bindings.html#Plugin_bindings_for_jar_packaging -->
-                <plugin>
-                    <artifactId>maven-resources-plugin</artifactId>
-                    <version>3.0.2</version>
-                </plugin>
+                <!-- default lifecycle, jar packaging: see
+                https://maven.apache.org/ref/current/maven-core/default-bindings.html#Plugin_bindings_for_jar_packaging -->
                 <plugin>
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>3.8.0</version>
@@ -144,10 +173,11 @@
                     <version>2.5.2</version>
                 </plugin>
                 <plugin>
-                    <artifactId>maven-deploy-plugin</artifactId>
-                    <version>2.8.2</version>
+                    <artifactId>maven-gpg-plugin</artifactId>
+                    <version>3.2.3</version>
                 </plugin>
-                <!-- site lifecycle, see https://maven.apache.org/ref/current/maven-core/lifecycles.html#site_Lifecycle -->
+                <!-- site lifecycle, see
+                https://maven.apache.org/ref/current/maven-core/lifecycles.html#site_Lifecycle -->
                 <plugin>
                     <artifactId>maven-site-plugin</artifactId>
                     <version>3.7.1</version>
@@ -157,18 +187,16 @@
                     <version>3.0.0</version>
                 </plugin>
                 <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-enforcer-plugin</artifactId>
                     <version>3.0.0</version>
-                    <configuration>
-                        <failFast>false</failFast>
-                        <rules>
-                            <dependencyConvergence/>
-                            <requireUpperBoundDeps/>
-                            <requireSameVersions/>
-                            <banDuplicatePomDependencyVersions/>
-                        </rules>
-                    </configuration>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.3.1</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>3.1.2</version>
                 </plugin>
                 <plugin>
                     <groupId>org.jacoco</groupId>
@@ -178,10 +206,30 @@
             </plugins>
         </pluginManagement>
         <plugins>
+            <!-- Plugin for Signing -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-gpg-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>sign-artifacts</id>
+                        <phase>deploy</phase>
+                        <goals>
+                            <goal>sign</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <gpgArguments>
+                        <arg>--pinentry-mode</arg>
+                        <arg>loopback</arg>
+                    </gpgArguments>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
-                <inherited>false</inherited>
+                <inherited>true</inherited>
                 <configuration>
                     <failFast>false</failFast>
                     <rules>
@@ -243,24 +291,134 @@
     </build>
     <profiles>
         <profile>
-            <id>ghcr</id>
+            <id>develop</id>
+            <modules>
+                <module>sdk</module>
+                <module>cmdline</module>
+                <module>examples</module>
+            </modules>
             <activation>
                 <activeByDefault>true</activeByDefault>
             </activation>
+        </profile>
+        <profile>
+            <id>stage</id>
+            <modules>
+                <module>sdk</module>
+            </modules>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
             <distributionManagement>
                 <repository>
-                    <id>github</id>
-                    <name>ghcr</name>
+                    <id>github-pkg</id>
+                    <name>GitHub opentdf Apache Maven Packages</name>
                     <url>https://maven.pkg.github.com/opentdf/java-sdk</url>
+                    <snapshots>
+                        <enabled>true</enabled>
+                    </snapshots>
                 </repository>
-                <snapshotRepository>
-                    <id>github</id>
-                    <name>ghcr</name>
-                    <url>https://maven.pkg.github.com/opentdf/java-sdk</url>
-                </snapshotRepository>
             </distributionManagement>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-deploy-plugin</artifactId>
+                        <version>3.1.2</version>
+                        <configuration>
+                            <repositoryId>github-pkg</repositoryId>
+                            <url>https://maven.pkg.github.com/opentdf/java-sdk</url>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
         </profile>
-
+        <profile>
+            <id>release</id>
+            <modules>
+                <module>sdk</module>
+            </modules>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <build>
+                <plugins>
+                    <!-- Publish to Maven Central Deploy -->
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.6.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <autoPublish>true</autoPublish>
+                            <waitUntil>published</waitUntil>
+                            <!-- defined in settings.xml -->
+                            <publishingServerId>central</publishingServerId>
+                        </configuration>
+                    </plugin>
+                    <!-- Exclude from lifecycle, phase none -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-deploy-plugin</artifactId>
+                        <version>3.1.2</version>
+                        <executions>
+                            <execution>
+                                <id>default-deploy</id>
+                                <phase>none</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>coverage</id>
+            <modules>
+                <module>sdk</module>
+            </modules>
+            <properties>
+                <sonar.organization>opentdf</sonar.organization>
+                <sonar.projectKey>opentdf_java-sdk</sonar.projectKey>
+                <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
+                        <version>0.8.12</version>
+                        <executions>
+                            <execution>
+                                <id>prepare-agent</id>
+                                <goals>
+                                    <goal>prepare-agent</goal>
+                                    <goal>report-aggregate</goal>
+                                </goals>
+                            </execution>
+                            <execution>
+                                <id>report</id>
+                                <phase>test</phase>
+                                <goals>
+                                    <goal>report</goal>
+                                </goals>
+                                <configuration>
+                                    <dataFile>${project.parent.basedir}/target/jacoco.exec</dataFile>
+                                    <formats>
+                                        <format>XML</format>
+                                    </formats>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>post-test-report</id>
+                                <phase>prepare-package</phase>
+                                <goals>
+                                    <goal>report</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
     </profiles>
 </project>
-

@@ -12,12 +12,27 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 
+/**
+ * The AesGcm class provides encryption and decryption methods using AES-GCM mode.
+ * It includes methods to encrypt and decrypt byte arrays using a specified
+ * symmetric key.
+ */
 public class AesGcm {
     public static final int GCM_NONCE_LENGTH = 12; // in bytes
     public static final int GCM_TAG_LENGTH = 16; // in bytes
     private static final String CIPHER_TRANSFORM = "AES/GCM/NoPadding";
 
     private final SecretKey key;
+
+
+    /**
+     * <p>Return symmetric key</p>
+     *
+     * @return
+     */
+    public byte[] getKey() {
+        return key.getEncoded();
+    }
 
     public static class Encrypted {
         private final byte[] iv;

@@ -1,8 +1,10 @@
 package io.opentdf.platform.sdk;
 
 import java.util.List;
-import java.util.UUID;
 
+/**
+ * The PolicyObject class represents a policy with a unique identifier and a body containing data attributes.
+ */
 public class PolicyObject {
     static public class AttributeObject {
         public String attribute;

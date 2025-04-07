@@ -2,7 +2,6 @@ package io.opentdf.platform.sdk.nanotdf;
 
 import io.opentdf.platform.sdk.NanoTDF;
 
-import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
@@ -35,7 +34,7 @@ public class Header {
     }
 
     public byte[] getMagicNumberAndVersion() {
-        return Arrays.copyOf(NanoTDF.MAGIC_NUMBER_AND_VERSION,  NanoTDF.MAGIC_NUMBER_AND_VERSION.length);
+        return Arrays.copyOf(NanoTDF.MAGIC_NUMBER_AND_VERSION, NanoTDF.MAGIC_NUMBER_AND_VERSION.length);
     }
 
     public void setMagicNumberAndVersion(byte[] magicNumberAndVersion) {
@@ -45,7 +44,8 @@ public class Header {
         if (!Arrays.equals(magicNumberAndVersion, NanoTDF.MAGIC_NUMBER_AND_VERSION)) {
             throw new IllegalArgumentException("Invalid magic number and version. It must be {0x4C, 0x31, 0x4C}.");
         }
-        System.arraycopy(magicNumberAndVersion, 0, NanoTDF.MAGIC_NUMBER_AND_VERSION, 0, NanoTDF.MAGIC_NUMBER_AND_VERSION.length);
+        System.arraycopy(magicNumberAndVersion, 0, NanoTDF.MAGIC_NUMBER_AND_VERSION, 0,
+                NanoTDF.MAGIC_NUMBER_AND_VERSION.length);
     }
 
     public void setKasLocator(ResourceLocator kasLocator) {
@@ -128,31 +128,4 @@ public class Header {
 
         return totalBytesWritten;
     }
-
-//    public int writeIntoBuffer(OutputStream stream) {
-//        if (buffer.remaining() < getTotalSize()) {
-//            throw new IllegalArgumentException("Failed to write header - invalid buffer size.");
-//        }
-//
-//        int totalBytesWritten = 0;
-//        buffer.put(NanoTDF.MAGIC_NUMBER_AND_VERSION);
-//        totalBytesWritten += NanoTDF.MAGIC_NUMBER_AND_VERSION.length;
-//
-//        int kasLocatorSize = kasLocator.writeIntoBuffer(buffer);
-//        totalBytesWritten += kasLocatorSize;
-//
-//        buffer.put(eccMode.getECCModeAsByte());
-//        totalBytesWritten += 1;
-//
-//        buffer.put(payloadConfig.getSymmetricAndPayloadConfigAsByte());
-//        totalBytesWritten += 1;
-//
-//        int policyInfoSize = policyInfo.writeIntoBuffer(buffer);
-//        totalBytesWritten += policyInfoSize;
-//
-//        buffer.put(ephemeralKey);
-//        totalBytesWritten += ephemeralKey.length;
-//
-//        return totalBytesWritten;
-//    }
 }

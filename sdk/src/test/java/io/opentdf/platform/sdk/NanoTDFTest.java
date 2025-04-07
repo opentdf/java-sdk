@@ -1,8 +1,10 @@
 package io.opentdf.platform.sdk;
 
+import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.Header;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
+import java.nio.charset.StandardCharsets;
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.junit.jupiter.api.Test;
 
@@ -33,23 +35,33 @@ public class NanoTDFTest {
             "oVP7Vpcx\n" +
             "-----END PRIVATE KEY-----";
 
-    private static SDK.KAS kas = new SDK.KAS() {
+    private static final String KID = "r1";
+    
+    protected static SDK.KAS kas = new SDK.KAS() {
         @Override
         public void close() throws Exception {
         }
 
         @Override
-        public String getPublicKey(Config.KASInfo kasInfo) {
-            return kasPublicKey;
+        public Config.KASInfo getPublicKey(Config.KASInfo kasInfo) {
+            Config.KASInfo returnKI = new Config.KASInfo();
+            returnKI.PublicKey = kasPublicKey;
+            return returnKI;
         }
 
         @Override
-        public String getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
-            return kasPublicKey;
+        public KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
+            if (kasInfo.Algorithm != null && !"ec:secp256r1".equals(kasInfo.Algorithm)) {
+                throw new IllegalArgumentException("Unexpected algorithm: " + kasInfo);
+            }
+            var k2 = kasInfo.clone();
+            k2.KID = KID;
+            k2.PublicKey = kasPublicKey;
+            return k2;
         }
 
         @Override
-        public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy) {
+        public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy, KeyType sessionKeyType) {
             int index = Integer.parseInt(keyAccess.url);
             var decryptor = new AsymDecryption(keypairs.get(index).getPrivate());
             var bytes = Base64.getDecoder().decode(keyAccess.wrappedKey);
@@ -84,6 +96,11 @@ public class NanoTDFTest {
             byte[] key = ECKeyPair.calculateHKDF(hashOfSalt, symmetricKey);
             return key;
         }
+
+        @Override
+        public KASKeyCache getKeyCache(){
+            return new KASKeyCache();
+        }
     };
 
     private static ArrayList<KeyPair> keypairs = new ArrayList<>();
@@ -94,6 +111,7 @@ public class NanoTDFTest {
         var kasInfo = new Config.KASInfo();
         kasInfo.URL = "https://api.example.com/kas";
         kasInfo.PublicKey = null;
+        kasInfo.KID = KID;
         kasInfos.add(kasInfo);
 
         Config.NanoTDFConfig config = Config.newNanoTDFConfig(
@@ -111,11 +129,14 @@ public class NanoTDFTest {
 
         byte[] nanoTDFBytes = tdfOutputStream.toByteArray();
         ByteArrayOutputStream plainTextStream = new ByteArrayOutputStream();
+        nanoTDF = new NanoTDF();
         nanoTDF.readNanoTDF(ByteBuffer.wrap(nanoTDFBytes), plainTextStream, kas);
 
-        String out = new String(plainTextStream.toByteArray(), "UTF-8");
+        String out = new String(plainTextStream.toByteArray(), StandardCharsets.UTF_8);
         assertThat(out).isEqualTo(plainText);
-
+        // KAS KID
+        assertThat(new String(nanoTDFBytes, StandardCharsets.UTF_8)).contains(KID);
+        
 
         int[] nanoTDFSize = { 0, 1, 100*1024, 1024*1024, 4*1024*1024, 12*1024*1024, 15*1024,1024, ((16 * 1024 * 1024) - 3 - 32) };
         for (int size: nanoTDFSize) {
@@ -132,5 +153,46 @@ public class NanoTDFTest {
             nanoTDF.readNanoTDF(ByteBuffer.wrap(nTDFBytes), dataStream, kas);
             assertThat(dataStream.toByteArray()).isEqualTo(data);
         }
+    }
+
+    @Test
+    void collection() throws Exception {
+        var kasInfos = new ArrayList<>();
+        var kasInfo = new Config.KASInfo();
+        kasInfo.URL = "https://api.example.com/kas";
+        kasInfo.PublicKey = null;
+        kasInfo.KID = KID;
+        kasInfos.add(kasInfo);
+
+        Config.NanoTDFConfig config = Config.newNanoTDFConfig(
+                Config.withNanoKasInformation(kasInfos.toArray(new Config.KASInfo[0])),
+                Config.witDataAttributes("https://example.com/attr/Classification/value/S",
+                        "https://example.com/attr/Classification/value/X"),
+                Config.withCollection()
+        );
+
+        ByteBuffer byteBuffer = ByteBuffer.wrap(new byte[]{});
+
+        NanoTDF nanoTDF = new NanoTDF();
+        ByteBuffer header = getHeaderBuffer(byteBuffer,nanoTDF, config);
+        for (int i = 0; i < Config.MAX_COLLECTION_ITERATION - 10; i++) {
+            config.collectionConfig.getHeaderInfo();
+
+        }
+        for (int i = 1; i < 10; i++) {
+            ByteBuffer newHeader = getHeaderBuffer(byteBuffer,nanoTDF, config);
+            assertThat(header).isEqualTo(newHeader);
+        }
+
+        ByteBuffer newHeader = getHeaderBuffer(byteBuffer,nanoTDF, config);
+        assertThat(header).isNotEqualTo(newHeader);
+    }
+
+    private ByteBuffer getHeaderBuffer(ByteBuffer input, NanoTDF nanoTDF, Config.NanoTDFConfig config) throws Exception {
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+        nanoTDF.createNanoTDF(input, tdfOutputStream, config, kas);
+        ByteBuffer tdf = ByteBuffer.wrap(tdfOutputStream.toByteArray());
+        Header header = new Header(tdf);
+        return tdf.position(0).slice().limit(header.getTotalSize());
     }
 }

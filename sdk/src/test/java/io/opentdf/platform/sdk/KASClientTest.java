@@ -57,11 +57,12 @@ public class KASClientTest {
                     .build();
 
             var keypair = CryptoUtils.generateRSAKeypair();
-            var dpopKey = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).privateKey(keypair.getPrivate()).build();
+            var dpopKey = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).privateKey(keypair.getPrivate())
+                    .build();
             try (var kas = new KASClient(channelFactory, dpopKey)) {
                 Config.KASInfo kasInfo = new Config.KASInfo();
                 kasInfo.URL = "localhost:" + rewrapServer.getPort();
-                assertThat(kas.getPublicKey(kasInfo)).isEqualTo("тај је клуц");
+                assertThat(kas.getPublicKey(kasInfo).PublicKey).isEqualTo("тај је клуц");
             }
         } finally {
             if (rewrapServer != null) {
@@ -71,9 +72,44 @@ public class KASClientTest {
     }
 
     @Test
+    void testGettingKid() throws IOException {
+        AccessServiceGrpc.AccessServiceImplBase accessService = new AccessServiceGrpc.AccessServiceImplBase() {
+            @Override
+            public void publicKey(PublicKeyRequest request, StreamObserver<PublicKeyResponse> responseObserver) {
+                var response = PublicKeyResponse.newBuilder().setKid("r1").build();
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+            }
+        };
+
+        Server server = null;
+        try {
+            server = startServer(accessService);
+            Function<String, ManagedChannel> channelFactory = (String url) -> ManagedChannelBuilder
+                    .forTarget(url)
+                    .usePlaintext()
+                    .build();
+
+            var keypair = CryptoUtils.generateRSAKeypair();
+            var dpopKey = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).privateKey(keypair.getPrivate())
+                    .build();
+            try (var kas = new KASClient(channelFactory, dpopKey)) {
+                Config.KASInfo kasInfo = new Config.KASInfo();
+                kasInfo.URL = "localhost:" + server.getPort();
+                assertThat(kas.getPublicKey(kasInfo).KID).isEqualTo("r1");
+            }
+        } finally {
+            if (server != null) {
+                server.shutdownNow();
+            }
+        }
+    }
+
+    @Test
     void testCallingRewrap() throws IOException {
         var dpopKeypair = CryptoUtils.generateRSAKeypair();
-        var dpopKey = new RSAKey.Builder((RSAPublicKey)dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate()).build();
+        var dpopKey = new RSAKey.Builder((RSAPublicKey) dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate())
+                .build();
         var serverKeypair = CryptoUtils.generateRSAKeypair();
         AccessServiceGrpc.AccessServiceImplBase accessService = new AccessServiceGrpc.AccessServiceImplBase() {
             @Override
@@ -105,10 +141,12 @@ public class KASClientTest {
                 var gson = new Gson();
                 var req = gson.fromJson(requestBodyJson, KASClient.RewrapRequestBody.class);
 
-                var decryptedKey = new AsymDecryption(serverKeypair.getPrivate()).decrypt(Base64.getDecoder().decode(req.keyAccess.wrappedKey));
+                var decryptedKey = new AsymDecryption(serverKeypair.getPrivate())
+                        .decrypt(Base64.getDecoder().decode(req.keyAccess.wrappedKey));
                 var encryptedKey = new AsymEncryption(req.clientPublicKey).encrypt(decryptedKey);
 
-                responseObserver.onNext(RewrapResponse.newBuilder().setEntityWrappedKey(ByteString.copyFrom(encryptedKey)).build());
+                responseObserver.onNext(
+                        RewrapResponse.newBuilder().setEntityWrappedKey(ByteString.copyFrom(encryptedKey)).build());
                 responseObserver.onCompleted();
             }
         };
@@ -127,7 +165,7 @@ public class KASClientTest {
                 var serverWrappedKey = new AsymEncryption(serverKeypair.getPublic()).encrypt(plaintextKey);
                 keyAccess.wrappedKey = Base64.getEncoder().encodeToString(serverWrappedKey);
 
-                rewrapResponse = kas.unwrap(keyAccess, "the policy");
+                rewrapResponse = kas.unwrap(keyAccess, "the policy", KeyType.RSA2048Key);
             }
             assertThat(rewrapResponse).containsExactly(plaintextKey);
         } finally {
@@ -141,7 +179,8 @@ public class KASClientTest {
     public void testAddressNormalization() {
         var lastAddress = new AtomicReference<String>();
         var dpopKeypair = CryptoUtils.generateRSAKeypair();
-        var dpopKey = new RSAKey.Builder((RSAPublicKey)dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate()).build();
+        var dpopKey = new RSAKey.Builder((RSAPublicKey) dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate())
+                .build();
         var kasClient = new KASClient(addr -> {
             lastAddress.set(addr);
             return ManagedChannelBuilder.forTarget(addr).build();

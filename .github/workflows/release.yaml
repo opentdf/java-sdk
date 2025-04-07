@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+  release:
+    types: [created]
 
 permissions:
   contents: read
@@ -30,18 +32,51 @@ jobs:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       - name: Setup Buf
-        uses: bufbuild/buf-setup-action@382440cdb8ec7bc25a68d7b4711163d95f7cc3aa
+        uses: bufbuild/buf-setup-action@2211e06e8cf26d628cda2eea15c95f8c42b080b3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Set up JDK
+      # stage maven profile
+      - name: Set up JDK to publish to GitHub Packages
+        if: github.ref == 'refs/heads/main'
         uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
         with:
           java-version: "11"
           distribution: "adopt"
-          server-id: github
-      - name: Publish package
-        run: mvn --batch-mode deploy
+          # write settings.xml
+          server-id: github-pkg
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
+          gpg-private-key: ${{ secrets.GPG_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+      - name: Publish to GitHub Packages
+        if: github.ref == 'refs/heads/main'
+        run: mvn --batch-mode deploy -DskipTests -P stage
+        env:
+          GITHUB_ACTOR: ${{ secrets.GITHUB_ACTOR }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_KEY_PASSPHRASE }}
+      # release maven profile
+      - name: Set up JDK to publish to Maven Central
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
+        with:
+          java-version: "11"
+          distribution: "adopt"
+          # write settings.xml
+          server-id: central
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+      - name: Publish to Maven Central
+        if: startsWith(github.ref, 'refs/tags/')
+        run: mvn --batch-mode deploy -DskipTests -P release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_KEY_PASSPHRASE }}

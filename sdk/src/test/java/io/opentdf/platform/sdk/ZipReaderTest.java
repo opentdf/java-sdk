@@ -1,4 +1,5 @@
 package io.opentdf.platform.sdk;
+
 import com.google.gson.Gson;
 import org.apache.commons.compress.archivers.zip.Zip64Mode;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
@@ -10,6 +11,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -18,9 +20,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class ZipReaderTest {
 
@@ -28,17 +27,29 @@ public class ZipReaderTest {
     public void testReadingExistingZip() throws Exception {
         try (RandomAccessFile raf = new RandomAccessFile("src/test/resources/sample.txt.tdf", "r")) {
             var fileChannel = raf.getChannel();
-            var zipReader = new ZipReader(fileChannel);
-            var entries = zipReader.getEntries();
+            ZipReaderTest.testReadingZipChannel(fileChannel, true);
+        }
+    }
+
+    protected static void testReadingZipChannel(SeekableByteChannel fileChannel, boolean test) throws IOException {
+        var zipReader = new ZipReader(fileChannel);
+        var entries = zipReader.getEntries();
+        if (test) {
             assertThat(entries.size()).isEqualTo(2);
-            for (var entry: entries) {
-                var stream = new ByteArrayOutputStream();
-                if (entry.getName().endsWith(".json")) {
-                    entry.getData().transferTo(stream);
-                    var data = stream.toString(StandardCharsets.UTF_8);
-                    var map = new Gson().fromJson(data, Map.class);
+        }
+        for (var entry: entries) {
+            var stream = new ByteArrayOutputStream();
+            if (entry.getName().endsWith(".json")) {
+                entry.getData().transferTo(stream);
+                var data = stream.toString(StandardCharsets.UTF_8);
+                var gson = new Gson();
+                var map = gson.fromJson(data, Map.class);
+                
+                if (test) {
                     assertThat(map.get("encryptionInformation")).isNotNull();
                 }
+            } else if (!test) {
+                entry.getData().transferTo(stream);        // still invoke getData logic
             }
         }
     }

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 class ConfigTest {
 
@@ -20,11 +21,11 @@ class ConfigTest {
     }
 
     @Test
-    void withDataAttributes_shouldAddAttributes() {
-        Config.TDFConfig config = Config.newTDFConfig(Config.withDataAttributes("attr1", "attr2"));
+    void withDataAttributes_shouldAddAttributes() throws AutoConfigureException {
+        Config.TDFConfig config = Config.newTDFConfig(Config.withDataAttributes("https://example.com/attr/attr1/value/value1", "https://example.com/attr/attr2/value/value2"));
         assertEquals(2, config.attributes.size());
-        assertTrue(config.attributes.contains("attr1"));
-        assertTrue(config.attributes.contains("attr2"));
+        assertTrue(config.attributes.contains(new Autoconfigure.AttributeValueFQN("https://example.com/attr/attr1/value/value1")));
+        assertTrue(config.attributes.contains(new Autoconfigure.AttributeValueFQN("https://example.com/attr/attr2/value/value2")));
     }
 
     @Test
@@ -32,6 +33,7 @@ class ConfigTest {
         Config.KASInfo kasInfo = new Config.KASInfo();
         kasInfo.URL = "http://example.com";
         kasInfo.PublicKey = "publicKey";
+        kasInfo.KID = "r1";
         Config.TDFConfig config = Config.newTDFConfig(Config.withKasInformation(kasInfo));
         assertEquals(1, config.kasInfoList.size());
         assertEquals(kasInfo, config.kasInfoList.get(0));
@@ -45,7 +47,24 @@ class ConfigTest {
 
     @Test
     void withSegmentSize_shouldSetSegmentSize() {
-        Config.TDFConfig config = Config.newTDFConfig(Config.withSegmentSize(1024));
-        assertEquals(1024, config.defaultSegmentSize);
+        Config.TDFConfig config = Config.newTDFConfig(Config.withSegmentSize(Config.MIN_SEGMENT_SIZE));
+        assertEquals(Config.MIN_SEGMENT_SIZE, config.defaultSegmentSize);
+    }
+
+    @Test
+    void withSegmentSize_shouldIgnoreSegmentSize() {
+        try {
+            Config.withSegmentSize(1024);
+            fail("Expected exception");
+        } catch (IllegalArgumentException e) {
+            // expected
+        }
+    }
+
+    @Test
+    void withMimeType_shouldSetMimeType() {
+        final String mimeType = "application/pdf";
+        Config.TDFConfig config = Config.newTDFConfig(Config.withMimeType(mimeType));
+        assertEquals(mimeType, config.mimeType);
     }
 }

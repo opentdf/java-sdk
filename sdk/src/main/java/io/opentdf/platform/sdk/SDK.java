@@ -1,7 +1,9 @@
 package io.opentdf.platform.sdk;
 
-import io.grpc.Channel;
+import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
+import io.opentdf.platform.authorization.AuthorizationServiceGrpc;
+import io.opentdf.platform.authorization.AuthorizationServiceGrpc.AuthorizationServiceFutureStub;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
 import io.opentdf.platform.policy.namespaces.NamespaceServiceGrpc;
@@ -11,32 +13,69 @@ import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceGrpc.Res
 import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc;
 import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc.SubjectMappingServiceFutureStub;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.net.ssl.TrustManager;
+import java.io.IOException;
+import java.nio.channels.SeekableByteChannel;
+import java.util.Optional;
 
 /**
- * The SDK class represents a software development kit for interacting with the opentdf platform. It
- * provides various services and stubs for making API calls to the opentdf platform.
+ * The SDK class represents a software development kit for interacting with the
+ * opentdf platform. It
+ * provides various services and stubs for making API calls to the opentdf
+ * platform.
  */
 public class SDK implements AutoCloseable {
     private final Services services;
+    private final TrustManager trustManager;
+    private final ClientInterceptor authInterceptor;
 
+    private static final Logger log = LoggerFactory.getLogger(SDK.class);
+
+    /**
+     * Closes the SDK, including its associated services.
+     *
+     * @throws Exception if an error occurs while closing the services.
+     */
     @Override
     public void close() throws Exception {
         services.close();
     }
 
+    /**
+     * KAS (Key Access Service) interface to define methods related to key access and management.
+     * This interface extends AutoCloseable to allow for resource management during close operations.
+     */
     public interface KAS extends AutoCloseable {
-        String getPublicKey(Config.KASInfo kasInfo);
-        String getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve);
-        byte[] unwrap(Manifest.KeyAccess keyAccess, String policy);
+        Config.KASInfo getPublicKey(Config.KASInfo kasInfo);
+
+        Config.KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve);
+
+        byte[] unwrap(Manifest.KeyAccess keyAccess, String policy,
+                      KeyType sessionKeyType);
+
         byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL);
+
+        KASKeyCache getKeyCache();
     }
 
-    // TODO: add KAS
+    /**
+     * The Services interface provides access to various gRPC service stubs and a Key Authority Service (KAS).
+     * It extends the AutoCloseable interface, allowing for the release of resources when no longer needed.
+     */
     public interface Services extends AutoCloseable {
+        AuthorizationServiceFutureStub authorization();
+
         AttributesServiceFutureStub attributes();
+
         NamespaceServiceFutureStub namespaces();
+
         SubjectMappingServiceFutureStub subjectMappings();
+
         ResourceMappingServiceFutureStub resourceMappings();
+
         KAS kas();
 
         static Services newServices(ManagedChannel channel, KAS kas) {
@@ -44,6 +83,7 @@ public class SDK implements AutoCloseable {
             var namespaceService = NamespaceServiceGrpc.newFutureStub(channel);
             var subjectMappingService = SubjectMappingServiceGrpc.newFutureStub(channel);
             var resourceMappingService = ResourceMappingServiceGrpc.newFutureStub(channel);
+            var authorizationService = AuthorizationServiceGrpc.newFutureStub(channel);
 
             return new Services() {
                 @Override
@@ -73,6 +113,11 @@ public class SDK implements AutoCloseable {
                 }
 
                 @Override
+                public AuthorizationServiceFutureStub authorization() {
+                    return authorizationService;
+                }
+
+                @Override
                 public KAS kas() {
                     return kas;
                 }
@@ -80,11 +125,44 @@ public class SDK implements AutoCloseable {
         }
     }
 
-    SDK(Services services) {
-        this.services = services;
+    public Optional<TrustManager> getTrustManager() {
+        return Optional.ofNullable(trustManager);
     }
 
-    public Services getServices(){
+    public Optional<ClientInterceptor> getAuthInterceptor() {
+        return Optional.ofNullable(authInterceptor);
+    }
+
+    SDK(Services services, TrustManager trustManager, ClientInterceptor authInterceptor) {
+        this.services = services;
+        this.trustManager = trustManager;
+        this.authInterceptor = authInterceptor;
+    }
+
+    public Services getServices() {
         return this.services;
+    }
+
+    /**
+     * Checks to see if this has the structure of a Z-TDF in that it is a zip file
+     * containing
+     * a `manifest.json` and a `0.payload`
+     * 
+     * @param channel A channel containing the bytes of the potential Z-TDF
+     * @return `true` if
+     */
+    public static boolean isTDF(SeekableByteChannel channel) {
+        ZipReader zipReader;
+        try {
+            zipReader = new ZipReader(channel);
+        } catch (IOException | InvalidZipException e) {
+            return false;
+        }
+        var entries = zipReader.getEntries();
+        if (entries.size() != 2) {
+            return false;
+        }
+        return entries.stream().anyMatch(e -> "0.manifest.json".equals(e.getName()))
+                && entries.stream().anyMatch(e -> "0.payload".equals(e.getName()));
     }
 }

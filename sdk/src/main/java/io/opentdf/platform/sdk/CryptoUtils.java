@@ -2,13 +2,13 @@ package io.opentdf.platform.sdk;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import java.security.InvalidKeyException;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
-import java.security.PublicKey;
+import java.security.*;
+import java.security.spec.ECGenParameterSpec;
 import java.util.Base64;
 
+/**
+ * Utility class for cryptographic operations such as generating RSA key pairs and calculating HMAC.
+ */
 public class CryptoUtils {
     private static final int KEYPAIR_SIZE = 2048;
 
@@ -40,6 +40,30 @@ public class CryptoUtils {
         return kpg.generateKeyPair();
     }
 
+    public static KeyPair generateECKeypair(String curveName) {
+        KeyPairGenerator kpg;
+        try {
+            kpg = KeyPairGenerator.getInstance("EC");
+            ECGenParameterSpec ecSpec = new ECGenParameterSpec(curveName);
+            kpg.initialize(ecSpec);
+        } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
+            throw new SDKException("error creating EC keypair", e);
+        }
+        return kpg.generateKeyPair();
+    }
+
+    public static String getPublicKeyPEM(PublicKey publicKey) {
+        return "-----BEGIN PUBLIC KEY-----\r\n" +
+                Base64.getMimeEncoder().encodeToString(publicKey.getEncoded()) +
+                "\r\n-----END PUBLIC KEY-----";
+    }
+
+    public  static String getPrivateKeyPEM(PrivateKey privateKey) {
+        return "-----BEGIN PRIVATE KEY-----\r\n" +
+                Base64.getMimeEncoder().encodeToString(privateKey.getEncoded()) +
+                "\r\n-----END PRIVATE KEY-----";
+    }
+
     public static String getRSAPublicKeyPEM(PublicKey publicKey) {
         if (!"RSA".equals(publicKey.getAlgorithm())) {
             throw new IllegalArgumentException("can't get public key PEM for algorithm [" + publicKey.getAlgorithm() + "]");
@@ -49,4 +73,16 @@ public class CryptoUtils {
                 Base64.getMimeEncoder().encodeToString(publicKey.getEncoded()) +
                 "\r\n-----END PUBLIC KEY-----";
     }
+
+    public static String getRSAPrivateKeyPEM(PrivateKey privateKey) {
+        if (!"RSA".equals(privateKey.getAlgorithm())) {
+            throw new IllegalArgumentException("can't get private key PEM for algorithm [" + privateKey.getAlgorithm() + "]");
+        }
+
+        return "-----BEGIN PRIVATE KEY-----\r\n" +
+                Base64.getMimeEncoder().encodeToString(privateKey.getEncoded()) +
+                "\r\n-----END PRIVATE KEY-----";
+    }
+
+
 }
