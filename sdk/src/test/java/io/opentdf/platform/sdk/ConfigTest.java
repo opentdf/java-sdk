@@ -67,9 +67,13 @@ class ConfigTest {
 
     @Test
     void withCompatibilityModeShouldSetFieldsCorrectly() {
-        Config.TDFConfig config = Config.newTDFConfig(Config.withTargetMode("1.0.1"));
-        assertThat(config.renderVersionInfoInManifest).isFalse();
-        assertThat(config.hexEncodeRootAndSegmentHashes).isTrue();
+        Config.TDFConfig oldConfig = Config.newTDFConfig(Config.withTargetMode("1.0.1"));
+        assertThat(oldConfig.renderVersionInfoInManifest).isFalse();
+        assertThat(oldConfig.hexEncodeRootAndSegmentHashes).isTrue();
+
+        Config.TDFConfig newConfig = Config.newTDFConfig(Config.withTargetMode("100.0.1"));
+        assertThat(newConfig.renderVersionInfoInManifest).isTrue();
+        assertThat(newConfig.hexEncodeRootAndSegmentHashes).isFalse();
     }
 
 
