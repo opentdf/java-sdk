@@ -13,11 +13,10 @@ class Version implements Comparable<Version> {
     private final int major;
     private final int minor;
     private final int patch;
-    private final String prerelease;
+    private final String prereleaseAndMetadata;
     private static final Logger log = LoggerFactory.getLogger(Version.class);
-    private final String buildmetadata;
 
-    Pattern SEMVER_PATTERN = Pattern.compile("^(?<major>0|[1-9]\\d*)\\.(?<minor>0|[1-9]\\d*)\\.(?<patch>0|[1-9]\\d*)(?:-(?<prerelease>(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+(?<buildmetadata>[0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$");
+    Pattern SEMVER_PATTERN = Pattern.compile("^(?<major>0|[1-9]\\d*)\\.(?<minor>0|[1-9]\\d*)\\.(?<patch>0|[1-9]\\d*)(?<prereleaseAndMetadata>\\D.*)?$");
 
     @Override
     public String toString() {
@@ -25,7 +24,7 @@ class Version implements Comparable<Version> {
                 "major=" + major +
                 ", minor=" + minor +
                 ", patch=" + patch +
-                ", prerelease='" + prerelease + '\'' +
+                ", prereleaseAndMetadata='" + prereleaseAndMetadata + '\'' +
                 '}';
     }
 
@@ -37,16 +36,14 @@ class Version implements Comparable<Version> {
         this.major = Integer.parseInt(matcher.group("major"));
         this.minor = Optional.ofNullable(matcher.group("minor")).map(Integer::parseInt).orElse(0);
         this.patch = Optional.ofNullable(matcher.group("patch")).map(Integer::parseInt).orElse(0);
-        this.prerelease = matcher.group("prerelease");
-        this.buildmetadata = matcher.group("buildmetadata");
+        this.prereleaseAndMetadata = matcher.group("prereleaseAndMetadata");
     }
 
-    public Version(int major, int minor, int patch, @Nullable String prerelease, @Nullable String buildmetadata) {
+    public Version(int major, int minor, int patch, @Nullable String prereleaseAndMetadata) {
         this.major = major;
         this.minor = minor;
         this.patch = patch;
-        this.prerelease = prerelease;
-        this.buildmetadata = buildmetadata;
+        this.prereleaseAndMetadata = prereleaseAndMetadata;
     }
 
     @Override

@@ -2,18 +2,16 @@ package io.opentdf.platform.sdk;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Vector;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 class VersionTest {
 
     @Test
     public void testParsingVersions() {
-        assertThat(new Version("1.0.0")).isEqualTo(new Version(1, 0, 0, null, null));
-        assertThat(new Version("1.2.1-alpha")).isEqualTo(new Version(1, 2, 1, "alpha", "a build"));
+        assertThat(new Version("1.0.0")).isEqualTo(new Version(1, 0, 0, null));
+        assertThat(new Version("1.2.1-alpha")).isEqualTo(new Version(1, 2, 1, "alpha a build"));
         // ignore anything but the version
-        assertThat(new Version("1.2.1-alpha+build.123")).isEqualTo(new Version(1, 2, 1, "beta", "build.1234"));
+        assertThat(new Version("1.2.1-alpha+build.123")).isEqualTo(new Version(1, 2, 1, "beta build.1234"));
     }
 
     @Test
