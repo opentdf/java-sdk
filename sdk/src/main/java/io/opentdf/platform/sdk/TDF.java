@@ -540,7 +540,7 @@ public class TDF {
                 payloadOutput.write(cipherData);
 
                 segmentSig = calculateSignature(cipherData, tdfObject.payloadKey, tdfConfig.segmentIntegrityAlgorithm);
-                if (tdfConfig.hexEncodeSegmentHashes) {
+                if (tdfConfig.hexEncodeRootAndSegmentHashes) {
                     segmentSig = Hex.encodeHexString(segmentSig).getBytes(StandardCharsets.UTF_8);
                 }
                 segmentInfo.hash = Base64.getEncoder().encodeToString(segmentSig);
@@ -555,12 +555,12 @@ public class TDF {
 
         Manifest.RootSignature rootSignature = new Manifest.RootSignature();
 
-        byte[] encodedAggregateHash = tdfConfig.hexEncodeSegmentHashes
+        byte[] encodedAggregateHash = tdfConfig.hexEncodeRootAndSegmentHashes
                 ? aggregateHash.toString(StandardCharsets.UTF_8).getBytes(StandardCharsets.UTF_8)
                 : aggregateHash.toByteArray();
         byte[] rootSig = calculateSignature(encodedAggregateHash,
                 tdfObject.payloadKey, tdfConfig.integrityAlgorithm);
-        byte[] encodedRootSig = tdfConfig.hexEncodeSegmentHashes
+        byte[] encodedRootSig = tdfConfig.hexEncodeRootAndSegmentHashes
                 ? Hex.encodeHexString(rootSig).getBytes(StandardCharsets.UTF_8)
                 : rootSig;
         rootSignature.signature = Base64.getEncoder().encodeToString(encodedRootSig);

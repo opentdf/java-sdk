@@ -140,7 +140,7 @@ public class Config {
         public String mimeType;
         public List<Autoconfigure.KeySplitStep> splitPlan;
         public KeyType wrappingKeyType;
-        public boolean hexEncodeSegmentHashes;
+        public boolean hexEncodeRootAndSegmentHashes;
         public boolean renderVersionInfoInManifest;
 
         public TDFConfig() {
@@ -156,7 +156,7 @@ public class Config {
             this.mimeType = DEFAULT_MIME_TYPE;
             this.splitPlan = new ArrayList<>();
             this.wrappingKeyType = KeyType.RSA2048Key;
-            this.hexEncodeSegmentHashes = false;
+            this.hexEncodeRootAndSegmentHashes = false;
             this.renderVersionInfoInManifest = true;
         }
     }
@@ -263,7 +263,7 @@ public class Config {
         return (TDFConfig config) -> {
             var legacyTDF = version.compareTo(new Version("4.3.0")) < 0;
             config.renderVersionInfoInManifest = !legacyTDF;
-            config.hexEncodeSegmentHashes = legacyTDF;
+            config.hexEncodeRootAndSegmentHashes = legacyTDF;
         };
     }
 

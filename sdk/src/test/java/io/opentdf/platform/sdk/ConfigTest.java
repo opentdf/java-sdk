@@ -2,6 +2,8 @@ package io.opentdf.platform.sdk;
 
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -18,6 +20,8 @@ class ConfigTest {
         assertEquals(Config.IntegrityAlgorithm.GMAC, config.segmentIntegrityAlgorithm);
         assertTrue(config.attributes.isEmpty());
         assertTrue(config.kasInfoList.isEmpty());
+        assertTrue(config.renderVersionInfoInManifest);
+        assertFalse(config.hexEncodeRootAndSegmentHashes);
     }
 
     @Test
@@ -60,6 +64,14 @@ class ConfigTest {
             // expected
         }
     }
+
+    @Test
+    void withCompatibilityModeShouldSetFieldsCorrectly() {
+        Config.TDFConfig config = Config.newTDFConfig(Config.withTargetMode("1.0.1"));
+        assertThat(config.renderVersionInfoInManifest).isFalse();
+        assertThat(config.hexEncodeRootAndSegmentHashes).isTrue();
+    }
+
 
     @Test
     void withMimeType_shouldSetMimeType() {
