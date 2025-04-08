@@ -140,6 +140,8 @@ public class Config {
         public String mimeType;
         public List<Autoconfigure.KeySplitStep> splitPlan;
         public KeyType wrappingKeyType;
+        public boolean hexEncodeRootAndSegmentHashes;
+        public boolean renderVersionInfoInManifest;
 
         public TDFConfig() {
             this.autoconfigure = true;
@@ -154,6 +156,8 @@ public class Config {
             this.mimeType = DEFAULT_MIME_TYPE;
             this.splitPlan = new ArrayList<>();
             this.wrappingKeyType = KeyType.RSA2048Key;
+            this.hexEncodeRootAndSegmentHashes = false;
+            this.renderVersionInfoInManifest = true;
         }
     }
 
@@ -248,6 +252,18 @@ public class Config {
         return (TDFConfig config) -> {
             config.autoconfigure = enable;
             config.splitPlan = null;
+        };
+    }
+
+    // specify TDF version for TDF creation to target. Versions less than 4.3.0 will add a
+    // layer of hex encoding to their segment hashes and will not include version information
+    // in their manifests.
+    public static Consumer<TDFConfig> withTargetMode(String targetVersion) {
+        Version version = new Version(targetVersion == null ? "0.0.0" : targetVersion);
+        return (TDFConfig config) -> {
+            var legacyTDF = version.compareTo(new Version("4.3.0")) < 0;
+            config.renderVersionInfoInManifest = !legacyTDF;
+            config.hexEncodeRootAndSegmentHashes = legacyTDF;
         };
     }
 

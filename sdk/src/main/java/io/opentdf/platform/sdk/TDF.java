@@ -221,7 +221,7 @@ public class TDF {
         private static final Base64.Encoder encoder = Base64.getEncoder();
 
         private void prepareManifest(Config.TDFConfig tdfConfig, SDK.KAS kas) {
-            manifest.tdfVersion = TDF_VERSION;
+            manifest.tdfVersion = tdfConfig.renderVersionInfoInManifest ? TDF_VERSION : null;
             manifest.encryptionInformation.keyAccessType = kSplitKeyType;
             manifest.encryptionInformation.keyAccessObj = new ArrayList<>();
 
@@ -540,6 +540,9 @@ public class TDF {
                 payloadOutput.write(cipherData);
 
                 segmentSig = calculateSignature(cipherData, tdfObject.payloadKey, tdfConfig.segmentIntegrityAlgorithm);
+                if (tdfConfig.hexEncodeRootAndSegmentHashes) {
+                    segmentSig = Hex.encodeHexString(segmentSig).getBytes(StandardCharsets.UTF_8);
+                }
                 segmentInfo.hash = Base64.getEncoder().encodeToString(segmentSig);
 
                 aggregateHash.write(segmentSig);
@@ -552,9 +555,11 @@ public class TDF {
 
         Manifest.RootSignature rootSignature = new Manifest.RootSignature();
 
-        byte[] rootSig = calculateSignature(aggregateHash.toByteArray(),
-                tdfObject.payloadKey, tdfConfig.integrityAlgorithm);
-        rootSignature.signature = Base64.getEncoder().encodeToString(rootSig);
+        byte[] rootSig = calculateSignature(aggregateHash.toByteArray(), tdfObject.payloadKey, tdfConfig.integrityAlgorithm);
+        byte[] encodedRootSig = tdfConfig.hexEncodeRootAndSegmentHashes
+                ? Hex.encodeHexString(rootSig).getBytes(StandardCharsets.UTF_8)
+                : rootSig;
+        rootSignature.signature = Base64.getEncoder().encodeToString(encodedRootSig);
 
         String alg = kGmacIntegrityAlgorithm;
         if (tdfConfig.integrityAlgorithm == Config.IntegrityAlgorithm.HS256) {
