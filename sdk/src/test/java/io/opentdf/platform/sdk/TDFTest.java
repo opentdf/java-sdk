@@ -547,6 +547,15 @@ public class TDFTest {
         reader.readPayload(dataOutputStream);
         assertThat(reader.getManifest().payload.mimeType).isEqualTo(mimeType);
         assertArrayEquals(data, dataOutputStream.toByteArray(), "extracted data does not match");
+        var manifest = reader.getManifest();
+        var assertions = manifest.assertions;
+        assertThat(assertions.size()).isEqualTo(1);
+        var assertion = assertions.get(0);
+        assertThat(assertion.id).isEqualTo("assertion1");
+        assertThat(assertion.statement.format).isEqualTo("base64binary");
+        assertThat(assertion.statement.schema).isEqualTo("text");
+        assertThat(assertion.statement.value).isEqualTo("ICAgIDxlZGoOkVkaD4=");
+        assertThat(assertion.type).isEqualTo(AssertionConfig.Type.BaseAssertion.toString());
     }
 
     @Nonnull
