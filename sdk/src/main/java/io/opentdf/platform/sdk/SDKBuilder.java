@@ -1,6 +1,8 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.ProtocolClientConfig;
 import com.connectrpc.ProtocolClientInterface;
+import com.connectrpc.SerializationStrategy;
 import com.connectrpc.impl.ProtocolClient;
 import com.connectrpc.okhttp.ConnectOkHttpClient;
 import com.nimbusds.jose.JOSEException;
@@ -242,12 +244,13 @@ public class SDKBuilder {
         var c = new OkHttpClient.Builder()
                 .protocols(OkHttpClient.Companion.getDEFAULT_PROTOCOLS$okhttp())
                 .connectionSpecs(OkHttpClient.Companion.getDEFAULT_CONNECTION_SPECS$okhttp())
-                .sslSocketFactory()
+                .socketFactory(sslFactory.getSslSocketFactory())
                 .build();
 
         var as = new ProtocolClient(
-                new ConnectOkHttpClient(),
-        )
+                new ConnectOkHttpClient(c),
+                new ProtocolClientConfig(platformEndpoint, )
+        );
         var client = new KASClient(managedChannelFactory, dpopKey);
         return new ServicesAndInternals(
                 authInterceptor,
