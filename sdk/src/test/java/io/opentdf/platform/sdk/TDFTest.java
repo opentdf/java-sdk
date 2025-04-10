@@ -500,11 +500,21 @@ public class TDFTest {
     @Test
     public void legacyTDFRoundTrips() throws DecoderException, IOException, ExecutionException, JOSEException, InterruptedException, ParseException, NoSuchAlgorithmException {
         final String mimeType = "application/pdf";
+        var assertionConfig1 = new AssertionConfig();
+        assertionConfig1.id = "assertion1";
+        assertionConfig1.type = AssertionConfig.Type.BaseAssertion;
+        assertionConfig1.scope = AssertionConfig.Scope.TrustedDataObj;
+        assertionConfig1.appliesToState = AssertionConfig.AppliesToState.Unencrypted;
+        assertionConfig1.statement = new AssertionConfig.Statement();
+        assertionConfig1.statement.format = "base64binary";
+        assertionConfig1.statement.schema = "text";
+        assertionConfig1.statement.value = "ICAgIDxlZGoOkVkaD4=";
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
                 Config.withKasInformation(getRSAKASInfos()),
                 Config.withTargetMode("4.2.1"),
+                Config.withAssertionConfig(assertionConfig1),
                 Config.withMimeType(mimeType));
 
         byte[] data = new byte[129];
@@ -537,6 +547,15 @@ public class TDFTest {
         reader.readPayload(dataOutputStream);
         assertThat(reader.getManifest().payload.mimeType).isEqualTo(mimeType);
         assertArrayEquals(data, dataOutputStream.toByteArray(), "extracted data does not match");
+        var manifest = reader.getManifest();
+        var assertions = manifest.assertions;
+        assertThat(assertions.size()).isEqualTo(1);
+        var assertion = assertions.get(0);
+        assertThat(assertion.id).isEqualTo("assertion1");
+        assertThat(assertion.statement.format).isEqualTo("base64binary");
+        assertThat(assertion.statement.schema).isEqualTo("text");
+        assertThat(assertion.statement.value).isEqualTo("ICAgIDxlZGoOkVkaD4=");
+        assertThat(assertion.type).isEqualTo(AssertionConfig.Type.BaseAssertion.toString());
     }
 
     @Nonnull

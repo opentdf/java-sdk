@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.8](https://github.com/opentdf/java-sdk/compare/v0.7.7...v0.7.8) (2025-04-09)
+
+
+### Bug Fixes
+
+* deal with the extra layer of hex ([#236](https://github.com/opentdf/java-sdk/issues/236)) ([7e961c1](https://github.com/opentdf/java-sdk/commit/7e961c196c1708da18f0d9dd49d8427f3452f615))
+
 ## [0.7.7](https://github.com/opentdf/java-sdk/compare/v0.7.6...v0.7.7) (2025-04-07)
 
 

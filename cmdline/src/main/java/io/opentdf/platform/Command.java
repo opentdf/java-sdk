@@ -51,7 +51,7 @@ import java.util.function.Consumer;
  */
 class Versions {
     // Version of the SDK, managed by release-please.
-    public static final String SDK = "0.7.8-SNAPSHOT"; // x-release-please-version
+    public static final String SDK = "0.7.9-SNAPSHOT"; // x-release-please-version
 
     // This sdk aims to support this version of the TDF spec; currently 4.3.0.
     public static final String TDF_SPEC = "4.3.0";

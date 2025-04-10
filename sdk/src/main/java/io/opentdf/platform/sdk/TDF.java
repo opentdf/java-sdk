@@ -596,7 +596,9 @@ public class TDF {
             assertion.appliesToState = assertionConfig.appliesToState.toString();
 
             var assertionHashAsHex = assertion.hash();
-            var assertionHash = Hex.decodeHex(assertionHashAsHex);
+            var assertionHash = tdfConfig.hexEncodeRootAndSegmentHashes
+                ? assertionHashAsHex.getBytes(StandardCharsets.UTF_8)
+                : Hex.decodeHex(assertionHashAsHex);
             byte[] completeHash = new byte[aggregateHash.size() + assertionHash.length];
             System.arraycopy(aggregateHash.toByteArray(), 0, completeHash, 0, aggregateHash.size());
             System.arraycopy(assertionHash, 0, completeHash, aggregateHash.size(), assertionHash.length);
