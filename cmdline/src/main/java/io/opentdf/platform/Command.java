@@ -51,7 +51,7 @@ import java.util.function.Consumer;
  */
 class Versions {
     // Version of the SDK, managed by release-please.
-    public static final String SDK = "0.7.6"; // x-release-please-version
+    public static final String SDK = "0.7.9-SNAPSHOT"; // x-release-please-version
 
     // This sdk aims to support this version of the TDF spec; currently 4.3.0.
     public static final String TDF_SPEC = "4.3.0";
@@ -162,7 +162,8 @@ class Command {
             @Option(names = {
                     "--encap-key-type" }, defaultValue = Option.NULL_VALUE, description = "Preferred key access key wrap algorithm, one of ${COMPLETION-CANDIDATES}") Optional<KeyType> encapKeyType,
             @Option(names = { "--mime-type" }, defaultValue = Option.NULL_VALUE) Optional<String> mimeType,
-            @Option(names = { "--with-assertions" }, defaultValue = Option.NULL_VALUE) Optional<String> assertion)
+            @Option(names = { "--with-assertions" }, defaultValue = Option.NULL_VALUE) Optional<String> assertion,
+            @Option(names = { "--with-target-mode" }, defaultValue = Option.NULL_VALUE) Optional<String> targetMode)
 
             throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException, DecoderException {
 
@@ -214,9 +215,8 @@ class Command {
             configs.add(Config.withAssertionConfig(assertionConfigs));
         }
 
-        if (attributes.isPresent()) {
-            configs.add(Config.withDataAttributes(attributes.get().split(",")));
-        }
+        attributes.ifPresent(s -> configs.add(Config.withDataAttributes(s.split(","))));
+        targetMode.map(Config::withTargetMode).ifPresent(configs::add);
         var tdfConfig = Config.newTDFConfig(configs.toArray(Consumer[]::new));
         try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {
             try (var out = new BufferedOutputStream(System.out)) {

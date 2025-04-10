@@ -5,29 +5,34 @@ import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.TDF.Reader;
 import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
+import org.apache.commons.codec.DecoderException;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
-import org.bouncycastle.jce.interfaces.ECPrivateKey;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import javax.annotation.Nonnull;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TDFTest {
@@ -492,6 +497,67 @@ public class TDFTest {
         assertThat(reader.getManifest().payload.mimeType).isEqualTo(mimeType);
     }
 
+    @Test
+    public void legacyTDFRoundTrips() throws DecoderException, IOException, ExecutionException, JOSEException, InterruptedException, ParseException, NoSuchAlgorithmException {
+        final String mimeType = "application/pdf";
+        var assertionConfig1 = new AssertionConfig();
+        assertionConfig1.id = "assertion1";
+        assertionConfig1.type = AssertionConfig.Type.BaseAssertion;
+        assertionConfig1.scope = AssertionConfig.Scope.TrustedDataObj;
+        assertionConfig1.appliesToState = AssertionConfig.AppliesToState.Unencrypted;
+        assertionConfig1.statement = new AssertionConfig.Statement();
+        assertionConfig1.statement.format = "base64binary";
+        assertionConfig1.statement.schema = "text";
+        assertionConfig1.statement.value = "ICAgIDxlZGoOkVkaD4=";
+
+        Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
+                Config.withKasInformation(getRSAKASInfos()),
+                Config.withTargetMode("4.2.1"),
+                Config.withAssertionConfig(assertionConfig1),
+                Config.withMimeType(mimeType));
+
+        byte[] data = new byte[129];
+        new Random().nextBytes(data);
+        InputStream plainTextInputStream = new ByteArrayInputStream(data);
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+
+        TDF tdf = new TDF();
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, null);
+
+        var dataOutputStream = new ByteArrayOutputStream();
+
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
+        var integrityInformation = reader.getManifest().encryptionInformation.integrityInformation;
+        assertThat(reader.getManifest().tdfVersion).isNull();
+        var decodedSignature = Base64.getDecoder().decode(integrityInformation.rootSignature.signature);
+        for (var b: decodedSignature) {
+            assertThat(isHexChar(b))
+                    .withFailMessage("non-hex byte in signature: " + b)
+                    .isTrue();
+        }
+        for (var s: integrityInformation.segments) {
+            var decodedSegmentSignature = Base64.getDecoder().decode(s.hash);
+            for (var b: decodedSegmentSignature) {
+                assertThat(isHexChar(b))
+                        .withFailMessage("non-hex byte in segment signature: " + b)
+                        .isTrue();
+            }
+        }
+        reader.readPayload(dataOutputStream);
+        assertThat(reader.getManifest().payload.mimeType).isEqualTo(mimeType);
+        assertArrayEquals(data, dataOutputStream.toByteArray(), "extracted data does not match");
+        var manifest = reader.getManifest();
+        var assertions = manifest.assertions;
+        assertThat(assertions.size()).isEqualTo(1);
+        var assertion = assertions.get(0);
+        assertThat(assertion.id).isEqualTo("assertion1");
+        assertThat(assertion.statement.format).isEqualTo("base64binary");
+        assertThat(assertion.statement.schema).isEqualTo("text");
+        assertThat(assertion.statement.value).isEqualTo("ICAgIDxlZGoOkVkaD4=");
+        assertThat(assertion.type).isEqualTo(AssertionConfig.Type.BaseAssertion.toString());
+    }
+
     @Nonnull
     private static Config.KASInfo[] getKASInfos(Predicate<Integer> filter) {
         var kasInfos = new ArrayList<Config.KASInfo>();
@@ -514,5 +580,9 @@ public class TDFTest {
     @Nonnull
     private static Config.KASInfo[] getECKASInfos() {
         return getKASInfos(i -> i % 2 != 0);
+    }
+
+    private static boolean isHexChar(byte b) {
+        return (b >= 'a' && b <= 'f') || (b >= '0' && b <= '9');
     }
 }
