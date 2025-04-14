@@ -62,7 +62,7 @@
         <dependency>
             <groupId>build.buf</groupId>
             <artifactId>protovalidate</artifactId>
-            <version>0.1.9</version>
+            <version>0.6.0</version>
             <scope>compile</scope>
         </dependency>
         <!-- Networking Dependencies -->
