@@ -17,6 +17,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>11</maven.compiler.release>
+    <platform.branch>protocol/go/v0.2.28</platform.branch>
   </properties>
 
   <dependencyManagement>
@@ -138,7 +139,7 @@
                           <!-- Generate OpenTDF Platform Protobuf -->
                           <exec executable="buf" dir="." failOnError="true">
                               <arg value="generate"/>
-                              <arg value="https://github.com/opentdf/platform.git#branch=main,subdir=service"/>
+                              <arg value="https://github.com/opentdf/platform.git#branch=${platform.branch},subdir=service"/>
                               <arg value="-o"/>
                               <arg value="target/generated-sources"/>
                           </exec>
