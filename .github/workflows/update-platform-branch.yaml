@@ -1,0 +1,65 @@
+name: "Update Platform Branch"
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The new tag or branch to update the platform.branch property to ."
+        required: true
+        default: "protocol/go/v0.2.29"
+
+jobs:
+  update-platform-branch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout java-sdk repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Validate tag as a valid git ref
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if ! [[ "$TAG" =~ ^[a-zA-Z0-9._\-/]+$ ]]; then
+            echo "Invalid tag format: [$TAG]"
+            exit 1
+          fi
+
+      - name: Check if tag exists in the repository
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if ! git ls-remote --exit-code --heads --tags https://github.com/opentdf/platform.git "$TAG"; then
+            echo "Tag or branch [$TAG] does not exist in the platform repository."
+            exit 1
+          fi
+
+      - name: Update platform.branch in pom.xml files
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          find . -name "pom.xml" -exec sed -i.bak "s|<platform.branch>.*</platform.branch>|<platform.branch>${TAG}</platform.branch>|g" {} \;
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b update-platform-branch
+          git add .
+          git commit -m "fix(sdk): Updates to proto version ${{ github.event.inputs.tag }}"
+
+      - name: Push changes
+        run: |
+          git push origin update-platform-branch
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "fix(sdk): Updates to proto version ${{ github.event.inputs.tag }}"
+          branch: update-platform-branch
+          title: "fix(sdk): Updates to proto version ${{ github.event.inputs.tag }}"
+          body: "This PR updates the platform.branch property in all pom.xml files to the new tag or branch: ${{ github.event.inputs.tag }}."
+          labels: "automated-update"
