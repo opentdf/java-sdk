@@ -53,12 +53,13 @@ jobs:
       - name: Update platform.branch in pom.xml files
         run: |
             find . -name "pom.xml" -exec sed -i.bak "s|<platform.branch>.*</platform.branch>|<platform.branch>${TAG}</platform.branch>|g" {} \;
-            CHANGED_FILES=$(find . -name "pom.xml.bak" -exec diff -u {} $(echo {} | sed 's/.bak$//') \;)
+            CHANGED_FILES=$(find . -name "pom.xml" -exec diff -u {} {}.bak \;)
             if [ -z "$CHANGED_FILES" ]; then
               echo "No changes detected in pom.xml files." | tee -a $GITHUB_STEP_SUMMARY
               find . -name "pom.xml.bak" -delete
               exit 1
             fi
+            echo "The following pom.xml files were updated: $CHANGED_FILES"
             find . -name "pom.xml.bak" -delete
 
       - name: Fetch release notes for the tag
