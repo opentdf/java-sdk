@@ -12,6 +12,7 @@
     <properties>
         <jazzer.version>0.22.1</jazzer.version>
         <jazzer.baseurl>https://github.com/CodeIntelligenceTesting/jazzer/releases/download/v${jazzer.version}</jazzer.baseurl>
+        <platform.branch>protocol/go/v0.3.0</platform.branch>
     </properties>
     <dependencies>
         <!-- Logging Dependencies -->
@@ -257,7 +258,7 @@
                                 <!-- Generate OpenTDF Platform Protobuf -->
                                 <exec executable="buf" dir="." failOnError="true">
                                     <arg value="generate"/>
-                                    <arg value="https://github.com/opentdf/platform.git#branch=main,subdir=service"/>
+                                    <arg value="https://github.com/opentdf/platform.git#branch=${platform.branch},subdir=service"/>
                                     <arg value="-o"/>
                                     <arg value="target/generated-sources"/>
                                 </exec>
