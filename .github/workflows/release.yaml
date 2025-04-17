@@ -21,7 +21,7 @@ jobs:
         with:
           app-id: "${{ secrets.APP_ID }}"
           private-key: "${{ secrets.AUTOMATION_KEY }}"
-      - uses: google-github-actions/release-please-action@v4
+      - uses: googleapis/release-please-action@a02a34c4d625f9be7cb89156071d8567266a2445 # v4.2.0
         with:
           token: "${{ steps.generate_token.outputs.token }}"
           config-file: release-please.json
@@ -30,15 +30,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Setup Buf
-        uses: bufbuild/buf-setup-action@2211e06e8cf26d628cda2eea15c95f8c42b080b3
+        uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1.50.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       # stage maven profile
       - name: Set up JDK to publish to GitHub Packages
         if: github.ref == 'refs/heads/main'
-        uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
         with:
           java-version: "11"
           distribution: "adopt"
@@ -60,7 +60,7 @@ jobs:
       # release maven profile
       - name: Set up JDK to publish to Maven Central
         if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/setup-java@5896cecc08fd8a1fbdfaf517e29b571164b031f7
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
         with:
           java-version: "11"
           distribution: "adopt"
