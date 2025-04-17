@@ -74,7 +74,7 @@ jobs:
           echo "RELEASE_NOTES=$RELEASE_NOTES" >> $GITHUB_ENV
           echo "RELEASE_URL=https://github.com/opentdf/platform/releases/tag/$TAG" >> $GITHUB_ENV
 
-      - name: Commit and changes
+      - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
