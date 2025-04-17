@@ -1,4 +1,7 @@
 name: "Update Platform Branch"
+# This workflow updates the platform.branch property in all pom.xml files to a new tag or branch.
+# It is triggered by a manual dispatch or by a call from another workflow - notably from platform changes to protocol/go.
+# This property is used to select which versions of the protocol buffer definitions to use.
 
 on:
   workflow_call:
@@ -9,9 +12,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "The new tag or branch to update the platform.branch property to ."
+        description: "The new tag or branch to update the platform.branch property to use for targeting the RPC protocol buffers."
         required: true
-        default: "protocol/go/v0.2.29"
+        default: "protocol/go/v0.3.0"
 
 jobs:
   update-platform-branch:
