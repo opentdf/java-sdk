@@ -2,6 +2,9 @@ name: "Update Platform Branch"
 # This workflow updates the platform.branch property in all pom.xml files to a new tag or branch.
 # It is triggered by a manual dispatch or by a call from another workflow - notably from platform changes to protocol/go.
 # This property is used to select which versions of the protocol buffer definitions to use.
+#
+# To test:
+#   `act workflow_dispatch -W ./.github/workflows/update-platform-branch.yaml --input tag=protocol/go/v0.3.1`
 
 on:
   workflow_call:
@@ -27,7 +30,7 @@ jobs:
       - name: Validate tag as a valid git ref
         run: |
           TAG="${{ github.event.inputs.tag }}"
-          if ! [[ "$TAG" =~ ^[a-zA-Z0-9._\-/]+$ ]]; then
+          if ! echo "$TAG" | grep -Eq "^[a-zA-Z0-9._\-\/]+$"; then
             echo "Invalid tag format: [$TAG]"
             exit 1
           fi
