@@ -334,7 +334,7 @@ jobs:
       contents: read
       packages: read
     needs: platform-integration
-    uses: opentdf/tests/.github/workflows/xtest.yml@DSPX-959-java-sdk-protogen-changes
+    uses: opentdf/tests/.github/workflows/xtest.yml@main
     with:
       focus-sdk: java
       java-ref: ${{ github.ref }} latest
