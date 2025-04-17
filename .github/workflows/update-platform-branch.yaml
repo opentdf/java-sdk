@@ -26,6 +26,8 @@ jobs:
     steps:
       - name: Checkout java-sdk repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: true # Required for "commit changes" and push steps below
 
       - name: Validate tag as a valid git ref
         run: |
@@ -48,13 +50,32 @@ jobs:
           TAG="${{ github.event.inputs.tag }}"
           find . -name "pom.xml" -exec sed -i.bak "s|<platform.branch>.*</platform.branch>|<platform.branch>${TAG}</platform.branch>|g" {} \;
 
+      - name: Fetch release notes for the tag
+        id: fetch-release-notes
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          RELEASE_URL="https://api.github.com/repos/opentdf/platform/releases/tags/$TAG"
+          RESPONSE=$(curl -s -H "Accept: application/vnd.github.v3+json" "$RELEASE_URL")
+          RELEASE_NOTES=$(echo "$RESPONSE" | jq -r '.body // ""')
+          if [ "$RELEASE_NOTES" = "" ]; then
+            echo "No release notes found for tag $TAG."
+          fi
+          echo "::set-output name=release_notes::$RELEASE_NOTES"
+          echo "::set-output name=release_url::https://github.com/opentdf/platform/releases/tag/$TAG"
+
       - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b update-platform-branch
           git add .
-          git commit -m "fix(sdk): Updates to proto version ${{ github.event.inputs.tag }}"
+          RELEASE_NOTES="${{ steps.fetch-release-notes.outputs.release_notes }}"
+          RELEASE_URL="${{ steps.fetch-release-notes.outputs.release_url }}"
+          if [ -n "$RELEASE_NOTES" ]; then
+            git commit -m "fix(sdk): Updates to proto version ${{ github.event.inputs.tag }}\n\nRelease Notes:\n$RELEASE_NOTES\n\nSee the release: $RELEASE_URL"
+          else
+            git commit -m "fix(sdk): Updates to proto version ${{ github.event.inputs.tag }}\n\nSee the release: $RELEASE_URL"
+          fi
 
       - name: Push changes
         run: |
@@ -67,5 +88,11 @@ jobs:
           commit-message: "fix(sdk): Updates to proto version ${{ github.event.inputs.tag }}"
           branch: update-platform-branch
           title: "fix(sdk): Updates to proto version ${{ github.event.inputs.tag }}"
-          body: "This PR updates the platform.branch property in all pom.xml files to the new tag or branch: ${{ github.event.inputs.tag }}."
+          body: |
+            This PR updates the platform.branch property in all pom.xml files to the new tag or branch: ${{ github.event.inputs.tag }}.
+
+            See the release: ${{ steps.fetch-release-notes.outputs.release_url }}
+
+            Release Notes:
+            ${{ steps.fetch-release-notes.outputs.release_notes }}
           labels: "automated-update"
