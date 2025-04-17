@@ -12,7 +12,7 @@
     <properties>
         <jazzer.version>0.22.1</jazzer.version>
         <jazzer.baseurl>https://github.com/CodeIntelligenceTesting/jazzer/releases/download/v${jazzer.version}</jazzer.baseurl>
-        <platform.branch>protocol/go/v0.2.28</platform.branch>
+        <platform.branch>protocol/go/v0.3.0</platform.branch>
     </properties>
     <dependencies>
         <!-- Logging Dependencies -->
