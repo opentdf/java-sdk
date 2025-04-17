@@ -1,17 +1,12 @@
 package io.opentdf.platform.sdk;
 
-import io.grpc.ClientInterceptor;
-import io.grpc.ManagedChannel;
-import io.opentdf.platform.authorization.AuthorizationServiceGrpc;
-import io.opentdf.platform.authorization.AuthorizationServiceGrpc.AuthorizationServiceFutureStub;
-import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
-import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
-import io.opentdf.platform.policy.namespaces.NamespaceServiceGrpc;
-import io.opentdf.platform.policy.namespaces.NamespaceServiceGrpc.NamespaceServiceFutureStub;
-import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceGrpc;
-import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceGrpc.ResourceMappingServiceFutureStub;
-import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc;
-import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc.SubjectMappingServiceFutureStub;
+import com.connectrpc.Interceptor;
+import com.connectrpc.impl.ProtocolClient;
+import io.opentdf.platform.authorization.AuthorizationServiceClient;
+import io.opentdf.platform.policy.attributes.AttributesServiceClient;
+import io.opentdf.platform.policy.namespaces.NamespaceServiceClient;
+import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceClient;
+import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClient;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +25,7 @@ import java.util.Optional;
 public class SDK implements AutoCloseable {
     private final Services services;
     private final TrustManager trustManager;
-    private final ClientInterceptor authInterceptor;
+    private final Interceptor authInterceptor;
 
     private static final Logger log = LoggerFactory.getLogger(SDK.class);
 
@@ -66,54 +61,53 @@ public class SDK implements AutoCloseable {
      * It extends the AutoCloseable interface, allowing for the release of resources when no longer needed.
      */
     public interface Services extends AutoCloseable {
-        AuthorizationServiceFutureStub authorization();
+        AttributesServiceClient attributes();
 
-        AttributesServiceFutureStub attributes();
+        NamespaceServiceClient namespaces();
 
-        NamespaceServiceFutureStub namespaces();
+        SubjectMappingServiceClient  subjectMappings();
 
-        SubjectMappingServiceFutureStub subjectMappings();
+        ResourceMappingServiceClient resourceMappings();
 
-        ResourceMappingServiceFutureStub resourceMappings();
+        AuthorizationServiceClient authorization();
 
         KAS kas();
 
-        static Services newServices(ManagedChannel channel, KAS kas) {
-            var attributeService = AttributesServiceGrpc.newFutureStub(channel);
-            var namespaceService = NamespaceServiceGrpc.newFutureStub(channel);
-            var subjectMappingService = SubjectMappingServiceGrpc.newFutureStub(channel);
-            var resourceMappingService = ResourceMappingServiceGrpc.newFutureStub(channel);
-            var authorizationService = AuthorizationServiceGrpc.newFutureStub(channel);
+        static Services newServices(ProtocolClient client, KAS kas) {
+            var attributeService = new AttributesServiceClient(client);
+            var namespaceService = new NamespaceServiceClient(client);
+            var subjectMappingService = new SubjectMappingServiceClient(client);
+            var resourceMappingService = new ResourceMappingServiceClient(client);
+            var authorizationService = new AuthorizationServiceClient(client);
 
             return new Services() {
                 @Override
                 public void close() throws Exception {
-                    channel.shutdownNow();
                     kas.close();
                 }
 
                 @Override
-                public AttributesServiceFutureStub attributes() {
+                public AttributesServiceClient attributes() {
                     return attributeService;
                 }
 
                 @Override
-                public NamespaceServiceFutureStub namespaces() {
+                public NamespaceServiceClient namespaces() {
                     return namespaceService;
                 }
 
                 @Override
-                public SubjectMappingServiceFutureStub subjectMappings() {
+                public SubjectMappingServiceClient subjectMappings() {
                     return subjectMappingService;
                 }
 
                 @Override
-                public ResourceMappingServiceFutureStub resourceMappings() {
+                public ResourceMappingServiceClient resourceMappings() {
                     return resourceMappingService;
                 }
 
                 @Override
-                public AuthorizationServiceFutureStub authorization() {
+                public AuthorizationServiceClient authorization() {
                     return authorizationService;
                 }
 
@@ -129,11 +123,11 @@ public class SDK implements AutoCloseable {
         return Optional.ofNullable(trustManager);
     }
 
-    public Optional<ClientInterceptor> getAuthInterceptor() {
+    public Optional<Interceptor> getAuthInterceptor() {
         return Optional.ofNullable(authInterceptor);
     }
 
-    SDK(Services services, TrustManager trustManager, ClientInterceptor authInterceptor) {
+    SDK(Services services, TrustManager trustManager, Interceptor authInterceptor) {
         this.services = services;
         this.trustManager = trustManager;
         this.authInterceptor = authInterceptor;

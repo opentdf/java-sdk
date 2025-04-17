@@ -1,6 +1,5 @@
 package io.opentdf.platform.sdk;
 
-import com.google.common.base.Supplier;
 import io.opentdf.platform.policy.Attribute;
 import io.opentdf.platform.policy.AttributeRuleTypeEnum;
 import io.opentdf.platform.policy.AttributeValueSelector;
@@ -8,7 +7,7 @@ import io.opentdf.platform.policy.KasPublicKey;
 import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
 import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.Value;
-import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
+import io.opentdf.platform.policy.attributes.AttributesServiceClient;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse.AttributeAndValue;
@@ -31,6 +30,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -106,7 +106,7 @@ public class Autoconfigure {
             }
 
             try {
-                URLDecoder.decode(matcher.group(2), StandardCharsets.UTF_8.name());
+                URLDecoder.decode(matcher.group(2), StandardCharsets.UTF_8);
             } catch (Exception e) {
                 throw new AutoConfigureException("invalid type: error in attribute name [" + matcher.group(2) + "]");
             }
@@ -699,15 +699,14 @@ public class Autoconfigure {
     }
 
     // Gets a list of directory of KAS grants for a list of attribute FQNs
-    public static Granter newGranterFromService(AttributesServiceFutureStub as, KASKeyCache keyCache, AttributeValueFQN... fqns) throws AutoConfigureException, ExecutionException, InterruptedException {
+    public static Granter newGranterFromService(AttributesServiceClient as, KASKeyCache keyCache, AttributeValueFQN... fqns) throws AutoConfigureException, ExecutionException, InterruptedException {
 
         GetAttributeValuesByFqnsRequest request = GetAttributeValuesByFqnsRequest.newBuilder()
                 .addAllFqns(Arrays.stream(fqns).map(AttributeValueFQN::toString).collect(Collectors.toList()))
                 .setWithValue(AttributeValueSelector.newBuilder().setWithKeyAccessGrants(true).build())
                 .build();
 
-        GetAttributeValuesByFqnsResponse av = as.getAttributeValuesByFqns(request).get();
-
+        GetAttributeValuesByFqnsResponse av = Helpers.getAttributeValuesByFqns(as, request);
         return getGranter(keyCache, new ArrayList<>(av.getFqnAttributeValuesMap().values()));
     }
 

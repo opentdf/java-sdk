@@ -75,11 +75,6 @@
             </exclusions>
         </dependency>
         <dependency>
-            <groupId>com.connectrpc</groupId>
-            <artifactId>connect-kotlin-okhttp</artifactId>
-            <version>0.7.2</version>
-        </dependency>
-        <dependency>
             <groupId>com.squareup.okio</groupId>
             <artifactId>okio-jvm</artifactId>
             <version>3.9.1</version>
@@ -108,6 +103,22 @@
             <groupId>io.grpc</groupId>
             <artifactId>grpc-stub</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp</artifactId>
+            <version>4.12.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.connectrpc</groupId>
+            <artifactId>connect-kotlin-google-java-ext</artifactId>
+            <version>0.7.2</version>
+        </dependency>
+        <dependency>
+            <groupId>com.connectrpc</groupId>
+            <artifactId>connect-kotlin-okhttp</artifactId>
+            <version>0.7.2</version>
+        </dependency>
+
         <!-- Other Dependencies -->
         <dependency>
             <groupId>org.apache.tomcat</groupId>
@@ -151,7 +162,7 @@
         <dependency>
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>mockwebserver</artifactId>
-            <version>5.0.0-alpha.14</version>
+            <version>4.12.0</version>
             <scope>test</scope>
             <exclusions>
                 <exclusion>
@@ -181,7 +192,7 @@
         <dependency>
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>okhttp-tls</artifactId>
-            <version>5.0.0-alpha.14</version>
+            <version>4.12.0</version>
             <scope>test</scope>
             <exclusions>
                 <exclusion>

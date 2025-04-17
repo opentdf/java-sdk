@@ -1,5 +1,6 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.http.HTTPMethod;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.jwk.RSAKey;
@@ -27,6 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URL;
 import java.time.Instant;
 
 /**
@@ -34,25 +36,25 @@ import java.time.Instant;
  * to the server. It adds authentication headers to the requests by fetching and caching access
  * tokens.
  */
-class GRPCAuthInterceptor implements ClientInterceptor {
+class TokenSource {
     private Instant tokenExpiryTime;
     private AccessToken token;
     private final ClientAuthentication clientAuth;
     private final RSAKey rsaKey;
     private final URI tokenEndpointURI;
     private final AuthorizationGrant authzGrant;
-    private SSLFactory sslFactory;
-    private static final Logger logger = LoggerFactory.getLogger(GRPCAuthInterceptor.class);
+    private final SSLFactory sslFactory;
+    private static final Logger logger = LoggerFactory.getLogger(TokenSource.class);
 
 
     /**
-     * Constructs a new GRPCAuthInterceptor with the specified client authentication and RSA key.
+     * Constructs a new TokenSource with the specified client authentication and RSA key.
      *
      * @param clientAuth the client authentication to be used by the interceptor
      * @param rsaKey     the RSA key to be used by the interceptor
      * @param sslFactory Optional SSLFactory for Requests
      */
-    public GRPCAuthInterceptor(ClientAuthentication clientAuth, RSAKey rsaKey, URI tokenEndpointURI, AuthorizationGrant authzGrant, SSLFactory sslFactory) {
+    public TokenSource(ClientAuthentication clientAuth, RSAKey rsaKey, URI tokenEndpointURI, AuthorizationGrant authzGrant, SSLFactory sslFactory) {
         this.clientAuth = clientAuth;
         this.rsaKey = rsaKey;
         this.tokenEndpointURI = tokenEndpointURI;
@@ -60,43 +62,43 @@ class GRPCAuthInterceptor implements ClientInterceptor {
         this.authzGrant = authzGrant;
     }
 
-    /**
-     * Intercepts the client call before it is sent to the server.
-     *
-     * @param method      The method descriptor for the call.
-     * @param callOptions The call options for the call.
-     * @param next        The next channel in the channel pipeline.
-     * @param <ReqT>      The type of the request message.
-     * @param <RespT>     The type of the response message.
-     * @return A client call with the intercepted behavior.
-     */
-    @Override
-    public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
-                                                               CallOptions callOptions, Channel next) {
-        return new ForwardingClientCall.SimpleForwardingClientCall<>(next.newCall(method, callOptions)) {
-            @Override
-            public void start(Listener<RespT> responseListener, Metadata headers) {
-                // Get the access token
-                AccessToken t = getToken();
-                headers.put(Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER),
-                        "DPoP " + t.getValue());
+    class AuthHeaders {
+        private final String authHeader;
+        private final String dpopHeader;
 
-                // Build the DPoP proof for each request
-                try {
-                    DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(rsaKey, JWSAlgorithm.RS256);
+        public AuthHeaders(String authHeader, String dpopHeader) {
+            this.authHeader = authHeader;
+            this.dpopHeader = dpopHeader;
+        }
 
-                    URI uri = new URI("/" + method.getFullMethodName());
-                    SignedJWT proof = dpopFactory.createDPoPJWT("POST", uri, t);
-                    headers.put(Metadata.Key.of("DPoP", Metadata.ASCII_STRING_MARSHALLER),
-                            proof.serialize());
-                } catch (URISyntaxException e) {
-                    throw new RuntimeException("Invalid URI syntax for DPoP proof creation", e);
-                } catch (JOSEException e) {
-                    throw new RuntimeException("Error creating DPoP proof", e);
-                }
-                super.start(responseListener, headers);
-            }
-        };
+        public String getAuthHeader() {
+            return authHeader;
+        }
+
+        public String getDpopHeader() {
+            return dpopHeader;
+        }
+    }
+
+    public AuthHeaders getAuthHeaders(URL url, String method) {
+        // Get the access token
+        AccessToken t = getToken();
+
+        // Build the DPoP proof for each request
+        String dpopProof;
+        try {
+            DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(rsaKey, JWSAlgorithm.RS256);
+            SignedJWT proof = dpopFactory.createDPoPJWT(method, url.toURI(), t);
+            dpopProof = proof.serialize();
+        } catch (URISyntaxException e) {
+            throw new RuntimeException("Invalid URI syntax for DPoP proof creation", e);
+        } catch (JOSEException e) {
+            throw new RuntimeException("Error creating DPoP proof", e);
+        }
+
+        return new AuthHeaders(
+                "DPoP " + t.getValue(),
+                dpopProof);
     }
 
     /**

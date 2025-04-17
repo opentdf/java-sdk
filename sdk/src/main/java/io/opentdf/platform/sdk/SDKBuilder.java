@@ -1,10 +1,12 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.Interceptor;
 import com.connectrpc.ProtocolClientConfig;
-import com.connectrpc.ProtocolClientInterface;
-import com.connectrpc.SerializationStrategy;
+import com.connectrpc.extensions.GoogleJavaProtobufStrategy;
 import com.connectrpc.impl.ProtocolClient;
 import com.connectrpc.okhttp.ConnectOkHttpClient;
+import com.connectrpc.protocols.GETConfiguration;
+import com.connectrpc.protocols.NetworkProtocol;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.RSAKey;
@@ -21,17 +23,20 @@ import com.nimbusds.oauth2.sdk.token.BearerAccessToken;
 import com.nimbusds.oauth2.sdk.token.TokenTypeURI;
 import com.nimbusds.oauth2.sdk.tokenexchange.TokenExchangeGrant;
 import com.nimbusds.openid.connect.sdk.op.OIDCProviderMetadata;
-import io.grpc.*;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.opentdf.platform.kas.AccessServiceClient;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRequest;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
-import io.opentdf.platform.wellknownconfiguration.WellKnownServiceGrpc;
+import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClient;
 import nl.altindag.ssl.SSLFactory;
 import nl.altindag.ssl.pem.util.PemUtils;
 import okhttp3.OkHttpClient;
+import okhttp3.Protocol;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509ExtendedTrustManager;
 import java.io.File;
@@ -40,6 +45,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
@@ -141,7 +147,7 @@ public class SDKBuilder {
         return this;
     }
 
-    private GRPCAuthInterceptor getGrpcAuthInterceptor(RSAKey rsaKey) {
+    private Interceptor getAuthInterceptor(RSAKey rsaKey) {
         if (platformEndpoint == null) {
             throw new SDKException("cannot build an SDK without specifying the platform endpoint");
         }
@@ -155,21 +161,15 @@ public class SDKBuilder {
         // we don't add the auth listener to this channel since it is only used to call
         // the
         // well known endpoint
-        ManagedChannel bootstrapChannel = null;
+        ProtocolClient bootstrapClient = null;
         GetWellKnownConfigurationResponse config;
+        bootstrapClient = getProtocolClient(platformEndpoint) ;
+        var stub = new WellKnownServiceClient(bootstrapClient);
         try {
-            bootstrapChannel = getManagedChannelBuilder(platformEndpoint).build();
-            var stub = WellKnownServiceGrpc.newBlockingStub(bootstrapChannel);
-            try {
-                config = stub.getWellKnownConfiguration(GetWellKnownConfigurationRequest.getDefaultInstance());
-            } catch (StatusRuntimeException e) {
-                Status status = Status.fromThrowable(e);
-                throw new SDKException(String.format("Got grpc status [%s] when getting configuration", status), e);
-            }
-        } finally {
-            if (bootstrapChannel != null) {
-                bootstrapChannel.shutdown();
-            }
+            config = Helpers.call(stub.getWellKnownConfigurationBlocking(GetWellKnownConfigurationRequest.getDefaultInstance(), Collections.emptyMap()));
+        } catch (StatusRuntimeException e) {
+            Status status = Status.fromThrowable(e);
+            throw new SDKException(String.format("Got grpc status [%s] when getting configuration", status), e);
         }
 
         String platformIssuer;
@@ -178,7 +178,6 @@ public class SDKBuilder {
                     .getConfiguration()
                     .getFieldsOrThrow(PLATFORM_ISSUER)
                     .getStringValue();
-
         } catch (IllegalArgumentException e) {
             logger.warn(
                     "no `platform_issuer` found in well known configuration. requests from the SDK will be unauthenticated",
@@ -201,17 +200,17 @@ public class SDKBuilder {
         if (this.authzGrant == null) {
             this.authzGrant = new ClientCredentialsGrant();
         }
-
-        return new GRPCAuthInterceptor(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI(), this.authzGrant, sslFactory);
+        var ts = new TokenSource(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI(), this.authzGrant, sslFactory);
+        return new AuthInterceptor(ts);
     }
 
     static class ServicesAndInternals {
-        final ClientInterceptor interceptor;
+        final Interceptor interceptor;
         final TrustManager trustManager;
 
         final SDK.Services services;
 
-        ServicesAndInternals(ClientInterceptor interceptor, TrustManager trustManager, SDK.Services services) {
+        ServicesAndInternals(Interceptor interceptor, TrustManager trustManager, SDK.Services services) {
             this.interceptor = interceptor;
             this.trustManager = trustManager;
             this.services = services;
@@ -229,33 +228,42 @@ public class SDKBuilder {
             throw new SDKException("Error generating DPoP key", e);
         }
 
-        var authInterceptor = getGrpcAuthInterceptor(dpopKey);
-        ManagedChannel channel;
-        Function<String, ManagedChannel> managedChannelFactory;
-        if (authInterceptor == null) {
-            channel = getManagedChannelBuilder(platformEndpoint).build();
-            managedChannelFactory = (String endpoint) -> getManagedChannelBuilder(endpoint).build();
+        var authInterceptor = getAuthInterceptor(dpopKey);
+        var kasClient = getKASClient(dpopKey, authInterceptor);
+        var protocolClient = getProtocolClient(platformEndpoint, authInterceptor);
 
-        } else {
-            channel = getManagedChannelBuilder(platformEndpoint).intercept(authInterceptor).build();
-            managedChannelFactory = (String endpoint) -> getManagedChannelBuilder(endpoint).intercept(authInterceptor)
-                    .build();
-        }
-        var c = new OkHttpClient.Builder()
-                .protocols(OkHttpClient.Companion.getDEFAULT_PROTOCOLS$okhttp())
-                .connectionSpecs(OkHttpClient.Companion.getDEFAULT_CONNECTION_SPECS$okhttp())
-                .socketFactory(sslFactory.getSslSocketFactory())
-                .build();
-
-        var as = new ProtocolClient(
-                new ConnectOkHttpClient(c),
-                new ProtocolClientConfig(platformEndpoint, )
-        );
-        var client = new KASClient(managedChannelFactory, dpopKey);
         return new ServicesAndInternals(
                 authInterceptor,
                 sslFactory == null ? null : sslFactory.getTrustManager().orElse(null),
-                SDK.Services.newServices(channel, client));
+                SDK.Services.newServices(protocolClient, kasClient));
+    }
+
+    @Nonnull
+    private KASClient getKASClient(RSAKey dpopKey, Interceptor interceptor) {
+        Function<String, AccessServiceClient> clientFactory = (String endpoint) -> {
+            var c = new OkHttpClient.Builder();
+            if (usePlainText) {
+                c.protocols(List.of(Protocol.H2_PRIOR_KNOWLEDGE));
+            }
+            if (sslFactory != null) {
+                c.sslSocketFactory(sslFactory.getSslSocketFactory(), sslFactory.getTrustManager().get());
+            }
+
+            var as = new ProtocolClient(
+                    new ConnectOkHttpClient(c.build()),
+                    new ProtocolClientConfig(endpoint,
+                            new GoogleJavaProtobufStrategy(),
+                            NetworkProtocol.GRPC,
+                            null,
+                            GETConfiguration.Enabled.INSTANCE,
+                            List.of(_ignored -> interceptor)
+                    )
+            );
+
+            return new AccessServiceClient(as);
+        };
+
+        return new KASClient(clientFactory, dpopKey);
     }
 
     public SDK build() {
@@ -263,30 +271,31 @@ public class SDKBuilder {
         return new SDK(services.services, services.trustManager, services.interceptor);
     }
 
-    /**
-     * This produces a channel configured with all the available SDK options. The
-     * only
-     * reason it can't take in an interceptor is because we need to create a channel
-     * that
-     * doesn't have any authentication when we are bootstrapping
-     * 
-     * @param endpoint The endpoint that we are creating the channel for
-     * @return {@type ManagedChannelBuilder<?>} configured with the SDK options
-     */
-    private ManagedChannelBuilder<?> getManagedChannelBuilder(String endpoint) {
-        ManagedChannelBuilder<?> channelBuilder;
-        if (sslFactory != null && !usePlainText) {
-            channelBuilder = Grpc.newChannelBuilder(endpoint, TlsChannelCredentials.newBuilder()
-                    .trustManager(sslFactory.getTrustManager().get()).build());
-        } else {
-            channelBuilder = ManagedChannelBuilder.forTarget(endpoint);
+    private ProtocolClient getProtocolClient(String endpoint) {
+        return getProtocolClient(endpoint, null);
+    }
+
+    private ProtocolClient getProtocolClient(String endpoint, Interceptor interceptor) {
+        var httpClient = new OkHttpClient.Builder();
+        if (usePlainText) {
+            httpClient.protocols(List.of(Protocol.H2_PRIOR_KNOWLEDGE));
+        }
+        if (sslFactory != null) {
+            httpClient.sslSocketFactory(sslFactory.getSslSocketFactory(), sslFactory.getTrustManager().get());
         }
 
-        if (usePlainText) {
-            channelBuilder = channelBuilder.usePlaintext();
-        }
-        return channelBuilder;
+        var protocolClientConfig = new ProtocolClientConfig(
+                endpoint,
+                new GoogleJavaProtobufStrategy(),
+                NetworkProtocol.GRPC,
+                null,
+                GETConfiguration.Enabled.INSTANCE,
+                interceptor == null ? Collections.emptyList() : List.of((_config) -> interceptor)
+        );
+
+        return new ProtocolClient(new ConnectOkHttpClient(httpClient.build()), protocolClientConfig);
     }
+
 
     SSLFactory getSslFactory() {
         return this.sslFactory;

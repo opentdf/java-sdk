@@ -5,7 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.nimbusds.jose.*;
 
 import io.opentdf.platform.policy.Value;
-import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
+import io.opentdf.platform.policy.attributes.AttributesServiceClient;
 import io.opentdf.platform.sdk.Config.TDFConfig;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
 import io.opentdf.platform.sdk.Config.KASInfo;
@@ -475,7 +475,7 @@ public class TDF {
 
     public TDFObject createTDF(InputStream payload,
                                OutputStream outputStream,
-                               Config.TDFConfig tdfConfig, SDK.KAS kas, AttributesServiceFutureStub attrService)
+                               Config.TDFConfig tdfConfig, SDK.KAS kas, AttributesServiceClient attributesServiceClient)
             throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException, DecoderException {
 
         if (tdfConfig.autoconfigure) {
@@ -483,7 +483,7 @@ public class TDF {
             if (tdfConfig.attributeValues != null && !tdfConfig.attributeValues.isEmpty()) {
                 granter = Autoconfigure.newGranterFromAttributes(tdfConfig.attributeValues.toArray(new Value[0]));
             } else if (tdfConfig.attributes != null && !tdfConfig.attributes.isEmpty()) {
-                granter = Autoconfigure.newGranterFromService(attrService, kas.getKeyCache(),
+                granter = Autoconfigure.newGranterFromService(attributesServiceClient, kas.getKeyCache(),
                         tdfConfig.attributes.toArray(new AttributeValueFQN[0]));
             }
 

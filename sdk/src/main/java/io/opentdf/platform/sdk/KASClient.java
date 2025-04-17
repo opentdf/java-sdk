@@ -9,11 +9,9 @@ import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
-import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
 import io.grpc.Status;
 import io.opentdf.platform.kas.AccessServiceClient;
-import io.opentdf.platform.kas.AccessServiceGrpc;
 import io.opentdf.platform.kas.PublicKeyRequest;
 import io.opentdf.platform.kas.PublicKeyResponse;
 import io.opentdf.platform.kas.RewrapRequest;
@@ -119,30 +117,31 @@ public class KASClient implements SDK.KAS {
     }
 
     private String normalizeAddress(String urlString) {
-        URL url;
-        try {
-            url = new URL(urlString);
-        } catch (MalformedURLException e) {
-            // if there is no protocol then they either gave us
-            // a correct address or one we don't know how to fix
-            return urlString;
-        }
-
-        // otherwise we take the specified port or default
-        // based on whether the URL uses a scheme that
-        // implies TLS
-        int port;
-        if (url.getPort() == -1) {
-            if ("http".equals(url.getProtocol())) {
-                port = 80;
-            } else {
-                port = 443;
-            }
-        } else {
-            port = url.getPort();
-        }
-
-        return format("%s:%d", url.getHost(), port);
+        return urlString;
+//        URL url;
+//        try {
+//            url = new URL(urlString);
+//        } catch (MalformedURLException e) {
+//            // if there is no protocol then they either gave us
+//            // a correct address or one we don't know how to fix
+//            return urlString;
+//        }
+//
+//        // otherwise we take the specified port or default
+//        // based on whether the URL uses a scheme that
+//        // implies TLS
+//        int port;
+//        if (url.getPort() == -1) {
+//            if ("http".equals(url.getProtocol())) {
+//                port = 80;
+//            } else {
+//                port = 443;
+//            }
+//        } else {
+//            port = url.getPort();
+//        }
+//
+//        return format("%s:%d", url.getHost(), port);
     }
 
     @Override
@@ -312,21 +311,8 @@ public class KASClient implements SDK.KAS {
 
     private final HashMap<String, AccessServiceClient> stubs = new HashMap<>();
 
-    private static class CacheEntry {
-        final ManagedChannel channel;
-        final AccessServiceGrpc.AccessServiceBlockingStub stub;
-
-        private CacheEntry(ManagedChannel channel, AccessServiceGrpc.AccessServiceBlockingStub stub) {
-            this.channel = channel;
-            this.stub = stub;
-        }
-    }
-
     // make this protected so we can test the address normalization logic
     synchronized AccessServiceClient getStub(String url) {
-        var realAddress = normalizeAddress(url);
-        stubs.computeIfAbsent(realAddress, channelFactory);
-
-        return stubs.get(realAddress);
+        return stubs.computeIfAbsent(normalizeAddress(url), channelFactory);
     }
 }
