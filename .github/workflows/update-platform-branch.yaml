@@ -44,9 +44,9 @@ jobs:
               sed 's|.*/||' | \
               sort -V | \
               tail -n1)
-            echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
+            echo "LATEST_TAG=$LATEST_TAG" >> "$GITHUB_ENV"
           else
-            echo "LATEST_TAG=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
+            echo "LATEST_TAG=${{ github.event.inputs.tag }}" >> "$GITHUB_ENV"
           fi
 
       - name: Check if update is needed
@@ -57,14 +57,14 @@ jobs:
             echo "Platform branch is already up-to-date."
             exit 1
           fi
-          echo "CURRENT_TAG=$CURRENT_TAG" >> $GITHUB_ENV
+          echo "CURRENT_TAG=$CURRENT_TAG" >> "$GITHUB_ENV"
 
       - name: Check for existing PR
         id: check-pr
         run: |
           EXISTING_PR=$(gh pr list --head update-platform-branch --json number --jq '.[0].number')
           if [ -n "$EXISTING_PR" ]; then
-            echo "EXISTING_PR=$EXISTING_PR" >> $GITHUB_ENV
+            echo "EXISTING_PR=$EXISTING_PR" >> "$GITHUB_OUTPUT"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
