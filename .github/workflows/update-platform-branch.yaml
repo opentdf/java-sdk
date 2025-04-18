@@ -7,6 +7,8 @@ name: "Update Platform Branch"
 #   `act workflow_dispatch -W ./.github/workflows/update-platform-branch.yaml --input tag=protocol/go/v0.3.1`
 
 on:
+  schedule:
+    - cron: "0 0 * * *" # Runs daily at midnight UTC
   workflow_call:
     inputs:
       tag:
@@ -29,75 +31,89 @@ jobs:
 
     steps:
       - name: Checkout java-sdk repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v3
         with:
-          persist-credentials: true # Required for "commit changes" and push steps below
+          persist-credentials: true
 
-      - name: Validate tag as a valid git ref
+      - name: Fetch latest semver tag for protocol/go
+        id: fetch-latest-tag
         run: |
-          if ! echo "$TAG" | grep -Eq "^[a-zA-Z0-9._\-\/]+$"; then
-            echo "Invalid tag format: [$TAG]"
+          if [ -z "${{ github.event.inputs.tag }}" ]; then
+            LATEST_TAG=$(git ls-remote --tags https://github.com/opentdf/platform.git | \
+              grep "refs/tags/protocol/go" | \
+              sed 's|.*/||' | \
+              sort -V | \
+              tail -n1)
+            echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
+          else
+            echo "LATEST_TAG=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
+          fi
+
+      - name: Check if update is needed
+        id: check-update
+        run: |
+          CURRENT_TAG=$(grep -oP '<platform.branch>\K.*(?=</platform.branch>)' pom.xml | head -n1)
+          if [ "$CURRENT_TAG" = "$LATEST_TAG" ]; then
+            echo "Platform branch is already up-to-date."
             exit 1
           fi
-          echo "TAG=$TAG" >> $GITHUB_ENV
+          echo "CURRENT_TAG=$CURRENT_TAG" >> $GITHUB_ENV
+
+      - name: Check for existing PR
+        id: check-pr
+        run: |
+          EXISTING_PR=$(gh pr list --head update-platform-branch --json number --jq '.[0].number')
+          if [ -n "$EXISTING_PR" ]; then
+            echo "EXISTING_PR=$EXISTING_PR" >> $GITHUB_ENV
+          fi
         env:
-          TAG: ${{ github.event.inputs.tag }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check if tag exists in the repository
+      - name: Check out existing PR
+        if: steps.check-pr.outputs.EXISTING_PR != ''
         run: |
-          if ! git ls-remote --exit-code --heads --tags https://github.com/opentdf/platform.git "$TAG"; then
-            echo "Tag or branch [$TAG] does not exist in the platform repository."
-            exit 1
-          fi
+          git fetch origin update-platform-branch:update-platform-branch
+          git checkout update-platform-branch
 
       - name: Update platform.branch in pom.xml files
         run: |
-            find . -name "pom.xml" -exec sed -i.bak "s|<platform.branch>.*</platform.branch>|<platform.branch>${TAG}</platform.branch>|g" {} \;
-            CHANGED_FILES=$(find . -name "pom.xml" -exec diff -u {} {}.bak \;)
-            if [ -z "$CHANGED_FILES" ]; then
-              echo "No changes detected in pom.xml files." | tee -a $GITHUB_STEP_SUMMARY
-              find . -name "pom.xml.bak" -delete
-              exit 1
-            fi
-            echo "The following pom.xml files were updated: $CHANGED_FILES"
+          find . -name "pom.xml" -exec sed -i.bak "s|<platform.branch>.*</platform.branch>|<platform.branch>${LATEST_TAG}</platform.branch>|g" {} \;
+          CHANGED_FILES=$(find . -name "pom.xml" -exec diff -u {} {}.bak \;)
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No changes detected in pom.xml files." | tee -a $GITHUB_STEP_SUMMARY
             find . -name "pom.xml.bak" -delete
-
-      - name: Fetch release notes for the tag
-        id: fetch-release-notes
-        run: |
-          RELEASE_URL="https://api.github.com/repos/opentdf/platform/releases/tags/$TAG"
-          RESPONSE=$(curl -s -H "Accept: application/vnd.github.v3+json" "$RELEASE_URL")
-          RELEASE_NOTES=$(echo "$RESPONSE" | jq -r '.body // ""')
-          if [ "$RELEASE_NOTES" = "" ]; then
-            echo "No release notes found for tag $TAG."
+            exit 1
           fi
-          echo "RELEASE_NOTES=$RELEASE_NOTES" >> $GITHUB_ENV
-          echo "RELEASE_URL=https://github.com/opentdf/platform/releases/tag/$TAG" >> $GITHUB_ENV
+          echo "The following pom.xml files were updated: $CHANGED_FILES"
+          find . -name "pom.xml.bak" -delete
 
-      - name: Commit changes
+      - name: Create new branch
+        if: steps.check-pr.outputs.EXISTING_PR == ''
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b update-platform-branch
           git add .
-          if [ -n "$RELEASE_NOTES" ]; then
-            git commit -m "fix(sdk): Updates to proto version $TAG\n\nRelease Notes:\n$RELEASE_NOTES\n\nSee the release: $RELEASE_URL"
-          else
-            git commit -m "fix(sdk): Updates to proto version $TAG\n\nSee the release: $RELEASE_URL"
-          fi
+          git commit -m "fix(sdk): Updates to proto version $LATEST_TAG"
           git push origin update-platform-branch
 
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
+      - name: Update existing PR
+        if: steps.check-pr.outputs.EXISTING_PR != ''
+        run: |
+          git add .
+          git commit --amend --no-edit
+          git push origin update-platform-branch --force
+
+      - name: Create New PR
+        if: steps.check-pr.outputs.EXISTING_PR == ''
+        uses: peter-evans/create-pull-request@v7.0.8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "fix(sdk): Updates to proto version ${{ github.event.inputs.tag }}"
+          commit-message: "fix(sdk): Updates to proto version $LATEST_TAG"
           branch: update-platform-branch
-          title: "fix(sdk): Updates to proto version ${{ github.event.inputs.tag }}"
+          title: "fix(sdk): Updates to proto version $LATEST_TAG"
           body: |
-            This PR updates the platform.branch property in all pom.xml files to the new tag or branch: ${{ github.event.inputs.tag }}.
+            This PR updates the platform.branch property in all pom.xml files to the new tag or branch: $LATEST_TAG.
 
-            See the release: $RELEASE_URL
+            See the release: https://github.com/opentdf/platform/releases/tag/$LATEST_TAG
 
             Release Notes:
             $RELEASE_NOTES
