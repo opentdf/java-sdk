@@ -2,11 +2,11 @@ package io.opentdf.platform.sdk;
 
 import com.connectrpc.Interceptor;
 import com.connectrpc.impl.ProtocolClient;
-import io.opentdf.platform.authorization.AuthorizationServiceClient;
-import io.opentdf.platform.policy.attributes.AttributesServiceClient;
-import io.opentdf.platform.policy.namespaces.NamespaceServiceClient;
-import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceClient;
-import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClient;
+import io.opentdf.platform.generated.authorization.AuthorizationServiceClient;
+import io.opentdf.platform.generated.policy.attributes.AttributesServiceClient;
+import io.opentdf.platform.generated.policy.namespaces.NamespaceServiceClient;
+import io.opentdf.platform.generated.policy.resourcemapping.ResourceMappingServiceClient;
+import io.opentdf.platform.generated.policy.subjectmapping.SubjectMappingServiceClient;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,7 +65,7 @@ public class SDK implements AutoCloseable {
 
         NamespaceServiceClient namespaces();
 
-        SubjectMappingServiceClient  subjectMappings();
+        SubjectMappingServiceClient subjectMappings();
 
         ResourceMappingServiceClient resourceMappings();
 

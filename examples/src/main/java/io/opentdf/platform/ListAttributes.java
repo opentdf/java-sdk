@@ -1,12 +1,12 @@
 package io.opentdf.platform;
+import com.connectrpc.ResponseMessageKt;
+import io.opentdf.platform.generated.policy.Attribute;
+import io.opentdf.platform.generated.policy.attributes.ListAttributesRequest;
+import io.opentdf.platform.generated.policy.attributes.ListAttributesResponse;
 import io.opentdf.platform.sdk.*;
 
+import java.util.Collections;
 import java.util.concurrent.ExecutionException;
-
-import io.opentdf.platform.policy.AttributeRuleTypeEnum;
-
-import io.opentdf.platform.policy.attributes.*;
-import io.opentdf.platform.policy.Attribute;
 
 import java.util.List;
 
@@ -25,7 +25,7 @@ public class ListAttributes {
         ListAttributesRequest request = ListAttributesRequest.newBuilder()
         .setNamespace("mynamespace.com").build();
 
-        ListAttributesResponse resp = sdk.getServices().attributes().listAttributes(request).get();
+        ListAttributesResponse resp = ResponseMessageKt.getOrThrow(sdk.getServices().attributes().listAttributesBlocking(request, Collections.emptyMap()).execute());
 
         List<Attribute> attributes = resp.getAttributesList();
 

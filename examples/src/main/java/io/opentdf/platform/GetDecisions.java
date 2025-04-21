@@ -1,10 +1,17 @@
 package io.opentdf.platform;
+import com.connectrpc.ResponseMessageKt;
+import io.opentdf.platform.generated.authorization.DecisionRequest;
+import io.opentdf.platform.generated.authorization.DecisionResponse;
+import io.opentdf.platform.generated.authorization.Entity;
+import io.opentdf.platform.generated.authorization.EntityChain;
+import io.opentdf.platform.generated.authorization.GetDecisionsRequest;
+import io.opentdf.platform.generated.authorization.GetDecisionsResponse;
+import io.opentdf.platform.generated.authorization.ResourceAttribute;
+import io.opentdf.platform.generated.policy.Action;
 import io.opentdf.platform.sdk.*;
 
+import java.util.Collections;
 import java.util.concurrent.ExecutionException;
-
-import io.opentdf.platform.authorization.*;
-import io.opentdf.platform.policy.Action;
 
 import java.util.List;
 
@@ -28,7 +35,7 @@ public class GetDecisions {
             .addAttributeValueFqns("https://mynamespace.com/attr/test/value/test1"))
         ).build();
 
-        GetDecisionsResponse resp = sdk.getServices().authorization().getDecisions(request).get();
+        GetDecisionsResponse resp = ResponseMessageKt.getOrThrow(sdk.getServices().authorization().getDecisionsBlocking(request, Collections.emptyMap()).execute());
 
         List<DecisionResponse> decisions = resp.getDecisionResponsesList();
 

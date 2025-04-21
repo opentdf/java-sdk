@@ -1,11 +1,14 @@
 package io.opentdf.platform;
+import com.connectrpc.ResponseMessageKt;
+import grpc.gateway.protoc_gen_openapiv2.options.Response;
+import io.opentdf.platform.generated.policy.Action;
+import io.opentdf.platform.generated.policy.SubjectMapping;
+import io.opentdf.platform.generated.policy.subjectmapping.CreateSubjectMappingRequest;
+import io.opentdf.platform.generated.policy.subjectmapping.CreateSubjectMappingResponse;
 import io.opentdf.platform.sdk.*;
 
+import java.util.Collections;
 import java.util.concurrent.ExecutionException;
-
-import io.opentdf.platform.policy.subjectmapping.*;
-import io.opentdf.platform.policy.SubjectMapping;
-import io.opentdf.platform.policy.Action;
 
 public class CreateSubjectMapping {
     public static void main(String[] args) throws ExecutionException, InterruptedException{
@@ -25,7 +28,7 @@ public class CreateSubjectMapping {
         .setExistingSubjectConditionSetId("9009fde8-d22b-4dfb-a456-f9ce6943244a")
         .build();
 
-        CreateSubjectMappingResponse resp = sdk.getServices().subjectMappings().createSubjectMapping(request).get();
+        CreateSubjectMappingResponse resp = ResponseMessageKt.getOrThrow(sdk.getServices().subjectMappings().createSubjectMappingBlocking(request, Collections.emptyMap()).execute());
 
         SubjectMapping sm = resp.getSubjectMapping();
 

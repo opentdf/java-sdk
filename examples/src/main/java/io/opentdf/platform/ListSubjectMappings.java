@@ -1,10 +1,12 @@
 package io.opentdf.platform;
+import com.connectrpc.ResponseMessageKt;
+import io.opentdf.platform.generated.policy.SubjectMapping;
+import io.opentdf.platform.generated.policy.subjectmapping.ListSubjectMappingsRequest;
+import io.opentdf.platform.generated.policy.subjectmapping.ListSubjectMappingsResponse;
 import io.opentdf.platform.sdk.*;
 
+import java.util.Collections;
 import java.util.concurrent.ExecutionException;
-
-import io.opentdf.platform.policy.subjectmapping.*;
-import io.opentdf.platform.policy.SubjectMapping;
 
 import java.util.List;
 
@@ -22,7 +24,7 @@ public class ListSubjectMappings {
     
         ListSubjectMappingsRequest request = ListSubjectMappingsRequest.newBuilder().build();
 
-        ListSubjectMappingsResponse resp = sdk.getServices().subjectMappings().listSubjectMappings(request).get();
+        ListSubjectMappingsResponse resp = ResponseMessageKt.getOrThrow(sdk.getServices().subjectMappings().listSubjectMappingsBlocking(request, Collections.emptyMap()).execute());
 
         List<SubjectMapping> sms = resp.getSubjectMappingsList();
 

@@ -1,10 +1,13 @@
 package io.opentdf.platform;
+import com.connectrpc.ResponseMessageKt;
+import io.opentdf.platform.generated.policy.Namespace;
+import io.opentdf.platform.generated.policy.namespaces.ListNamespacesRequest;
+import io.opentdf.platform.generated.policy.namespaces.ListNamespacesResponse;
 import io.opentdf.platform.sdk.*;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
-
-import io.opentdf.platform.policy.namespaces.*;
-import io.opentdf.platform.policy.Namespace;
 
 public class ListNamespaces {
     public static void main(String[] args) throws ExecutionException, InterruptedException{
@@ -20,8 +23,8 @@ public class ListNamespaces {
 
         ListNamespacesRequest request = ListNamespacesRequest.newBuilder().build();
 
-        ListNamespacesResponse resp = sdk.getServices().namespaces().listNamespaces(request).get();
+        ListNamespacesResponse resp = ResponseMessageKt.getOrThrow(sdk.getServices().namespaces().listNamespacesBlocking(request, Collections.emptyMap()).execute());
 
-        java.util.List<Namespace> namespaces = resp.getNamespacesList();
+        List<Namespace> namespaces = resp.getNamespacesList();
     }
 }

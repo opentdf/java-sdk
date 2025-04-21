@@ -11,15 +11,15 @@ import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
-import io.opentdf.platform.kas.AccessServiceGrpc;
-import io.opentdf.platform.kas.RewrapRequest;
-import io.opentdf.platform.kas.RewrapResponse;
-import io.opentdf.platform.policy.namespaces.GetNamespaceRequest;
-import io.opentdf.platform.policy.namespaces.GetNamespaceResponse;
-import io.opentdf.platform.policy.namespaces.NamespaceServiceGrpc;
-import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRequest;
-import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
-import io.opentdf.platform.wellknownconfiguration.WellKnownServiceGrpc;
+import io.opentdf.platform.generated.kas.AccessServiceGrpc;
+import io.opentdf.platform.generated.kas.RewrapRequest;
+import io.opentdf.platform.generated.kas.RewrapResponse;
+import io.opentdf.platform.generated.policy.namespaces.GetNamespaceRequest;
+import io.opentdf.platform.generated.policy.namespaces.GetNamespaceResponse;
+import io.opentdf.platform.generated.policy.namespaces.NamespaceServiceGrpc;
+import io.opentdf.platform.generated.wellknownconfiguration.GetWellKnownConfigurationRequest;
+import io.opentdf.platform.generated.wellknownconfiguration.GetWellKnownConfigurationResponse;
+import io.opentdf.platform.generated.wellknownconfiguration.WellKnownServiceGrpc;
 import nl.altindag.ssl.SSLFactory;
 import nl.altindag.ssl.pem.util.PemUtils;
 import nl.altindag.ssl.util.KeyStoreUtils;
@@ -157,7 +157,7 @@ public class SDKBuilderTest {
             WellKnownServiceGrpc.WellKnownServiceImplBase wellKnownService = new WellKnownServiceGrpc.WellKnownServiceImplBase() {
                 @Override
                 public void getWellKnownConfiguration(GetWellKnownConfigurationRequest request,
-                        StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
+                                                      StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
                     var val = Value.newBuilder().setStringValue(issuer).build();
                     var config = Struct.newBuilder().putFields("platform_issuer", val).build();
                     var response = GetWellKnownConfigurationResponse
@@ -189,7 +189,7 @@ public class SDKBuilderTest {
                     .addService(new NamespaceServiceGrpc.NamespaceServiceImplBase() {
                         @Override
                         public void getNamespace(GetNamespaceRequest request,
-                                StreamObserver<GetNamespaceResponse> responseObserver) {
+                                                 StreamObserver<GetNamespaceResponse> responseObserver) {
                             var val = Value.newBuilder().setStringValue(issuer).build();
                             var response = GetNamespaceResponse
                                     .newBuilder()

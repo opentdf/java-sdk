@@ -1,16 +1,18 @@
 package io.opentdf.platform;
+import com.connectrpc.ResponseMessageKt;
+import io.opentdf.platform.generated.policy.Condition;
+import io.opentdf.platform.generated.policy.ConditionBooleanTypeEnum;
+import io.opentdf.platform.generated.policy.ConditionGroup;
+import io.opentdf.platform.generated.policy.SubjectConditionSet;
+import io.opentdf.platform.generated.policy.SubjectMappingOperatorEnum;
+import io.opentdf.platform.generated.policy.SubjectSet;
+import io.opentdf.platform.generated.policy.subjectmapping.CreateSubjectConditionSetRequest;
+import io.opentdf.platform.generated.policy.subjectmapping.CreateSubjectConditionSetResponse;
+import io.opentdf.platform.generated.policy.subjectmapping.SubjectConditionSetCreate;
 import io.opentdf.platform.sdk.*;
 
+import java.util.Collections;
 import java.util.concurrent.ExecutionException;
-
-import io.opentdf.platform.policy.subjectmapping.*;
-import io.opentdf.platform.policy.SubjectMapping;
-import io.opentdf.platform.policy.SubjectConditionSet;
-import io.opentdf.platform.policy.SubjectSet;
-import io.opentdf.platform.policy.ConditionGroup;
-import io.opentdf.platform.policy.Condition;
-import io.opentdf.platform.policy.ConditionBooleanTypeEnum;
-import io.opentdf.platform.policy.SubjectMappingOperatorEnum;
 
 
 public class CreateSubjectConditionSet {
@@ -38,7 +40,7 @@ public class CreateSubjectConditionSet {
             SubjectConditionSetCreate.newBuilder().addSubjectSets(subjectset))
         .build();
 
-        CreateSubjectConditionSetResponse resp = sdk.getServices().subjectMappings().createSubjectConditionSet(request).get();
+        CreateSubjectConditionSetResponse resp = ResponseMessageKt.getOrThrow(sdk.getServices().subjectMappings().createSubjectConditionSetBlocking(request, Collections.emptyMap()).execute());
 
         SubjectConditionSet scs = resp.getSubjectConditionSet();
 
