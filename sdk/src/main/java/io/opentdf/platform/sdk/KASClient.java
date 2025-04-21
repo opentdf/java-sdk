@@ -11,11 +11,11 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import io.grpc.StatusRuntimeException;
 import io.grpc.Status;
-import io.opentdf.platform.kas.AccessServiceClient;
-import io.opentdf.platform.kas.PublicKeyRequest;
-import io.opentdf.platform.kas.PublicKeyResponse;
-import io.opentdf.platform.kas.RewrapRequest;
-import io.opentdf.platform.kas.RewrapResponse;
+import io.opentdf.platform.generated.kas.AccessServiceClient;
+import io.opentdf.platform.generated.kas.PublicKeyRequest;
+import io.opentdf.platform.generated.kas.PublicKeyResponse;
+import io.opentdf.platform.generated.kas.RewrapRequest;
+import io.opentdf.platform.generated.kas.RewrapResponse;
 import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
@@ -31,6 +31,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.function.Function;
@@ -69,6 +70,12 @@ public class KASClient implements SDK.KAS {
             throw new SDKException("error creating dpop signer", e);
         }
         this.kasKeyCache = new KASKeyCache();
+    }
+
+    public KASClient(Function<String, AccessServiceClient> channelFactory, boolean usePlaintext, RSASSASigner signer) {
+        this.channelFactory = channelFactory;
+        this.usePlaintext = usePlaintext;
+        this.signer = signer;
     }
 
     @Override
@@ -221,7 +228,7 @@ public class KASClient implements SDK.KAS {
                 .build();
         RewrapResponse response;
         try {
-            var req = getStub(keyAccess.url).rewrapBlocking(request, MapsKt.mapOf()).execute();
+            var req = getStub(keyAccess.url).rewrapBlocking(request, Collections.emptyMap()).execute();
             try {
                 response = getOrThrow(req);
             } catch (Exception e) {
@@ -290,7 +297,7 @@ public class KASClient implements SDK.KAS {
                 .setSignedRequestToken(jwt.serialize())
                 .build();
 
-        var request = getStub(keyAccess.url).rewrapBlocking(req, MapsKt.mapOf()).execute();
+        var request = getStub(keyAccess.url).rewrapBlocking(req, Collections.emptyMap()).execute();
         RewrapResponse response;
         try {
             response = getOrThrow(request);

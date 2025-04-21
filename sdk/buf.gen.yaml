@@ -10,7 +10,7 @@ managed:
       module: buf.build/grpc-ecosystem/grpc-gateway
   override:
     - file_option: java_package_prefix
-      value: io.opentdf.platform
+      value: io.opentdf.platform.generated
 plugins:
   - remote: buf.build/protocolbuffers/java:v25.3
     out: ./
@@ -19,6 +19,4 @@ plugins:
   - remote: buf.build/connectrpc/kotlin
     out: ./
     opt:
-      - generateCallbackMethods=true
-      - generateCoroutineMethods=true
       - generateBlockingUnaryMethods=true

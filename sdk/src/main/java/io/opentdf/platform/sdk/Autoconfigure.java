@@ -1,18 +1,16 @@
 package io.opentdf.platform.sdk;
 
-import com.connectrpc.ResponseMessage;
 import com.connectrpc.ResponseMessageKt;
-import io.opentdf.platform.policy.Attribute;
-import io.opentdf.platform.policy.AttributeRuleTypeEnum;
-import io.opentdf.platform.policy.AttributeValueSelector;
-import io.opentdf.platform.policy.KasPublicKey;
-import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
-import io.opentdf.platform.policy.KeyAccessServer;
-import io.opentdf.platform.policy.Value;
-import io.opentdf.platform.policy.attributes.AttributesServiceClient;
-import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
-import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
-import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse.AttributeAndValue;
+import io.opentdf.platform.generated.policy.Attribute;
+import io.opentdf.platform.generated.policy.AttributeRuleTypeEnum;
+import io.opentdf.platform.generated.policy.AttributeValueSelector;
+import io.opentdf.platform.generated.policy.KasPublicKey;
+import io.opentdf.platform.generated.policy.KasPublicKeyAlgEnum;
+import io.opentdf.platform.generated.policy.KeyAccessServer;
+import io.opentdf.platform.generated.policy.Value;
+import io.opentdf.platform.generated.policy.attributes.AttributesServiceClient;
+import io.opentdf.platform.generated.policy.attributes.GetAttributeValuesByFqnsRequest;
+import io.opentdf.platform.generated.policy.attributes.GetAttributeValuesByFqnsResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -690,7 +688,7 @@ public class Autoconfigure {
             if (!v.hasAttribute()) {
                 throw new AutoConfigureException("tried to use an attribute that is not initialized");
             }
-            return AttributeAndValue.newBuilder()
+            return GetAttributeValuesByFqnsResponse.AttributeAndValue.newBuilder()
                     .setValue(v)
                     .setAttribute(v.getAttribute())
                     .build();
@@ -713,8 +711,8 @@ public class Autoconfigure {
         return getGranter(keyCache, new ArrayList<>(av.getFqnAttributeValuesMap().values()));
     }
 
-    private static Granter getGranter(@Nullable KASKeyCache keyCache, List<AttributeAndValue> values) {
-        Granter grants = new Granter(values.stream().map(AttributeAndValue::getValue).map(Value::getFqn).map(AttributeValueFQN::new).collect(Collectors.toList()));
+    private static Granter getGranter(@Nullable KASKeyCache keyCache, List<GetAttributeValuesByFqnsResponse.AttributeAndValue> values) {
+        Granter grants = new Granter(values.stream().map(GetAttributeValuesByFqnsResponse.AttributeAndValue::getValue).map(Value::getFqn).map(AttributeValueFQN::new).collect(Collectors.toList()));
 
         for (var attributeAndValue: values) {
             var val = attributeAndValue.getValue();
