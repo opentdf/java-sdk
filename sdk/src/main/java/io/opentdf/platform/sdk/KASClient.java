@@ -23,10 +23,6 @@ import io.opentdf.platform.sdk.TDF.KasBadRequestException;
 
 import kotlin.collections.MapsKt;
 
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -126,38 +122,6 @@ public class KASClient implements SDK.KAS {
     @Override
     public KASKeyCache getKeyCache() {
         return this.kasKeyCache;
-    }
-
-    private String normalizeAddress(String urlString) {
-        URL url;
-        try {
-            url = new URL(urlString);
-        } catch (MalformedURLException e) {
-            url = tryParseHostAndPort(urlString);
-        }
-        final int port = url.getPort() == -1 ? ("http".equals(url.getProtocol()) ? 80 : 443 ) : url.getPort();
-        final String protocol = usePlaintext && "http".equals(url.getProtocol()) ? "http" : "https";
-
-        try {
-            return new URL(protocol, url.getHost(), port, "").toString();
-        } catch (MalformedURLException e) {
-            throw new SDKException("error creating KAS address", e);
-        }
-    }
-
-    private URL tryParseHostAndPort(String urlString) {
-        URI uri;
-        try {
-            uri = new URI(null, urlString, null, null, null).parseServerAuthority();
-        } catch (URISyntaxException e) {
-            throw new SDKException("error trying to parse host and port", e);
-        }
-
-        try {
-            return new URL(uri.getPort() == 80 ? "http" : "https", uri.getHost(), uri.getPort(), "");
-        } catch (MalformedURLException e) {
-            throw new SDKException("error trying to create URL from host and port", e);
-        }
     }
 
     @Override
@@ -329,6 +293,6 @@ public class KASClient implements SDK.KAS {
 
     // make this protected so we can test the address normalization logic
     synchronized AccessServiceClient getStub(String url) {
-        return stubs.computeIfAbsent(normalizeAddress(url), channelFactory);
+        return stubs.computeIfAbsent(SDKBuilder.normalizeAddress(url, usePlaintext), channelFactory);
     }
 }
