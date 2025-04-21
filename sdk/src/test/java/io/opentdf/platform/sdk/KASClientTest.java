@@ -72,7 +72,7 @@ public class KASClientTest {
             var keypair = CryptoUtils.generateRSAKeypair();
             var dpopKey = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).privateKey(keypair.getPrivate())
                     .build();
-            try (var kas = new KASClient(aclientFactory, dpopKey, false)) {
+            try (var kas = new KASClient(aclientFactory, dpopKey, true)) {
                 Config.KASInfo kasInfo = new Config.KASInfo();
                 kasInfo.URL = "http://localhost:" + rewrapServer.getPort();
                 assertThat(kas.getPublicKey(kasInfo).PublicKey).isEqualTo("тај је клуц");
@@ -102,7 +102,7 @@ public class KASClientTest {
             var keypair = CryptoUtils.generateRSAKeypair();
             var dpopKey = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).privateKey(keypair.getPrivate())
                     .build();
-            try (var kas = new KASClient(aclientFactory, dpopKey, false)) {
+            try (var kas = new KASClient(aclientFactory, dpopKey, true)) {
                 Config.KASInfo kasInfo = new Config.KASInfo();
                 kasInfo.URL = "http://localhost:" + server.getPort();
                 assertThat(kas.getPublicKey(kasInfo).KID).isEqualTo("r1");
@@ -167,7 +167,7 @@ public class KASClientTest {
             rewrapServer = startServer(accessService);
             byte[] plaintextKey;
             byte[] rewrapResponse;
-            try (var kas = new KASClient(aclientFactory, dpopKey, false)) {
+            try (var kas = new KASClient(aclientFactory, dpopKey, true)) {
 
                 Manifest.KeyAccess keyAccess = new Manifest.KeyAccess();
                 keyAccess.url = "http://localhost:" + rewrapServer.getPort();
