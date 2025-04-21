@@ -257,7 +257,6 @@ public class SDKBuilder {
             if (sslFactory != null) {
                 c.sslSocketFactory(sslFactory.getSslSocketFactory(), sslFactory.getTrustManager().get());
             }
-
             var as = new ProtocolClient(
                     new ConnectOkHttpClient(c.build()),
                     new ProtocolClientConfig(endpoint,
@@ -268,10 +267,8 @@ public class SDKBuilder {
                             List.of(_ignored -> interceptor)
                     )
             );
-
             return new AccessServiceClient(as);
         };
-
         return new KASClient(clientFactory, dpopKey, usePlainText);
     }
 
@@ -304,7 +301,6 @@ public class SDKBuilder {
 
         return new ProtocolClient(new ConnectOkHttpClient(httpClient.build()), protocolClientConfig);
     }
-
 
     SSLFactory getSslFactory() {
         return this.sslFactory;
