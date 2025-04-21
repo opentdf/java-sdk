@@ -2,6 +2,7 @@ package io.opentdf.platform.sdk;
 
 import com.connectrpc.Interceptor;
 import com.connectrpc.ProtocolClientConfig;
+import com.connectrpc.ResponseMessageKt;
 import com.connectrpc.extensions.GoogleJavaProtobufStrategy;
 import com.connectrpc.impl.ProtocolClient;
 import com.connectrpc.okhttp.ConnectOkHttpClient;
@@ -166,7 +167,7 @@ public class SDKBuilder {
         bootstrapClient = getProtocolClient(platformEndpoint) ;
         var stub = new WellKnownServiceClient(bootstrapClient);
         try {
-            config = Helpers.call(stub.getWellKnownConfigurationBlocking(GetWellKnownConfigurationRequest.getDefaultInstance(), Collections.emptyMap()));
+            config = ResponseMessageKt.getOrThrow(stub.getWellKnownConfigurationBlocking(GetWellKnownConfigurationRequest.getDefaultInstance(), Collections.emptyMap()).execute());
         } catch (StatusRuntimeException e) {
             Status status = Status.fromThrowable(e);
             throw new SDKException(String.format("Got grpc status [%s] when getting configuration", status), e);

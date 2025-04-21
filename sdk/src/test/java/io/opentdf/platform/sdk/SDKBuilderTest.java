@@ -1,5 +1,6 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.ResponseMessageKt;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
 import io.grpc.Metadata;
@@ -42,6 +43,7 @@ import java.security.KeyStore;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -271,7 +273,7 @@ public class SDKBuilderTest {
                     .setBody("{\"access_token\": \"hereisthetoken\", \"token_type\": \"Bearer\"}")
                     .setHeader("Content-Type", "application/json"));
 
-            var ignored = Helpers.call(services.namespaces().getNamespaceBlocking(GetNamespaceRequest.getDefaultInstance(), Helpers.noHeaders()));
+            var ignored = ResponseMessageKt.getOrThrow(services.namespaces().getNamespaceBlocking(GetNamespaceRequest.getDefaultInstance(), Collections.emptyMap()).execute());
 
             // we've now made two requests. one to get the bootstrapping info and one
             // call that should activate the token fetching logic
@@ -399,7 +401,7 @@ public class SDKBuilderTest {
             assertThat(sdk.getAuthInterceptor()).isEmpty();
 
             try {
-                Helpers.getNamespace(sdk.getServices().namespaces(), GetNamespaceRequest.getDefaultInstance());
+                ResponseMessageKt.getOrThrow(sdk.getServices().namespaces().getNamespaceBlocking(GetNamespaceRequest.getDefaultInstance(), Collections.emptyMap()).execute());
             } catch (StatusRuntimeException ignored) {}
 
             assertThat(getNsCalled.get()).isTrue();

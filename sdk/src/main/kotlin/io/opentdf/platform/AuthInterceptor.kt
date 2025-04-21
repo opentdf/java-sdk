@@ -23,12 +23,8 @@ private class AuthInterceptor(private val ts: TokenSource) : Interceptor{
                     methodSpec = request.methodSpec,
                 )
             },
-            requestBodyFunction = { resp ->
-                resp
-            },
-            streamResultFunction = { streamResult ->
-                streamResult
-            },
+            requestBodyFunction = { resp -> resp },
+            streamResultFunction = { streamResult -> streamResult },
         )
     }
 
