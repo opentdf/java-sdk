@@ -377,39 +377,39 @@
                     </execution>
                 </executions>
             </plugin>
-<!--            <plugin>-->
-<!--                <groupId>org.apache.maven.plugins</groupId>-->
-<!--                <artifactId>maven-antrun-plugin</artifactId>-->
-<!--                <version>3.1.0</version>-->
-<!--                <executions>-->
-<!--                    &lt;!&ndash; Generate Sources Execution under target/generated-sources &ndash;&gt;-->
-<!--                    <execution>-->
-<!--                        <id>generateSources</id>-->
-<!--                        <phase>generate-sources</phase>-->
-<!--                        <configuration>-->
-<!--                            <target>-->
-<!--                                &lt;!&ndash; Generate OpenTDF Platform Protobuf &ndash;&gt;-->
-<!--                                <exec executable="buf" dir="." failOnError="true">-->
-<!--                                    <arg value="generate"/>-->
-<!--                                    <arg value="https://github.com/opentdf/platform.git#branch=main,subdir=service"/>-->
-<!--                                    <arg value="-o"/>-->
-<!--                                    <arg value="target/generated-sources"/>-->
-<!--                                </exec>-->
-<!--                                &lt;!&ndash; Generate gRPC Protobuf &ndash;&gt;-->
-<!--                                <exec executable="buf" dir="." failOnError="true">-->
-<!--                                    <arg value="generate"/>-->
-<!--                                    <arg value="buf.build/grpc-ecosystem/grpc-gateway"/>-->
-<!--                                    <arg value="-o"/>-->
-<!--                                    <arg value="target/generated-sources"/>-->
-<!--                                </exec>-->
-<!--                            </target>-->
-<!--                        </configuration>-->
-<!--                        <goals>-->
-<!--                            <goal>run</goal>-->
-<!--                        </goals>-->
-<!--                    </execution>-->
-<!--                </executions>-->
-<!--            </plugin>-->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <!-- Generate Sources Execution under target/generated-sources -->
+                    <execution>
+                        <id>generateSources</id>
+                        <phase>generate-sources</phase>
+                        <configuration>
+                            <target>
+                                <!-- Generate OpenTDF Platform Protobuf -->
+                                <exec executable="buf" dir="." failOnError="true">
+                                    <arg value="generate"/>
+                                    <arg value="https://github.com/opentdf/platform.git#branch=main,subdir=service"/>
+                                    <arg value="-o"/>
+                                    <arg value="target/generated-sources"/>
+                                </exec>
+                                <!-- Generate gRPC Protobuf -->
+                                <exec executable="buf" dir="." failOnError="true">
+                                    <arg value="generate"/>
+                                    <arg value="buf.build/grpc-ecosystem/grpc-gateway"/>
+                                    <arg value="-o"/>
+                                    <arg value="target/generated-sources"/>
+                                </exec>
+                            </target>
+                        </configuration>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <!-- Add Generate Sources Directory -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
