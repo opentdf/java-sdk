@@ -592,18 +592,6 @@ public class AutoconfigureTest {
                     }
             );
 
-//                AttributesServiceGrpc.AttributesServiceFutureStub attributeGrpcStub = mock(
-//                        AttributesServiceGrpc.AttributesServiceFutureStub.class);
-//                lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
-//                        .thenAnswer(
-//                                invocation -> {
-//                                    GetAttributeValuesByFqnsResponse resp = getResponse(
-//                                            (GetAttributeValuesByFqnsRequest) invocation.getArguments()[0]);
-//                                    SettableFuture<GetAttributeValuesByFqnsResponse> future = SettableFuture.create();
-//                                    future.set(resp); // Set the request as the future's result
-//                                    return future;
-//                                });
-
             Granter reasoner = Autoconfigure.newGranterFromService(attributeService, new KASKeyCache(),
                     tc.getPolicy().toArray(new AttributeValueFQN[0]));
             assertThat(reasoner).isNotNull();
