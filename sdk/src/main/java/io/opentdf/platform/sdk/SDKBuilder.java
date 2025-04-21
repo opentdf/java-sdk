@@ -292,30 +292,7 @@ public class SDKBuilder {
 
     @Nonnull
     private KASClient getKASClient(RSAKey dpopKey, Interceptor interceptor) {
-        Function<String, AccessServiceClient> clientFactory = (String endpoint) -> {
-            var c = new OkHttpClient.Builder();
-            if (usePlainText) {
-                c.protocols(List.of(Protocol.H2_PRIOR_KNOWLEDGE));
-            }
-            if (sslFactory != null) {
-                if (sslFactory.getTrustManager().isEmpty()) {
-                    throw new SDKException("SSL factory must have a trust manager");
-                }
-                c.sslSocketFactory(sslFactory.getSslSocketFactory(), sslFactory.getTrustManager().get());
-            }
-            var as = new ProtocolClient(
-                    new ConnectOkHttpClient(c.build()),
-                    new ProtocolClientConfig(endpoint,
-                            new GoogleJavaProtobufStrategy(),
-                            NetworkProtocol.GRPC,
-                            null,
-                            GETConfiguration.Enabled.INSTANCE,
-                            List.of(_ignored -> interceptor)
-                    )
-            );
-            return new AccessServiceClient(as);
-        };
-        return new KASClient(clientFactory, dpopKey, usePlainText);
+        return new KASClient((String endpoint) -> new AccessServiceClient(getProtocolClient(endpoint, interceptor)), dpopKey, usePlainText);
     }
 
     public SDK build() {
@@ -333,9 +310,11 @@ public class SDKBuilder {
             httpClient.protocols(List.of(Protocol.H2_PRIOR_KNOWLEDGE));
         }
         if (sslFactory != null) {
+            if (sslFactory.getTrustManager().isEmpty()) {
+                throw new SDKException("SSL factory must have a trust manager");
+            }
             httpClient.sslSocketFactory(sslFactory.getSslSocketFactory(), sslFactory.getTrustManager().get());
         }
-
         var protocolClientConfig = new ProtocolClientConfig(
                 endpoint,
                 new GoogleJavaProtobufStrategy(),
