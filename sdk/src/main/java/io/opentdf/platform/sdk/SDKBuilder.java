@@ -34,11 +34,13 @@ import nl.altindag.ssl.SSLFactory;
 import nl.altindag.ssl.pem.util.PemUtils;
 import okhttp3.OkHttpClient;
 import okhttp3.Protocol;
+import okhttp3.internal.platform.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509ExtendedTrustManager;
 import java.io.File;
 import java.io.FileInputStream;
@@ -296,6 +298,9 @@ public class SDKBuilder {
                 c.protocols(List.of(Protocol.H2_PRIOR_KNOWLEDGE));
             }
             if (sslFactory != null) {
+                if (sslFactory.getTrustManager().isEmpty()) {
+                    throw new SDKException("SSL factory must have a trust manager");
+                }
                 c.sslSocketFactory(sslFactory.getSslSocketFactory(), sslFactory.getTrustManager().get());
             }
             var as = new ProtocolClient(
