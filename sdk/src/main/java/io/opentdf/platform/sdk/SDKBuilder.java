@@ -34,13 +34,11 @@ import nl.altindag.ssl.SSLFactory;
 import nl.altindag.ssl.pem.util.PemUtils;
 import okhttp3.OkHttpClient;
 import okhttp3.Protocol;
-import okhttp3.internal.platform.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import javax.net.ssl.TrustManager;
-import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509ExtendedTrustManager;
 import java.io.File;
 import java.io.FileInputStream;
@@ -55,9 +53,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
-import java.util.function.Function;
-
-import static io.opentdf.platform.sdk.TDF.logger;
 
 /**
  * A builder class for creating instances of the SDK class.
@@ -214,7 +209,7 @@ public class SDKBuilder {
         // well known endpoint
         ProtocolClient bootstrapClient = null;
         GetWellKnownConfigurationResponse config;
-        bootstrapClient = getProtocolClient(platformEndpoint) ;
+        bootstrapClient = getUnauthenticatedProtocolClient(platformEndpoint) ;
         var stub = new WellKnownServiceClient(bootstrapClient);
         try {
             config = ResponseMessageKt.getOrThrow(stub.getWellKnownConfigurationBlocking(GetWellKnownConfigurationRequest.getDefaultInstance(), Collections.emptyMap()).execute());
@@ -282,7 +277,7 @@ public class SDKBuilder {
         this.platformEndpoint = normalizeAddress(this.platformEndpoint, this.usePlainText);
         var authInterceptor = getAuthInterceptor(dpopKey);
         var kasClient = getKASClient(dpopKey, authInterceptor);
-        var protocolClient = getProtocolClient(platformEndpoint, authInterceptor);
+        var protocolClient = getUnauthenticatedProtocolClient(platformEndpoint, authInterceptor);
 
         return new ServicesAndInternals(
                 authInterceptor,
@@ -292,7 +287,7 @@ public class SDKBuilder {
 
     @Nonnull
     private KASClient getKASClient(RSAKey dpopKey, Interceptor interceptor) {
-        return new KASClient((String endpoint) -> new AccessServiceClient(getProtocolClient(endpoint, interceptor)), dpopKey, usePlainText);
+        return new KASClient((String endpoint) -> new AccessServiceClient(getUnauthenticatedProtocolClient(endpoint, interceptor)), dpopKey, usePlainText);
     }
 
     public SDK build() {
@@ -300,11 +295,11 @@ public class SDKBuilder {
         return new SDK(services.services, services.trustManager, services.interceptor);
     }
 
-    private ProtocolClient getProtocolClient(String endpoint) {
-        return getProtocolClient(endpoint, null);
+    private ProtocolClient getUnauthenticatedProtocolClient(String endpoint) {
+        return getUnauthenticatedProtocolClient(endpoint, null);
     }
 
-    private ProtocolClient getProtocolClient(String endpoint, Interceptor interceptor) {
+    private ProtocolClient getUnauthenticatedProtocolClient(String endpoint, Interceptor authInterceptor) {
         var httpClient = new OkHttpClient.Builder();
         if (usePlainText) {
             httpClient.protocols(List.of(Protocol.H2_PRIOR_KNOWLEDGE));
@@ -321,7 +316,7 @@ public class SDKBuilder {
                 NetworkProtocol.GRPC,
                 null,
                 GETConfiguration.Enabled.INSTANCE,
-                interceptor == null ? Collections.emptyList() : List.of((_config) -> interceptor)
+                authInterceptor == null ? Collections.emptyList() : List.of((_config) -> authInterceptor)
         );
 
         return new ProtocolClient(new ConnectOkHttpClient(httpClient.build()), protocolClientConfig);
