@@ -576,21 +576,20 @@ public class AutoconfigureTest {
 
         for (ReasonerTestCase tc : testCases) {
             var attributeService = mock(AttributesServiceClient.class);
-            when(attributeService.getAttributeValuesByFqnsBlocking(any(), any())).thenReturn(
-                    new UnaryBlockingCall<>() {
-                        @Override
-                        public ResponseMessage<GetAttributeValuesByFqnsResponse> execute() {
-                            return new ResponseMessage.Success<>(
-                                    getResponse(GetAttributeValuesByFqnsRequest.newBuilder()
-                                            .addAllFqns(tc.getPolicy().stream().map(AttributeValueFQN::toString).collect(Collectors.toList()))
-                                            .build()), Collections.emptyMap(), Collections.emptyMap());
-                        }
-
-                        @Override
-                        public void cancel() {
-                        }
+            when(attributeService.getAttributeValuesByFqnsBlocking(any(), any())).thenAnswer(invocation -> {
+                var request = (GetAttributeValuesByFqnsRequest) invocation.getArgument(0);
+                return new UnaryBlockingCall<GetAttributeValuesByFqnsResponse>() {
+                    @Override
+                    public ResponseMessage<GetAttributeValuesByFqnsResponse> execute() {
+                        return new ResponseMessage.Success<>(getResponse(request), Collections.emptyMap(), Collections.emptyMap());
                     }
-            );
+
+                    @Override
+                    public void cancel() {
+                    }
+                };
+            });
+
 
             Granter reasoner = Autoconfigure.newGranterFromService(attributeService, new KASKeyCache(),
                     tc.getPolicy().toArray(new AttributeValueFQN[0]));
@@ -900,49 +899,38 @@ public class AutoconfigureTest {
                 .setUri("https://example.com/kas")
                 .build();
 
-//        AttributesServiceGrpc.AttributesServiceFutureStub attributeGrpcStub = mock(
-//                AttributesServiceGrpc.AttributesServiceFutureStub.class);
-//        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
-//                .thenAnswer(
-//                        invocation -> {
-//                            GetAttributeValuesByFqnsResponse resp = getResponseWithGrants(
-//                                    (GetAttributeValuesByFqnsRequest) invocation.getArguments()[0], List.of(kas1));
-//                            SettableFuture<GetAttributeValuesByFqnsResponse> future = SettableFuture.create();
-//                            future.set(resp); // Set the request as the future's result
-//                            return future;
-//                        });
-//        AttributesServiceClient attributeGrpcStub = mock(AttributesServiceClient.class);
-//        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(), any()))
-//                .thenAnswer(
-//                        invocation -> {
-//                            GetAttributeValuesByFqnsResponse resp = getResponseWithGrants(
-//                                    (GetAttributeValuesByFqnsRequest) invocation.getArguments()[0], List.of(kas1));
-//                            SettableFuture<GetAttributeValuesByFqnsResponse> future = SettableFuture.create();
-//                            future.set(resp); // Set the request as the future's result
-//                            return future;
-//                        });
+        AttributesServiceClient attributesServiceClient = mock(AttributesServiceClient.class);
+        when(attributesServiceClient.getAttributeValuesByFqnsBlocking(any(), any())).thenAnswer(invocation -> {
+            var request = (GetAttributeValuesByFqnsRequest)invocation.getArgument(0);
+            return new UnaryBlockingCall<GetAttributeValuesByFqnsResponse>(){
+                @Override
+                public ResponseMessage<GetAttributeValuesByFqnsResponse> execute() {
+                    return new ResponseMessage.Success<>(getResponseWithGrants(request, List.of(kas1)), Collections.emptyMap(), Collections.emptyMap());
+                }
+                @Override public void cancel() {}
+            };
+        });
 
-//        KASKeyCache keyCache = new KASKeyCache();
-//
-//        Granter reasoner = Autoconfigure.newGranterFromService(attributeGrpcStub, keyCache,
-//                List.of(clsS, rel2gbr, rel2usa, n2kHCS, n2kSI).toArray(new AttributeValueFQN[0]));
-//        assertThat(reasoner).isNotNull();
-//
-//        // Verify that the key was stored in the cache
-//        Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1");
-//        assertNotNull(storedKASInfo);
-//        assertEquals("https://example.com/kas", storedKASInfo.URL);
-//        assertEquals("test-kid", storedKASInfo.KID);
-//        assertEquals("ec:secp256r1", storedKASInfo.Algorithm);
-//        assertEquals("public-key-pem", storedKASInfo.PublicKey);
-//
-//        Config.KASInfo storedKASInfo2 = keyCache.get("https://example.com/kas", "rsa:2048");
-//        assertNotNull(storedKASInfo2);
-//        assertEquals("https://example.com/kas", storedKASInfo2.URL);
-//        assertEquals("test-kid-2", storedKASInfo2.KID);
-//        assertEquals("rsa:2048", storedKASInfo2.Algorithm);
-//        assertEquals("public-key-pem-2", storedKASInfo2.PublicKey);
-//
+        KASKeyCache keyCache = new KASKeyCache();
+
+        Granter reasoner = Autoconfigure.newGranterFromService(attributesServiceClient, keyCache,
+                List.of(clsS, rel2gbr, rel2usa, n2kHCS, n2kSI).toArray(new AttributeValueFQN[0]));
+        assertThat(reasoner).isNotNull();
+
+        // Verify that the key was stored in the cache
+        Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1");
+        assertNotNull(storedKASInfo);
+        assertEquals("https://example.com/kas", storedKASInfo.URL);
+        assertEquals("test-kid", storedKASInfo.KID);
+        assertEquals("ec:secp256r1", storedKASInfo.Algorithm);
+        assertEquals("public-key-pem", storedKASInfo.PublicKey);
+
+        Config.KASInfo storedKASInfo2 = keyCache.get("https://example.com/kas", "rsa:2048");
+        assertNotNull(storedKASInfo2);
+        assertEquals("https://example.com/kas", storedKASInfo2.URL);
+        assertEquals("test-kid-2", storedKASInfo2.KID);
+        assertEquals("rsa:2048", storedKASInfo2.Algorithm);
+        assertEquals("public-key-pem-2", storedKASInfo2.PublicKey);
     }
 
 }
