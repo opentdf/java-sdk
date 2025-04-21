@@ -237,9 +237,9 @@ public class KASClientTest {
         assertThat(lastAddress.get()).isEqualTo("http://example.org:80");
         assertThat(c1).isSameAs(c2);
 
+        // default to HTTP if no scheme is provided
         httpsKASClient.getStub("example.org:1234");
-        assertThat(lastAddress.get()).isEqualTo("https://example.org:1234");
-
+        assertThat(lastAddress.get()).isEqualTo("http://example.org:1234");
     }
 
     private static Server startServer(AccessServiceGrpc.AccessServiceImplBase accessService) throws IOException {

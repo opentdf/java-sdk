@@ -87,12 +87,12 @@ public class SDKBuilder {
         } catch (MalformedURLException e) {
             url = tryParseHostAndPort(urlString);
         }
-        final int port = url.getPort() == -1 ? ("http".equals(url.getProtocol()) ? 80 : 443 ) : url.getPort();
+        final int port = url.getPort() == -1 ? ("http".equals(url.getProtocol()) ? 80 : 443) : url.getPort();
         final String protocol = usePlaintext && "http".equals(url.getProtocol()) ? "http" : "https";
 
         try {
             var returnUrl = new URL(protocol, url.getHost(), port, "").toString();
-            TDF.logger.debug("normalized url [{}] to [{}]", urlString, returnUrl);
+            logger.debug("normalized url [{}] to [{}]", urlString, returnUrl);
             return returnUrl;
         } catch (MalformedURLException e) {
             throw new SDKException("error creating KAS address", e);
@@ -108,7 +108,7 @@ public class SDKBuilder {
         }
 
         try {
-            return new URL(uri.getPort() == 80 ? "http" : "https", uri.getHost(), uri.getPort(), "");
+            return new URL(uri.getPort() == 443 ? "https" : "http", uri.getHost(), uri.getPort(), "");
         } catch (MalformedURLException e) {
             throw new SDKException("error trying to create URL from host and port", e);
         }
