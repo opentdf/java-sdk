@@ -24,8 +24,6 @@ import io.opentdf.platform.kas.RewrapRequest;
 import io.opentdf.platform.kas.RewrapResponse;
 import okhttp3.OkHttpClient;
 import okhttp3.Protocol;
-import org.junit.Ignore;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -74,7 +72,7 @@ public class KASClientTest {
             var keypair = CryptoUtils.generateRSAKeypair();
             var dpopKey = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).privateKey(keypair.getPrivate())
                     .build();
-            try (var kas = new KASClient(aclientFactory, dpopKey)) {
+            try (var kas = new KASClient(aclientFactory, dpopKey, false)) {
                 Config.KASInfo kasInfo = new Config.KASInfo();
                 kasInfo.URL = "http://localhost:" + rewrapServer.getPort();
                 assertThat(kas.getPublicKey(kasInfo).PublicKey).isEqualTo("тај је клуц");
@@ -104,7 +102,7 @@ public class KASClientTest {
             var keypair = CryptoUtils.generateRSAKeypair();
             var dpopKey = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).privateKey(keypair.getPrivate())
                     .build();
-            try (var kas = new KASClient(aclientFactory, dpopKey)) {
+            try (var kas = new KASClient(aclientFactory, dpopKey, false)) {
                 Config.KASInfo kasInfo = new Config.KASInfo();
                 kasInfo.URL = "http://localhost:" + server.getPort();
                 assertThat(kas.getPublicKey(kasInfo).KID).isEqualTo("r1");
@@ -169,7 +167,7 @@ public class KASClientTest {
             rewrapServer = startServer(accessService);
             byte[] plaintextKey;
             byte[] rewrapResponse;
-            try (var kas = new KASClient(aclientFactory, dpopKey)) {
+            try (var kas = new KASClient(aclientFactory, dpopKey, false)) {
 
                 Manifest.KeyAccess keyAccess = new Manifest.KeyAccess();
                 keyAccess.url = "http://localhost:" + rewrapServer.getPort();
@@ -188,28 +186,60 @@ public class KASClientTest {
         }
     }
 
-    @Test @Disabled("not quite sure what are address normalization requirements are now")
-    public void testAddressNormalization() {
+    @Test
+    public void testAddressNormalizationWithHTTPSClient() {
         var lastAddress = new AtomicReference<String>();
         var dpopKeypair = CryptoUtils.generateRSAKeypair();
         var dpopKey = new RSAKey.Builder((RSAPublicKey) dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate())
                 .build();
-        var kasClient = new KASClient(addr -> {
+        var httpsKASClient = new KASClient(addr -> {
             lastAddress.set(addr);
             return aclientFactory.apply(addr);
-        }, dpopKey);
+        }, dpopKey, false);
 
-        var stub = kasClient.getStub("http://localhost:8080");
-        assertThat(lastAddress.get()).isEqualTo("localhost:8080");
-        var otherStub = kasClient.getStub("https://localhost:8080");
-        assertThat(lastAddress.get()).isEqualTo("localhost:8080");
+        var stub = httpsKASClient.getStub("http://localhost:8080");
+        assertThat(lastAddress.get()).isEqualTo("https://localhost:8080");
+        var otherStub = httpsKASClient.getStub("https://localhost:8080");
+        assertThat(lastAddress.get()).isEqualTo("https://localhost:8080");
         assertThat(stub).isSameAs(otherStub);
 
-        kasClient.getStub("https://example.org");
-        assertThat(lastAddress.get()).isEqualTo("example.org:443");
+        httpsKASClient.getStub("https://example.org");
+        assertThat(lastAddress.get()).isEqualTo("https://example.org:443");
 
-        kasClient.getStub("http://example.org");
-        assertThat(lastAddress.get()).isEqualTo("example.org:80");
+        httpsKASClient.getStub("http://example.org");
+        assertThat(lastAddress.get()).isEqualTo("https://example.org:80");
+
+        httpsKASClient.getStub("example.org:1234");
+        assertThat(lastAddress.get()).isEqualTo("https://example.org:1234");
+    }
+
+    @Test
+    public void testAddressNormalizationWithInsecureHTTPClient() {
+        var lastAddress = new AtomicReference<String>();
+        var dpopKeypair = CryptoUtils.generateRSAKeypair();
+        var dpopKey = new RSAKey.Builder((RSAPublicKey) dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate())
+                .build();
+        var httpsKASClient = new KASClient(addr -> {
+            lastAddress.set(addr);
+            return aclientFactory.apply(addr);
+        }, dpopKey, true);
+
+        httpsKASClient.getStub("http://localhost:8080");
+        assertThat(lastAddress.get()).isEqualTo("http://localhost:8080");
+        assertThat(lastAddress.get()).isEqualTo("http://localhost:8080");
+
+        httpsKASClient.getStub("https://example.org");
+        assertThat(lastAddress.get()).isEqualTo("https://example.org:443");
+
+        var c1 = httpsKASClient.getStub("http://example.org");
+        assertThat(lastAddress.get()).isEqualTo("http://example.org:80");
+        var c2 = httpsKASClient.getStub("example.org:80");
+        assertThat(lastAddress.get()).isEqualTo("http://example.org:80");
+        assertThat(c1).isSameAs(c2);
+
+        httpsKASClient.getStub("example.org:1234");
+        assertThat(lastAddress.get()).isEqualTo("https://example.org:1234");
+
     }
 
     private static Server startServer(AccessServiceGrpc.AccessServiceImplBase accessService) throws IOException {

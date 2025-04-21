@@ -22,10 +22,13 @@ import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import io.opentdf.platform.sdk.TDF.KasBadRequestException;
 
 import kotlin.collections.MapsKt;
+
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
@@ -44,6 +47,7 @@ import static java.lang.String.format;
 public class KASClient implements SDK.KAS {
 
     private final Function<String, AccessServiceClient> channelFactory;
+    private final boolean usePlaintext;
     private final RSASSASigner signer;
     private AsymDecryption decryptor;
     private String clientPublicKey;
@@ -52,12 +56,13 @@ public class KASClient implements SDK.KAS {
     /***
      * A client that communicates with KAS
      * 
-     * @param channelFactory A function that produces channels that can be used to
+     * @param clientFactory A function that produces channels that can be used to
      *                       communicate
      * @param dpopKey
      */
-    public KASClient(Function<String, AccessServiceClient> channelFactory, RSAKey dpopKey) {
-        this.channelFactory = channelFactory;
+    public KASClient(Function<String, AccessServiceClient> clientFactory, RSAKey dpopKey, boolean usePlaintext) {
+        this.channelFactory = clientFactory;
+        this.usePlaintext = usePlaintext;
         try {
             this.signer = new RSASSASigner(dpopKey);
         } catch (JOSEException e) {
@@ -68,7 +73,7 @@ public class KASClient implements SDK.KAS {
 
     @Override
     public KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
-        var req = PublicKeyRequest.newBuilder().setAlgorithm(String.format("ec:%s", curve.toString())).build();
+        var req = PublicKeyRequest.newBuilder().setAlgorithm(format("ec:%s", curve.toString())).build();
         var r = getStub(kasInfo.URL).publicKeyBlocking(req, MapsKt.mapOf()).execute();
         PublicKeyResponse res;
         try {
@@ -117,31 +122,35 @@ public class KASClient implements SDK.KAS {
     }
 
     private String normalizeAddress(String urlString) {
-        return urlString;
-//        URL url;
-//        try {
-//            url = new URL(urlString);
-//        } catch (MalformedURLException e) {
-//            // if there is no protocol then they either gave us
-//            // a correct address or one we don't know how to fix
-//            return urlString;
-//        }
-//
-//        // otherwise we take the specified port or default
-//        // based on whether the URL uses a scheme that
-//        // implies TLS
-//        int port;
-//        if (url.getPort() == -1) {
-//            if ("http".equals(url.getProtocol())) {
-//                port = 80;
-//            } else {
-//                port = 443;
-//            }
-//        } else {
-//            port = url.getPort();
-//        }
-//
-//        return format("%s:%d", url.getHost(), port);
+        URL url;
+        try {
+            url = new URL(urlString);
+        } catch (MalformedURLException e) {
+            url = tryParseHostAndPort(urlString);
+        }
+        final int port = url.getPort() == -1 ? ("http".equals(url.getProtocol()) ? 80 : 443 ) : url.getPort();
+        final String protocol = usePlaintext && "http".equals(url.getProtocol()) ? "http" : "https";
+
+        try {
+            return new URL(protocol, url.getHost(), port, "").toString();
+        } catch (MalformedURLException e) {
+            throw new SDKException("error creating KAS address", e);
+        }
+    }
+
+    private URL tryParseHostAndPort(String urlString) {
+        URI uri;
+        try {
+            uri = new URI(null, urlString, null, null, null).parseServerAuthority();
+        } catch (URISyntaxException e) {
+            throw new SDKException("error trying to parse host and port", e);
+        }
+
+        try {
+            return new URL(uri.getPort() == 80 ? "http" : "https", uri.getHost(), uri.getPort(), "");
+        } catch (MalformedURLException e) {
+            throw new SDKException("error trying to create URL from host and port", e);
+        }
     }
 
     @Override
@@ -257,7 +266,7 @@ public class KASClient implements SDK.KAS {
         keyAccess.protocol = "kas";
 
         NanoTDFRewrapRequestBody body = new NanoTDFRewrapRequestBody();
-        body.algorithm = String.format("ec:%s", curve.toString());
+        body.algorithm = format("ec:%s", curve.toString());
         body.clientPublicKey = keyPair.publicKeyInPEMFormat();
         body.keyAccess = keyAccess;
 

@@ -143,6 +143,14 @@ public class SDKBuilder {
         return this;
     }
 
+    /**
+     * If set to `true` `http` connections to platform services are allowed. In particular,
+     * use this option to unwrap TDFs using KASs that are not using TLS. Also, if KASs use
+     * <hostname>:<port> addresses then this option must be set in order for the SDK to
+     * call the KAS without TLS.
+     * @param usePlainText
+     * @return
+     */
     public SDKBuilder useInsecurePlaintextConnection(Boolean usePlainText) {
         this.usePlainText = usePlainText;
         return this;
@@ -264,7 +272,7 @@ public class SDKBuilder {
             return new AccessServiceClient(as);
         };
 
-        return new KASClient(clientFactory, dpopKey);
+        return new KASClient(clientFactory, dpopKey, false);
     }
 
     public SDK build() {
