@@ -272,7 +272,7 @@ public class SDKBuilder {
             return new AccessServiceClient(as);
         };
 
-        return new KASClient(clientFactory, dpopKey, false);
+        return new KASClient(clientFactory, dpopKey, usePlainText);
     }
 
     public SDK build() {
