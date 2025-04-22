@@ -302,6 +302,7 @@ public class SDKBuilder {
     private ProtocolClient getUnauthenticatedProtocolClient(String endpoint, Interceptor authInterceptor) {
         var httpClient = new OkHttpClient.Builder();
         if (usePlainText) {
+            // we can only connect using HTTP/2 without any negotiation when using plain test
             httpClient.protocols(List.of(Protocol.H2_PRIOR_KNOWLEDGE));
         }
         if (sslFactory != null) {
