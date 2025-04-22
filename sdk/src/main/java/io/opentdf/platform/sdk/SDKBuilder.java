@@ -239,7 +239,7 @@ public class SDKBuilder {
         this.platformEndpoint = AddressNormalizer.normalizeAddress(this.platformEndpoint, this.usePlainText);
         var authInterceptor = getAuthInterceptor(dpopKey);
         var kasClient = getKASClient(dpopKey, authInterceptor);
-        var protocolClient = getUnauthenticatedProtocolClient(platformEndpoint, authInterceptor);
+        var protocolClient = getProtocolClient(platformEndpoint, authInterceptor);
 
         return new ServicesAndInternals(
                 authInterceptor,
@@ -249,7 +249,7 @@ public class SDKBuilder {
 
     @Nonnull
     private KASClient getKASClient(RSAKey dpopKey, Interceptor interceptor) {
-        return new KASClient((String endpoint) -> new AccessServiceClient(getUnauthenticatedProtocolClient(endpoint, interceptor)), dpopKey, usePlainText);
+        return new KASClient((String endpoint) -> new AccessServiceClient(getProtocolClient(endpoint, interceptor)), dpopKey, usePlainText);
     }
 
     public SDK build() {
