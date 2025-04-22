@@ -27,7 +27,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.text.ParseException;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 
 /**
  * The TDF class is responsible for handling operations related to
@@ -476,7 +475,7 @@ public class TDF {
     public TDFObject createTDF(InputStream payload,
                                OutputStream outputStream,
                                Config.TDFConfig tdfConfig, SDK.KAS kas, AttributesServiceClient attributesServiceClient)
-            throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException, DecoderException {
+            throws IOException, JOSEException, AutoConfigureException, DecoderException {
 
         if (tdfConfig.autoconfigure) {
             Autoconfigure.Granter granter = new Autoconfigure.Granter(new ArrayList<>());

@@ -152,7 +152,7 @@ public class KASClient implements SDK.KAS {
     @Override
     public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy,  KeyType sessionKeyType) {
         ECKeyPair ecKeyPair = null;
-        
+
         if (sessionKeyType.isEc()) {
             var curveName = sessionKeyType.getCurveName();
             ecKeyPair = new ECKeyPair(curveName, ECKeyPair.ECAlgorithm.ECDH);
@@ -191,40 +191,37 @@ public class KASClient implements SDK.KAS {
                 .setSignedRequestToken(jwt.serialize())
                 .build();
         RewrapResponse response;
+        var req = getStub(keyAccess.url).rewrapBlocking(request, Collections.emptyMap()).execute();
         try {
-            var req = getStub(keyAccess.url).rewrapBlocking(request, Collections.emptyMap()).execute();
-            try {
-                response = getOrThrow(req);
-            } catch (Exception e) {
-                throw new SDKException("error unwrapping key", e);
-            }
-            var wrappedKey = response.getEntityWrappedKey().toByteArray();
-            if (sessionKeyType != KeyType.RSA2048Key) {
-
-                if (ecKeyPair == null) {
-                    throw new SDKException("ECKeyPair is null. Unable to proceed with the unwrap operation.");
-                }
-
-                var kasEphemeralPublicKey = response.getSessionPublicKey();
-                var publicKey = ECKeyPair.publicKeyFromPem(kasEphemeralPublicKey);
-                byte[] symKey = ECKeyPair.computeECDHKey(publicKey, ecKeyPair.getPrivateKey());
-
-                var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symKey);
-
-                AesGcm gcm = new AesGcm(sessionKey);
-                AesGcm.Encrypted encrypted = new AesGcm.Encrypted(wrappedKey);
-                return gcm.decrypt(encrypted);
-            } else {
-                return decryptor.decrypt(wrappedKey);
-            }
+            response = getOrThrow(req);
         } catch (StatusRuntimeException e) {
             if (e.getStatus().getCode() == Status.Code.INVALID_ARGUMENT) {
                 // 400 Bad Request
-                throw new KasBadRequestException("rewrap request 400: " + e.toString());
+                throw new KasBadRequestException("rewrap request 400: " + e);
             }
             throw e;
+        } catch (Exception e) {
+            throw new SDKException("error unwrapping key", e);
         }
-        
+        var wrappedKey = response.getEntityWrappedKey().toByteArray();
+        if (sessionKeyType != KeyType.RSA2048Key) {
+
+            if (ecKeyPair == null) {
+                throw new SDKException("ECKeyPair is null. Unable to proceed with the unwrap operation.");
+            }
+
+            var kasEphemeralPublicKey = response.getSessionPublicKey();
+            var publicKey = ECKeyPair.publicKeyFromPem(kasEphemeralPublicKey);
+            byte[] symKey = ECKeyPair.computeECDHKey(publicKey, ecKeyPair.getPrivateKey());
+
+            var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symKey);
+
+            AesGcm gcm = new AesGcm(sessionKey);
+            AesGcm.Encrypted encrypted = new AesGcm.Encrypted(wrappedKey);
+            return gcm.decrypt(encrypted);
+        } else {
+            return decryptor.decrypt(wrappedKey);
+        }
     }
 
     public byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL) {

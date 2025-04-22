@@ -82,9 +82,9 @@ class TokenSource {
             SignedJWT proof = dpopFactory.createDPoPJWT(method, url.toURI(), t);
             dpopProof = proof.serialize();
         } catch (URISyntaxException e) {
-            throw new RuntimeException("Invalid URI syntax for DPoP proof creation", e);
+            throw new SDKException("Invalid URI syntax for DPoP proof creation", e);
         } catch (JOSEException e) {
-            throw new RuntimeException("Error creating DPoP proof", e);
+            throw new SDKException("Error creating DPoP proof", e);
         }
 
         return new AuthHeaders(
@@ -126,7 +126,6 @@ class TokenSource {
                     ErrorObject error = tokenResponse.toErrorResponse().getErrorObject();
                     throw new RuntimeException("Token request failed: " + error);
                 }
-
 
                 var tokens = tokenResponse.toSuccessResponse().getTokens();
                 if (tokens.getDPoPAccessToken() != null) {

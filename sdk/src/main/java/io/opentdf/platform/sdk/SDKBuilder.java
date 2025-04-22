@@ -279,7 +279,7 @@ public class SDKBuilder {
                 NetworkProtocol.GRPC,
                 null,
                 GETConfiguration.Enabled.INSTANCE,
-                authInterceptor == null ? Collections.emptyList() : List.of((_config) -> authInterceptor)
+                authInterceptor == null ? Collections.emptyList() : List.of(_config -> authInterceptor)
         );
 
         return new ProtocolClient(new ConnectOkHttpClient(httpClient.build()), protocolClientConfig);
