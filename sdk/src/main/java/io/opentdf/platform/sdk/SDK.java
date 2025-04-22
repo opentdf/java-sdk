@@ -27,8 +27,6 @@ public class SDK implements AutoCloseable {
     private final TrustManager trustManager;
     private final Interceptor authInterceptor;
 
-    private static final Logger log = LoggerFactory.getLogger(SDK.class);
-
     /**
      * Closes the SDK, including its associated services.
      *

@@ -202,15 +202,6 @@ public class KASClientTest {
         var otherStub = httpsKASClient.getStub("https://localhost:8080");
         assertThat(lastAddress.get()).isEqualTo("https://localhost:8080");
         assertThat(stub).isSameAs(otherStub);
-
-        httpsKASClient.getStub("https://example.org");
-        assertThat(lastAddress.get()).isEqualTo("https://example.org:443");
-
-        httpsKASClient.getStub("http://example.org");
-        assertThat(lastAddress.get()).isEqualTo("https://example.org:80");
-
-        httpsKASClient.getStub("example.org:1234");
-        assertThat(lastAddress.get()).isEqualTo("https://example.org:1234");
     }
 
     @Test
@@ -224,22 +215,11 @@ public class KASClientTest {
             return aclientFactory.apply(addr);
         }, dpopKey, true);
 
-        httpsKASClient.getStub("http://localhost:8080");
-        assertThat(lastAddress.get()).isEqualTo("http://localhost:8080");
-        assertThat(lastAddress.get()).isEqualTo("http://localhost:8080");
-
-        httpsKASClient.getStub("https://example.org");
-        assertThat(lastAddress.get()).isEqualTo("https://example.org:443");
-
         var c1 = httpsKASClient.getStub("http://example.org");
         assertThat(lastAddress.get()).isEqualTo("http://example.org:80");
         var c2 = httpsKASClient.getStub("example.org:80");
         assertThat(lastAddress.get()).isEqualTo("http://example.org:80");
         assertThat(c1).isSameAs(c2);
-
-        // default to HTTP if no scheme is provided
-        httpsKASClient.getStub("example.org:1234");
-        assertThat(lastAddress.get()).isEqualTo("http://example.org:1234");
     }
 
     private static Server startServer(AccessServiceGrpc.AccessServiceImplBase accessService) throws IOException {

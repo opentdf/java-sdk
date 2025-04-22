@@ -293,6 +293,6 @@ public class KASClient implements SDK.KAS {
 
     // make this protected so we can test the address normalization logic
     synchronized AccessServiceClient getStub(String url) {
-        return stubs.computeIfAbsent(SDKBuilder.normalizeAddress(url, usePlaintext), channelFactory);
+        return stubs.computeIfAbsent(AddressNormalizer.normalizeAddress(url, usePlaintext), channelFactory);
     }
 }

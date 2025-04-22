@@ -44,10 +44,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -75,40 +71,6 @@ public class SDKBuilder {
         builder.authzGrant = null;
 
         return builder;
-    }
-
-    static String normalizeAddress(String urlString, boolean usePlaintext) {
-        URL url;
-        try {
-            url = new URL(urlString);
-        } catch (MalformedURLException e) {
-            url = tryParseHostAndPort(urlString);
-        }
-        final int port = url.getPort() == -1 ? ("http".equals(url.getProtocol()) ? 80 : 443) : url.getPort();
-        final String protocol = usePlaintext && "http".equals(url.getProtocol()) ? "http" : "https";
-
-        try {
-            var returnUrl = new URL(protocol, url.getHost(), port, "").toString();
-            logger.debug("normalized url [{}] to [{}]", urlString, returnUrl);
-            return returnUrl;
-        } catch (MalformedURLException e) {
-            throw new SDKException("error creating KAS address", e);
-        }
-    }
-
-    private static URL tryParseHostAndPort(String urlString) {
-        URI uri;
-        try {
-            uri = new URI(null, urlString, null, null, null).parseServerAuthority();
-        } catch (URISyntaxException e) {
-            throw new SDKException("error trying to parse host and port", e);
-        }
-
-        try {
-            return new URL(uri.getPort() == 443 ? "https" : "http", uri.getHost(), uri.getPort(), "");
-        } catch (MalformedURLException e) {
-            throw new SDKException("error trying to create URL from host and port", e);
-        }
     }
 
     public SDKBuilder sslFactory(SSLFactory sslFactory) {
@@ -274,7 +236,7 @@ public class SDKBuilder {
             throw new SDKException("Error generating DPoP key", e);
         }
 
-        this.platformEndpoint = normalizeAddress(this.platformEndpoint, this.usePlainText);
+        this.platformEndpoint = AddressNormalizer.normalizeAddress(this.platformEndpoint, this.usePlainText);
         var authInterceptor = getAuthInterceptor(dpopKey);
         var kasClient = getKASClient(dpopKey, authInterceptor);
         var protocolClient = getUnauthenticatedProtocolClient(platformEndpoint, authInterceptor);

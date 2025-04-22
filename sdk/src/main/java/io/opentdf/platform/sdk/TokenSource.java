@@ -1,6 +1,5 @@
 package io.opentdf.platform.sdk;
 
-import com.connectrpc.http.HTTPMethod;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.jwk.RSAKey;
@@ -15,13 +14,6 @@ import com.nimbusds.oauth2.sdk.dpop.DefaultDPoPProofFactory;
 import com.nimbusds.oauth2.sdk.http.HTTPRequest;
 import com.nimbusds.oauth2.sdk.http.HTTPResponse;
 import com.nimbusds.oauth2.sdk.token.AccessToken;
-import io.grpc.CallOptions;
-import io.grpc.Channel;
-import io.grpc.ClientCall;
-import io.grpc.ClientInterceptor;
-import io.grpc.ForwardingClientCall;
-import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
 import nl.altindag.ssl.SSLFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,9 +24,8 @@ import java.net.URL;
 import java.time.Instant;
 
 /**
- * The GRPCAuthInterceptor class is responsible for intercepting client calls before they are sent
- * to the server. It adds authentication headers to the requests by fetching and caching access
- * tokens.
+ * The TokenSource class is responsible for providing authorization tokens. It handles
+ * timeouts and creating OIDC calls. It is thread-safe.
  */
 class TokenSource {
     private Instant tokenExpiryTime;
