@@ -187,7 +187,7 @@ public class KASClientTest {
     }
 
     @Test
-    public void testAddressNormalizationWithHTTPSClient() {
+    void testAddressNormalizationWithHTTPSClient() {
         var lastAddress = new AtomicReference<String>();
         var dpopKeypair = CryptoUtils.generateRSAKeypair();
         var dpopKey = new RSAKey.Builder((RSAPublicKey) dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate())
@@ -205,7 +205,7 @@ public class KASClientTest {
     }
 
     @Test
-    public void testAddressNormalizationWithInsecureHTTPClient() {
+    void testAddressNormalizationWithInsecureHTTPClient() {
         var lastAddress = new AtomicReference<String>();
         var dpopKeypair = CryptoUtils.generateRSAKeypair();
         var dpopKey = new RSAKey.Builder((RSAPublicKey) dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate())

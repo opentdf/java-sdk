@@ -190,7 +190,6 @@ public class SDKBuilderTest {
                         @Override
                         public void getNamespace(GetNamespaceRequest request,
                                                  StreamObserver<GetNamespaceResponse> responseObserver) {
-                            var val = Value.newBuilder().setStringValue(issuer).build();
                             var response = GetNamespaceResponse
                                     .newBuilder()
                                     .build();
@@ -273,7 +272,7 @@ public class SDKBuilderTest {
                     .setBody("{\"access_token\": \"hereisthetoken\", \"token_type\": \"Bearer\"}")
                     .setHeader("Content-Type", "application/json"));
 
-            var ignored = ResponseMessageKt.getOrThrow(services.namespaces().getNamespaceBlocking(GetNamespaceRequest.getDefaultInstance(), Collections.emptyMap()).execute());
+            ResponseMessageKt.getOrThrow(services.namespaces().getNamespaceBlocking(GetNamespaceRequest.getDefaultInstance(), Collections.emptyMap()).execute());
 
             // we've now made two requests. one to get the bootstrapping info and one
             // call that should activate the token fetching logic
@@ -402,7 +401,9 @@ public class SDKBuilderTest {
 
             try {
                 ResponseMessageKt.getOrThrow(sdk.getServices().namespaces().getNamespaceBlocking(GetNamespaceRequest.getDefaultInstance(), Collections.emptyMap()).execute());
-            } catch (StatusRuntimeException ignored) {}
+            } catch (StatusRuntimeException ignored) {
+                // ignore the error, we just want to make sure that we called the service
+            }
 
             assertThat(getNsCalled.get()).isTrue();
             assertThat(authHeader.get()).isNullOrEmpty();
