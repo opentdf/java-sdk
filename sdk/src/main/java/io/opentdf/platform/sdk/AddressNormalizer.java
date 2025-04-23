@@ -11,6 +11,9 @@ import java.net.URL;
 class AddressNormalizer {
     private static final Logger logger = LoggerFactory.getLogger(AddressNormalizer.class);
 
+    private AddressNormalizer(){
+    }
+
     static String normalizeAddress(String urlString, boolean usePlaintext) {
         URL url;
         try {

@@ -586,6 +586,7 @@ public class AutoconfigureTest {
 
                     @Override
                     public void cancel() {
+                        // not really calling anything
                     }
                 };
             });
@@ -907,7 +908,9 @@ public class AutoconfigureTest {
                 public ResponseMessage<GetAttributeValuesByFqnsResponse> execute() {
                     return new ResponseMessage.Success<>(getResponseWithGrants(request, List.of(kas1)), Collections.emptyMap(), Collections.emptyMap());
                 }
-                @Override public void cancel() {}
+                @Override public void cancel() {
+                    // not really calling anything
+                }
             };
         });
 
