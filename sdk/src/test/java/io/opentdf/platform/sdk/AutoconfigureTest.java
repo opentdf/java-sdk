@@ -872,7 +872,7 @@ public class AutoconfigureTest {
     }
 
     @Test
-    void testKeyCacheFromGrants() throws InterruptedException, ExecutionException {
+    void testKeyCacheFromGrants() {
         // Create the KasPublicKey object
         KasPublicKey kasPublicKey1 = KasPublicKey.newBuilder()
                 .setAlg(KasPublicKeyAlgEnum.KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1)

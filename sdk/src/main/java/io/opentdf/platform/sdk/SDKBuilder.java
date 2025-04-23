@@ -258,10 +258,10 @@ public class SDKBuilder {
     }
 
     private ProtocolClient getUnauthenticatedProtocolClient(String endpoint) {
-        return getUnauthenticatedProtocolClient(endpoint, null);
+        return getProtocolClient(endpoint, null);
     }
 
-    private ProtocolClient getUnauthenticatedProtocolClient(String endpoint, Interceptor authInterceptor) {
+    private ProtocolClient getProtocolClient(String endpoint, Interceptor authInterceptor) {
         var httpClient = new OkHttpClient.Builder();
         if (usePlainText) {
             // we can only connect using HTTP/2 without any negotiation when using plain test
@@ -273,13 +273,14 @@ public class SDKBuilder {
             }
             httpClient.sslSocketFactory(sslFactory.getSslSocketFactory(), sslFactory.getTrustManager().get());
         }
+
         var protocolClientConfig = new ProtocolClientConfig(
                 endpoint,
                 new GoogleJavaProtobufStrategy(),
                 NetworkProtocol.GRPC,
                 null,
                 GETConfiguration.Enabled.INSTANCE,
-                authInterceptor == null ? Collections.emptyList() : List.of(_config -> authInterceptor)
+                authInterceptor == null ? Collections.emptyList() : List.of(ignoredConfig -> authInterceptor)
         );
 
         return new ProtocolClient(new ConnectOkHttpClient(httpClient.build()), protocolClientConfig);

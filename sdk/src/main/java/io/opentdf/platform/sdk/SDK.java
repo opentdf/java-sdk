@@ -8,8 +8,6 @@ import io.opentdf.platform.generated.policy.namespaces.NamespaceServiceClient;
 import io.opentdf.platform.generated.policy.resourcemapping.ResourceMappingServiceClient;
 import io.opentdf.platform.generated.policy.subjectmapping.SubjectMappingServiceClient;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.TrustManager;
 import java.io.IOException;
