@@ -2,6 +2,7 @@ package io.opentdf.platform.sdk;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.security.NoSuchAlgorithmException;
 import java.text.ParseException;
@@ -32,7 +33,7 @@ public class Fuzzing {
     };
 
     @FuzzTest(maxDuration=TEST_DURATION)
-    public void fuzzNanoTDF(FuzzedDataProvider data) throws IOException {
+    public void fuzzNanoTDF(FuzzedDataProvider data) throws IOException, URISyntaxException {
         byte[] fuzzBytes = data.consumeRemainingAsBytes();
         NanoTDF nanoTDF = new NanoTDF();
         nanoTDF.readNanoTDF(ByteBuffer.wrap(fuzzBytes), IGNORE_OUTPUT_STREAM, NanoTDFTest.kas);

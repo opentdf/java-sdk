@@ -33,8 +33,7 @@ public class TDFE2ETest {
                 .clientSecret("opentdf-sdk", "secret")
                 .useInsecurePlaintextConnection(true)
                 .platformEndpoint("localhost:8080")
-                .buildServices()
-                .services;
+                .build();
 
         var kasInfo = new Config.KASInfo();
         kasInfo.URL = "localhost:8080";
@@ -56,10 +55,10 @@ public class TDFE2ETest {
             ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
             TDF tdf = new TDF();
-            tdf.createTDF(plainTextInputStream, tdfOutputStream, configPair.tdfConfig, sdk.kas(), sdk.attributes());
+            tdf.createTDF(plainTextInputStream, tdfOutputStream, configPair.tdfConfig, sdk.getServices().kas(), sdk.getServices().attributes());
 
             var unwrappedData = new java.io.ByteArrayOutputStream();
-            var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), sdk.kas(), configPair.tdfReaderConfig);
+            var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), sdk.getServices().kas(), configPair.tdfReaderConfig, sdk.getServices().kasRegistry(), sdk.getPlatformUrl());
             reader.readPayload(unwrappedData);
 
             assertThat(unwrappedData.toString(StandardCharsets.UTF_8)).isEqualTo("text");

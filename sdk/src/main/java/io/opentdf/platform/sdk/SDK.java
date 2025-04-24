@@ -1,7 +1,11 @@
 package io.opentdf.platform.sdk;
 
+import io.grpc.CallOptions;
+import io.grpc.Channel;
+import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
+import io.grpc.MethodDescriptor;
 import io.opentdf.platform.authorization.AuthorizationServiceGrpc;
 import io.opentdf.platform.authorization.AuthorizationServiceGrpc.AuthorizationServiceFutureStub;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
@@ -12,6 +16,8 @@ import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceGrpc;
 import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceGrpc.ResourceMappingServiceFutureStub;
 import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc;
 import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc.SubjectMappingServiceFutureStub;
+import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceGrpc;
+import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceGrpc.KeyAccessServerRegistryServiceFutureStub;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +37,7 @@ public class SDK implements AutoCloseable {
     private final Services services;
     private final TrustManager trustManager;
     private final ClientInterceptor authInterceptor;
+    private final String platformUrl;
 
     private static final Logger log = LoggerFactory.getLogger(SDK.class);
 
@@ -76,6 +83,8 @@ public class SDK implements AutoCloseable {
 
         ResourceMappingServiceFutureStub resourceMappings();
 
+        KeyAccessServerRegistryServiceFutureStub kasRegistry();
+
         KAS kas();
 
         static Services newServices(ManagedChannel channel, KAS kas) {
@@ -84,6 +93,7 @@ public class SDK implements AutoCloseable {
             var subjectMappingService = SubjectMappingServiceGrpc.newFutureStub(channel);
             var resourceMappingService = ResourceMappingServiceGrpc.newFutureStub(channel);
             var authorizationService = AuthorizationServiceGrpc.newFutureStub(channel);
+            var kasRegistryService = KeyAccessServerRegistryServiceGrpc.newFutureStub(channel);
 
             return new Services() {
                 @Override
@@ -118,6 +128,11 @@ public class SDK implements AutoCloseable {
                 }
 
                 @Override
+                public KeyAccessServerRegistryServiceFutureStub kasRegistry() {
+                    return kasRegistryService;
+                }
+
+                @Override
                 public KAS kas() {
                     return kas;
                 }
@@ -133,7 +148,8 @@ public class SDK implements AutoCloseable {
         return Optional.ofNullable(authInterceptor);
     }
 
-    SDK(Services services, TrustManager trustManager, ClientInterceptor authInterceptor) {
+    SDK(Services services, TrustManager trustManager, ClientInterceptor authInterceptor, String platformUrl) {
+        this.platformUrl = platformUrl;
         this.services = services;
         this.trustManager = trustManager;
         this.authInterceptor = authInterceptor;
@@ -164,5 +180,9 @@ public class SDK implements AutoCloseable {
         }
         return entries.stream().anyMatch(e -> "0.manifest.json".equals(e.getName()))
                 && entries.stream().anyMatch(e -> "0.payload".equals(e.getName()));
+    }
+
+    public String getPlatformUrl() {
+        return platformUrl;
     }
 }

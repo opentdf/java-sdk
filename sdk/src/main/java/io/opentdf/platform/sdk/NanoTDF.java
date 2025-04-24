@@ -1,14 +1,20 @@
 package io.opentdf.platform.sdk;
 
+import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceGrpc.KeyAccessServerRegistryServiceFutureStub;
+import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
+import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
+import io.opentdf.platform.sdk.TDF.KasAllowlistException;
 import io.opentdf.platform.sdk.nanotdf.*;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -199,9 +205,39 @@ public class NanoTDF {
         return nanoTDFSize;
     }
 
+    public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream,
+            SDK.KAS kas) throws IOException, URISyntaxException {
+             readNanoTDF(nanoTDF, outputStream,kas, Config.newNanoTDFReaderConfig());
+    }
 
     public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream,
-            SDK.KAS kas) throws IOException {
+            SDK.KAS kas, KeyAccessServerRegistryServiceFutureStub kasRegistryService, String platformUrl) throws IOException, InterruptedException, ExecutionException, URISyntaxException {
+             readNanoTDF(nanoTDF, outputStream,kas, Config.newNanoTDFReaderConfig(), kasRegistryService, platformUrl);
+    }
+
+    public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream,
+            SDK.KAS kas, Config.NanoTDFReaderConfig nanoTdfReaderConfig, KeyAccessServerRegistryServiceFutureStub kasRegistryService, String platformUrl) throws IOException, InterruptedException, ExecutionException, URISyntaxException {
+        if (!nanoTdfReaderConfig.ignoreKasAllowlist && (nanoTdfReaderConfig.kasAllowlist == null || nanoTdfReaderConfig.kasAllowlist.isEmpty())) {
+            ListKeyAccessServersRequest request = ListKeyAccessServersRequest.newBuilder()
+                    .build();
+            ListKeyAccessServersResponse response = kasRegistryService.listKeyAccessServers(request).get();
+            nanoTdfReaderConfig.kasAllowlist = new HashSet<>();
+            var kases = response.getKeyAccessServersList();
+
+            for (var entry : kases) {
+                nanoTdfReaderConfig.kasAllowlist.add(Config.getKasAddress(entry.getUri()));
+            }
+
+            logger.info("platformUrl: {}", platformUrl);
+            nanoTdfReaderConfig.kasAllowlist.add(Config.getKasAddress(platformUrl));
+            logger.info("KasAllowlist: kas url list is {}", nanoTdfReaderConfig.kasAllowlist);
+        }
+        readNanoTDF(nanoTDF, outputStream, kas, nanoTdfReaderConfig);
+    }
+
+
+    public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream,
+            SDK.KAS kas, Config.NanoTDFReaderConfig nanoTdfReaderConfig) throws IOException, URISyntaxException {
 
         Header header = new Header(nanoTDF);
         CollectionKey cachedKey = collectionStore.getKey(header);
@@ -217,6 +253,18 @@ public class NanoTDF {
             logger.debug("readNanoTDF header length {}", headerData.length);
 
             String kasUrl = header.getKasLocator().getResourceUrl();
+
+            var realAddress = Config.getKasAddress(kasUrl);
+            if (nanoTdfReaderConfig.ignoreKasAllowlist) {
+                logger.warn("Ignoring KasAllowlist for url {}", realAddress);
+            } else if (nanoTdfReaderConfig.kasAllowlist == null || nanoTdfReaderConfig.kasAllowlist.isEmpty()) {
+                logger.error("KasAllowlist: No KAS allowlist provided and no KeyAccessServerRegistry available, {} is not allowed", realAddress);
+                throw new KasAllowlistException("No KAS allowlist provided and no KeyAccessServerRegistry available");
+            } else if (!nanoTdfReaderConfig.kasAllowlist.contains(realAddress)) {
+                logger.error("KasAllowlist: kas url {} is not allowed for allowlist {}", realAddress, nanoTdfReaderConfig.kasAllowlist);
+                throw new KasAllowlistException("KasAllowlist: kas url "+realAddress+" is not allowed");
+            }
+
 
             key = kas.unwrapNanoTDF(header.getECCMode().getEllipticCurveType(),
                     base64HeaderData,

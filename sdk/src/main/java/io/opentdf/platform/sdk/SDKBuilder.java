@@ -243,7 +243,7 @@ public class SDKBuilder {
 
     public SDK build() {
         var services = buildServices();
-        return new SDK(services.services, services.trustManager, services.interceptor);
+        return new SDK(services.services, services.trustManager, services.interceptor, platformEndpoint);
     }
 
     /**
@@ -257,6 +257,9 @@ public class SDKBuilder {
      * @return {@type ManagedChannelBuilder<?>} configured with the SDK options
      */
     private ManagedChannelBuilder<?> getManagedChannelBuilder(String endpoint) {
+        // normalize the endpoint, ends with just host:port
+        endpoint = KASClient.normalizeAddress(endpoint);
+
         ManagedChannelBuilder<?> channelBuilder;
         if (sslFactory != null && !usePlainText) {
             channelBuilder = Grpc.newChannelBuilder(endpoint, TlsChannelCredentials.newBuilder()
