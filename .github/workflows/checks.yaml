@@ -302,21 +302,21 @@ jobs:
             --client-secret=secret \
             --platform-endpoint=http://localhost:8080 \
             -h\
-            encrypt --kas-url=http://localhost:8080,localhost:8282 -f data -m 'here is some metadata' > test.tdf
+            encrypt --kas-url=http://localhost:8080,http://localhost:8282 -f data -m 'here is some metadata' > test.tdf
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=http://localhost:8080 \
             -h\
-            decrypt -f test.tdf > decrypted
+            decrypt -f test.tdf --kas-allowlist http://localhost:8080,http://localhost:8282  > decrypted
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=http://localhost:8080 \
             -h\
-            metadata -f test.tdf > metadata
+            metadata -f test.tdf --kas-allowlist http://localhost:8080,http://localhost:8282 > metadata
 
           if ! diff -q data decrypted; then
             printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
