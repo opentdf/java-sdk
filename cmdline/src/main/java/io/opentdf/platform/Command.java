@@ -304,13 +304,24 @@ class Command {
     }
 
     @CommandLine.Command(name = "metadata")
-    void readMetadata(@Option(names = { "-f", "--file" }, required = true) Path tdfPath) throws IOException,
+    void readMetadata(@Option(names = { "-f", "--file" }, required = true) Path tdfPath,
+    @Option(names = { "--kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<String> kasAllowlistStr,
+            @Option(names = { "--ignore-kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<Boolean> ignoreAllowlist) throws IOException,
             TDF.FailedToCreateGMAC, JOSEException, NoSuchAlgorithmException, ParseException, DecoderException, InterruptedException, ExecutionException, URISyntaxException {
         var sdk = buildSDK();
-
+        var opts = new ArrayList<Consumer<Config.TDFReaderConfig>>();
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
             try (var stdout = new PrintWriter(System.out)) {
-                var reader = new TDF().loadTDF(in, sdk.getServices().kas(), sdk.getServices().kasRegistry(), sdk.getPlatformUrl());
+
+                if (ignoreAllowlist.isPresent()) {
+                    opts.add(Config.WithIgnoreKasAllowlist(ignoreAllowlist.get()));
+                }
+                if (kasAllowlistStr.isPresent()) {
+                    opts.add(Config.WithKasAllowlist(kasAllowlistStr.get().split(",")));
+                }
+
+                var readerConfig = Config.newTDFReaderConfig(opts.toArray(new Consumer[0]));
+                var reader = new TDF().loadTDF(in, sdk.getServices().kas(), readerConfig, sdk.getServices().kasRegistry(), sdk.getPlatformUrl());
                 stdout.write(reader.getMetadata() == null ? "" : reader.getMetadata());
             }
         }
