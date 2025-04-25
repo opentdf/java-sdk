@@ -61,7 +61,7 @@ public class TDFTest {
             int index;
             // if the kasinfo url contains the platform url, remove it
             if (kasInfo.URL.startsWith(platformUrl)) {
-                index = Integer.parseInt(kasInfo.URL.replaceFirst("^"+platformUrl+"/kas", ""));
+                index = Integer.parseInt(kasInfo.URL.replaceFirst("^" + Pattern.quote(platformUrl) + "/kas", ""));
             } else {
                 index = Integer.parseInt(kasInfo.URL.replaceFirst("^https://example.com/kas", ""));
             }
