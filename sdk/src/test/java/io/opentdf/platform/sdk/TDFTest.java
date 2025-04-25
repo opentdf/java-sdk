@@ -79,7 +79,7 @@ public class TDFTest {
                 int index;
                 // if the keyAccess.url contains the platform url, remove it
                 if (keyAccess.url.startsWith(platformUrl)) {
-                    index = Integer.parseInt(keyAccess.url.replaceFirst("^"+platformUrl+"/kas", ""));
+                    index = Integer.parseInt(keyAccess.url.replaceFirst("^" + Pattern.quote(platformUrl) + "/kas", ""));
                 } else {
                     index = Integer.parseInt(keyAccess.url.replaceFirst("^https://example.com/kas", ""));
                 }
