@@ -228,9 +228,7 @@ public class NanoTDF {
                 nanoTdfReaderConfig.kasAllowlist.add(Config.getKasAddress(entry.getUri()));
             }
 
-            logger.info("platformUrl: {}", platformUrl);
             nanoTdfReaderConfig.kasAllowlist.add(Config.getKasAddress(platformUrl));
-            logger.info("KasAllowlist: kas url list is {}", nanoTdfReaderConfig.kasAllowlist);
         }
         readNanoTDF(nanoTDF, outputStream, kas, nanoTdfReaderConfig);
     }
@@ -261,7 +259,7 @@ public class NanoTDF {
                 logger.error("KasAllowlist: No KAS allowlist provided and no KeyAccessServerRegistry available, {} is not allowed", realAddress);
                 throw new KasAllowlistException("No KAS allowlist provided and no KeyAccessServerRegistry available");
             } else if (!nanoTdfReaderConfig.kasAllowlist.contains(realAddress)) {
-                logger.error("KasAllowlist: kas url {} is not allowed for allowlist {}", realAddress, nanoTdfReaderConfig.kasAllowlist);
+                logger.error("KasAllowlist: kas url {} is not allowed", realAddress);
                 throw new KasAllowlistException("KasAllowlist: kas url "+realAddress+" is not allowed");
             }
 

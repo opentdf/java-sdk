@@ -9,9 +9,6 @@ import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesSer
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceGrpc.KeyAccessServerRegistryServiceFutureStub;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
-// import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
-// import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
-// import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse.AttributeAndValue;
 import io.opentdf.platform.sdk.Config.TDFConfig;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
 import io.opentdf.platform.sdk.Config.KASInfo;
@@ -719,7 +716,6 @@ public class TDF {
                         throw new KasAllowlistException("No KAS allowlist provided and no KeyAccessServerRegistry available");
                     } else if (!tdfReaderConfig.kasAllowlist.contains(realAddress)) {
                         logger.error("KasAllowlist: kas url {} is not allowed", realAddress);
-                        logger.error("KasAllowlist: kas list is {}", tdfReaderConfig.kasAllowlist);
                         throw new KasAllowlistException("KasAllowlist: kas url "+realAddress+" is not allowed");
                     }
                     unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy, tdfReaderConfig.sessionKeyType);
