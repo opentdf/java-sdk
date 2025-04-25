@@ -9,7 +9,6 @@ import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceGrpc
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.policy.KeyAccessServer;
-import com.google.common.util.concurrent.ListenableFuture;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
@@ -35,6 +34,7 @@ import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
@@ -42,7 +42,6 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
