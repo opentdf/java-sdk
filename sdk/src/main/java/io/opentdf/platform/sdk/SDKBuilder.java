@@ -335,10 +335,11 @@ public class SDKBuilder {
             httpClient.protocols(List.of(Protocol.H2_PRIOR_KNOWLEDGE));
         }
         if (sslFactory != null) {
-            if (sslFactory.getTrustManager().isEmpty()) {
+            var trustManager = sslFactory.getTrustManager();
+            if (trustManager.isEmpty()) {
                 throw new SDKException("SSL factory must have a trust manager");
             }
-            httpClient.sslSocketFactory(sslFactory.getSslSocketFactory(), sslFactory.getTrustManager().get());
+            httpClient.sslSocketFactory(sslFactory.getSslSocketFactory(), trustManager.get());
         }
         return httpClient.build();
     }
