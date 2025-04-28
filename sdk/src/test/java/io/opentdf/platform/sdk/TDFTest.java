@@ -24,7 +24,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
-import java.security.Key;
 import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -34,7 +33,6 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -555,7 +553,7 @@ public class TDFTest {
     }
 
     @Test
-    public void legacyTDFRoundTrips() throws DecoderException, IOException, JOSEException, ParseException, NoSuchAlgorithmException, URISyntaxException {
+    void legacyTDFRoundTrips() throws DecoderException, IOException, JOSEException, ParseException, NoSuchAlgorithmException, URISyntaxException {
         final String mimeType = "application/pdf";
         var assertionConfig1 = new AssertionConfig();
         assertionConfig1.id = "assertion1";
