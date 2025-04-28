@@ -38,7 +38,7 @@ public class Example {
     // Decrypt a file
     try (SeekableByteChannel in =
           FileChannel.open("input.ciphertext", StandardOpenOption.READ)) {
-        TDF.Reader reader = new TDF().loadTDF(in, sdk.getServices().kas());
+        TDF.Reader reader = new TDF().loadTDF(in, sdk.getServices().kas(), sdk.getServices().kasRegistry(), sdk.getPlatformUrl());
         reader.readPayload(System.out);
     }
 }}

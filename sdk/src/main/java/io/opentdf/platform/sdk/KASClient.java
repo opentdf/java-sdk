@@ -105,7 +105,7 @@ public class KASClient implements SDK.KAS {
         return this.kasKeyCache;
     }
 
-    private String normalizeAddress(String urlString) {
+    public static String normalizeAddress(String urlString) {
         URL url;
         try {
             url = new URL(urlString);

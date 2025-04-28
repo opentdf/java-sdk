@@ -8,8 +8,11 @@ import io.opentdf.platform.sdk.nanotdf.SymmetricAndPayloadConfig;
 
 import io.opentdf.platform.policy.Value;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.*;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * Configuration class for setting various configurations related to TDF.
@@ -98,6 +101,8 @@ public class Config {
         AssertionVerificationKeys assertionVerificationKeys = new AssertionVerificationKeys();
         boolean disableAssertionVerification;
         KeyType sessionKeyType;
+        Set<String> kasAllowlist;
+        boolean ignoreKasAllowlist;
     }
 
     @SafeVarargs
@@ -105,6 +110,7 @@ public class Config {
         TDFReaderConfig config = new TDFReaderConfig();
         config.disableAssertionVerification = false;
         config.sessionKeyType = KeyType.RSA2048Key;
+        config.kasAllowlist = new HashSet<>();
         for (Consumer<TDFReaderConfig> option : options) {
             option.accept(config);
         }
@@ -123,6 +129,30 @@ public class Config {
     public static Consumer<TDFReaderConfig> WithSessionKeyType(KeyType keyType) {
         return (TDFReaderConfig config) -> config.sessionKeyType = keyType;
     }
+    public static Consumer<TDFReaderConfig> WithKasAllowlist(String... kasAllowlist) {
+        return (TDFReaderConfig config) -> {
+            config.kasAllowlist = Arrays.stream(kasAllowlist)
+                                        .map(s -> {
+                                            try {
+                                                return getKasAddress(s);
+                                            } catch (URISyntaxException e) {
+                                                throw new RuntimeException("Invalid URI: " + s, e);
+                                            }
+                                        }).collect(Collectors.toCollection(HashSet::new));
+        };
+    }
+
+    public static Consumer<TDFReaderConfig> withKasAllowlist(Set<String> kasAllowlist) {
+        return (TDFReaderConfig config) -> {
+            config.kasAllowlist = kasAllowlist;
+        };
+    }
+
+    public static Consumer<TDFReaderConfig> WithIgnoreKasAllowlist(boolean ignore) {
+        return (TDFReaderConfig config) -> config.ignoreKasAllowlist = ignore;
+    }
+
+
     public static class TDFConfig {
         public Boolean autoconfigure;
         public int defaultSegmentSize;
@@ -354,6 +384,43 @@ public class Config {
         return (NanoTDFConfig config) -> config.eccMode.setECDSABinding(enable);
     }
 
+    public static class NanoTDFReaderConfig {
+        Set<String> kasAllowlist;
+        boolean ignoreKasAllowlist;
+    }
+
+    public static NanoTDFReaderConfig newNanoTDFReaderConfig(Consumer<NanoTDFReaderConfig>... options) {
+        NanoTDFReaderConfig config = new NanoTDFReaderConfig();
+        for (Consumer<NanoTDFReaderConfig> option : options) {
+            option.accept(config);
+        }
+        return config;
+    }
+
+    public static Consumer<NanoTDFReaderConfig> WithNanoKasAllowlist(String... kasAllowlist) {
+        return (NanoTDFReaderConfig config) -> {
+            // apply getKasAddress to each kasAllowlist entry and add to hashset
+            config.kasAllowlist = Arrays.stream(kasAllowlist)
+                                        .map(s -> {
+                                            try {
+                                                return getKasAddress(s);
+                                            } catch (URISyntaxException e) {
+                                                throw new RuntimeException("Invalid URI: " + s, e);
+                                            }
+                                        }).collect(Collectors.toCollection(HashSet::new));
+        };
+    }
+
+    public static Consumer<NanoTDFReaderConfig> withNanoKasAllowlist(Set<String> kasAllowlist) {
+        return (NanoTDFReaderConfig config) -> {
+            config.kasAllowlist = kasAllowlist;
+        };
+    }
+
+    public static Consumer<NanoTDFReaderConfig> WithNanoIgnoreKasAllowlist(boolean ignore) {
+        return (NanoTDFReaderConfig config) -> config.ignoreKasAllowlist = ignore;
+    }
+
     public static class HeaderInfo {
         private final Header header;
         private final AesGcm key;
@@ -408,5 +475,29 @@ public class Config {
             updatedHeaderInfo = true;
             this.notifyAll();
         }
+    }
+
+    public static String getKasAddress(String kasURL) throws URISyntaxException {
+        // Prepend "https://" if no scheme is provided
+        if (!kasURL.contains("://")) {
+            kasURL = "https://" + kasURL;
+        }
+
+        URI uri = new URI(kasURL);
+
+        // Default to "https" if no scheme is provided
+        String scheme = uri.getScheme();
+        if (scheme == null) {
+            scheme = "https";
+        }
+
+        // Default to port 443 if no port is provided
+        int port = uri.getPort();
+        if (port == -1) {
+            port = 443;
+        }
+
+        // Reconstruct the URL with only the scheme, host, and port
+        return new URI(scheme, null, uri.getHost(), port, null, null, null).toString();
     }
 }
