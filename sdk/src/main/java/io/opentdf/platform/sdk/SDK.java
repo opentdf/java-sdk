@@ -3,6 +3,7 @@ package io.opentdf.platform.sdk;
 import com.connectrpc.Interceptor;
 import io.opentdf.platform.generated.authorization.AuthorizationServiceClient;
 import io.opentdf.platform.generated.policy.attributes.AttributesServiceClient;
+import io.opentdf.platform.generated.policy.kasregistry.KeyAccessServerRegistryServiceClient;
 import io.opentdf.platform.generated.policy.namespaces.NamespaceServiceClient;
 import io.opentdf.platform.generated.policy.resourcemapping.ResourceMappingServiceClient;
 import io.opentdf.platform.generated.policy.subjectmapping.SubjectMappingServiceClient;
@@ -23,6 +24,7 @@ public class SDK implements AutoCloseable {
     private final Services services;
     private final TrustManager trustManager;
     private final Interceptor authInterceptor;
+    private final String platformUrl;
 
     /**
      * Closes the SDK, including its associated services.
@@ -66,6 +68,8 @@ public class SDK implements AutoCloseable {
 
         AuthorizationServiceClient authorization();
 
+        KeyAccessServerRegistryServiceClient kasRegistry();
+
         KAS kas();
     }
 
@@ -77,7 +81,8 @@ public class SDK implements AutoCloseable {
         return Optional.ofNullable(authInterceptor);
     }
 
-    SDK(Services services, TrustManager trustManager, Interceptor authInterceptor) {
+    SDK(Services services, TrustManager trustManager, Interceptor authInterceptor, String platformUrl) {
+        this.platformUrl = platformUrl;
         this.services = services;
         this.trustManager = trustManager;
         this.authInterceptor = authInterceptor;
@@ -108,5 +113,9 @@ public class SDK implements AutoCloseable {
         }
         return entries.stream().anyMatch(e -> "0.manifest.json".equals(e.getName()))
                 && entries.stream().anyMatch(e -> "0.payload".equals(e.getName()));
+    }
+
+    public String getPlatformUrl() {
+        return platformUrl;
     }
 }

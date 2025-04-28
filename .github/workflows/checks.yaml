@@ -152,21 +152,21 @@ jobs:
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
-            --platform-endpoint=localhost:8080 \
+            --platform-endpoint=http://localhost:8080 \
             -h\
-            encrypt --kas-url=localhost:8080 --mime-type=text/plain --attr https://example.com/attr/attr1/value/value1 --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
+            encrypt --kas-url=http://localhost:8080 --mime-type=text/plain --attr https://example.com/attr/attr1/value/value1 --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
-            --platform-endpoint=localhost:8080 \
+            --platform-endpoint=http://localhost:8080 \
             -h\
             decrypt -f test.tdf > decrypted
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
-            --platform-endpoint=localhost:8080 \
+            --platform-endpoint=http://localhost:8080 \
             -h\
             metadata -f test.tdf > metadata
 
@@ -188,14 +188,14 @@ jobs:
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
-            --platform-endpoint=localhost:8080 \
+            --platform-endpoint=http://localhost:8080 \
             -h\
             encryptnano --kas-url=http://localhost:8080 --attr https://example.com/attr/attr1/value/value1 -f data -m 'here is some metadata' > nano.ntdf
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
-            --platform-endpoint=localhost:8080 \
+            --platform-endpoint=http://localhost:8080 \
             -h\
             decryptnano -f nano.ntdf > decrypted
           
@@ -215,14 +215,14 @@ jobs:
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
-            --platform-endpoint=localhost:8080 \
+            --platform-endpoint=http://localhost:8080 \
             -h\
-            encrypt --kas-url=localhost:8080 --mime-type=text/plain --with-assertions=$ASSERTIONS --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
+            encrypt --kas-url=http://localhost:8080 --mime-type=text/plain --with-assertions=$ASSERTIONS --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
-            --platform-endpoint=localhost:8080 \
+            --platform-endpoint=http://localhost:8080 \
             -h\
             decrypt -f test.tdf > decrypted
           
@@ -246,14 +246,14 @@ jobs:
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
-            --platform-endpoint=localhost:8080 \
+            --platform-endpoint=http://localhost:8080 \
             -h\
-            encrypt --kas-url=localhost:8080 --mime-type=text/plain --with-assertions="$SIGNED_ASSERTIONS_HS256" --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
+            encrypt --kas-url=http://localhost:8080 --mime-type=text/plain --with-assertions="$SIGNED_ASSERTIONS_HS256" --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
-            --platform-endpoint=localhost:8080 \
+            --platform-endpoint=http://localhost:8080 \
             -h\
             decrypt --with-assertion-verification-keys="$SIGNED_ASSERTION_VERIFICATON_HS256" -f test.tdf > decrypted
           
@@ -267,14 +267,14 @@ jobs:
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
-            --platform-endpoint=localhost:8080 \
+            --platform-endpoint=http://localhost:8080 \
             -h\
-            encrypt --kas-url=localhost:8080 --mime-type=text/plain --with-assertions "$SIGNED_ASSERTIONS_RS256" --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
+            encrypt --kas-url=http://localhost:8080 --mime-type=text/plain --with-assertions "$SIGNED_ASSERTIONS_RS256" --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
-            --platform-endpoint=localhost:8080 \
+            --platform-endpoint=http://localhost:8080 \
             -h\
             decrypt --with-assertion-verification-keys "$SIGNED_ASSERTION_VERIFICATON_RS256" -f test.tdf > decrypted
           
@@ -300,23 +300,23 @@ jobs:
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
-            --platform-endpoint=localhost:8080 \
+            --platform-endpoint=http://localhost:8080 \
             -h\
-            encrypt --kas-url=localhost:8080,localhost:8282 -f data -m 'here is some metadata' > test.tdf
+            encrypt --kas-url=http://localhost:8080,http://localhost:8282 -f data -m 'here is some metadata' > test.tdf
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
-            --platform-endpoint=localhost:8080 \
+            --platform-endpoint=http://localhost:8080 \
             -h\
-            decrypt -f test.tdf > decrypted
+            decrypt -f test.tdf --kas-allowlist http://localhost:8080,http://localhost:8282  > decrypted
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
-            --platform-endpoint=localhost:8080 \
+            --platform-endpoint=http://localhost:8080 \
             -h\
-            metadata -f test.tdf > metadata
+            metadata -f test.tdf --kas-allowlist http://localhost:8080,http://localhost:8282 > metadata
 
           if ! diff -q data decrypted; then
             printf 'decrypted data is incorrect [%s]' "$(< decrypted)"

@@ -11,12 +11,15 @@ managed:
   override:
     - file_option: java_package_prefix
       value: io.opentdf.platform.generated
+    - file_option: java_package_prefix
+      value: io.opentdf.platform.generated.test
+      module: buf.build/grpc/java
 plugins:
   - remote: buf.build/protocolbuffers/java:v25.3
-    out: ./
-  - remote: buf.build/grpc/java:v1.61.1
-    out: ./
+    out: ./generated-sources
   - remote: buf.build/connectrpc/kotlin
-    out: ./
+    out: ./generated-sources
     opt:
       - generateBlockingUnaryMethods=true
+  - remote: buf.build/grpc/java:v1.61.1
+    out: ./generated-test-sources

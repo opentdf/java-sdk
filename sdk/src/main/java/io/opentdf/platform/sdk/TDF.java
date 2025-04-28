@@ -1,11 +1,15 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.ResponseMessageKt;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.nimbusds.jose.*;
 
 import io.opentdf.platform.generated.policy.Value;
 import io.opentdf.platform.generated.policy.attributes.AttributesServiceClient;
+import io.opentdf.platform.generated.policy.kasregistry.KeyAccessServerRegistryServiceClient;
+import io.opentdf.platform.generated.policy.kasregistry.ListKeyAccessServersRequest;
+import io.opentdf.platform.generated.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.sdk.Config.TDFConfig;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
 import io.opentdf.platform.sdk.Config.KASInfo;
@@ -22,6 +26,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StringReader;
+import java.net.URISyntaxException;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
@@ -168,6 +173,12 @@ public class TDF {
 
     public static class KasBadRequestException extends TamperException {
         public KasBadRequestException(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    public static class KasAllowlistException extends SDKException {
+        public KasAllowlistException(String errorMessage) {
             super(errorMessage);
         }
     }
@@ -648,6 +659,26 @@ public class TDF {
         return loadTDF(tdf, kas, Config.newTDFReaderConfig());
     }
 
+    public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas, KeyAccessServerRegistryServiceClient kasRegistryService, String platformUrl)
+            throws DecoderException, IOException, ParseException, NoSuchAlgorithmException, JOSEException, URISyntaxException {
+        return loadTDF(tdf, kas, Config.newTDFReaderConfig(), kasRegistryService, platformUrl);
+    }
+
+    public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas, Config.TDFReaderConfig tdfReaderConfig, KeyAccessServerRegistryServiceClient kasRegistryService, String platformUrl)
+            throws DecoderException, IOException, ParseException, NoSuchAlgorithmException, JOSEException, URISyntaxException {
+        if (!tdfReaderConfig.ignoreKasAllowlist && (tdfReaderConfig.kasAllowlist == null || tdfReaderConfig.kasAllowlist.isEmpty())) {
+            ListKeyAccessServersRequest request = ListKeyAccessServersRequest.newBuilder()
+                    .build();
+            ListKeyAccessServersResponse response = ResponseMessageKt.getOrThrow(kasRegistryService.listKeyAccessServersBlocking(request, Collections.emptyMap()).execute());
+            tdfReaderConfig.kasAllowlist = new HashSet<>();
+
+            for (var entry : response.getKeyAccessServersList()) {
+                tdfReaderConfig.kasAllowlist.add(Config.getKasAddress(entry.getUri()));
+            }
+            tdfReaderConfig.kasAllowlist.add(Config.getKasAddress(platformUrl));
+        }
+        return loadTDF(tdf, kas, tdfReaderConfig);
+    }
 
     public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas,
                           Config.TDFReaderConfig tdfReaderConfig)
@@ -677,6 +708,16 @@ public class TDF {
                 }
                 knownSplits.add(ss.splitID);
                 try {
+                    var realAddress = Config.getKasAddress(keyAccess.url);
+                    if (tdfReaderConfig.ignoreKasAllowlist) {
+                        logger.warn("Ignoring KasAllowlist for url {}", realAddress);
+                    } else if (tdfReaderConfig.kasAllowlist == null || tdfReaderConfig.kasAllowlist.isEmpty()) {
+                        logger.error("KasAllowlist: No KAS allowlist provided and no KeyAccessServerRegistry available, {} is not allowed", realAddress);
+                        throw new KasAllowlistException("No KAS allowlist provided and no KeyAccessServerRegistry available");
+                    } else if (!tdfReaderConfig.kasAllowlist.contains(realAddress)) {
+                        logger.error("KasAllowlist: kas url {} is not allowed", realAddress);
+                        throw new KasAllowlistException("KasAllowlist: kas url "+realAddress+" is not allowed");
+                    }
                     unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy, tdfReaderConfig.sessionKeyType);
                 } catch (Exception e) {
                     skippedSplits.put(ss, e);

@@ -28,6 +28,7 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.opentdf.platform.generated.authorization.AuthorizationServiceClient;
 import io.opentdf.platform.generated.policy.attributes.AttributesServiceClient;
+import io.opentdf.platform.generated.policy.kasregistry.KeyAccessServerRegistryServiceClient;
 import io.opentdf.platform.generated.policy.namespaces.NamespaceServiceClient;
 import io.opentdf.platform.generated.policy.resourcemapping.ResourceMappingServiceClient;
 import io.opentdf.platform.generated.policy.subjectmapping.SubjectMappingServiceClient;
@@ -252,6 +253,7 @@ public class SDKBuilder {
         var subjectMappingService = new SubjectMappingServiceClient(client);
         var resourceMappingService = new ResourceMappingServiceClient(client);
         var authorizationService = new AuthorizationServiceClient(client);
+        var kasRegistryService = new KeyAccessServerRegistryServiceClient(client);
 
         var services = new SDK.Services() {
             @Override
@@ -287,6 +289,11 @@ public class SDKBuilder {
             }
 
             @Override
+            public KeyAccessServerRegistryServiceClient kasRegistry() {
+                return kasRegistryService;
+            }
+
+            @Override
             public SDK.KAS kas() {
                 return kasClient;
             }
@@ -306,7 +313,7 @@ public class SDKBuilder {
 
     public SDK build() {
         var services = buildServices();
-        return new SDK(services.services, services.trustManager, services.interceptor);
+        return new SDK(services.services, services.trustManager, services.interceptor, platformEndpoint);
     }
 
     private ProtocolClient getUnauthenticatedProtocolClient(String endpoint, OkHttpClient httpClient) {

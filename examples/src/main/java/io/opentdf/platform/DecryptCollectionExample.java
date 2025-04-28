@@ -9,12 +9,14 @@ import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
+import java.util.concurrent.ExecutionException;
 
 public class DecryptCollectionExample {
-    public static void main(String[] args) throws IOException, NanoTDF.NanoTDFMaxSizeLimit, NanoTDF.UnsupportedNanoTDFFeature, NanoTDF.InvalidNanoTDFConfig, NoSuchAlgorithmException, InterruptedException {
+    public static void main(String[] args) throws IOException, NanoTDF.NanoTDFMaxSizeLimit, NanoTDF.UnsupportedNanoTDFFeature, NanoTDF.InvalidNanoTDFConfig, NoSuchAlgorithmException, InterruptedException, ExecutionException, URISyntaxException {
         String clientId = "opentdf-sdk";
         String clientSecret = "secret";
         String platformEndpoint = "localhost:8080";
@@ -33,7 +35,7 @@ public class DecryptCollectionExample {
 
         for (int i = 0; i < 50; i++) {
             FileInputStream fis = new FileInputStream(String.format("out/my.%d_ciphertext", i));
-            nanoTDFClient.readNanoTDF(ByteBuffer.wrap(fis.readAllBytes()), System.out, sdk.getServices().kas());
+            nanoTDFClient.readNanoTDF(ByteBuffer.wrap(fis.readAllBytes()), System.out, sdk.getServices().kas(), sdk.getServices().kasRegistry(), sdk.getPlatformUrl());
             fis.close();
         }
 
