@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.9](https://github.com/opentdf/java-sdk/compare/v0.7.8...v0.7.9) (2025-04-28)
+
+
+### Features
+
+* **sdk:** KAS Allowlist ([#245](https://github.com/opentdf/java-sdk/issues/245)) ([e48cdbd](https://github.com/opentdf/java-sdk/commit/e48cdbd3cefeb04be3812d1c7fc77427872be146))
+
 ## [0.7.8](https://github.com/opentdf/java-sdk/compare/v0.7.7...v0.7.8) (2025-04-09)
 
 
