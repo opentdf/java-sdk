@@ -124,7 +124,7 @@ class TokenSource {
                 tokenResponse = TokenResponse.parse(httpResponse);
                 if (!tokenResponse.indicatesSuccess()) {
                     ErrorObject error = tokenResponse.toErrorResponse().getErrorObject();
-                    throw new RuntimeException("Token request failed: " + error);
+                    throw new SDKException("failure to get token. description = [" + error.getDescription() + "] error code = [" + error.getCode() + "] error uri = [" + error.getURI() + "]");
                 }
 
                 var tokens = tokenResponse.toSuccessResponse().getTokens();
@@ -149,8 +149,7 @@ class TokenSource {
             }
 
         } catch (Exception e) {
-            // TODO Auto-generated catch block
-            throw new RuntimeException("failed to get token", e);
+            throw new SDKException("failed to get token", e);
         }
         return this.token;
     }

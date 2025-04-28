@@ -327,7 +327,8 @@ public class SDKBuilder {
     }
 
     private OkHttpClient getHttpClient() {
-        // TODO: just use a single http client for everything
+        // using a single http client is apparently the best practice, subject to everyone wanting to
+        // have the same protocols
         var httpClient = new OkHttpClient.Builder();
         if (usePlainText) {
             // we can only connect using HTTP/2 without any negotiation when using plain test

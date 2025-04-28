@@ -25,7 +25,6 @@ import io.opentdf.platform.sdk.TDF.KasBadRequestException;
 import kotlin.collections.MapsKt;
 import okhttp3.OkHttpClient;
 
-import java.net.http.HttpClient;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -33,9 +32,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
-import java.util.function.Function;
 
 import static com.connectrpc.ResponseMessageKt.getOrThrow;
 import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
