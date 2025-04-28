@@ -212,12 +212,12 @@ public class NanoTDF {
     }
 
     public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream,
-                            SDK.KAS kas, KeyAccessServerRegistryServiceClient kasRegistryService, String platformUrl) throws IOException, InterruptedException, ExecutionException, URISyntaxException {
+                            SDK.KAS kas, KeyAccessServerRegistryServiceClient kasRegistryService, String platformUrl) throws IOException, URISyntaxException {
              readNanoTDF(nanoTDF, outputStream,kas, Config.newNanoTDFReaderConfig(), kasRegistryService, platformUrl);
     }
 
     public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream,
-            SDK.KAS kas, Config.NanoTDFReaderConfig nanoTdfReaderConfig, KeyAccessServerRegistryServiceClient kasRegistryService, String platformUrl) throws IOException, InterruptedException, ExecutionException, URISyntaxException {
+            SDK.KAS kas, Config.NanoTDFReaderConfig nanoTdfReaderConfig, KeyAccessServerRegistryServiceClient kasRegistryService, String platformUrl) throws IOException, URISyntaxException {
         if (!nanoTdfReaderConfig.ignoreKasAllowlist && (nanoTdfReaderConfig.kasAllowlist == null || nanoTdfReaderConfig.kasAllowlist.isEmpty())) {
             ListKeyAccessServersRequest request = ListKeyAccessServersRequest.newBuilder()
                     .build();

@@ -159,7 +159,7 @@ public class TDFTest {
 
                     @Override
                     public void cancel() {
-
+                        // this never happens in tests
                     }
                 });
     }
@@ -555,7 +555,7 @@ public class TDFTest {
     }
 
     @Test
-    public void legacyTDFRoundTrips() throws DecoderException, IOException, ExecutionException, JOSEException, InterruptedException, ParseException, NoSuchAlgorithmException, URISyntaxException {
+    public void legacyTDFRoundTrips() throws DecoderException, IOException, JOSEException, ParseException, NoSuchAlgorithmException, URISyntaxException {
         final String mimeType = "application/pdf";
         var assertionConfig1 = new AssertionConfig();
         assertionConfig1.id = "assertion1";
@@ -637,7 +637,7 @@ public class TDFTest {
 
                                 @Override
                                 public void cancel() {
-
+                                    // we never do this during tests
                                 }
                             }
                 );

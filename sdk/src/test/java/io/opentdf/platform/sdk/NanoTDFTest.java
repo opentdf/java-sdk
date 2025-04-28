@@ -145,11 +145,9 @@ public class NanoTDFTest {
 
                     @Override
                     public void cancel() {
+                        // this never happens in tests
                     }
                 });
-//        io.grpc.Channel mockChannel = mock(io.grpc.Channel.class);
-//        when(mockChannel.authority()).thenReturn("mock:8080");
-//        when(kasRegistryService.getChannel()).thenReturn(mockChannel);
     }
 
     private static ArrayList<KeyPair> keypairs = new ArrayList<>();
