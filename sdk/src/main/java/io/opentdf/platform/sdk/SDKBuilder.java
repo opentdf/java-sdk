@@ -26,7 +26,11 @@ import com.nimbusds.oauth2.sdk.tokenexchange.TokenExchangeGrant;
 import com.nimbusds.openid.connect.sdk.op.OIDCProviderMetadata;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import io.opentdf.platform.generated.kas.AccessServiceClient;
+import io.opentdf.platform.generated.authorization.AuthorizationServiceClient;
+import io.opentdf.platform.generated.policy.attributes.AttributesServiceClient;
+import io.opentdf.platform.generated.policy.namespaces.NamespaceServiceClient;
+import io.opentdf.platform.generated.policy.resourcemapping.ResourceMappingServiceClient;
+import io.opentdf.platform.generated.policy.subjectmapping.SubjectMappingServiceClient;
 import io.opentdf.platform.generated.wellknownconfiguration.GetWellKnownConfigurationRequest;
 import io.opentdf.platform.generated.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import io.opentdf.platform.generated.wellknownconfiguration.WellKnownServiceClient;
@@ -49,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.BiFunction;
 
 /**
  * A builder class for creating instances of the SDK class.
@@ -171,7 +176,8 @@ public class SDKBuilder {
         // well known endpoint
         ProtocolClient bootstrapClient = null;
         GetWellKnownConfigurationResponse config;
-        bootstrapClient = getUnauthenticatedProtocolClient(platformEndpoint) ;
+        var httpClient = getHttpClient();
+        bootstrapClient = getUnauthenticatedProtocolClient(platformEndpoint, httpClient) ;
         var stub = new WellKnownServiceClient(bootstrapClient);
         try {
             config = ResponseMessageKt.getOrThrow(stub.getWellKnownConfigurationBlocking(GetWellKnownConfigurationRequest.getDefaultInstance(), Collections.emptyMap()).execute());
@@ -239,17 +245,63 @@ public class SDKBuilder {
         this.platformEndpoint = AddressNormalizer.normalizeAddress(this.platformEndpoint, this.usePlainText);
         var authInterceptor = getAuthInterceptor(dpopKey);
         var kasClient = getKASClient(dpopKey, authInterceptor);
-        var protocolClient = getProtocolClient(platformEndpoint, authInterceptor);
+        var httpClient = getHttpClient();
+        var client = getProtocolClient(platformEndpoint, httpClient, authInterceptor);
+        var attributeService = new AttributesServiceClient(client);
+        var namespaceService = new NamespaceServiceClient(client);
+        var subjectMappingService = new SubjectMappingServiceClient(client);
+        var resourceMappingService = new ResourceMappingServiceClient(client);
+        var authorizationService = new AuthorizationServiceClient(client);
+
+        var services = new SDK.Services() {
+            @Override
+            public void close() {
+                kasClient.close();
+                httpClient.dispatcher().executorService().shutdown();
+                httpClient.connectionPool().evictAll();
+            }
+
+            @Override
+            public AttributesServiceClient attributes() {
+                return attributeService;
+            }
+
+            @Override
+            public NamespaceServiceClient namespaces() {
+                return namespaceService;
+            }
+
+            @Override
+            public SubjectMappingServiceClient subjectMappings() {
+                return subjectMappingService;
+            }
+
+            @Override
+            public ResourceMappingServiceClient resourceMappings() {
+                return resourceMappingService;
+            }
+
+            @Override
+            public AuthorizationServiceClient authorization() {
+                return authorizationService;
+            }
+
+            @Override
+            public SDK.KAS kas() {
+                return kasClient;
+            }
+        };
 
         return new ServicesAndInternals(
                 authInterceptor,
                 sslFactory == null ? null : sslFactory.getTrustManager().orElse(null),
-                SDK.Services.newServices(protocolClient, kasClient));
+                services);
     }
 
     @Nonnull
     private KASClient getKASClient(RSAKey dpopKey, Interceptor interceptor) {
-        return new KASClient((String endpoint) -> new AccessServiceClient(getProtocolClient(endpoint, interceptor)), dpopKey, usePlainText);
+        BiFunction<OkHttpClient, String, ProtocolClient> protocolClientFactory = (OkHttpClient client, String address) -> getProtocolClient(address, client, interceptor);
+        return new KASClient(getHttpClient(), protocolClientFactory, dpopKey, usePlainText);
     }
 
     public SDK build() {
@@ -257,11 +309,25 @@ public class SDKBuilder {
         return new SDK(services.services, services.trustManager, services.interceptor);
     }
 
-    private ProtocolClient getUnauthenticatedProtocolClient(String endpoint) {
-        return getProtocolClient(endpoint, null);
+    private ProtocolClient getUnauthenticatedProtocolClient(String endpoint, OkHttpClient httpClient) {
+        return getProtocolClient(endpoint, httpClient, null);
     }
 
-    private ProtocolClient getProtocolClient(String endpoint, Interceptor authInterceptor) {
+    private ProtocolClient getProtocolClient(String endpoint, OkHttpClient httpClient, Interceptor authInterceptor) {
+        var protocolClientConfig = new ProtocolClientConfig(
+                endpoint,
+                new GoogleJavaProtobufStrategy(),
+                NetworkProtocol.GRPC,
+                null,
+                GETConfiguration.Enabled.INSTANCE,
+                authInterceptor == null ? Collections.emptyList() : List.of(ignoredConfig -> authInterceptor)
+        );
+
+        return new ProtocolClient(new ConnectOkHttpClient(httpClient), protocolClientConfig);
+    }
+
+    private OkHttpClient getHttpClient() {
+        // TODO: just use a single http client for everything
         var httpClient = new OkHttpClient.Builder();
         if (usePlainText) {
             // we can only connect using HTTP/2 without any negotiation when using plain test
@@ -273,17 +339,7 @@ public class SDKBuilder {
             }
             httpClient.sslSocketFactory(sslFactory.getSslSocketFactory(), sslFactory.getTrustManager().get());
         }
-
-        var protocolClientConfig = new ProtocolClientConfig(
-                endpoint,
-                new GoogleJavaProtobufStrategy(),
-                NetworkProtocol.GRPC,
-                null,
-                GETConfiguration.Enabled.INSTANCE,
-                authInterceptor == null ? Collections.emptyList() : List.of(ignoredConfig -> authInterceptor)
-        );
-
-        return new ProtocolClient(new ConnectOkHttpClient(httpClient.build()), protocolClientConfig);
+        return httpClient.build();
     }
 
     SSLFactory getSslFactory() {

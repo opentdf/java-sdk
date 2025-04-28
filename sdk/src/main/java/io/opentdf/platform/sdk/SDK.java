@@ -1,7 +1,6 @@
 package io.opentdf.platform.sdk;
 
 import com.connectrpc.Interceptor;
-import com.connectrpc.impl.ProtocolClient;
 import io.opentdf.platform.generated.authorization.AuthorizationServiceClient;
 import io.opentdf.platform.generated.policy.attributes.AttributesServiceClient;
 import io.opentdf.platform.generated.policy.namespaces.NamespaceServiceClient;
@@ -68,51 +67,6 @@ public class SDK implements AutoCloseable {
         AuthorizationServiceClient authorization();
 
         KAS kas();
-
-        static Services newServices(ProtocolClient client, KAS kas) {
-            var attributeService = new AttributesServiceClient(client);
-            var namespaceService = new NamespaceServiceClient(client);
-            var subjectMappingService = new SubjectMappingServiceClient(client);
-            var resourceMappingService = new ResourceMappingServiceClient(client);
-            var authorizationService = new AuthorizationServiceClient(client);
-
-            return new Services() {
-                @Override
-                public void close() throws Exception {
-                    kas.close();
-                }
-
-                @Override
-                public AttributesServiceClient attributes() {
-                    return attributeService;
-                }
-
-                @Override
-                public NamespaceServiceClient namespaces() {
-                    return namespaceService;
-                }
-
-                @Override
-                public SubjectMappingServiceClient subjectMappings() {
-                    return subjectMappingService;
-                }
-
-                @Override
-                public ResourceMappingServiceClient resourceMappings() {
-                    return resourceMappingService;
-                }
-
-                @Override
-                public AuthorizationServiceClient authorization() {
-                    return authorizationService;
-                }
-
-                @Override
-                public KAS kas() {
-                    return kas;
-                }
-            };
-        }
     }
 
     public Optional<TrustManager> getTrustManager() {

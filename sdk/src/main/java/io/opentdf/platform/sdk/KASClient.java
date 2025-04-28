@@ -1,6 +1,7 @@
 package io.opentdf.platform.sdk;
 
 import com.connectrpc.ResponseMessageKt;
+import com.connectrpc.impl.ProtocolClient;
 import com.google.gson.Gson;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -22,7 +23,9 @@ import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import io.opentdf.platform.sdk.TDF.KasBadRequestException;
 
 import kotlin.collections.MapsKt;
+import okhttp3.OkHttpClient;
 
+import java.net.http.HttpClient;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -30,6 +33,8 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import static com.connectrpc.ResponseMessageKt.getOrThrow;
@@ -43,7 +48,8 @@ import static java.lang.String.format;
  */
 public class KASClient implements SDK.KAS {
 
-    private final Function<String, AccessServiceClient> channelFactory;
+    private final OkHttpClient httpClient;
+    private final BiFunction<OkHttpClient, String, ProtocolClient> protocolClientFactory;
     private final boolean usePlaintext;
     private final RSASSASigner signer;
     private AsymDecryption decryptor;
@@ -53,12 +59,12 @@ public class KASClient implements SDK.KAS {
     /***
      * A client that communicates with KAS
      * 
-     * @param clientFactory A function that produces channels that can be used to
      *                       communicate
      * @param dpopKey
      */
-    public KASClient(Function<String, AccessServiceClient> clientFactory, RSAKey dpopKey, boolean usePlaintext) {
-        this.channelFactory = clientFactory;
+    KASClient(OkHttpClient httpClient, BiFunction<OkHttpClient, String, ProtocolClient> protocolClientFactory, RSAKey dpopKey, boolean usePlaintext) {
+        this.httpClient = httpClient;
+        this.protocolClientFactory = protocolClientFactory;
         this.usePlaintext = usePlaintext;
         try {
             this.signer = new RSASSASigner(dpopKey);
@@ -66,12 +72,6 @@ public class KASClient implements SDK.KAS {
             throw new SDKException("error creating dpop signer", e);
         }
         this.kasKeyCache = new KASKeyCache();
-    }
-
-    public KASClient(Function<String, AccessServiceClient> channelFactory, boolean usePlaintext, RSASSASigner signer) {
-        this.channelFactory = channelFactory;
-        this.usePlaintext = usePlaintext;
-        this.signer = signer;
     }
 
     @Override
@@ -126,6 +126,8 @@ public class KASClient implements SDK.KAS {
 
     @Override
     public synchronized void close() {
+        this.httpClient.dispatcher().cancelAll();
+        this.httpClient.connectionPool().evictAll();
     }
 
     static class RewrapRequestBody {
@@ -290,6 +292,9 @@ public class KASClient implements SDK.KAS {
 
     // make this protected so we can test the address normalization logic
     synchronized AccessServiceClient getStub(String url) {
-        return stubs.computeIfAbsent(AddressNormalizer.normalizeAddress(url, usePlaintext), channelFactory);
+        return stubs.computeIfAbsent(AddressNormalizer.normalizeAddress(url, usePlaintext), (String address) -> {
+            var client = protocolClientFactory.apply(httpClient, address);
+            return new AccessServiceClient(client);
+        });
     }
 }

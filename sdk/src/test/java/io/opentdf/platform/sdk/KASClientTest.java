@@ -16,7 +16,6 @@ import com.nimbusds.jwt.SignedJWT;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.stub.StreamObserver;
-import io.opentdf.platform.generated.kas.AccessServiceClient;
 import io.opentdf.platform.generated.kas.AccessServiceGrpc;
 import io.opentdf.platform.generated.kas.PublicKeyRequest;
 import io.opentdf.platform.generated.kas.PublicKeyResponse;
@@ -33,24 +32,21 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 
 import static io.opentdf.platform.sdk.SDKBuilderTest.getRandomPort;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 public class KASClientTest {
+    OkHttpClient httpClient = new OkHttpClient.Builder()
+            .protocols(List.of(Protocol.H2_PRIOR_KNOWLEDGE))
+            .build();
 
-    Function<String, AccessServiceClient> aclientFactory = (String endpoint) -> {
-        var c = new OkHttpClient.Builder()
-                .protocols(List.of(Protocol.H2_PRIOR_KNOWLEDGE))
-                .build();
-
-        var as = new ProtocolClient(
-                new ConnectOkHttpClient(c),
+    BiFunction<OkHttpClient, String, ProtocolClient> aclientFactory = (OkHttpClient client, String endpoint) -> {
+        return new ProtocolClient(
+                new ConnectOkHttpClient(httpClient),
                 new ProtocolClientConfig(endpoint, new GoogleJavaProtobufStrategy(), NetworkProtocol.GRPC, null, GETConfiguration.Enabled.INSTANCE)
         );
-
-        return new AccessServiceClient(as);
     };
 
     @Test
@@ -72,7 +68,7 @@ public class KASClientTest {
             var keypair = CryptoUtils.generateRSAKeypair();
             var dpopKey = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).privateKey(keypair.getPrivate())
                     .build();
-            try (var kas = new KASClient(aclientFactory, dpopKey, true)) {
+            try (var kas = new KASClient(httpClient, aclientFactory, dpopKey, true)) {
                 Config.KASInfo kasInfo = new Config.KASInfo();
                 kasInfo.URL = "http://localhost:" + rewrapServer.getPort();
                 assertThat(kas.getPublicKey(kasInfo).PublicKey).isEqualTo("тај је клуц");
@@ -102,7 +98,7 @@ public class KASClientTest {
             var keypair = CryptoUtils.generateRSAKeypair();
             var dpopKey = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).privateKey(keypair.getPrivate())
                     .build();
-            try (var kas = new KASClient(aclientFactory, dpopKey, true)) {
+            try (var kas = new KASClient(httpClient, aclientFactory, dpopKey, true)) {
                 Config.KASInfo kasInfo = new Config.KASInfo();
                 kasInfo.URL = "http://localhost:" + server.getPort();
                 assertThat(kas.getPublicKey(kasInfo).KID).isEqualTo("r1");
@@ -167,7 +163,7 @@ public class KASClientTest {
             rewrapServer = startServer(accessService);
             byte[] plaintextKey;
             byte[] rewrapResponse;
-            try (var kas = new KASClient(aclientFactory, dpopKey, true)) {
+            try (var kas = new KASClient(httpClient, aclientFactory, dpopKey, true)) {
 
                 Manifest.KeyAccess keyAccess = new Manifest.KeyAccess();
                 keyAccess.url = "http://localhost:" + rewrapServer.getPort();
@@ -192,9 +188,9 @@ public class KASClientTest {
         var dpopKeypair = CryptoUtils.generateRSAKeypair();
         var dpopKey = new RSAKey.Builder((RSAPublicKey) dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate())
                 .build();
-        var httpsKASClient = new KASClient(addr -> {
+        var httpsKASClient = new KASClient(httpClient, (client, addr) -> {
             lastAddress.set(addr);
-            return aclientFactory.apply(addr);
+            return aclientFactory.apply(client, addr);
         }, dpopKey, false);
 
         var stub = httpsKASClient.getStub("http://localhost:8080");
@@ -210,9 +206,9 @@ public class KASClientTest {
         var dpopKeypair = CryptoUtils.generateRSAKeypair();
         var dpopKey = new RSAKey.Builder((RSAPublicKey) dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate())
                 .build();
-        var httpsKASClient = new KASClient(addr -> {
+        var httpsKASClient = new KASClient(httpClient, (client, addr) -> {
             lastAddress.set(addr);
-            return aclientFactory.apply(addr);
+            return aclientFactory.apply(client, addr);
         }, dpopKey, true);
 
         var c1 = httpsKASClient.getStub("http://example.org");
