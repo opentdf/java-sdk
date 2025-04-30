@@ -22,10 +22,7 @@ import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import io.opentdf.platform.sdk.TDF.KasBadRequestException;
 
-import kotlin.collections.MapsKt;
 import okhttp3.OkHttpClient;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -75,7 +72,7 @@ public class KASClient implements SDK.KAS {
     @Override
     public KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
         var req = PublicKeyRequest.newBuilder().setAlgorithm(format("ec:%s", curve.toString())).build();
-        var r = getStub(kasInfo.URL).publicKeyBlocking(req, MapsKt.mapOf()).execute();
+        var r = getStub(kasInfo.URL).publicKeyBlocking(req, Collections.emptyMap()).execute();
         PublicKeyResponse res;
         try {
             res = ResponseMessageKt.getOrThrow(r);
@@ -99,7 +96,7 @@ public class KASClient implements SDK.KAS {
                 ? PublicKeyRequest.getDefaultInstance()
                 : PublicKeyRequest.newBuilder().setAlgorithm(kasInfo.Algorithm).build();
 
-        var req= getStub(kasInfo.URL).publicKeyBlocking(request, MapsKt.mapOf()).execute();
+        var req = getStub(kasInfo.URL).publicKeyBlocking(request, Collections.emptyMap()).execute();
         PublicKeyResponse resp;
         try {
             resp = RequestHelper.getOrThrow(req);
