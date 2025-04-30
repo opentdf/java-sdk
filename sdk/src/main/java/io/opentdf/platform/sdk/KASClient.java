@@ -1,5 +1,7 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.Code;
+import com.connectrpc.ConnectException;
 import com.connectrpc.ResponseMessageKt;
 import com.connectrpc.impl.ProtocolClient;
 import com.google.gson.Gson;
@@ -10,8 +12,6 @@ import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
-import io.grpc.StatusRuntimeException;
-import io.grpc.Status;
 import io.opentdf.platform.generated.kas.AccessServiceClient;
 import io.opentdf.platform.generated.kas.PublicKeyRequest;
 import io.opentdf.platform.generated.kas.PublicKeyResponse;
@@ -195,15 +195,14 @@ public class KASClient implements SDK.KAS {
         RewrapResponse response;
         var req = getStub(keyAccess.url).rewrapBlocking(request, Collections.emptyMap()).execute();
         try {
-            response = getOrThrow(req);
-        } catch (StatusRuntimeException e) {
-            if (e.getStatus().getCode() == Status.Code.INVALID_ARGUMENT) {
+            response = RequestHelper.getOrThrow(req);
+        } catch (ConnectException e) {
+            if (e.getCode() == Code.INVALID_ARGUMENT) {
                 // 400 Bad Request
                 throw new KasBadRequestException("rewrap request 400: " + e);
             }
-            throw e;
+            throw new SDKException("error unwrapping key", e);
         } catch (Exception e) {
-            log.error("error unwrapping key", e);
             throw new SDKException("error unwrapping key", e);
         }
         var wrappedKey = response.getEntityWrappedKey().toByteArray();

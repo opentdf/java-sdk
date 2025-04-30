@@ -1,8 +1,8 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.ConnectException;
 import com.connectrpc.Interceptor;
 import com.connectrpc.ProtocolClientConfig;
-import com.connectrpc.ResponseMessageKt;
 import com.connectrpc.extensions.GoogleJavaProtobufStrategy;
 import com.connectrpc.impl.ProtocolClient;
 import com.connectrpc.okhttp.ConnectOkHttpClient;
@@ -24,8 +24,6 @@ import com.nimbusds.oauth2.sdk.token.BearerAccessToken;
 import com.nimbusds.oauth2.sdk.token.TokenTypeURI;
 import com.nimbusds.oauth2.sdk.tokenexchange.TokenExchangeGrant;
 import com.nimbusds.openid.connect.sdk.op.OIDCProviderMetadata;
-import io.grpc.Status;
-import io.grpc.StatusRuntimeException;
 import io.opentdf.platform.generated.authorization.AuthorizationServiceClient;
 import io.opentdf.platform.generated.policy.attributes.AttributesServiceClient;
 import io.opentdf.platform.generated.policy.kasregistry.KeyAccessServerRegistryServiceClient;
@@ -180,10 +178,9 @@ public class SDKBuilder {
         bootstrapClient = getUnauthenticatedProtocolClient(platformEndpoint, httpClient) ;
         var stub = new WellKnownServiceClient(bootstrapClient);
         try {
-            config = ResponseMessageKt.getOrThrow(stub.getWellKnownConfigurationBlocking(GetWellKnownConfigurationRequest.getDefaultInstance(), Collections.emptyMap()).execute());
-        } catch (StatusRuntimeException e) {
-            Status status = Status.fromThrowable(e);
-            throw new SDKException(String.format("Got grpc status [%s] when getting configuration", status), e);
+            config = RequestHelper.getOrThrow(stub.getWellKnownConfigurationBlocking(GetWellKnownConfigurationRequest.getDefaultInstance(), Collections.emptyMap()).execute());
+        } catch (ConnectException e) {
+            throw new SDKException(String.format("Got grpc status [%s] when getting configuration", e.getCode()), e);
         }
 
         String platformIssuer;
