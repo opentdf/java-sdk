@@ -203,6 +203,7 @@ public class KASClient implements SDK.KAS {
             }
             throw e;
         } catch (Exception e) {
+            log.error("error unwrapping key", e);
             throw new SDKException("error unwrapping key", e);
         }
         var wrappedKey = response.getEntityWrappedKey().toByteArray();
