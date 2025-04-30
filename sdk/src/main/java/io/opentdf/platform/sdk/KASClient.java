@@ -46,7 +46,6 @@ import static java.lang.String.format;
  */
 public class KASClient implements SDK.KAS {
 
-    private static final Logger log = LoggerFactory.getLogger(KASClient.class);
     private final OkHttpClient httpClient;
     private final BiFunction<OkHttpClient, String, ProtocolClient> protocolClientFactory;
     private final boolean usePlaintext;
