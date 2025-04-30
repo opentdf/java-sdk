@@ -24,6 +24,8 @@ import io.opentdf.platform.sdk.TDF.KasBadRequestException;
 
 import kotlin.collections.MapsKt;
 import okhttp3.OkHttpClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -45,6 +47,7 @@ import static java.lang.String.format;
  */
 public class KASClient implements SDK.KAS {
 
+    private static final Logger log = LoggerFactory.getLogger(KASClient.class);
     private final OkHttpClient httpClient;
     private final BiFunction<OkHttpClient, String, ProtocolClient> protocolClientFactory;
     private final boolean usePlaintext;
@@ -262,6 +265,7 @@ public class KASClient implements SDK.KAS {
         try {
             response = getOrThrow(request);
         } catch (Exception e) {
+            log.error("this is the error", e.getCause());
             throw new SDKException("error rewrapping key", e);
         }
         var wrappedKey = response.getEntityWrappedKey().toByteArray();
