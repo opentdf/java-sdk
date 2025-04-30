@@ -36,7 +36,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.function.BiFunction;
 
-import static com.connectrpc.ResponseMessageKt.getOrThrow;
 import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
 import static java.lang.String.format;
 
@@ -104,7 +103,7 @@ public class KASClient implements SDK.KAS {
         var req= getStub(kasInfo.URL).publicKeyBlocking(request, MapsKt.mapOf()).execute();
         PublicKeyResponse resp;
         try {
-            resp = getOrThrow(req);
+            resp = RequestHelper.getOrThrow(req);
         } catch (Exception e) {
             throw new SDKException("error getting public key", e);
         }
@@ -263,9 +262,8 @@ public class KASClient implements SDK.KAS {
         var request = getStub(keyAccess.url).rewrapBlocking(req, Collections.emptyMap()).execute();
         RewrapResponse response;
         try {
-            response = getOrThrow(request);
+            response = RequestHelper.getOrThrow(request);
         } catch (Exception e) {
-            log.error("this is the error", e.getCause());
             throw new SDKException("error rewrapping key", e);
         }
         var wrappedKey = response.getEntityWrappedKey().toByteArray();
