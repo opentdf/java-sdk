@@ -149,21 +149,21 @@ jobs:
         run: |
           printf 'here is some data to encrypt' > data
 
-          java -jar target/cmdline.jar \
+          java -Djava.util.logging.config.file=$(pwd)/src/main/java/resources/logging.properties -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=http://localhost:8080 \
             -h\
             encrypt --kas-url=http://localhost:8080 --mime-type=text/plain --attr https://example.com/attr/attr1/value/value1 --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
 
-          java -jar target/cmdline.jar \
+          java -Djava.util.logging.config.file=$(pwd)/src/main/java/resources/logging.properties -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=http://localhost:8080 \
             -h\
             decrypt -f test.tdf > decrypted
 
-          java -jar target/cmdline.jar \
+          java -Djava.util.logging.config.file=$(pwd)/src/main/java/resources/logging.properties -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=http://localhost:8080 \
@@ -297,21 +297,21 @@ jobs:
         run: |
           printf 'here is some data to encrypt' > data
 
-          java -Djava.util.logging.config.file=./src/main/java/resources/logging.properties -jar target/cmdline.jar \
+          java -Djava.util.logging.config.file=$(pwd)/src/main/java/resources/logging.properties -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=http://localhost:8080 \
             -h\
             encrypt --kas-url=http://localhost:8080,http://localhost:8282 -f data -m 'here is some metadata' > test.tdf
 
-          java -Djava.util.logging.config.file=./src/main/java/resources/logging.properties -jar target/cmdline.jar \
+          java -Djava.util.logging.config.file=$(pwd)/src/main/java/resources/logging.properties -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=http://localhost:8080 \
             -h\
             decrypt -f test.tdf --kas-allowlist http://localhost:8080,http://localhost:8282  > decrypted
 
-          java -Djava.util.logging.config.file=./src/main/java/resources/logging.properties -jar target/cmdline.jar \
+          java -Djava.util.logging.config.file=$(pwd)/src/main/java/resources/logging.properties -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=http://localhost:8080 \
