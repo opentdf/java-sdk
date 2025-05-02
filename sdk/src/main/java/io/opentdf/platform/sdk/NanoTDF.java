@@ -1,6 +1,5 @@
 package io.opentdf.platform.sdk;
 
-import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceGrpc.KeyAccessServerRegistryServiceFutureStub;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.sdk.TDF.KasAllowlistException;
@@ -38,17 +37,19 @@ public class NanoTDF {
     private static final int kIvPadding = 9;
     private static final int kNanoTDFIvSize = 3;
     private static final byte[] kEmptyIV = new byte[] { 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 };
+    private final SDK.Services services;
     private final CollectionStore collectionStore;
 
-    public NanoTDF() {
-        this(new CollectionStore.NoOpCollectionStore());
+    NanoTDF(SDK.Services services) {
+        this(services, new CollectionStore.NoOpCollectionStore());
     }
 
-    public NanoTDF(boolean collectionStoreEnabled) {
-        this(collectionStoreEnabled ? new CollectionStoreImpl() : null);
+    NanoTDF(SDK.Services services, boolean collectionStoreEnabled) {
+        this(services, collectionStoreEnabled ? new CollectionStoreImpl() : null);
     }
 
-    public NanoTDF(CollectionStore collectionStore) {
+    NanoTDF(SDK.Services services, CollectionStore collectionStore) {
+        this.services = services;
         this.collectionStore = collectionStore;
     }
 
@@ -70,7 +71,7 @@ public class NanoTDF {
         }
     }
 
-    private Config.HeaderInfo getHeaderInfo(Config.NanoTDFConfig nanoTDFConfig, SDK.KAS kas)
+    private Config.HeaderInfo getHeaderInfo(Config.NanoTDFConfig nanoTDFConfig)
             throws InvalidNanoTDFConfig, UnsupportedNanoTDFFeature, NoSuchAlgorithmException, InterruptedException {
         if (nanoTDFConfig.collectionConfig.useCollection) {
             Config.HeaderInfo headerInfo = nanoTDFConfig.collectionConfig.getHeaderInfo();
@@ -88,7 +89,7 @@ public class NanoTDF {
         String url = kasInfo.URL;
         if (kasInfo.PublicKey == null || kasInfo.PublicKey.isEmpty()) {
             logger.info("no public key provided for KAS at {}, retrieving", url);
-            kasInfo = kas.getECPublicKey(kasInfo, nanoTDFConfig.eccMode.getEllipticCurveType());
+            kasInfo = services.kas().getECPublicKey(kasInfo, nanoTDFConfig.eccMode.getEllipticCurveType());
         }
 
         // Kas url resource locator
@@ -148,8 +149,7 @@ public class NanoTDF {
     }
 
     public int createNanoTDF(ByteBuffer data, OutputStream outputStream,
-            Config.NanoTDFConfig nanoTDFConfig,
-            SDK.KAS kas) throws IOException, NanoTDFMaxSizeLimit, InvalidNanoTDFConfig,
+            Config.NanoTDFConfig nanoTDFConfig) throws IOException, NanoTDFMaxSizeLimit, InvalidNanoTDFConfig,
             NoSuchAlgorithmException, UnsupportedNanoTDFFeature, InterruptedException {
         int nanoTDFSize = 0;
 
@@ -158,7 +158,7 @@ public class NanoTDF {
             throw new NanoTDFMaxSizeLimit("exceeds max size for nano tdf");
         }
 
-        Config.HeaderInfo headerKeyPair = getHeaderInfo(nanoTDFConfig, kas);
+        Config.HeaderInfo headerKeyPair = getHeaderInfo(nanoTDFConfig);
         Header header = headerKeyPair.getHeader();
         AesGcm gcm = headerKeyPair.getKey();
         int iteration = headerKeyPair.getIteration();
@@ -205,22 +205,20 @@ public class NanoTDF {
         return nanoTDFSize;
     }
 
-    public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream,
-            SDK.KAS kas) throws IOException, URISyntaxException {
-             readNanoTDF(nanoTDF, outputStream,kas, Config.newNanoTDFReaderConfig());
+    public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream) throws IOException, URISyntaxException {
+             readNanoTDF(nanoTDF, outputStream, Config.newNanoTDFReaderConfig());
+    }
+
+    public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream, String platformUrl) throws IOException, InterruptedException, ExecutionException, URISyntaxException {
+             readNanoTDF(nanoTDF, outputStream, Config.newNanoTDFReaderConfig(), platformUrl);
     }
 
     public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream,
-            SDK.KAS kas, KeyAccessServerRegistryServiceFutureStub kasRegistryService, String platformUrl) throws IOException, InterruptedException, ExecutionException, URISyntaxException {
-             readNanoTDF(nanoTDF, outputStream,kas, Config.newNanoTDFReaderConfig(), kasRegistryService, platformUrl);
-    }
-
-    public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream,
-            SDK.KAS kas, Config.NanoTDFReaderConfig nanoTdfReaderConfig, KeyAccessServerRegistryServiceFutureStub kasRegistryService, String platformUrl) throws IOException, InterruptedException, ExecutionException, URISyntaxException {
+            Config.NanoTDFReaderConfig nanoTdfReaderConfig, String platformUrl) throws IOException, InterruptedException, ExecutionException, URISyntaxException {
         if (!nanoTdfReaderConfig.ignoreKasAllowlist && (nanoTdfReaderConfig.kasAllowlist == null || nanoTdfReaderConfig.kasAllowlist.isEmpty())) {
             ListKeyAccessServersRequest request = ListKeyAccessServersRequest.newBuilder()
                     .build();
-            ListKeyAccessServersResponse response = kasRegistryService.listKeyAccessServers(request).get();
+            ListKeyAccessServersResponse response = services.kasRegistry().listKeyAccessServers(request).get();
             nanoTdfReaderConfig.kasAllowlist = new HashSet<>();
             var kases = response.getKeyAccessServersList();
 
@@ -230,12 +228,12 @@ public class NanoTDF {
 
             nanoTdfReaderConfig.kasAllowlist.add(Config.getKasAddress(platformUrl));
         }
-        readNanoTDF(nanoTDF, outputStream, kas, nanoTdfReaderConfig);
+        readNanoTDF(nanoTDF, outputStream, nanoTdfReaderConfig);
     }
 
 
     public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream,
-            SDK.KAS kas, Config.NanoTDFReaderConfig nanoTdfReaderConfig) throws IOException, URISyntaxException {
+            Config.NanoTDFReaderConfig nanoTdfReaderConfig) throws IOException, URISyntaxException {
 
         Header header = new Header(nanoTDF);
         CollectionKey cachedKey = collectionStore.getKey(header);
@@ -264,7 +262,7 @@ public class NanoTDF {
             }
 
 
-            key = kas.unwrapNanoTDF(header.getECCMode().getEllipticCurveType(),
+            key = services.kas().unwrapNanoTDF(header.getECCMode().getEllipticCurveType(),
                     base64HeaderData,
                     kasUrl);
             collectionStore.store(header, new CollectionKey(key));

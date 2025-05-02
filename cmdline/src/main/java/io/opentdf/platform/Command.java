@@ -221,9 +221,7 @@ class Command {
         var tdfConfig = Config.newTDFConfig(configs.toArray(Consumer[]::new));
         try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {
             try (var out = new BufferedOutputStream(System.out)) {
-                new TDF().createTDF(in, out, tdfConfig,
-                        sdk.getServices().kas(),
-                        sdk.getServices().attributes());
+                new TDF(sdk.getServices()).createTDF(in, out, tdfConfig);
             }
         }
     }
@@ -297,7 +295,7 @@ class Command {
                 }
 
                 var readerConfig = Config.newTDFReaderConfig(opts.toArray(new Consumer[0]));
-                var reader = new TDF().loadTDF(in, sdk.getServices().kas(), readerConfig, sdk.getServices().kasRegistry(), sdk.getPlatformUrl());
+                var reader = new TDF(sdk.getServices()).loadTDF(in, readerConfig, sdk.getPlatformUrl());
                 reader.readPayload(stdout);
             }
         }
@@ -321,7 +319,7 @@ class Command {
                 }
 
                 var readerConfig = Config.newTDFReaderConfig(opts.toArray(new Consumer[0]));
-                var reader = new TDF().loadTDF(in, sdk.getServices().kas(), readerConfig, sdk.getServices().kasRegistry(), sdk.getPlatformUrl());
+                var reader = new TDF(sdk.getServices()).loadTDF(in, readerConfig, sdk.getPlatformUrl());
                 stdout.write(reader.getMetadata() == null ? "" : reader.getMetadata());
             }
         }

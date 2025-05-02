@@ -163,13 +163,13 @@ public class NanoTDFTest {
         ByteBuffer byteBuffer = ByteBuffer.wrap(plainText.getBytes());
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
-        NanoTDF nanoTDF = new NanoTDF();
-        nanoTDF.createNanoTDF(byteBuffer, tdfOutputStream, config, kas);
+        NanoTDF nanoTDF = new NanoTDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build());
+        nanoTDF.createNanoTDF(byteBuffer, tdfOutputStream, config);
 
         byte[] nanoTDFBytes = tdfOutputStream.toByteArray();
         ByteArrayOutputStream plainTextStream = new ByteArrayOutputStream();
-        nanoTDF = new NanoTDF();
-        nanoTDF.readNanoTDF(ByteBuffer.wrap(nanoTDFBytes), plainTextStream, kas, kasRegistryService, platformUrl);
+        nanoTDF = new NanoTDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build());
+        nanoTDF.readNanoTDF(ByteBuffer.wrap(nanoTDFBytes), plainTextStream, platformUrl);
 
         String out = new String(plainTextStream.toByteArray(), StandardCharsets.UTF_8);
         assertThat(out).isEqualTo(plainText);
@@ -184,12 +184,12 @@ public class NanoTDFTest {
 
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
-            NanoTDF nTDF = new NanoTDF();
-            nTDF.createNanoTDF(ByteBuffer.wrap(data), outputStream, config, kas);
+            NanoTDF nTDF = new NanoTDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build());
+            nTDF.createNanoTDF(ByteBuffer.wrap(data), outputStream, config);
 
             byte[] nTDFBytes = outputStream.toByteArray();
             ByteArrayOutputStream dataStream = new ByteArrayOutputStream();
-            nanoTDF.readNanoTDF(ByteBuffer.wrap(nTDFBytes), dataStream, kas, kasRegistryService, platformUrl);
+            nanoTDF.readNanoTDF(ByteBuffer.wrap(nTDFBytes), dataStream, platformUrl);
             assertThat(dataStream.toByteArray()).isEqualTo(data);
         }
     }
@@ -211,26 +211,26 @@ public class NanoTDFTest {
         ByteBuffer byteBuffer = ByteBuffer.wrap(plainText.getBytes());
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
-        NanoTDF nanoTDF = new NanoTDF();
-        nanoTDF.createNanoTDF(byteBuffer, tdfOutputStream, config, kas);
+        NanoTDF nanoTDF = new NanoTDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasReg).build());
+        nanoTDF.createNanoTDF(byteBuffer, tdfOutputStream, config);
 
         byte[] nanoTDFBytes = tdfOutputStream.toByteArray();
         ByteArrayOutputStream plainTextStream = new ByteArrayOutputStream();
-        nanoTDF = new NanoTDF();
+        nanoTDF = new NanoTDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasReg).build());
         if (allowed) {
             if (decryptConfig != null) {
-                nanoTDF.readNanoTDF(ByteBuffer.wrap(nanoTDFBytes), plainTextStream, kas, decryptConfig);
+                nanoTDF.readNanoTDF(ByteBuffer.wrap(nanoTDFBytes), plainTextStream, decryptConfig);
             } else {
-                nanoTDF.readNanoTDF(ByteBuffer.wrap(nanoTDFBytes), plainTextStream, kas, kasReg, platformUrl);
+                nanoTDF.readNanoTDF(ByteBuffer.wrap(nanoTDFBytes), plainTextStream, platformUrl);
             }
             String out = new String(plainTextStream.toByteArray(), StandardCharsets.UTF_8);
             assertThat(out).isEqualTo(plainText);
         } else {
             try {
                 if (decryptConfig != null) {
-                    nanoTDF.readNanoTDF(ByteBuffer.wrap(nanoTDFBytes), plainTextStream, kas, decryptConfig);
+                    nanoTDF.readNanoTDF(ByteBuffer.wrap(nanoTDFBytes), plainTextStream, decryptConfig);
                 } else {
-                    nanoTDF.readNanoTDF(ByteBuffer.wrap(nanoTDFBytes), plainTextStream, kas, kasReg, platformUrl);
+                    nanoTDF.readNanoTDF(ByteBuffer.wrap(nanoTDFBytes), plainTextStream, platformUrl);
                 }
                 assertThat(false).isTrue();
             } catch (SDKException e) {
@@ -290,7 +290,7 @@ public class NanoTDFTest {
 
         ByteBuffer byteBuffer = ByteBuffer.wrap(new byte[]{});
 
-        NanoTDF nanoTDF = new NanoTDF();
+        NanoTDF nanoTDF = new NanoTDF(new FakeServicesBuilder().setKas(kas).build());
         ByteBuffer header = getHeaderBuffer(byteBuffer,nanoTDF, config);
         for (int i = 0; i < Config.MAX_COLLECTION_ITERATION - 10; i++) {
             config.collectionConfig.getHeaderInfo();
@@ -307,7 +307,7 @@ public class NanoTDFTest {
 
     private ByteBuffer getHeaderBuffer(ByteBuffer input, NanoTDF nanoTDF, Config.NanoTDFConfig config) throws Exception {
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
-        nanoTDF.createNanoTDF(input, tdfOutputStream, config, kas);
+        nanoTDF.createNanoTDF(input, tdfOutputStream, config);
         ByteBuffer tdf = ByteBuffer.wrap(tdfOutputStream.toByteArray());
         Header header = new Header(tdf);
         return tdf.position(0).slice().limit(header.getTotalSize());

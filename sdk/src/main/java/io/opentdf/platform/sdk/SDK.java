@@ -1,11 +1,8 @@
 package io.opentdf.platform.sdk;
 
-import io.grpc.CallOptions;
-import io.grpc.Channel;
-import io.grpc.ClientCall;
+import com.nimbusds.jose.JOSEException;
 import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
-import io.grpc.MethodDescriptor;
 import io.opentdf.platform.authorization.AuthorizationServiceGrpc;
 import io.opentdf.platform.authorization.AuthorizationServiceGrpc.AuthorizationServiceFutureStub;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
@@ -19,13 +16,19 @@ import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc.Subje
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceGrpc;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceGrpc.KeyAccessServerRegistryServiceFutureStub;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
+import org.apache.commons.codec.DecoderException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.TrustManager;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.channels.SeekableByteChannel;
+import java.security.NoSuchAlgorithmException;
+import java.text.ParseException;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 
 /**
  * The SDK class represents a software development kit for interacting with the
@@ -157,6 +160,16 @@ public class SDK implements AutoCloseable {
 
     public Services getServices() {
         return this.services;
+    }
+
+    public TDF.Reader loadTDF(SeekableByteChannel channel, Config.TDFReaderConfig config) throws DecoderException, IOException, ParseException, NoSuchAlgorithmException, JOSEException {
+        var tdf = new TDF(services);
+        return tdf.loadTDF(channel, config);
+    }
+
+    public TDF.TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig config) throws DecoderException, IOException, ParseException, NoSuchAlgorithmException, JOSEException, ExecutionException, InterruptedException {
+        var tdf = new TDF(services);
+        return tdf.createTDF(payload, outputStream, config);
     }
 
     /**
