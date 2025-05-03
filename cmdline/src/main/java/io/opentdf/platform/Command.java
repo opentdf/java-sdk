@@ -287,15 +287,11 @@ class Command {
                 }
                 rewrapKeyType.map(Config::WithSessionKeyType).ifPresent(opts::add);
 
-                if (ignoreAllowlist.isPresent()) {
-                    opts.add(Config.WithIgnoreKasAllowlist(ignoreAllowlist.get()));
-                }
-                if (kasAllowlistStr.isPresent()) {
-                    opts.add(Config.WithKasAllowlist(kasAllowlistStr.get().split(",")));
-                }
+                ignoreAllowlist.ifPresent(aBoolean -> opts.add(Config.WithIgnoreKasAllowlist(aBoolean)));
+                kasAllowlistStr.ifPresent(s -> opts.add(Config.WithKasAllowlist(s.split(","))));
 
                 var readerConfig = Config.newTDFReaderConfig(opts.toArray(new Consumer[0]));
-                var reader = new TDF(sdk.getServices()).loadTDF(in, readerConfig, sdk.getPlatformUrl());
+                var reader = sdk.loadTDF(in, readerConfig);
                 reader.readPayload(stdout);
             }
         }
