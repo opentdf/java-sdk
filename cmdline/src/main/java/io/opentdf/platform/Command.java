@@ -365,12 +365,8 @@ class Command {
                 in.read(buffer);
                 buffer.flip();
                 var opts = new ArrayList<Consumer<Config.NanoTDFReaderConfig>>();
-                if (ignoreAllowlist.isPresent()) {
-                    opts.add(Config.WithNanoIgnoreKasAllowlist(ignoreAllowlist.get()));
-                }
-                if (kasAllowlistStr.isPresent()) {
-                    opts.add(Config.WithNanoKasAllowlist(kasAllowlistStr.get().split(",")));
-                }
+                ignoreAllowlist.map(Config::WithNanoIgnoreKasAllowlist).ifPresent(opts::add);
+                kasAllowlistStr.map(s -> s.split(",")).map(Config::WithNanoKasAllowlist).ifPresent(opts::add);
                 var readerConfig = Config.newNanoTDFReaderConfig(opts.toArray(new Consumer[0]));
                 sdk.readNanoTDF(buffer, stdout, readerConfig);
             }
