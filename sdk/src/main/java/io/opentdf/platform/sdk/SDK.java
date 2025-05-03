@@ -164,9 +164,9 @@ public class SDK implements AutoCloseable {
         return this.services;
     }
 
-    public TDF.Reader loadTDF(SeekableByteChannel channel, Config.TDFReaderConfig config) throws DecoderException, IOException, ParseException, NoSuchAlgorithmException, JOSEException {
+    public TDF.Reader loadTDF(SeekableByteChannel channel, Config.TDFReaderConfig config) throws DecoderException, IOException, ParseException, NoSuchAlgorithmException, JOSEException, URISyntaxException, ExecutionException, InterruptedException {
         var tdf = new TDF(services);
-        return tdf.loadTDF(channel, config);
+        return tdf.loadTDF(channel, config, platformUrl);
     }
 
     public TDF.TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig config) throws DecoderException, IOException, JOSEException, ExecutionException, InterruptedException {
