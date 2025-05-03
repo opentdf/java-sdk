@@ -192,8 +192,8 @@ class Command {
             } catch (JsonSyntaxException e) {
                 // try it as a file path
                 try {
-                    String fielJson = new String(Files.readAllBytes(Paths.get(assertionConfig)));
-                    assertionConfigs = gson.fromJson(fielJson, AssertionConfig[].class);
+                    String fileJson = new String(Files.readAllBytes(Paths.get(assertionConfig)));
+                    assertionConfigs = gson.fromJson(fileJson, AssertionConfig[].class);
                 } catch (JsonSyntaxException e2) {
                     throw new RuntimeException("Failed to parse assertion from file, expects an list of assertions", e2);
                 } catch(Exception e3) {
@@ -221,7 +221,7 @@ class Command {
         var tdfConfig = Config.newTDFConfig(configs.toArray(Consumer[]::new));
         try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {
             try (var out = new BufferedOutputStream(System.out)) {
-                new TDF(sdk.getServices()).createTDF(in, out, tdfConfig);
+                sdk.createTDF(in, out, tdfConfig);
             }
         }
     }
@@ -319,7 +319,7 @@ class Command {
                 }
 
                 var readerConfig = Config.newTDFReaderConfig(opts.toArray(new Consumer[0]));
-                var reader = new TDF(sdk.getServices()).loadTDF(in, readerConfig, sdk.getPlatformUrl());
+                var reader = sdk.loadTDF(in, readerConfig);
                 stdout.write(reader.getMetadata() == null ? "" : reader.getMetadata());
             }
         }
@@ -349,8 +349,7 @@ class Command {
         var nanoTDFConfig = Config.newNanoTDFConfig(configs.toArray(Consumer[]::new));
         try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {
             try (var out = new BufferedOutputStream(System.out)) {
-                NanoTDF ntdf = new NanoTDF();
-                ntdf.createNanoTDF(ByteBuffer.wrap(in.readAllBytes()), out, nanoTDFConfig, sdk.getServices().kas());
+                sdk.createNanoTDF(ByteBuffer.wrap(in.readAllBytes()), out, nanoTDFConfig);
             }
         }
     }
@@ -362,7 +361,6 @@ class Command {
         var sdk = buildSDK();
         try (var in = FileChannel.open(nanoTDFPath, StandardOpenOption.READ)) {
             try (var stdout = new BufferedOutputStream(System.out)) {
-                NanoTDF ntdf = new NanoTDF();
                 ByteBuffer buffer = ByteBuffer.allocate((int) in.size());
                 in.read(buffer);
                 buffer.flip();
@@ -374,7 +372,7 @@ class Command {
                     opts.add(Config.WithNanoKasAllowlist(kasAllowlistStr.get().split(",")));
                 }
                 var readerConfig = Config.newNanoTDFReaderConfig(opts.toArray(new Consumer[0]));
-                ntdf.readNanoTDF(buffer, stdout, sdk.getServices().kas(), readerConfig, sdk.getServices().kasRegistry(), sdk.getPlatformUrl());
+                sdk.readNanoTDF(buffer, stdout, readerConfig);
             }
         }
     }

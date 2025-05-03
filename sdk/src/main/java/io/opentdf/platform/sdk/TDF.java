@@ -66,13 +66,13 @@ public class TDF {
      * input size, which controls the maximum size of the input data that can be processed.
      * For test purposes, an alternative constructor allows for setting a custom maximum input size.
      */
-    TDF(SDK.Services services) {
+    public TDF(SDK.Services services) {
         this(MAX_TDF_INPUT_SIZE, services);
     }
 
     // constructor for tests so that we can set a maximum size that's tractable for
     // tests
-    TDF(long maximumInputSize, SDK.Services services) {
+    public TDF(long maximumInputSize, SDK.Services services) {
         this.maximumSize = maximumInputSize;
         this.services = services;
     }

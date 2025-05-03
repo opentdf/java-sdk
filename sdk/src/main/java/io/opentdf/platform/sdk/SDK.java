@@ -24,6 +24,8 @@ import javax.net.ssl.TrustManager;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.security.NoSuchAlgorithmException;
 import java.text.ParseException;
@@ -167,9 +169,19 @@ public class SDK implements AutoCloseable {
         return tdf.loadTDF(channel, config);
     }
 
-    public TDF.TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig config) throws DecoderException, IOException, ParseException, NoSuchAlgorithmException, JOSEException, ExecutionException, InterruptedException {
+    public TDF.TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig config) throws DecoderException, IOException, JOSEException, ExecutionException, InterruptedException {
         var tdf = new TDF(services);
         return tdf.createTDF(payload, outputStream, config);
+    }
+
+    public int createNanoTDF(ByteBuffer payload, OutputStream outputStream, Config.NanoTDFConfig config) throws IOException, NoSuchAlgorithmException, InterruptedException, NanoTDF.NanoTDFMaxSizeLimit, NanoTDF.UnsupportedNanoTDFFeature, NanoTDF.InvalidNanoTDFConfig {
+        var ntdf = new NanoTDF(services);
+        return ntdf.createNanoTDF(payload, outputStream, config);
+    }
+
+    public void readNanoTDF(ByteBuffer nanoTDF, OutputStream out, Config.NanoTDFReaderConfig config) throws IOException, URISyntaxException, ExecutionException, InterruptedException {
+        var ntdf = new NanoTDF(services);
+        ntdf.readNanoTDF(nanoTDF, out, config, platformUrl);
     }
 
     /**
