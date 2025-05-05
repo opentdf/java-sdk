@@ -484,7 +484,7 @@ public class TDF {
         return Arrays.copyOfRange(data, data.length - kGMACPayloadLength, data.length);
     }
 
-    public TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig tdfConfig)
+    TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig tdfConfig)
             throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException, DecoderException {
 
         if (tdfConfig.autoconfigure) {
@@ -636,7 +636,7 @@ public class TDF {
         return tdfObject;
     }
 
-    public static List<String> defaultKases(TDFConfig config) {
+    static List<String> defaultKases(TDFConfig config) {
         List<String> allk = new ArrayList<>();
         List<String> defk = new ArrayList<>();
 
@@ -674,7 +674,7 @@ public class TDF {
         return loadTDF(tdf, tdfReaderConfig);
     }
 
-    public Reader loadTDF(SeekableByteChannel tdf, Config.TDFReaderConfig tdfReaderConfig)
+    Reader loadTDF(SeekableByteChannel tdf, Config.TDFReaderConfig tdfReaderConfig)
             throws RootSignatureValidationException, SegmentSizeMismatch,
             IOException, FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException, DecoderException {
 

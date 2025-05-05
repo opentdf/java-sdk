@@ -307,12 +307,8 @@ class Command {
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
             try (var stdout = new PrintWriter(System.out)) {
 
-                if (ignoreAllowlist.isPresent()) {
-                    opts.add(Config.WithIgnoreKasAllowlist(ignoreAllowlist.get()));
-                }
-                if (kasAllowlistStr.isPresent()) {
-                    opts.add(Config.WithKasAllowlist(kasAllowlistStr.get().split(",")));
-                }
+                ignoreAllowlist.map(Config::WithIgnoreKasAllowlist).ifPresent(opts::add);
+                kasAllowlistStr.map(s -> s.split(",")).map(Config::WithKasAllowlist).ifPresent(opts::add);
 
                 var readerConfig = Config.newTDFReaderConfig(opts.toArray(new Consumer[0]));
                 var reader = sdk.loadTDF(in, readerConfig);
