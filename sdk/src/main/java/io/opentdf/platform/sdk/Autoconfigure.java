@@ -699,14 +699,22 @@ public class Autoconfigure {
     }
 
     // Gets a list of directory of KAS grants for a list of attribute FQNs
-    public static Granter newGranterFromService(AttributesServiceFutureStub as, KASKeyCache keyCache, AttributeValueFQN... fqns) throws AutoConfigureException, ExecutionException, InterruptedException {
+    static Granter newGranterFromService(AttributesServiceFutureStub as, KASKeyCache keyCache, AttributeValueFQN... fqns) throws AutoConfigureException {
 
         GetAttributeValuesByFqnsRequest request = GetAttributeValuesByFqnsRequest.newBuilder()
                 .addAllFqns(Arrays.stream(fqns).map(AttributeValueFQN::toString).collect(Collectors.toList()))
                 .setWithValue(AttributeValueSelector.newBuilder().setWithKeyAccessGrants(true).build())
                 .build();
 
-        GetAttributeValuesByFqnsResponse av = as.getAttributeValuesByFqns(request).get();
+        GetAttributeValuesByFqnsResponse av = null;
+        try {
+            av = as.getAttributeValuesByFqns(request).get();
+        } catch (ExecutionException e) {
+            throw new AutoConfigureException("error getting attributes during autoconfiguration", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AutoConfigureException("interrupted while getting attributes during autoconfiguration", e);
+        }
 
         return getGranter(keyCache, new ArrayList<>(av.getFqnAttributeValuesMap().values()));
     }

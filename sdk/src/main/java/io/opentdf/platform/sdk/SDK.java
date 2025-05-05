@@ -164,22 +164,22 @@ public class SDK implements AutoCloseable {
         return this.services;
     }
 
-    public TDF.Reader loadTDF(SeekableByteChannel channel, Config.TDFReaderConfig config) throws DecoderException, IOException, ParseException, NoSuchAlgorithmException, JOSEException, URISyntaxException, ExecutionException, InterruptedException {
+    public TDF.Reader loadTDF(SeekableByteChannel channel, Config.TDFReaderConfig config) throws SDKException, IOException {
         var tdf = new TDF(services);
         return tdf.loadTDF(channel, config, platformUrl);
     }
 
-    public TDF.TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig config) throws DecoderException, IOException, JOSEException, ExecutionException, InterruptedException {
+    public TDF.TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig config) throws SDKException, IOException {
         var tdf = new TDF(services);
         return tdf.createTDF(payload, outputStream, config);
     }
 
-    public int createNanoTDF(ByteBuffer payload, OutputStream outputStream, Config.NanoTDFConfig config) throws IOException, NoSuchAlgorithmException, InterruptedException, NanoTDF.NanoTDFMaxSizeLimit, NanoTDF.UnsupportedNanoTDFFeature, NanoTDF.InvalidNanoTDFConfig {
+    public int createNanoTDF(ByteBuffer payload, OutputStream outputStream, Config.NanoTDFConfig config) throws SDKException, IOException {
         var ntdf = new NanoTDF(services);
         return ntdf.createNanoTDF(payload, outputStream, config);
     }
 
-    public void readNanoTDF(ByteBuffer nanoTDF, OutputStream out, Config.NanoTDFReaderConfig config) throws IOException, URISyntaxException, ExecutionException, InterruptedException {
+    public void readNanoTDF(ByteBuffer nanoTDF, OutputStream out, Config.NanoTDFReaderConfig config) throws SDKException, IOException {
         var ntdf = new NanoTDF(services);
         ntdf.readNanoTDF(nanoTDF, out, config, platformUrl);
     }

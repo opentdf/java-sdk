@@ -23,7 +23,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StringReader;
-import java.net.URISyntaxException;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
@@ -100,49 +99,37 @@ public class TDF {
 
     private static final Gson gson = new GsonBuilder().create();
 
-    public class SplitKeyException extends IOException {
+    public class SplitKeyException extends SDKException {
         public SplitKeyException(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class DataSizeNotSupported extends RuntimeException {
+    public static class DataSizeNotSupported extends SDKException {
         public DataSizeNotSupported(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class FailedToCreateEncodedTDF extends RuntimeException {
-        public FailedToCreateEncodedTDF(String errorMessage) {
-            super(errorMessage);
-        }
-    }
-
-    public static class KasInfoMissing extends RuntimeException {
+    public static class KasInfoMissing extends SDKException {
         public KasInfoMissing(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class KasPublicKeyMissing extends RuntimeException {
+    public static class KasPublicKeyMissing extends SDKException {
         public KasPublicKeyMissing(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class InputStreamReadFailed extends RuntimeException {
-        public InputStreamReadFailed(String errorMessage) {
-            super(errorMessage);
-        }
-    }
-
-    public static class FailedToCreateGMAC extends RuntimeException {
+    public static class FailedToCreateGMAC extends SDKException {
         public FailedToCreateGMAC(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class TDFReadFailed extends RuntimeException {
+    public static class TDFReadFailed extends SDKException {
         public TDFReadFailed(String errorMessage) {
             super(errorMessage);
         }
@@ -484,8 +471,7 @@ public class TDF {
         return Arrays.copyOfRange(data, data.length - kGMACPayloadLength, data.length);
     }
 
-    TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig tdfConfig)
-            throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException, DecoderException {
+    TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig tdfConfig) throws SDKException, IOException {
 
         if (tdfConfig.autoconfigure) {
             Autoconfigure.Granter granter = new Autoconfigure.Granter(new ArrayList<>());
@@ -605,9 +591,16 @@ public class TDF {
             assertion.appliesToState = assertionConfig.appliesToState.toString();
 
             var assertionHashAsHex = assertion.hash();
-            var assertionHash = tdfConfig.hexEncodeRootAndSegmentHashes
-                ? assertionHashAsHex.getBytes(StandardCharsets.UTF_8)
-                : Hex.decodeHex(assertionHashAsHex);
+            byte[] assertionHash;
+            if (tdfConfig.hexEncodeRootAndSegmentHashes) {
+                assertionHash = assertionHashAsHex.getBytes(StandardCharsets.UTF_8);
+            } else {
+                try {
+                    assertionHash = Hex.decodeHex(assertionHashAsHex);
+                } catch (DecoderException e) {
+                    throw new SDKException("error decoding assertion hash", e);
+                }
+            }
             byte[] completeHash = new byte[aggregateHash.size() + assertionHash.length];
             System.arraycopy(aggregateHash.toByteArray(), 0, completeHash, 0, aggregateHash.size());
             System.arraycopy(assertionHash, 0, completeHash, aggregateHash.size(), assertionHash.length);
@@ -623,7 +616,11 @@ public class TDF {
                     assertionHashAsHex,
                     encodedHash
             );
-            assertion.sign(hashValues, assertionSigningKey);
+            try {
+                assertion.sign(hashValues, assertionSigningKey);
+            } catch (KeyLengthException e) {
+                throw new SDKException("error signing assertion hash", e);
+            }
             signedAssertions.add(assertion);
         }
 
@@ -653,17 +650,20 @@ public class TDF {
         return defk;
     }
 
-    Reader loadTDF(SeekableByteChannel tdf, String platformUrl)
-            throws DecoderException, IOException, ParseException, NoSuchAlgorithmException, JOSEException, InterruptedException, ExecutionException, URISyntaxException {
+    Reader loadTDF(SeekableByteChannel tdf, String platformUrl) throws SDKException, IOException {
         return loadTDF(tdf, Config.newTDFReaderConfig(), platformUrl);
     }
 
-    Reader loadTDF(SeekableByteChannel tdf, Config.TDFReaderConfig tdfReaderConfig, String platformUrl)
-            throws DecoderException, IOException, ParseException, NoSuchAlgorithmException, JOSEException, InterruptedException, ExecutionException, URISyntaxException {
+    Reader loadTDF(SeekableByteChannel tdf, Config.TDFReaderConfig tdfReaderConfig, String platformUrl) throws SDKException, IOException {
         if (!tdfReaderConfig.ignoreKasAllowlist && (tdfReaderConfig.kasAllowlist == null || tdfReaderConfig.kasAllowlist.isEmpty())) {
             ListKeyAccessServersRequest request = ListKeyAccessServersRequest.newBuilder()
                     .build();
-            ListKeyAccessServersResponse response = services.kasRegistry().listKeyAccessServers(request).get();
+            ListKeyAccessServersResponse response;
+            try {
+                response = services.kasRegistry().listKeyAccessServers(request).get();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new SDKException("error getting key access servers", e);
+            }
             tdfReaderConfig.kasAllowlist = new HashSet<>();
 
             for (var entry : response.getKeyAccessServersList()) {
@@ -674,9 +674,7 @@ public class TDF {
         return loadTDF(tdf, tdfReaderConfig);
     }
 
-    Reader loadTDF(SeekableByteChannel tdf, Config.TDFReaderConfig tdfReaderConfig)
-            throws RootSignatureValidationException, SegmentSizeMismatch,
-            IOException, FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException, DecoderException {
+    Reader loadTDF(SeekableByteChannel tdf, Config.TDFReaderConfig tdfReaderConfig) throws SDKException, IOException {
 
         TDFReader tdfReader = new TDFReader(tdf);
         String manifestJson = tdfReader.manifest();
@@ -689,7 +687,12 @@ public class TDF {
         Set<String> foundSplits = new HashSet<>();
 
         Map<Autoconfigure.KeySplitStep, Exception> skippedSplits = new HashMap<>();
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        MessageDigest digest = null;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new SDKException("error getting instance of SHA-256 digest", e);
+        }
 
         if (manifest.payload.isEncrypted) {
             for (Manifest.KeyAccess keyAccess : manifest.encryptionInformation.keyAccessObj) {
@@ -818,14 +821,28 @@ public class TDF {
                 }
             }
 
-            var hashValues = assertion.verify(assertionKey);
+            Manifest.Assertion.HashValues hashValues = null;
+            try {
+                hashValues = assertion.verify(assertionKey);
+            } catch (ParseException | JOSEException e) {
+                throw new SDKException("error validating assertion hash", e);
+            }
             var hashOfAssertionAsHex = assertion.hash();
 
             if (!Objects.equals(hashOfAssertionAsHex, hashValues.getAssertionHash())) {
                 throw new AssertionException("assertion hash mismatch", assertion.id);
             }
 
-            byte[] hashOfAssertion = isLegacyTdf ? hashOfAssertionAsHex.getBytes(StandardCharsets.UTF_8) : Hex.decodeHex(hashOfAssertionAsHex);
+            byte[] hashOfAssertion;
+            if (isLegacyTdf) {
+                hashOfAssertion = hashOfAssertionAsHex.getBytes(StandardCharsets.UTF_8);
+            } else {
+                try {
+                    hashOfAssertion = Hex.decodeHex(hashOfAssertionAsHex);
+                } catch (DecoderException e) {
+                    throw new SDKException("error decoding assertion hash", e);
+                }
+            }
             var signature = new byte[aggregateHashByteArrayBytes.length + hashOfAssertion.length];
             System.arraycopy(aggregateHashByteArrayBytes, 0, signature, 0, aggregateHashByteArrayBytes.length);
             System.arraycopy(hashOfAssertion, 0, signature, aggregateHashByteArrayBytes.length, hashOfAssertion.length);

@@ -53,26 +53,25 @@ public class NanoTDF {
         this.collectionStore = collectionStore;
     }
 
-    public static class NanoTDFMaxSizeLimit extends Exception {
+    public static class NanoTDFMaxSizeLimit extends SDKException {
         public NanoTDFMaxSizeLimit(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class UnsupportedNanoTDFFeature extends Exception {
+    public static class UnsupportedNanoTDFFeature extends SDKException {
         public UnsupportedNanoTDFFeature(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class InvalidNanoTDFConfig extends Exception {
+    public static class InvalidNanoTDFConfig extends SDKException {
         public InvalidNanoTDFConfig(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    private Config.HeaderInfo getHeaderInfo(Config.NanoTDFConfig nanoTDFConfig)
-            throws InvalidNanoTDFConfig, UnsupportedNanoTDFFeature, NoSuchAlgorithmException, InterruptedException {
+    private Config.HeaderInfo getHeaderInfo(Config.NanoTDFConfig nanoTDFConfig) throws InvalidNanoTDFConfig, UnsupportedNanoTDFFeature {
         if (nanoTDFConfig.collectionConfig.useCollection) {
             Config.HeaderInfo headerInfo = nanoTDFConfig.collectionConfig.getHeaderInfo();
             if (headerInfo != null) {
@@ -103,7 +102,12 @@ public class NanoTDF {
         byte[] symmetricKey = ECKeyPair.computeECDHKey(kasPublicKey, keyPair.getPrivateKey());
 
         // Generate HKDF key
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        MessageDigest digest = null;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new SDKException("error getting instance of SHA-256 digest", e);
+        }
         byte[] hashOfSalt = digest.digest(MAGIC_NUMBER_AND_VERSION);
         byte[] key = ECKeyPair.calculateHKDF(hashOfSalt, symmetricKey);
 
@@ -149,8 +153,7 @@ public class NanoTDF {
     }
 
     public int createNanoTDF(ByteBuffer data, OutputStream outputStream,
-            Config.NanoTDFConfig nanoTDFConfig) throws IOException, NanoTDFMaxSizeLimit, InvalidNanoTDFConfig,
-            NoSuchAlgorithmException, UnsupportedNanoTDFFeature, InterruptedException {
+            Config.NanoTDFConfig nanoTDFConfig) throws SDKException, IOException {
         int nanoTDFSize = 0;
 
         int dataSize = data.limit();
@@ -183,7 +186,11 @@ public class NanoTDF {
         } else {
             do {
                 byte[] iv = new byte[kNanoTDFIvSize];
-                SecureRandom.getInstanceStrong().nextBytes(iv);
+                try {
+                    SecureRandom.getInstanceStrong().nextBytes(iv);
+                } catch (NoSuchAlgorithmException e) {
+                    throw new SDKException("error getting instance of strong SecureRandom", e);
+                }
                 System.arraycopy(iv, 0, actualIV, kIvPadding, iv.length);
             } while (Arrays.equals(actualIV, kEmptyIV));    // if match, we need to retry to prevent key + iv reuse with the policy
         }
@@ -209,16 +216,24 @@ public class NanoTDF {
              readNanoTDF(nanoTDF, outputStream, Config.newNanoTDFReaderConfig());
     }
 
-    public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream, String platformUrl) throws IOException, InterruptedException, ExecutionException, URISyntaxException {
+    public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream, String platformUrl) throws IOException {
              readNanoTDF(nanoTDF, outputStream, Config.newNanoTDFReaderConfig(), platformUrl);
     }
 
     public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream,
-            Config.NanoTDFReaderConfig nanoTdfReaderConfig, String platformUrl) throws IOException, InterruptedException, ExecutionException, URISyntaxException {
+            Config.NanoTDFReaderConfig nanoTdfReaderConfig, String platformUrl) throws IOException, SDKException {
         if (!nanoTdfReaderConfig.ignoreKasAllowlist && (nanoTdfReaderConfig.kasAllowlist == null || nanoTdfReaderConfig.kasAllowlist.isEmpty())) {
             ListKeyAccessServersRequest request = ListKeyAccessServersRequest.newBuilder()
                     .build();
-            ListKeyAccessServersResponse response = services.kasRegistry().listKeyAccessServers(request).get();
+            ListKeyAccessServersResponse response = null;
+            try {
+                response = services.kasRegistry().listKeyAccessServers(request).get();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new SDKException("interrupted while getting kas registry", e);
+            } catch (ExecutionException e) {
+                throw new SDKException("error getting kas registry", e);
+            }
             nanoTdfReaderConfig.kasAllowlist = new HashSet<>();
             var kases = response.getKeyAccessServersList();
 
@@ -233,7 +248,7 @@ public class NanoTDF {
 
 
     public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream,
-            Config.NanoTDFReaderConfig nanoTdfReaderConfig) throws IOException, URISyntaxException {
+            Config.NanoTDFReaderConfig nanoTdfReaderConfig) throws IOException {
 
         Header header = new Header(nanoTDF);
         CollectionKey cachedKey = collectionStore.getKey(header);
