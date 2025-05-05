@@ -661,8 +661,11 @@ public class TDF {
             ListKeyAccessServersResponse response;
             try {
                 response = services.kasRegistry().listKeyAccessServers(request).get();
-            } catch (InterruptedException | ExecutionException e) {
+            } catch (ExecutionException e) {
                 throw new SDKException("error getting key access servers", e);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new SDKException("interrupted while getting list of kases", e);
             }
             tdfReaderConfig.kasAllowlist = new HashSet<>();
 
