@@ -653,12 +653,12 @@ public class TDF {
         return defk;
     }
 
-    public Reader loadTDF(SeekableByteChannel tdf, String platformUrl)
+    Reader loadTDF(SeekableByteChannel tdf, String platformUrl)
             throws DecoderException, IOException, ParseException, NoSuchAlgorithmException, JOSEException, InterruptedException, ExecutionException, URISyntaxException {
         return loadTDF(tdf, Config.newTDFReaderConfig(), platformUrl);
     }
 
-    public Reader loadTDF(SeekableByteChannel tdf, Config.TDFReaderConfig tdfReaderConfig, String platformUrl)
+    Reader loadTDF(SeekableByteChannel tdf, Config.TDFReaderConfig tdfReaderConfig, String platformUrl)
             throws DecoderException, IOException, ParseException, NoSuchAlgorithmException, JOSEException, InterruptedException, ExecutionException, URISyntaxException {
         if (!tdfReaderConfig.ignoreKasAllowlist && (tdfReaderConfig.kasAllowlist == null || tdfReaderConfig.kasAllowlist.isEmpty())) {
             ListKeyAccessServersRequest request = ListKeyAccessServersRequest.newBuilder()
