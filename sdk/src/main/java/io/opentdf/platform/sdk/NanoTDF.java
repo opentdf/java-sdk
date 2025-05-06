@@ -7,7 +7,6 @@ import io.opentdf.platform.sdk.nanotdf.*;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -212,7 +211,7 @@ public class NanoTDF {
         return nanoTDFSize;
     }
 
-    public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream) throws IOException, URISyntaxException {
+    public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream) throws IOException {
              readNanoTDF(nanoTDF, outputStream, Config.newNanoTDFReaderConfig());
     }
 

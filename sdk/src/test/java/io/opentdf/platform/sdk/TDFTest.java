@@ -309,7 +309,11 @@ public class TDFTest {
                 new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256, keypair.getPublic()));
 
         var unwrappedData = new ByteArrayOutputStream();
-        var thrown = assertThrows(SDKException.class, () -> tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), Config.newTDFReaderConfig(), platformUrl));
+        var dataToUnwrap = new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray());
+        var emptyConfig= Config.newTDFReaderConfig();
+        var thrown = assertThrows(SDKException.class, () -> {
+            tdf.loadTDF(dataToUnwrap, emptyConfig, platformUrl);
+        });
         assertThat(thrown.getCause()).isInstanceOf(JOSEException.class);
 
         //  try with assertion verification disabled and not passing the assertion verification keys

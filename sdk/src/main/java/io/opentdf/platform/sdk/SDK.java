@@ -1,6 +1,5 @@
 package io.opentdf.platform.sdk;
 
-import com.nimbusds.jose.JOSEException;
 import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
 import io.opentdf.platform.authorization.AuthorizationServiceGrpc;
@@ -16,21 +15,14 @@ import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc.Subje
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceGrpc;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceGrpc.KeyAccessServerRegistryServiceFutureStub;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
-import org.apache.commons.codec.DecoderException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.TrustManager;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
-import java.security.NoSuchAlgorithmException;
-import java.text.ParseException;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 
 /**
  * The SDK class represents a software development kit for interacting with the
@@ -43,8 +35,6 @@ public class SDK implements AutoCloseable {
     private final TrustManager trustManager;
     private final ClientInterceptor authInterceptor;
     private final String platformUrl;
-
-    private static final Logger log = LoggerFactory.getLogger(SDK.class);
 
     /**
      * Closes the SDK, including its associated services.
