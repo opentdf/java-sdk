@@ -351,7 +351,7 @@ public class TDFTest {
         assertionConfig2.statement.value = "{\"uuid\":\"f74efb60-4a9a-11ef-a6f1-8ee1a61c148a\",\"body\":{\"dataAttributes\":null,\"dissem\":null}}";
 
         var rsaKasInfo = new Config.KASInfo();
-        rsaKasInfo.URL = "https://example.com/kas"+Integer.toString(0);
+        rsaKasInfo.URL = "https://example.com/kas"+ 0;
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
@@ -414,7 +414,7 @@ public class TDFTest {
         assertionConfig1.signingKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, key);
 
         var rsaKasInfo = new Config.KASInfo();
-        rsaKasInfo.URL = "https://example.com/kas"+Integer.toString(0);
+        rsaKasInfo.URL = "https://example.com/kas"+ 0;
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
@@ -472,7 +472,7 @@ public class TDFTest {
     }
 
     @Test
-    public void testCreatingTooLargeTDF() throws Exception {
+    public void testCreatingTooLargeTDF() {
         var random = new Random();
         var maxSize = random.nextInt(1024);
         var numReturned = new AtomicInteger(0);
@@ -540,7 +540,7 @@ public class TDFTest {
     }
 
     @Test
-    public void legacyTDFRoundTrips() throws DecoderException, IOException, ExecutionException, JOSEException, InterruptedException, ParseException, NoSuchAlgorithmException, URISyntaxException {
+    public void legacyTDFRoundTrips() throws IOException, NoSuchAlgorithmException {
         final String mimeType = "application/pdf";
         var assertionConfig1 = new AssertionConfig();
         assertionConfig1.id = "assertion1";
