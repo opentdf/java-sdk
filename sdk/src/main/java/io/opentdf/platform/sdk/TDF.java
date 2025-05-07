@@ -5,11 +5,11 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.nimbusds.jose.*;
 
-import io.opentdf.platform.generated.policy.Value;
-import io.opentdf.platform.generated.policy.attributes.AttributesServiceClient;
-import io.opentdf.platform.generated.policy.kasregistry.KeyAccessServerRegistryServiceClient;
-import io.opentdf.platform.generated.policy.kasregistry.ListKeyAccessServersRequest;
-import io.opentdf.platform.generated.policy.kasregistry.ListKeyAccessServersResponse;
+import io.opentdf.platform.policy.Value;
+import io.opentdf.platform.policy.attributes.AttributesServiceClient;
+import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
+import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
+import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.sdk.Config.TDFConfig;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
 import io.opentdf.platform.sdk.Config.KASInfo;

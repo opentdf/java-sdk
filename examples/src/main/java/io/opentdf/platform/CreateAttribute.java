@@ -1,9 +1,9 @@
 package io.opentdf.platform;
 import com.connectrpc.ResponseMessageKt;
-import io.opentdf.platform.generated.policy.Attribute;
-import io.opentdf.platform.generated.policy.AttributeRuleTypeEnum;
-import io.opentdf.platform.generated.policy.attributes.CreateAttributeRequest;
-import io.opentdf.platform.generated.policy.attributes.CreateAttributeResponse;
+import io.opentdf.platform.policy.Attribute;
+import io.opentdf.platform.policy.AttributeRuleTypeEnum;
+import io.opentdf.platform.policy.attributes.CreateAttributeRequest;
+import io.opentdf.platform.policy.attributes.CreateAttributeResponse;
 import io.opentdf.platform.sdk.*;
 
 import java.util.Collections;

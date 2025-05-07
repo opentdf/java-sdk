@@ -2,10 +2,10 @@ package io.opentdf.platform.sdk;
 
 import com.connectrpc.ResponseMessage;
 import com.connectrpc.UnaryBlockingCall;
-import io.opentdf.platform.generated.policy.KeyAccessServer;
-import io.opentdf.platform.generated.policy.kasregistry.KeyAccessServerRegistryServiceClient;
-import io.opentdf.platform.generated.policy.kasregistry.ListKeyAccessServersRequest;
-import io.opentdf.platform.generated.policy.kasregistry.ListKeyAccessServersResponse;
+import io.opentdf.platform.policy.KeyAccessServer;
+import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
+import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
+import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.Config.NanoTDFReaderConfig;
 import io.opentdf.platform.sdk.nanotdf.ECKeyPair;

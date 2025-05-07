@@ -1,8 +1,8 @@
 package io.opentdf.platform;
 import com.connectrpc.ResponseMessageKt;
-import io.opentdf.platform.generated.policy.Attribute;
-import io.opentdf.platform.generated.policy.attributes.ListAttributesRequest;
-import io.opentdf.platform.generated.policy.attributes.ListAttributesResponse;
+import io.opentdf.platform.policy.Attribute;
+import io.opentdf.platform.policy.attributes.ListAttributesRequest;
+import io.opentdf.platform.policy.attributes.ListAttributesResponse;
 import io.opentdf.platform.sdk.*;
 
 import java.util.Collections;

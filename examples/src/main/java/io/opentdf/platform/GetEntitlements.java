@@ -1,9 +1,9 @@
 package io.opentdf.platform;
 import com.connectrpc.ResponseMessageKt;
-import io.opentdf.platform.generated.authorization.Entity;
-import io.opentdf.platform.generated.authorization.EntityEntitlements;
-import io.opentdf.platform.generated.authorization.GetEntitlementsRequest;
-import io.opentdf.platform.generated.authorization.GetEntitlementsResponse;
+import io.opentdf.platform.authorization.Entity;
+import io.opentdf.platform.authorization.EntityEntitlements;
+import io.opentdf.platform.authorization.GetEntitlementsRequest;
+import io.opentdf.platform.authorization.GetEntitlementsResponse;
 import io.opentdf.platform.sdk.*;
 
 import java.util.Collections;

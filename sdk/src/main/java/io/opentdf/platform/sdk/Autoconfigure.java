@@ -1,16 +1,16 @@
 package io.opentdf.platform.sdk;
 
 import com.connectrpc.ResponseMessageKt;
-import io.opentdf.platform.generated.policy.Attribute;
-import io.opentdf.platform.generated.policy.AttributeRuleTypeEnum;
-import io.opentdf.platform.generated.policy.AttributeValueSelector;
-import io.opentdf.platform.generated.policy.KasPublicKey;
-import io.opentdf.platform.generated.policy.KasPublicKeyAlgEnum;
-import io.opentdf.platform.generated.policy.KeyAccessServer;
-import io.opentdf.platform.generated.policy.Value;
-import io.opentdf.platform.generated.policy.attributes.AttributesServiceClient;
-import io.opentdf.platform.generated.policy.attributes.GetAttributeValuesByFqnsRequest;
-import io.opentdf.platform.generated.policy.attributes.GetAttributeValuesByFqnsResponse;
+import io.opentdf.platform.policy.Attribute;
+import io.opentdf.platform.policy.AttributeRuleTypeEnum;
+import io.opentdf.platform.policy.AttributeValueSelector;
+import io.opentdf.platform.policy.KasPublicKey;
+import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
+import io.opentdf.platform.policy.KeyAccessServer;
+import io.opentdf.platform.policy.Value;
+import io.opentdf.platform.policy.attributes.AttributesServiceClient;
+import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
+import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

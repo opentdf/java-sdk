@@ -1,7 +1,7 @@
 package io.opentdf.platform;
 import com.connectrpc.ResponseMessageKt;
-import io.opentdf.platform.generated.policy.namespaces.CreateNamespaceRequest;
-import io.opentdf.platform.generated.policy.namespaces.CreateNamespaceResponse;
+import io.opentdf.platform.policy.namespaces.CreateNamespaceRequest;
+import io.opentdf.platform.policy.namespaces.CreateNamespaceResponse;
 import io.opentdf.platform.sdk.*;
 
 import java.util.Collections;

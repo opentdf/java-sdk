@@ -1,9 +1,9 @@
 package io.opentdf.platform;
 import com.connectrpc.ResponseMessageKt;
-import io.opentdf.platform.generated.policy.Action;
-import io.opentdf.platform.generated.policy.SubjectMapping;
-import io.opentdf.platform.generated.policy.subjectmapping.CreateSubjectMappingRequest;
-import io.opentdf.platform.generated.policy.subjectmapping.CreateSubjectMappingResponse;
+import io.opentdf.platform.policy.Action;
+import io.opentdf.platform.policy.SubjectMapping;
+import io.opentdf.platform.policy.subjectmapping.CreateSubjectMappingRequest;
+import io.opentdf.platform.policy.subjectmapping.CreateSubjectMappingResponse;
 import io.opentdf.platform.sdk.*;
 
 import java.util.Collections;

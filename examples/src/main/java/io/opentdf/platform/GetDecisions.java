@@ -1,13 +1,13 @@
 package io.opentdf.platform;
 import com.connectrpc.ResponseMessageKt;
-import io.opentdf.platform.generated.authorization.DecisionRequest;
-import io.opentdf.platform.generated.authorization.DecisionResponse;
-import io.opentdf.platform.generated.authorization.Entity;
-import io.opentdf.platform.generated.authorization.EntityChain;
-import io.opentdf.platform.generated.authorization.GetDecisionsRequest;
-import io.opentdf.platform.generated.authorization.GetDecisionsResponse;
-import io.opentdf.platform.generated.authorization.ResourceAttribute;
-import io.opentdf.platform.generated.policy.Action;
+import io.opentdf.platform.authorization.DecisionRequest;
+import io.opentdf.platform.authorization.DecisionResponse;
+import io.opentdf.platform.authorization.Entity;
+import io.opentdf.platform.authorization.EntityChain;
+import io.opentdf.platform.authorization.GetDecisionsRequest;
+import io.opentdf.platform.authorization.GetDecisionsResponse;
+import io.opentdf.platform.authorization.ResourceAttribute;
+import io.opentdf.platform.policy.Action;
 import io.opentdf.platform.sdk.*;
 
 import java.util.Collections;
