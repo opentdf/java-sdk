@@ -714,8 +714,6 @@ public class Autoconfigure {
     private static List<KeyAccessServer> getGrants(GetAttributeValuesByFqnsResponse.AttributeAndValue attributeAndValue) {
         var val = attributeAndValue.getValue();
         var attribute = attributeAndValue.getAttribute();
-        String fqnstr = val.getFqn();
-        AttributeValueFQN fqn = new AttributeValueFQN(fqnstr);
 
         if (!val.getGrantsList().isEmpty()) {
             if (logger.isDebugEnabled()) {
@@ -736,7 +734,9 @@ public class Autoconfigure {
             return nsGrants;
         } else {
             // this is needed to mark the fact that we have an empty
-            logger.debug("didn't find any grants on value, attribute, or namespace for attribute value [{}]", fqnstr);
+            if (logger.isDebugEnabled()) {
+                logger.debug("didn't find any grants on value, attribute, or namespace for attribute value [{}]", val.getFqn());
+            }
             return Collections.emptyList();
         }
 
