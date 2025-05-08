@@ -2,18 +2,14 @@ package io.opentdf.platform.sdk;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.security.NoSuchAlgorithmException;
-import java.text.ParseException;
 
-import org.apache.commons.codec.DecoderException;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import com.code_intelligence.jazzer.junit.FuzzTest;
 import com.google.gson.JsonParseException;
-import com.nimbusds.jose.JOSEException;
 
 import io.opentdf.platform.sdk.TDF.FailedToCreateGMAC;
 import io.opentdf.platform.sdk.TDF.Reader;
@@ -33,24 +29,24 @@ public class Fuzzing {
     };
 
     @FuzzTest(maxDuration=TEST_DURATION)
-    public void fuzzNanoTDF(FuzzedDataProvider data) throws IOException, URISyntaxException {
+    public void fuzzNanoTDF(FuzzedDataProvider data) throws IOException {
         byte[] fuzzBytes = data.consumeRemainingAsBytes();
-        NanoTDF nanoTDF = new NanoTDF();
-        nanoTDF.readNanoTDF(ByteBuffer.wrap(fuzzBytes), IGNORE_OUTPUT_STREAM, NanoTDFTest.kas);
+        NanoTDF nanoTDF = new NanoTDF(new FakeServicesBuilder().setKas(NanoTDFTest.kas).build());
+        nanoTDF.readNanoTDF(ByteBuffer.wrap(fuzzBytes), IGNORE_OUTPUT_STREAM);
     }
 
     @FuzzTest(maxDuration=TEST_DURATION)
-    public void fuzzTDF(FuzzedDataProvider data) throws FailedToCreateGMAC, NoSuchAlgorithmException, IOException, JOSEException, ParseException, DecoderException {
+    public void fuzzTDF(FuzzedDataProvider data) throws FailedToCreateGMAC, NoSuchAlgorithmException {
         byte[] fuzzBytes = data.consumeRemainingAsBytes();
         byte[] key = new byte[32];      // use consistent zero key for performance and so fuzz can relate to seed
         var assertionVerificationKeys = new Config.AssertionVerificationKeys();
         assertionVerificationKeys.defaultKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, key);
         Config.TDFReaderConfig readerConfig = Config.newTDFReaderConfig(
                 Config.withAssertionVerificationKeys(assertionVerificationKeys));
-        TDF tdf = new TDF();
+        TDF tdf = new TDF(new FakeServicesBuilder().setKas(TDFTest.kas).build());
 
         try {
-            Reader reader = tdf.loadTDF(new SeekableInMemoryByteChannel(fuzzBytes), TDFTest.kas, readerConfig);
+            Reader reader = tdf.loadTDF(new SeekableInMemoryByteChannel(fuzzBytes), readerConfig);
 
             reader.readPayload(IGNORE_OUTPUT_STREAM);
         } catch (SDKException | InvalidZipException | JsonParseException | IOException | IllegalArgumentException e) {

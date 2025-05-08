@@ -129,16 +129,9 @@ public class Config {
         return (TDFReaderConfig config) -> config.sessionKeyType = keyType;
     }
     public static Consumer<TDFReaderConfig> WithKasAllowlist(String... kasAllowlist) {
-        return (TDFReaderConfig config) -> {
-            config.kasAllowlist = Arrays.stream(kasAllowlist)
-                                        .map(s -> {
-                                            try {
-                                                return getKasAddress(s);
-                                            } catch (URISyntaxException e) {
-                                                throw new RuntimeException("Invalid URI: " + s, e);
-                                            }
-                                        }).collect(Collectors.toCollection(HashSet::new));
-        };
+        return (TDFReaderConfig config) -> config.kasAllowlist = Arrays
+                .stream(kasAllowlist)
+                .map(Config::getKasAddress).collect(Collectors.toSet());
     }
 
     public static Consumer<TDFReaderConfig> withKasAllowlist(Set<String> kasAllowlist) {
@@ -400,13 +393,8 @@ public class Config {
         return (NanoTDFReaderConfig config) -> {
             // apply getKasAddress to each kasAllowlist entry and add to hashset
             config.kasAllowlist = Arrays.stream(kasAllowlist)
-                                        .map(s -> {
-                                            try {
-                                                return getKasAddress(s);
-                                            } catch (URISyntaxException e) {
-                                                throw new RuntimeException("Invalid URI: " + s, e);
-                                            }
-                                        }).collect(Collectors.toCollection(HashSet::new));
+                    .map(Config::getKasAddress)
+                    .collect(Collectors.toSet());
         };
     }
 
@@ -455,7 +443,7 @@ public class Config {
             this.useCollection = useCollection;
         }
 
-        public synchronized HeaderInfo getHeaderInfo() throws InterruptedException {
+        public synchronized HeaderInfo getHeaderInfo() throws SDKException {
             int iteration = iterationCounter;
             iterationCounter = (iterationCounter + 1) % MAX_COLLECTION_ITERATION;
 
@@ -464,7 +452,12 @@ public class Config {
                 return null;
             }
             while (!updatedHeaderInfo) {
-                this.wait();
+                try {
+                    this.wait();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new SDKException("interrupted while waiting for header info", e);
+                }
             }
             return new HeaderInfo(headerInfo.getHeader(), headerInfo.getKey(), iteration);
         }
@@ -476,13 +469,18 @@ public class Config {
         }
     }
 
-    public static String getKasAddress(String kasURL) throws URISyntaxException {
+    public static String getKasAddress(String kasURL) throws SDKException {
         // Prepend "https://" if no scheme is provided
         if (!kasURL.contains("://")) {
             kasURL = "https://" + kasURL;
         }
 
-        URI uri = new URI(kasURL);
+        URI uri;
+        try {
+            uri = new URI(kasURL);
+        } catch (URISyntaxException e) {
+            throw new SDKException("error constructing KAS url", e);
+        }
 
         // Default to "https" if no scheme is provided
         String scheme = uri.getScheme();
@@ -497,6 +495,10 @@ public class Config {
         }
 
         // Reconstruct the URL with only the scheme, host, and port
-        return new URI(scheme, null, uri.getHost(), port, null, null, null).toString();
+        try {
+            return new URI(scheme, null, uri.getHost(), port, null, null, null).toString();
+        } catch (URISyntaxException e) {
+            throw new SDKException("error creating KAS URL from host and port", e);
+        }
     }
 }

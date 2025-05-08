@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static io.opentdf.platform.sdk.TDFWriter.TDF_MANIFEST_FILE_NAME;
@@ -22,8 +23,8 @@ public class TDFReader {
     private final ZipReader.Entry manifestEntry;
     private final InputStream payload;
 
-    public TDFReader(SeekableByteChannel tdf) throws IOException {
-        var entries = new ZipReader(tdf).getEntries()
+    public TDFReader(SeekableByteChannel tdf) throws SDKException, IOException {
+        Map<String, ZipReader.Entry> entries = new ZipReader(tdf).getEntries()
                 .stream()
                 .collect(Collectors.toMap(ZipReader.Entry::getName, e -> e));
 

@@ -53,8 +53,6 @@ public class EncryptExample {
 
         FileOutputStream fos = new FileOutputStream("my.ciphertext");
 
-        new TDF().createTDF(in, fos, tdfConfig,
-                sdk.getServices().kas(),
-                sdk.getServices().attributes());
+        sdk.createTDF(in, fos, tdfConfig);
     }
 }
