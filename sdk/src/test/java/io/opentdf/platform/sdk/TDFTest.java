@@ -11,7 +11,6 @@ import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.TDF.Reader;
 import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
-import org.apache.commons.codec.DecoderException;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -22,12 +21,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
@@ -256,7 +253,7 @@ public class TDFTest {
                 keypair.getPrivate());
 
         var rsaKasInfo = new Config.KASInfo();
-        rsaKasInfo.URL = "https://example.com/kas"+Integer.toString(0);
+        rsaKasInfo.URL = "https://example.com/kas"+ 0;
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
@@ -549,7 +546,7 @@ public class TDFTest {
     }
 
     @Test
-    void legacyTDFRoundTrips() throws DecoderException, IOException, JOSEException, ParseException, NoSuchAlgorithmException, URISyntaxException {
+    void legacyTDFRoundTrips() throws IOException, NoSuchAlgorithmException {
         final String mimeType = "application/pdf";
         var assertionConfig1 = new AssertionConfig();
         assertionConfig1.id = "assertion1";

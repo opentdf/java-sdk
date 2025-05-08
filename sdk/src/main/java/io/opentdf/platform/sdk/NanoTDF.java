@@ -1,7 +1,6 @@
 package io.opentdf.platform.sdk;
 
 import com.connectrpc.ResponseMessageKt;
-import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.sdk.TDF.KasAllowlistException;
