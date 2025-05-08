@@ -100,7 +100,7 @@ class KASClient implements SDK.KAS {
         PublicKeyResponse resp;
         try {
             resp = RequestHelper.getOrThrow(req);
-        } catch (Exception e) {
+        } catch (ConnectException e) {
             throw new SDKException("error getting public key", e);
         }
 
@@ -197,9 +197,8 @@ class KASClient implements SDK.KAS {
                 throw new KasBadRequestException("rewrap request 400: " + e);
             }
             throw new SDKException("error unwrapping key", e);
-        } catch (Exception e) {
-            throw new SDKException("error unwrapping key", e);
         }
+
         var wrappedKey = response.getEntityWrappedKey().toByteArray();
         if (sessionKeyType != KeyType.RSA2048Key) {
 
@@ -259,7 +258,7 @@ class KASClient implements SDK.KAS {
         RewrapResponse response;
         try {
             response = RequestHelper.getOrThrow(request);
-        } catch (Exception e) {
+        } catch (ConnectException e) {
             throw new SDKException("error rewrapping key", e);
         }
         var wrappedKey = response.getEntityWrappedKey().toByteArray();
