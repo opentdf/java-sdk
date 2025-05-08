@@ -31,11 +31,9 @@ public class DecryptCollectionExample {
 
 
         // Convert String to InputStream
-        NanoTDF nanoTDFClient = new NanoTDF(true);
-
         for (int i = 0; i < 50; i++) {
             FileInputStream fis = new FileInputStream(String.format("out/my.%d_ciphertext", i));
-            nanoTDFClient.readNanoTDF(ByteBuffer.wrap(fis.readAllBytes()), System.out, sdk.getServices().kas(), sdk.getServices().kasRegistry(), sdk.getPlatformUrl());
+            sdk.readNanoTDF(ByteBuffer.wrap(fis.readAllBytes()), System.out, Config.newNanoTDFReaderConfig());
             fis.close();
         }
 

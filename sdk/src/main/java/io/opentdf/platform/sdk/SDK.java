@@ -1,11 +1,7 @@
 package io.opentdf.platform.sdk;
 
-import io.grpc.CallOptions;
-import io.grpc.Channel;
-import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
-import io.grpc.MethodDescriptor;
 import io.opentdf.platform.authorization.AuthorizationServiceGrpc;
 import io.opentdf.platform.authorization.AuthorizationServiceGrpc.AuthorizationServiceFutureStub;
 import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
@@ -19,11 +15,12 @@ import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc.Subje
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceGrpc;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceGrpc.KeyAccessServerRegistryServiceFutureStub;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.TrustManager;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.util.Optional;
 
@@ -38,8 +35,6 @@ public class SDK implements AutoCloseable {
     private final TrustManager trustManager;
     private final ClientInterceptor authInterceptor;
     private final String platformUrl;
-
-    private static final Logger log = LoggerFactory.getLogger(SDK.class);
 
     /**
      * Closes the SDK, including its associated services.
@@ -157,6 +152,26 @@ public class SDK implements AutoCloseable {
 
     public Services getServices() {
         return this.services;
+    }
+
+    public TDF.Reader loadTDF(SeekableByteChannel channel, Config.TDFReaderConfig config) throws SDKException, IOException {
+        var tdf = new TDF(services);
+        return tdf.loadTDF(channel, config, platformUrl);
+    }
+
+    public TDF.TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig config) throws SDKException, IOException {
+        var tdf = new TDF(services);
+        return tdf.createTDF(payload, outputStream, config);
+    }
+
+    public int createNanoTDF(ByteBuffer payload, OutputStream outputStream, Config.NanoTDFConfig config) throws SDKException, IOException {
+        var ntdf = new NanoTDF(services);
+        return ntdf.createNanoTDF(payload, outputStream, config);
+    }
+
+    public void readNanoTDF(ByteBuffer nanoTDF, OutputStream out, Config.NanoTDFReaderConfig config) throws SDKException, IOException {
+        var ntdf = new NanoTDF(services);
+        ntdf.readNanoTDF(nanoTDF, out, config, platformUrl);
     }
 
     /**

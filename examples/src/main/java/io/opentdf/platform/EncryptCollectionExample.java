@@ -35,15 +35,9 @@ public class EncryptCollectionExample {
 
         String str = "Hello, World!";
 
-        // Convert String to InputStream
-        var in = new ByteArrayInputStream(str.getBytes(StandardCharsets.UTF_8));
-        NanoTDF nanoTDFClient = new NanoTDF();
-
         for (int i = 0; i < 50; i++) {
             FileOutputStream fos = new FileOutputStream(String.format("out/my.%d_ciphertext", i));
-            nanoTDFClient.createNanoTDF(ByteBuffer.wrap(str.getBytes()), fos, tdfConfig,
-                    sdk.getServices().kas());
+            sdk.createNanoTDF(ByteBuffer.wrap(str.getBytes(StandardCharsets.UTF_8)), fos, tdfConfig);
         }
-
     }
 }
