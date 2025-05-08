@@ -172,10 +172,9 @@ public class SDKBuilder {
 
         // we don't add the auth listener to this channel since it is only used to call
         // the well known endpoint
-        ProtocolClient bootstrapClient = null;
         GetWellKnownConfigurationResponse config;
         var httpClient = getHttpClient();
-        bootstrapClient = getUnauthenticatedProtocolClient(platformEndpoint, httpClient) ;
+        ProtocolClient bootstrapClient = getUnauthenticatedProtocolClient(platformEndpoint, httpClient) ;
         var stub = new WellKnownServiceClient(bootstrapClient);
         try {
             config = RequestHelper.getOrThrow(stub.getWellKnownConfigurationBlocking(GetWellKnownConfigurationRequest.getDefaultInstance(), Collections.emptyMap()).execute());
