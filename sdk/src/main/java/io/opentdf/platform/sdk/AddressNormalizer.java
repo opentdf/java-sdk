@@ -15,30 +15,39 @@ class AddressNormalizer {
     }
 
     static String normalizeAddress(String urlString, boolean usePlaintext) {
-        URL url;
+        URI uri;
         try {
-            url = new URL(urlString);
-        } catch (MalformedURLException e) {
-            url = tryParseHostAndPort(urlString);
+            uri = new URI(urlString);
+        } catch (URISyntaxException e) {
+            throw new SDKException("error trying to parse URL [" + urlString + "]", e);
+        }
+
+        if (uri.getHost() == null) {
+            // if there is no host then we are likely dealing with a host and port
+            try {
+                uri = new URI(usePlaintext ? "http" : "https", null, uri.getScheme(), Integer.parseInt(uri.getSchemeSpecificPart()), null, null, null);
+            } catch (URISyntaxException e) {
+                throw new SDKException("error trying to create URL for host and port[" + urlString + "]", e);
+            }
         }
         final int port;
-        if (url.getPort() == -1) {
-            port = "http".equals(url.getProtocol()) ? 80 : 443;
+        if (uri.getPort() == -1) {
+            port = usePlaintext ? 80 : 443;
         } else {
-            port = url.getPort();
+            port = uri.getPort();
         }
-        final String protocol = usePlaintext && "http".equals(url.getProtocol()) ? "http" : "https";
+        final String scheme = usePlaintext ? "http" : "https";
 
         try {
-            var returnUrl = new URL(protocol, url.getHost(), port, "").toString();
+            var returnUrl = new URI(scheme, null, uri.getHost(), port, null, null, null).toString();
             logger.debug("normalized url [{}] to [{}]", urlString, returnUrl);
             return returnUrl;
-        } catch (MalformedURLException e) {
+        } catch (URISyntaxException e) {
             throw new SDKException("error creating KAS address", e);
         }
     }
 
-    private static URL tryParseHostAndPort(String urlString) {
+    private static URI tryParseHostAndPort(String urlString) {
         URI uri;
         try {
             uri = new URI(null, urlString, null, null, null).parseServerAuthority();
@@ -47,8 +56,8 @@ class AddressNormalizer {
         }
 
         try {
-            return new URL(uri.getPort() == 443 ? "https" : "http", uri.getHost(), uri.getPort(), "");
-        } catch (MalformedURLException e) {
+            return new URI(uri.getPort() == 443 ? "https" : "http", null, uri.getHost(), uri.getPort(), "", "", "");
+        } catch (URISyntaxException e) {
             throw new SDKException("error trying to create URL from host and port", e);
         }
     }

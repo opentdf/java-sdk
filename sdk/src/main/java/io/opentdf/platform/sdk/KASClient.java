@@ -41,7 +41,7 @@ import static java.lang.String.format;
  * This class provides methods to retrieve public keys, unwrap encrypted keys,
  * and manage key caches.
  */
-public class KASClient implements SDK.KAS {
+class KASClient implements SDK.KAS {
 
     private final OkHttpClient httpClient;
     private final BiFunction<OkHttpClient, String, ProtocolClient> protocolClientFactory;
