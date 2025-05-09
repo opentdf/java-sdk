@@ -100,9 +100,9 @@ public class SDK implements AutoCloseable {
         return tdf.loadTDF(channel, config, platformUrl);
     }
 
-    public TDF.TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig config) throws SDKException, IOException {
+    public void createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig config) throws SDKException, IOException {
         var tdf = new TDF(services);
-        return tdf.createTDF(payload, outputStream, config);
+        tdf.createTDF(payload, outputStream, config);
     }
 
     public int createNanoTDF(ByteBuffer payload, OutputStream outputStream, Config.NanoTDFConfig config) throws SDKException, IOException {

@@ -36,7 +36,7 @@ import java.util.*;
  * TDF objects, as well as utility functions to handle cryptographic
  * operations and configurations.
  */
-public class TDF {
+class TDF {
 
     private static byte[] tdfECKeySaltCompute() {
         byte[] salt;
@@ -65,18 +65,18 @@ public class TDF {
      * input size, which controls the maximum size of the input data that can be processed.
      * For test purposes, an alternative constructor allows for setting a custom maximum input size.
      */
-    public TDF(SDK.Services services) {
+    TDF(SDK.Services services) {
         this(MAX_TDF_INPUT_SIZE, services);
     }
 
     // constructor for tests so that we can set a maximum size that's tractable for
     // tests
-    public TDF(long maximumInputSize, SDK.Services services) {
+    TDF(long maximumInputSize, SDK.Services services) {
         this.maximumSize = maximumInputSize;
         this.services = services;
     }
 
-    public static Logger logger = LoggerFactory.getLogger(TDF.class);
+    private static final Logger logger = LoggerFactory.getLogger(TDF.class);
 
     private static final long MAX_TDF_INPUT_SIZE = 68719476736L;
     private static final int GCM_KEY_SIZE = 32;
@@ -89,7 +89,6 @@ public class TDF {
     private static final String kGCMCipherAlgorithm = "AES-256-GCM";
     private static final int kGMACPayloadLength = 16;
     private static final String kGmacIntegrityAlgorithm = "GMAC";
-    private static final String kSha256Hash = "SHA256";
 
     private static final String kHmacIntegrityAlgorithm = "HS256";
     private static final String kTDFAsZip = "zip";
@@ -99,7 +98,7 @@ public class TDF {
 
     private static final Gson gson = new GsonBuilder().create();
 
-    public class SplitKeyException extends SDKException {
+    public static class SplitKeyException extends SDKException {
         public SplitKeyException(String errorMessage) {
             super(errorMessage);
         }
@@ -177,12 +176,12 @@ public class TDF {
         }
     }
 
-    public static class EncryptedMetadata {
+    static class EncryptedMetadata {
         private String ciphertext;
         private String iv;
     }
 
-    public static class ECKeyWrappedKeyInfo {
+    static class ECKeyWrappedKeyInfo {
         private String publicKey;
         private String wrappedKey;
     }
@@ -201,7 +200,7 @@ public class TDF {
             this.size = 0;
         }
 
-        PolicyObject createPolicyObject(List<Autoconfigure.AttributeValueFQN> attributes) {
+        private PolicyObject createPolicyObject(List<Autoconfigure.AttributeValueFQN> attributes) {
             PolicyObject policyObject = new PolicyObject();
             policyObject.body = new PolicyObject.Body();
             policyObject.uuid = UUID.randomUUID().toString();
@@ -293,7 +292,7 @@ public class TDF {
                 policyBinding.hash = encoder.encodeToString(hexBinding.getBytes(StandardCharsets.UTF_8));
 
                 // Add meta data
-                var encryptedMetadata = new String();
+                var encryptedMetadata = "";
                 if (tdfConfig.metaData != null && !tdfConfig.metaData.trim().isEmpty()) {
                     AesGcm aesGcm = new AesGcm(symKey);
                     var encrypted = aesGcm.encrypt(tdfConfig.metaData.getBytes(StandardCharsets.UTF_8));
@@ -788,12 +787,19 @@ public class TDF {
                 sigAlg = Config.IntegrityAlgorithm.GMAC;
             }
 
-            var sig = calculateSignature(aggregateHash.toByteArray(), payloadKey, sigAlg);
+            var sig = calculateSignature(aggregateHash.toByteArray(), result.payloadKey, sigAlg);
             if (isLegacyTdf) {
                 sig = Hex.encodeHexString(sig).getBytes();
             }
             rootSigValue = Base64.getEncoder().encodeToString(sig);
         } else {
+            MessageDigest digest;
+            try {
+                digest = MessageDigest.getInstance("SHA-256");
+            } catch (NoSuchAlgorithmException e) {
+                throw new SDKException("error getting instance of SHA-256 digest", e);
+            }
+
             rootSigValue = Base64.getEncoder().encodeToString(digest.digest(aggregateHash.toString().getBytes()));
         }
 
@@ -826,7 +832,7 @@ public class TDF {
                 }
             }
 
-            Manifest.Assertion.HashValues hashValues = null;
+            Manifest.Assertion.HashValues hashValues;
             try {
                 hashValues = assertion.verify(assertionKey);
             } catch (ParseException | JOSEException e) {
