@@ -10,7 +10,6 @@ import io.opentdf.platform.sdk.KeyType;
 import io.opentdf.platform.sdk.Config.AssertionVerificationKeys;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
-import io.opentdf.platform.sdk.TDF;
 import nl.altindag.ssl.SSLFactory;
 import org.apache.commons.codec.DecoderException;
 import picocli.CommandLine;
@@ -23,7 +22,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -36,7 +34,6 @@ import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
-import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -165,7 +162,7 @@ class Command {
             @Option(names = { "--with-assertions" }, defaultValue = Option.NULL_VALUE) Optional<String> assertion,
             @Option(names = { "--with-target-mode" }, defaultValue = Option.NULL_VALUE) Optional<String> targetMode)
 
-            throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException, DecoderException {
+            throws IOException, AutoConfigureException {
 
         var sdk = buildSDK();
         var kasInfos = kas.stream().map(k -> {
@@ -300,8 +297,7 @@ class Command {
     @CommandLine.Command(name = "metadata")
     void readMetadata(@Option(names = { "-f", "--file" }, required = true) Path tdfPath,
     @Option(names = { "--kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<String> kasAllowlistStr,
-            @Option(names = { "--ignore-kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<Boolean> ignoreAllowlist) throws IOException,
-            TDF.FailedToCreateGMAC, JOSEException, NoSuchAlgorithmException, ParseException, DecoderException, InterruptedException, ExecutionException, URISyntaxException {
+            @Option(names = { "--ignore-kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<Boolean> ignoreAllowlist) throws IOException {
         var sdk = buildSDK();
         var opts = new ArrayList<Consumer<Config.TDFReaderConfig>>();
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {

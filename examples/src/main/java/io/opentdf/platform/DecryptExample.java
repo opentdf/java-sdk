@@ -11,7 +11,6 @@ import java.net.URISyntaxException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
-import java.text.ParseException;
 import java.util.concurrent.ExecutionException;
 
 import javax.crypto.BadPaddingException;
@@ -21,10 +20,7 @@ import org.apache.commons.cli.*;
 import org.apache.commons.codec.DecoderException;
 
 public class DecryptExample {
-    public static void main(String[] args) throws IOException,
-            InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException,
-            BadPaddingException, InvalidKeyException, TDF.FailedToCreateGMAC,
-            JOSEException, ParseException, NoSuchAlgorithmException, DecoderException, org.apache.commons.cli.ParseException, InterruptedException, ExecutionException, URISyntaxException {
+    public static void main(String[] args) throws IOException, ParseException {
 
         // Create Options object
         Options options = new Options();

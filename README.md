@@ -15,33 +15,41 @@ This SDK is available from Maven central as:
 ## Quick Start Example
 
 ```java
+package io.opentdf.platform;
+
 import io.opentdf.platform.sdk.Config;
+import io.opentdf.platform.sdk.Reader;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
-import io.opentdf.platform.sdk.abac.Policy;
+
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.FileInputStream;
+import java.nio.channels.FileChannel;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 
 public class Example {
-  public static void main(String[] args) {
-    SDK sdk =
-        new SDKBuilder
-            .clientSecret("myClient", "token")
-            .platformEndpoint("https://your.cluster/")
-            .build();
-    // Encrypt a file
-    try (InputStream in = new FileInputStream("input.plaintext")) {
-      Config c = Config.newTDFConfig(Config.withDataAttributes("attr1", "attr2"));
-      new TDF().createTDF(in, System.out, tdfConfig, sdk.getServices().kas());
-    }
+    public static void main(String[] args) throws IOException {
+        SDK sdk = new SDKBuilder()
+                    .clientSecret("myClient", "token")
+                    .platformEndpoint("https://your.cluster/")
+                    .build();
 
-    // Decrypt a file
-    try (SeekableByteChannel in =
-          FileChannel.open("input.ciphertext", StandardOpenOption.READ)) {
-        TDF.Reader reader = new TDF().loadTDF(in, sdk.getServices().kas(), sdk.getServices().kasRegistry(), sdk.getPlatformUrl());
-        reader.readPayload(System.out);
+        // Encrypt a file
+        try (InputStream in = new FileInputStream("input.plaintext")) {
+            Config.TDFConfig c = Config.newTDFConfig(Config.withDataAttributes("attr1", "attr2"));
+            sdk.createTDF(in, System.out, c);
+        }
+
+        // Decrypt a file
+        try (SeekableByteChannel in = FileChannel.open(Path.of("input.ciphertext"), StandardOpenOption.READ)) {
+            Reader reader = sdk.loadTDF(in, Config.newTDFReaderConfig());
+            reader.readPayload(System.out);
+        }
     }
-}}
+}
 ```
 
 ### Cryptography Library
@@ -50,7 +58,7 @@ This SDK uses the [Bouncy Castle Security library](https://www.bouncycastle.org/
 Note: When using this SDK, it may be necessary to register the Bouncy Castle Provider as follows:
 
 ```java
-    static{
+    static {
         Security.addProvider(new BouncyCastleProvider());
     }
 ```

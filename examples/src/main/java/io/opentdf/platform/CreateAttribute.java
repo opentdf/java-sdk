@@ -12,7 +12,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.Arrays;
 
 public class CreateAttribute {
-    public static void main(String[] args) throws ExecutionException, InterruptedException{
+    public static void main(String[] args) {
 
         String clientId = "opentdf";
         String clientSecret = "secret";
