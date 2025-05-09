@@ -141,4 +141,101 @@ public class SDK implements AutoCloseable {
     public String getPlatformUrl() {
         return platformUrl;
     }
+
+    /**
+     * {@link SplitKeyException} is thrown when the SDK encounters an error related to
+     * the inability to reconstruct a split key during decryption.
+     */
+    public static class SplitKeyException extends SDKException {
+        public SplitKeyException(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    /**
+     * {@link DataSizeNotSupported} is thrown when the user attempts to create
+     * a TDF with a size larger than the maximum size (currently 64GiB).
+     */
+    public static class DataSizeNotSupported extends SDKException {
+        public DataSizeNotSupported(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    /**
+     * {@link KasInfoMissing} is thrown during TDF creation when no KAS information is present.
+     */
+    public static class KasInfoMissing extends SDKException {
+        public KasInfoMissing(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    /**
+     * {@link KasPublicKeyMissing} is thrown during encryption
+     *  when the SDK cannot retrieve the public key for a KAS.
+     */
+    public static class KasPublicKeyMissing extends SDKException {
+        public KasPublicKeyMissing(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    /**
+     * {@link TamperException} is the base class for exceptions related to signature mismatches.
+     */
+    public static class TamperException extends SDKException {
+        public TamperException(String errorMessage) {
+            super("[tamper detected] "+errorMessage);
+        }
+    }
+
+    /**
+     * {@link RootSignatureValidationException} is thrown when the signature on the overall
+     * TDF fails.
+     */
+    public static class RootSignatureValidationException extends TamperException {
+        public RootSignatureValidationException(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    /**
+     * {@link SegmentSignatureMismatch} is thrown when the segment signature does not
+     * match the expected signature.
+     */
+    public static class SegmentSignatureMismatch extends TamperException {
+        public SegmentSignatureMismatch(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    /**
+     * {@link KasBadRequestException} is thrown when a KAS returns a 400 error.
+     */
+    public static class KasBadRequestException extends TamperException {
+        public KasBadRequestException(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+   /**
+     * {@link KasAllowlistException} is thrown during decryption when a TDF refers to
+    * a KAS that is not in the allowlist.
+     */
+    public static class KasAllowlistException extends SDKException {
+        public KasAllowlistException(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    /**
+     * {@link AssertionException} indicates that an assertion was not validated due to
+     * an incorrect signature.
+     */
+    public static class AssertionException extends TamperException {
+        public AssertionException(String errorMessage, String id) {
+            super("assertion id: "+ id + "; " + errorMessage);
+        }
+    }
 }

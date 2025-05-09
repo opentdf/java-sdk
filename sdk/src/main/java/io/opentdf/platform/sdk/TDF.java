@@ -53,7 +53,7 @@ class TDF {
     public static final byte[] GLOBAL_KEY_SALT = tdfECKeySaltCompute();
     private static final String EMPTY_SPLIT_ID = "";
     private static final String TDF_VERSION = "4.3.0";
-    private static final String KEY_ACCESS_SECHMA_VERSION = "1.0";
+    private static final String KEY_ACCESS_SCHEMA_VERSION = "1.0";
     private final long maximumSize;
 
     private final SDK.Services services;
@@ -97,84 +97,6 @@ class TDF {
     private static final SecureRandom sRandom = new SecureRandom();
 
     private static final Gson gson = new GsonBuilder().create();
-
-    public static class SplitKeyException extends SDKException {
-        public SplitKeyException(String errorMessage) {
-            super(errorMessage);
-        }
-    }
-
-    public static class DataSizeNotSupported extends SDKException {
-        public DataSizeNotSupported(String errorMessage) {
-            super(errorMessage);
-        }
-    }
-
-    public static class KasInfoMissing extends SDKException {
-        public KasInfoMissing(String errorMessage) {
-            super(errorMessage);
-        }
-    }
-
-    public static class KasPublicKeyMissing extends SDKException {
-        public KasPublicKeyMissing(String errorMessage) {
-            super(errorMessage);
-        }
-    }
-
-    public static class FailedToCreateGMAC extends SDKException {
-        public FailedToCreateGMAC(String errorMessage) {
-            super(errorMessage);
-        }
-    }
-
-    public static class TDFReadFailed extends SDKException {
-        public TDFReadFailed(String errorMessage) {
-            super(errorMessage);
-        }
-    }
-
-    public static class TamperException extends SDKException {
-        public TamperException(String errorMessage) {
-            super("[tamper detected] "+errorMessage);
-        }
-    }
-
-    public static class RootSignatureValidationException extends TamperException {
-        public RootSignatureValidationException(String errorMessage) {
-            super(errorMessage);
-        }
-    }
-
-    public static class SegmentSizeMismatch extends TamperException {
-        public SegmentSizeMismatch(String errorMessage) {
-            super(errorMessage);
-        }
-    }
-
-    public static class SegmentSignatureMismatch extends TamperException {
-        public SegmentSignatureMismatch(String errorMessage) {
-            super(errorMessage);
-        }
-    }
-
-    public static class KasBadRequestException extends TamperException {
-        public KasBadRequestException(String errorMessage) {
-            super(errorMessage);
-        }
-    }
-
-    public static class KasAllowlistException extends SDKException {
-        public KasAllowlistException(String errorMessage) {
-            super(errorMessage);
-        }
-    }
-
-    public static class AssertionException extends TamperException {
-        public AssertionException(String errorMessage, String id) {
-            super("assertion id: "+ id + "; " + errorMessage);
-        }
-    }
 
     static class EncryptedMetadata {
         private String ciphertext;
@@ -307,7 +229,7 @@ class TDF {
 
                 for (Config.KASInfo kasInfo : conjunction.get(splitID)) {
                     if (kasInfo.PublicKey == null || kasInfo.PublicKey.isEmpty()) {
-                        throw new KasPublicKeyMissing("Kas public key is missing in kas information list");
+                        throw new SDK.KasPublicKeyMissing("Kas public key is missing in kas information list");
                     }
 
                     var keyAccess = createKeyAccess(tdfConfig, kasInfo, symKey, policyBinding, encryptedMetadata, splitID);
@@ -337,7 +259,7 @@ class TDF {
             keyAccess.policyBinding = policyBinding;
             keyAccess.encryptedMetadata = encryptedMetadata;
             keyAccess.sid = splitID;
-            keyAccess.schemaVersion = KEY_ACCESS_SECHMA_VERSION;
+            keyAccess.schemaVersion = KEY_ACCESS_SCHEMA_VERSION;
 
             if (tdfConfig.wrappingKeyType.isEc()) {
                 var ecKeyWrappedKeyInfo = createECWrappedKey(tdfConfig, kasInfo, symKey);
@@ -404,8 +326,7 @@ class TDF {
 
         }
 
-        public void readPayload(OutputStream outputStream) throws TDFReadFailed,
-                FailedToCreateGMAC, SegmentSignatureMismatch, IOException {
+        public void readPayload(OutputStream outputStream) throws SDK.SegmentSignatureMismatch, IOException {
 
             MessageDigest digest = null;
             try {
@@ -423,7 +344,7 @@ class TDF {
                 int bytesRead = tdfReader.readPayloadBytes(readBuf);
 
                 if (readBuf.length != bytesRead) {
-                    throw new TDFReadFailed("failed to read payload");
+                    throw new IllegalStateException("unable to read bytes for segment (wanted " + segment.encryptedSegmentSize + " but got " + bytesRead + ")");
                 }
 
                 var isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
@@ -441,7 +362,7 @@ class TDF {
                     }
 
                     if (segment.hash.compareTo(Base64.getEncoder().encodeToString(payloadSig)) != 0) {
-                        throw new SegmentSignatureMismatch("segment signature miss match");
+                        throw new SDK.SegmentSignatureMismatch("segment signature miss match");
                     }
 
                     byte[] writeBuf = aesGcm.decrypt(new AesGcm.Encrypted(readBuf));
@@ -450,7 +371,7 @@ class TDF {
                 } else {
                     String segmentSig = Hex.encodeHexString(digest.digest(readBuf));
                     if (segment.hash.compareTo(segmentSig) != 0) {
-                        throw new SegmentSignatureMismatch("segment signature miss match");
+                        throw new SDK.SegmentSignatureMismatch("segment signature miss match");
                     }
 
                     outputStream.write(readBuf);
@@ -469,7 +390,7 @@ class TDF {
         }
 
         if (kGMACPayloadLength > data.length) {
-            throw new FailedToCreateGMAC("fail to create gmac signature");
+            throw new IllegalArgumentException("tried to calculate GMAC on too small a payload. payload is "+ data.length + "bytes while GMAC is " + kGMACPayloadLength + " bytes");
         }
 
         return Arrays.copyOfRange(data, data.length - kGMACPayloadLength, data.length);
@@ -500,7 +421,7 @@ class TDF {
         }
 
         if (tdfConfig.kasInfoList.isEmpty() && (tdfConfig.splitPlan == null || tdfConfig.splitPlan.isEmpty())) {
-            throw new KasInfoMissing("kas information is missing, no key access template specified or inferred");
+            throw new SDK.KasInfoMissing("kas information is missing, no key access template specified or inferred");
         }
 
         TDFObject tdfObject = new TDFObject();
@@ -527,7 +448,7 @@ class TDF {
                 totalSize += readThisLoop;
 
                 if (totalSize > maximumSize) {
-                    throw new DataSizeNotSupported("can't create tdf larger than 64gb");
+                    throw new SDK.DataSizeNotSupported("can't create tdf larger than 64gb");
                 }
 
                 byte[] cipherData;
@@ -691,12 +612,6 @@ class TDF {
         Set<String> foundSplits = new HashSet<>();
 
         Map<Autoconfigure.KeySplitStep, Exception> skippedSplits = new HashMap<>();
-        MessageDigest digest = null;
-        try {
-            digest = MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException e) {
-            throw new SDKException("error getting instance of SHA-256 digest", e);
-        }
 
         if (manifest.payload.isEncrypted) {
             for (Manifest.KeyAccess keyAccess : manifest.encryptionInformation.keyAccessObj) {
@@ -713,10 +628,10 @@ class TDF {
                         logger.warn("Ignoring KasAllowlist for url {}", realAddress);
                     } else if (tdfReaderConfig.kasAllowlist == null || tdfReaderConfig.kasAllowlist.isEmpty()) {
                         logger.error("KasAllowlist: No KAS allowlist provided and no KeyAccessServerRegistry available, {} is not allowed", realAddress);
-                        throw new KasAllowlistException("No KAS allowlist provided and no KeyAccessServerRegistry available");
+                        throw new SDK.KasAllowlistException("No KAS allowlist provided and no KeyAccessServerRegistry available");
                     } else if (!tdfReaderConfig.kasAllowlist.contains(realAddress)) {
                         logger.error("KasAllowlist: kas url {} is not allowed", realAddress);
-                        throw new KasAllowlistException("KasAllowlist: kas url "+realAddress+" is not allowed");
+                        throw new SDK.KasAllowlistException("KasAllowlist: kas url "+realAddress+" is not allowed");
                     }
                     unwrappedKey = services.kas().unwrap(keyAccess, manifest.encryptionInformation.policy, tdfReaderConfig.sessionKeyType);
                 } catch (Exception e) {
@@ -761,7 +676,7 @@ class TDF {
                     combinedMessage.append(e.getMessage()).append("\n");
                 }
 
-                throw new SplitKeyException(combinedMessage.toString());
+                throw new SDK.SplitKeyException(combinedMessage.toString());
             }
         }
 
@@ -787,7 +702,7 @@ class TDF {
                 sigAlg = Config.IntegrityAlgorithm.GMAC;
             }
 
-            var sig = calculateSignature(aggregateHash.toByteArray(), result.payloadKey, sigAlg);
+            var sig = calculateSignature(aggregateHash.toByteArray(), payloadKey, sigAlg);
             if (isLegacyTdf) {
                 sig = Hex.encodeHexString(sig).getBytes();
             }
@@ -804,14 +719,14 @@ class TDF {
         }
 
         if (rootSignature.compareTo(rootSigValue) != 0) {
-            throw new RootSignatureValidationException("root signature validation failed");
+            throw new SDK.RootSignatureValidationException("root signature validation failed");
         }
 
         int segmentSize = manifest.encryptionInformation.integrityInformation.segmentSizeDefault;
         int encryptedSegSize = manifest.encryptionInformation.integrityInformation.encryptedSegmentSizeDefault;
 
         if (segmentSize != encryptedSegSize - (kGcmIvSize + kAesBlockSize)) {
-            throw new SegmentSizeMismatch("mismatch encrypted segment size in manifest");
+            throw new IllegalStateException("segment size mismatch. encrypted segment size differs from plaintext segment size. the TDF is invalid");
         }
 
         var aggregateHashByteArrayBytes = aggregateHash.toByteArray();
@@ -841,7 +756,7 @@ class TDF {
             var hashOfAssertionAsHex = assertion.hash();
 
             if (!Objects.equals(hashOfAssertionAsHex, hashValues.getAssertionHash())) {
-                throw new AssertionException("assertion hash mismatch", assertion.id);
+                throw new SDK.AssertionException("assertion hash mismatch", assertion.id);
             }
 
             byte[] hashOfAssertion;
@@ -860,7 +775,7 @@ class TDF {
             var encodeSignature = Base64.getEncoder().encodeToString(signature);
 
             if (!Objects.equals(encodeSignature, hashValues.getSignature())) {
-                throw new AssertionException("failed integrity check on assertion signature", assertion.id);
+                throw new SDK.AssertionException("failed integrity check on assertion signature", assertion.id);
             }
         }
 

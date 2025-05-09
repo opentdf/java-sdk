@@ -517,7 +517,7 @@ public class TDFTest {
                 Config.withAutoconfigure(false),
                 Config.withKasInformation(getRSAKASInfos()),
                 Config.withSegmentSize(Config.MIN_SEGMENT_SIZE));
-        assertThrows(TDF.DataSizeNotSupported.class,
+        assertThrows(SDK.DataSizeNotSupported.class,
                 () -> tdf.createTDF(is, os, tdfConfig),
                 "didn't throw an exception when we created TDF that was too large");
         assertThat(numReturned.get())
