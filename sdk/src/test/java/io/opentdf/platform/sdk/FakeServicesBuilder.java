@@ -1,47 +1,47 @@
 package io.opentdf.platform.sdk;
 
-import io.opentdf.platform.authorization.AuthorizationServiceGrpc;
-import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
-import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceGrpc;
-import io.opentdf.platform.policy.namespaces.NamespaceServiceGrpc;
-import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceGrpc;
-import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceGrpc;
+import io.opentdf.platform.authorization.AuthorizationServiceClient;
+import io.opentdf.platform.policy.attributes.AttributesServiceClient;
+import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
+import io.opentdf.platform.policy.namespaces.NamespaceServiceClient;
+import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceClient;
+import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClient;
 
 public class FakeServicesBuilder {
-    private AuthorizationServiceGrpc.AuthorizationServiceFutureStub authorizationService;
-    private AttributesServiceGrpc.AttributesServiceFutureStub attributesService;
-    private NamespaceServiceGrpc.NamespaceServiceFutureStub namespaceService;
-    private SubjectMappingServiceGrpc.SubjectMappingServiceFutureStub subjectMappingService;
-    private ResourceMappingServiceGrpc.ResourceMappingServiceFutureStub resourceMappingService;
-    private KeyAccessServerRegistryServiceGrpc.KeyAccessServerRegistryServiceFutureStub keyAccessServerRegistryServiceFutureStub;
+    private AuthorizationServiceClient authorizationService;
+    private AttributesServiceClient attributesService;
+    private NamespaceServiceClient namespaceService;
+    private SubjectMappingServiceClient subjectMappingService;
+    private ResourceMappingServiceClient resourceMappingService;
+    private KeyAccessServerRegistryServiceClient keyAccessServerRegistryServiceFutureStub;
     private SDK.KAS kas;
 
-    public FakeServicesBuilder setAuthorizationService(AuthorizationServiceGrpc.AuthorizationServiceFutureStub authorizationService) {
+    public FakeServicesBuilder setAuthorizationService(AuthorizationServiceClient authorizationService) {
         this.authorizationService = authorizationService;
         return this;
     }
 
-    public FakeServicesBuilder setAttributesService(AttributesServiceGrpc.AttributesServiceFutureStub attributesService) {
+    public FakeServicesBuilder setAttributesService(AttributesServiceClient attributesService) {
         this.attributesService = attributesService;
         return this;
     }
 
-    public FakeServicesBuilder setNamespaceService(NamespaceServiceGrpc.NamespaceServiceFutureStub namespaceService) {
+    public FakeServicesBuilder setNamespaceService(NamespaceServiceClient namespaceService) {
         this.namespaceService = namespaceService;
         return this;
     }
 
-    public FakeServicesBuilder setSubjectMappingService(SubjectMappingServiceGrpc.SubjectMappingServiceFutureStub subjectMappingService) {
+    public FakeServicesBuilder setSubjectMappingService(SubjectMappingServiceClient subjectMappingService) {
         this.subjectMappingService = subjectMappingService;
         return this;
     }
 
-    public FakeServicesBuilder setResourceMappingService(ResourceMappingServiceGrpc.ResourceMappingServiceFutureStub resourceMappingService) {
+    public FakeServicesBuilder setResourceMappingService(ResourceMappingServiceClient resourceMappingService) {
         this.resourceMappingService = resourceMappingService;
         return this;
     }
 
-    public FakeServicesBuilder setKeyAccessServerRegistryService(KeyAccessServerRegistryServiceGrpc.KeyAccessServerRegistryServiceFutureStub keyAccessServerRegistryServiceFutureStub) {
+    public FakeServicesBuilder setKeyAccessServerRegistryService(KeyAccessServerRegistryServiceClient keyAccessServerRegistryServiceFutureStub) {
         this.keyAccessServerRegistryServiceFutureStub = keyAccessServerRegistryServiceFutureStub;
         return this;
     }

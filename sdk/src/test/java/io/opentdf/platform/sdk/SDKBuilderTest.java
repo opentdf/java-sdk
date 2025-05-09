@@ -1,5 +1,6 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.ResponseMessageKt;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
 import io.grpc.Metadata;
@@ -29,7 +30,10 @@ import okhttp3.tls.HeldCertificate;
 import org.apache.commons.io.IOUtils;
 import org.junit.jupiter.api.Test;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
@@ -39,7 +43,7 @@ import java.security.KeyStore;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.concurrent.ExecutionException;
+import java.util.Collections;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -153,7 +157,7 @@ public class SDKBuilderTest {
             WellKnownServiceGrpc.WellKnownServiceImplBase wellKnownService = new WellKnownServiceGrpc.WellKnownServiceImplBase() {
                 @Override
                 public void getWellKnownConfiguration(GetWellKnownConfigurationRequest request,
-                        StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
+                                                      StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
                     var val = Value.newBuilder().setStringValue(issuer).build();
                     var config = Struct.newBuilder().putFields("platform_issuer", val).build();
                     var response = GetWellKnownConfigurationResponse
@@ -183,6 +187,15 @@ public class SDKBuilderTest {
                     .directExecutor()
                     .addService(wellKnownService)
                     .addService(new NamespaceServiceGrpc.NamespaceServiceImplBase() {
+                        @Override
+                        public void getNamespace(GetNamespaceRequest request,
+                                                 StreamObserver<GetNamespaceResponse> responseObserver) {
+                            var response = GetNamespaceResponse
+                                    .newBuilder()
+                                    .build();
+                            responseObserver.onNext(response);
+                            responseObserver.onCompleted();
+                        }
                     })
                     .intercept(new ServerInterceptor() {
                         @Override
@@ -236,7 +249,7 @@ public class SDKBuilderTest {
             SDKBuilder servicesBuilder = SDKBuilder
                     .newBuilder()
                     .clientSecret("client-id", "client-secret")
-                    .platformEndpoint("localhost:" + platformServicesServer.getPort());
+                    .platformEndpoint("http" + (useSSLPlatform ? "s" : "") + "://localhost:" + platformServicesServer.getPort());
 
             if (!useSSLPlatform) {
                 servicesBuilder = servicesBuilder.useInsecurePlaintextConnection(true);
@@ -259,7 +272,7 @@ public class SDKBuilderTest {
                     .setBody("{\"access_token\": \"hereisthetoken\", \"token_type\": \"Bearer\"}")
                     .setHeader("Content-Type", "application/json"));
 
-            var ignored = services.namespaces().getNamespace(GetNamespaceRequest.getDefaultInstance());
+            ResponseMessageKt.getOrThrow(services.namespaces().getNamespaceBlocking(GetNamespaceRequest.getDefaultInstance(), Collections.emptyMap()).execute());
 
             // we've now made two requests. one to get the bootstrapping info and one
             // call that should activate the token fetching logic
@@ -297,17 +310,20 @@ public class SDKBuilderTest {
             // now call KAS _on a different server_ and make sure that the interceptors
             // provide us with auth tokens
             var keyAccess = new Manifest.KeyAccess();
-            keyAccess.url = "localhost:" + kasServer.getPort();
+            keyAccess.url = "http" + (useSSLPlatform ? "s" : "") + "://localhost:" + kasServer.getPort();
 
             try {
                 services.kas().unwrap(keyAccess, "", KeyType.RSA2048Key);
-            } catch (Exception ignoredException) {
+            } catch (SDKException exception) {
                 // not going to bother making a real request with real crypto, just make sure
                 // that
                 // we have the right headers
+                if (!exception.getMessage().equals("error performing decryption")) {
+                    throw exception;
+                }
             }
             i = 0; // some race condition with testing
-            while (kasDPoPHeader.get() == null && i < 10) {
+            while (kasDPoPHeader.get() == null && i < 1000) {
                 Thread.sleep(10);
                 i += 1;
             }
@@ -378,19 +394,15 @@ public class SDKBuilderTest {
 
             sdk = SDKBuilder.newBuilder()
                     .clientSecret("user", "password")
-                    .platformEndpoint("localhost:" + platformServices.getPort())
+                    .platformEndpoint("http://localhost:" + platformServices.getPort())
                     .useInsecurePlaintextConnection(true)
                     .build();
             assertThat(sdk.getAuthInterceptor()).isEmpty();
 
             try {
-                sdk.getServices().namespaces().getNamespace(GetNamespaceRequest.getDefaultInstance()).get();
+                ResponseMessageKt.getOrThrow(sdk.getServices().namespaces().getNamespaceBlocking(GetNamespaceRequest.getDefaultInstance(), Collections.emptyMap()).execute());
             } catch (StatusRuntimeException ignored) {
-            } catch (ExecutionException e) {
-                throw new RuntimeException(e);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new RuntimeException(e);
+                // ignore the error, we just want to make sure that we called the service
             }
 
             assertThat(getNsCalled.get()).isTrue();

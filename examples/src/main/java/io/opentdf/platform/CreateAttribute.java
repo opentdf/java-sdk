@@ -1,12 +1,13 @@
 package io.opentdf.platform;
+import com.connectrpc.ResponseMessageKt;
+import io.opentdf.platform.policy.Attribute;
+import io.opentdf.platform.policy.AttributeRuleTypeEnum;
+import io.opentdf.platform.policy.attributes.CreateAttributeRequest;
+import io.opentdf.platform.policy.attributes.CreateAttributeResponse;
 import io.opentdf.platform.sdk.*;
 
+import java.util.Collections;
 import java.util.concurrent.ExecutionException;
-
-import io.opentdf.platform.policy.AttributeRuleTypeEnum;
-
-import io.opentdf.platform.policy.attributes.*;
-import io.opentdf.platform.policy.Attribute;
 
 import java.util.Arrays;
 
@@ -28,7 +29,7 @@ public class CreateAttribute {
         .setRule(AttributeRuleTypeEnum.forNumber(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ALL_OF_VALUE))
         .addAllValues(Arrays.asList("test1", "test2")).build();
 
-        CreateAttributeResponse resp = sdk.getServices().attributes().createAttribute(request).get();
+        CreateAttributeResponse resp = ResponseMessageKt.getOrThrow(sdk.getServices().attributes().createAttributeBlocking(request, Collections.emptyMap()).execute());
 
         Attribute attribute = resp.getAttribute();
 

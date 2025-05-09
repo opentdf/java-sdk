@@ -1,5 +1,6 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.ResponseMessageKt;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.sdk.TDF.KasAllowlistException;
@@ -12,7 +13,6 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -219,20 +219,13 @@ public class NanoTDF {
              readNanoTDF(nanoTDF, outputStream, Config.newNanoTDFReaderConfig(), platformUrl);
     }
 
+
     public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream,
-            Config.NanoTDFReaderConfig nanoTdfReaderConfig, String platformUrl) throws IOException, SDKException {
+                            Config.NanoTDFReaderConfig nanoTdfReaderConfig, String platformUrl) throws IOException {
         if (!nanoTdfReaderConfig.ignoreKasAllowlist && (nanoTdfReaderConfig.kasAllowlist == null || nanoTdfReaderConfig.kasAllowlist.isEmpty())) {
             ListKeyAccessServersRequest request = ListKeyAccessServersRequest.newBuilder()
                     .build();
-            ListKeyAccessServersResponse response = null;
-            try {
-                response = services.kasRegistry().listKeyAccessServers(request).get();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new SDKException("interrupted while getting kas registry", e);
-            } catch (ExecutionException e) {
-                throw new SDKException("error getting kas registry", e);
-            }
+            ListKeyAccessServersResponse response = ResponseMessageKt.getOrThrow(services.kasRegistry().listKeyAccessServersBlocking(request, Collections.emptyMap()).execute());
             nanoTdfReaderConfig.kasAllowlist = new HashSet<>();
             var kases = response.getKeyAccessServersList();
 

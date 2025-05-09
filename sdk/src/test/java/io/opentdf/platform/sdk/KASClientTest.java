@@ -1,5 +1,11 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.ProtocolClientConfig;
+import com.connectrpc.extensions.GoogleJavaProtobufStrategy;
+import com.connectrpc.impl.ProtocolClient;
+import com.connectrpc.okhttp.ConnectOkHttpClient;
+import com.connectrpc.protocols.GETConfiguration;
+import com.connectrpc.protocols.NetworkProtocol;
 import com.google.gson.Gson;
 import com.google.protobuf.ByteString;
 import com.nimbusds.jose.JOSEException;
@@ -7,8 +13,6 @@ import com.nimbusds.jose.JWSVerifier;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.SignedJWT;
-import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.stub.StreamObserver;
@@ -17,25 +21,33 @@ import io.opentdf.platform.kas.PublicKeyRequest;
 import io.opentdf.platform.kas.PublicKeyResponse;
 import io.opentdf.platform.kas.RewrapRequest;
 import io.opentdf.platform.kas.RewrapResponse;
+import okhttp3.OkHttpClient;
+import okhttp3.Protocol;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.security.interfaces.RSAPublicKey;
 import java.text.ParseException;
 import java.util.Base64;
+import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 
 import static io.opentdf.platform.sdk.SDKBuilderTest.getRandomPort;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 public class KASClientTest {
-
-    private static final Function<String, ManagedChannel> channelFactory = (String url) -> ManagedChannelBuilder
-            .forTarget(url)
-            .usePlaintext()
+    OkHttpClient httpClient = new OkHttpClient.Builder()
+            .protocols(List.of(Protocol.H2_PRIOR_KNOWLEDGE))
             .build();
+
+    BiFunction<OkHttpClient, String, ProtocolClient> aclientFactory = (OkHttpClient client, String endpoint) -> {
+        return new ProtocolClient(
+                new ConnectOkHttpClient(httpClient),
+                new ProtocolClientConfig(endpoint, new GoogleJavaProtobufStrategy(), NetworkProtocol.GRPC, null, GETConfiguration.Enabled.INSTANCE)
+        );
+    };
 
     @Test
     void testGettingPublicKey() throws IOException {
@@ -51,17 +63,14 @@ public class KASClientTest {
         Server rewrapServer = null;
         try {
             rewrapServer = startServer(accessService);
-            Function<String, ManagedChannel> channelFactory = (String url) -> ManagedChannelBuilder
-                    .forTarget(url)
-                    .usePlaintext()
-                    .build();
+
 
             var keypair = CryptoUtils.generateRSAKeypair();
             var dpopKey = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).privateKey(keypair.getPrivate())
                     .build();
-            try (var kas = new KASClient(channelFactory, dpopKey)) {
+            try (var kas = new KASClient(httpClient, aclientFactory, dpopKey, true)) {
                 Config.KASInfo kasInfo = new Config.KASInfo();
-                kasInfo.URL = "localhost:" + rewrapServer.getPort();
+                kasInfo.URL = "http://localhost:" + rewrapServer.getPort();
                 assertThat(kas.getPublicKey(kasInfo).PublicKey).isEqualTo("тај је клуц");
             }
         } finally {
@@ -85,18 +94,16 @@ public class KASClientTest {
         Server server = null;
         try {
             server = startServer(accessService);
-            Function<String, ManagedChannel> channelFactory = (String url) -> ManagedChannelBuilder
-                    .forTarget(url)
-                    .usePlaintext()
-                    .build();
 
             var keypair = CryptoUtils.generateRSAKeypair();
             var dpopKey = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).privateKey(keypair.getPrivate())
                     .build();
-            try (var kas = new KASClient(channelFactory, dpopKey)) {
+            try (var kas = new KASClient(httpClient, aclientFactory, dpopKey, true)) {
                 Config.KASInfo kasInfo = new Config.KASInfo();
-                kasInfo.URL = "localhost:" + server.getPort();
+                kasInfo.URL = "http://localhost:" + server.getPort();
                 assertThat(kas.getPublicKey(kasInfo).KID).isEqualTo("r1");
+            } catch (Exception e) {
+                throw e;
             }
         } finally {
             if (server != null) {
@@ -156,10 +163,10 @@ public class KASClientTest {
             rewrapServer = startServer(accessService);
             byte[] plaintextKey;
             byte[] rewrapResponse;
-            try (var kas = new KASClient(channelFactory, dpopKey)) {
+            try (var kas = new KASClient(httpClient, aclientFactory, dpopKey, true)) {
 
                 Manifest.KeyAccess keyAccess = new Manifest.KeyAccess();
-                keyAccess.url = "localhost:" + rewrapServer.getPort();
+                keyAccess.url = "http://localhost:" + rewrapServer.getPort();
                 plaintextKey = new byte[32];
                 new Random().nextBytes(plaintextKey);
                 var serverWrappedKey = new AsymEncryption(serverKeypair.getPublic()).encrypt(plaintextKey);
@@ -176,27 +183,39 @@ public class KASClientTest {
     }
 
     @Test
-    public void testAddressNormalization() {
+    void testAddressNormalizationWithHTTPSClient() {
         var lastAddress = new AtomicReference<String>();
         var dpopKeypair = CryptoUtils.generateRSAKeypair();
         var dpopKey = new RSAKey.Builder((RSAPublicKey) dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate())
                 .build();
-        var kasClient = new KASClient(addr -> {
+        var httpsKASClient = new KASClient(httpClient, (client, addr) -> {
             lastAddress.set(addr);
-            return ManagedChannelBuilder.forTarget(addr).build();
-        }, dpopKey);
+            return aclientFactory.apply(client, addr);
+        }, dpopKey, false);
 
-        var stub = kasClient.getStub("http://localhost:8080");
-        assertThat(lastAddress.get()).isEqualTo("localhost:8080");
-        var otherStub = kasClient.getStub("https://localhost:8080");
-        assertThat(lastAddress.get()).isEqualTo("localhost:8080");
+        var stub = httpsKASClient.getStub("http://localhost:8080");
+        assertThat(lastAddress.get()).isEqualTo("https://localhost:8080");
+        var otherStub = httpsKASClient.getStub("https://localhost:8080");
+        assertThat(lastAddress.get()).isEqualTo("https://localhost:8080");
         assertThat(stub).isSameAs(otherStub);
+    }
 
-        kasClient.getStub("https://example.org");
-        assertThat(lastAddress.get()).isEqualTo("example.org:443");
+    @Test
+    void testAddressNormalizationWithInsecureHTTPClient() {
+        var lastAddress = new AtomicReference<String>();
+        var dpopKeypair = CryptoUtils.generateRSAKeypair();
+        var dpopKey = new RSAKey.Builder((RSAPublicKey) dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate())
+                .build();
+        var httpsKASClient = new KASClient(httpClient, (client, addr) -> {
+            lastAddress.set(addr);
+            return aclientFactory.apply(client, addr);
+        }, dpopKey, true);
 
-        kasClient.getStub("http://example.org");
-        assertThat(lastAddress.get()).isEqualTo("example.org:80");
+        var c1 = httpsKASClient.getStub("http://example.org");
+        assertThat(lastAddress.get()).isEqualTo("http://example.org:80");
+        var c2 = httpsKASClient.getStub("example.org:80");
+        assertThat(lastAddress.get()).isEqualTo("http://example.org:80");
+        assertThat(c1).isSameAs(c2);
     }
 
     private static Server startServer(AccessServiceGrpc.AccessServiceImplBase accessService) throws IOException {

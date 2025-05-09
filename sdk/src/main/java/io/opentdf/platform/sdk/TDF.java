@@ -1,5 +1,6 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.ConnectException;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.nimbusds.jose.*;
@@ -28,7 +29,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.text.ParseException;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 
 /**
  * The TDF class is responsible for handling operations related to
@@ -660,12 +660,9 @@ public class TDF {
                     .build();
             ListKeyAccessServersResponse response;
             try {
-                response = services.kasRegistry().listKeyAccessServers(request).get();
-            } catch (ExecutionException e) {
-                throw new SDKException("error getting key access servers", e);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new SDKException("interrupted while getting list of kases", e);
+                response = RequestHelper.getOrThrow(services.kasRegistry().listKeyAccessServersBlocking(request, Collections.emptyMap()).execute());
+            } catch (ConnectException e) {
+                throw new SDKException("error getting kas servers", e);
             }
             tdfReaderConfig.kasAllowlist = new HashSet<>();
 

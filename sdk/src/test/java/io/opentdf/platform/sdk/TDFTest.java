@@ -1,15 +1,16 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.ResponseMessage;
+import com.connectrpc.UnaryBlockingCall;
 import com.nimbusds.jose.JOSEException;
+import io.opentdf.platform.policy.KeyAccessServer;
+import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
+import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
+import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.TDF.Reader;
 import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
-import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceGrpc.KeyAccessServerRegistryServiceFutureStub;
-import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
-import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
-import io.opentdf.platform.policy.KeyAccessServer;
-import org.apache.commons.codec.DecoderException;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -20,17 +21,15 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -45,7 +44,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class TDFTest {
-    protected static KeyAccessServerRegistryServiceFutureStub kasRegistryService;
+    protected static KeyAccessServerRegistryServiceClient kasRegistryService;
     protected static String platformUrl = "http://localhost:8080";
 
     protected static SDK.KAS kas = new SDK.KAS() {
@@ -131,7 +130,7 @@ public class TDFTest {
             }
         }
 
-        kasRegistryService = mock(KeyAccessServerRegistryServiceFutureStub.class);
+        kasRegistryService = mock(KeyAccessServerRegistryServiceClient.class);
         List<KeyAccessServer> kasRegEntries = new ArrayList<>();
         for (Config.KASInfo kasInfo : getRSAKASInfos()) {
             kasRegEntries.add(KeyAccessServer.newBuilder()
@@ -146,11 +145,18 @@ public class TDFTest {
                 .build();
 
         // Stub the listKeyAccessServers method
-        when(kasRegistryService.listKeyAccessServers(any(ListKeyAccessServersRequest.class)))
-                .thenReturn(com.google.common.util.concurrent.Futures.immediateFuture(mockResponse));
-        io.grpc.Channel mockChannel = mock(io.grpc.Channel.class);
-        when(mockChannel.authority()).thenReturn("mock:8080");
-        when(kasRegistryService.getChannel()).thenReturn(mockChannel);
+        when(kasRegistryService.listKeyAccessServersBlocking(any(ListKeyAccessServersRequest.class), any()))
+                .thenReturn(new UnaryBlockingCall<>() {
+                    @Override
+                    public ResponseMessage<ListKeyAccessServersResponse> execute() {
+                        return new ResponseMessage.Success<>(mockResponse, Collections.emptyMap(), Collections.emptyMap());
+                    }
+
+                    @Override
+                    public void cancel() {
+                        // this never happens in tests
+                    }
+                });
     }
 
     @Test
@@ -247,7 +253,7 @@ public class TDFTest {
                 keypair.getPrivate());
 
         var rsaKasInfo = new Config.KASInfo();
-        rsaKasInfo.URL = "https://example.com/kas"+Integer.toString(0);
+        rsaKasInfo.URL = "https://example.com/kas"+ 0;
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
@@ -540,7 +546,7 @@ public class TDFTest {
     }
 
     @Test
-    public void legacyTDFRoundTrips() throws IOException, NoSuchAlgorithmException {
+    void legacyTDFRoundTrips() throws IOException, NoSuchAlgorithmException {
         final String mimeType = "application/pdf";
         var assertionConfig1 = new AssertionConfig();
         assertionConfig1.id = "assertion1";
@@ -603,7 +609,7 @@ public class TDFTest {
     @Test
     void testKasAllowlist() throws Exception {
 
-        KeyAccessServerRegistryServiceFutureStub kasRegistryServiceNoUrl = mock(KeyAccessServerRegistryServiceFutureStub.class);
+        KeyAccessServerRegistryServiceClient kasRegistryServiceNoUrl = mock(KeyAccessServerRegistryServiceClient.class);
         List<KeyAccessServer> kasRegEntries = new ArrayList<>();
         kasRegEntries.add(KeyAccessServer.newBuilder()
         .setUri("http://example.com/kas0").build());
@@ -613,12 +619,19 @@ public class TDFTest {
                 .build();
 
         // Stub the listKeyAccessServers method
-        when(kasRegistryServiceNoUrl.listKeyAccessServers(any(ListKeyAccessServersRequest.class)))
-                .thenReturn(com.google.common.util.concurrent.Futures.immediateFuture(mockResponse));
-        io.grpc.Channel mockChannel = mock(io.grpc.Channel.class);
-        when(mockChannel.authority()).thenReturn("mock:8080");
-        when(kasRegistryServiceNoUrl.getChannel()).thenReturn(mockChannel);
+        when(kasRegistryServiceNoUrl.listKeyAccessServersBlocking(any(ListKeyAccessServersRequest.class), any()))
+                .thenReturn(new UnaryBlockingCall<>() {
+                                @Override
+                                public ResponseMessage<ListKeyAccessServersResponse> execute() {
+                                    return new ResponseMessage.Success<>(mockResponse, Collections.emptyMap(), Collections.emptyMap());
+                                }
 
+                                @Override
+                                public void cancel() {
+                                    // we never do this during tests
+                                }
+                            }
+                );
 
         var rsaKasInfo = new Config.KASInfo();
         rsaKasInfo.URL = "https://example.com/kas"+Integer.toString(0);

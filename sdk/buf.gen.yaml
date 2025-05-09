@@ -1,14 +1,25 @@
-version: v1
+version: v2
 managed:
   enabled: true
-  java_package_prefix:
-    default: io.opentdf.platform
-    except:
-      - buf.build/bufbuild/protovalidate
-      - buf.build/googleapis/googleapis
-      - buf.build/grpc-ecosystem/grpc-gateway
+  disable:
+    - file_option: java_package
+      module: buf.build/bufbuild/protovalidate
+    - file_option: java_package
+      module: buf.build/googleapis/googleapis
+    - file_option: java_package
+      module: buf.build/grpc-ecosystem/grpc-gateway
+  override:
+    - file_option: java_package_prefix
+      value: io.opentdf.platform
+    - file_option: java_package_prefix
+      value: io.opentdf.platform.test
+      module: buf.build/grpc/java
 plugins:
-  - plugin: buf.build/protocolbuffers/java:v25.3
-    out: ./
-  - plugin: buf.build/grpc/java:v1.61.1
-    out: ./
+  - remote: buf.build/protocolbuffers/java:v25.3
+    out: ./generated-sources
+  - remote: buf.build/connectrpc/kotlin
+    out: ./generated-sources
+    opt:
+      - generateBlockingUnaryMethods=true
+  - remote: buf.build/grpc/java:v1.61.1
+    out: ./generated-test-sources
