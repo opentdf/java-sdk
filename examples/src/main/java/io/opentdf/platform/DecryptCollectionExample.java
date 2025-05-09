@@ -16,7 +16,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.ExecutionException;
 
 public class DecryptCollectionExample {
-    public static void main(String[] args) throws IOException, NanoTDF.NanoTDFMaxSizeLimit, NanoTDF.UnsupportedNanoTDFFeature, NanoTDF.InvalidNanoTDFConfig, NoSuchAlgorithmException, InterruptedException, ExecutionException, URISyntaxException {
+    public static void main(String[] args) throws IOException {
         String clientId = "opentdf-sdk";
         String clientSecret = "secret";
         String platformEndpoint = "localhost:8080";

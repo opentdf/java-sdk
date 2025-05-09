@@ -406,9 +406,14 @@ public class TDF {
         }
 
         public void readPayload(OutputStream outputStream) throws TDFReadFailed,
-                FailedToCreateGMAC, SegmentSignatureMismatch, IOException, NoSuchAlgorithmException {
+                FailedToCreateGMAC, SegmentSignatureMismatch, IOException {
 
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            MessageDigest digest = null;
+            try {
+                digest = MessageDigest.getInstance("SHA-256");
+            } catch (NoSuchAlgorithmException e) {
+                throw new SDKException("error getting instance of SHA-256", e);
+            }
 
             for (Manifest.Segment segment : manifest.encryptionInformation.integrityInformation.segments) {
                 if (segment.encryptedSegmentSize > Config.MAX_SEGMENT_SIZE) {
