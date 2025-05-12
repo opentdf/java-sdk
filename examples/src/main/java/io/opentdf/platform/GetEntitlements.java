@@ -1,9 +1,13 @@
 package io.opentdf.platform;
+import com.connectrpc.ResponseMessageKt;
+import io.opentdf.platform.authorization.Entity;
+import io.opentdf.platform.authorization.EntityEntitlements;
+import io.opentdf.platform.authorization.GetEntitlementsRequest;
+import io.opentdf.platform.authorization.GetEntitlementsResponse;
 import io.opentdf.platform.sdk.*;
 
+import java.util.Collections;
 import java.util.concurrent.ExecutionException;
-
-import io.opentdf.platform.authorization.*;
 
 import java.util.List;
 
@@ -23,7 +27,7 @@ public class GetEntitlements {
         .addEntities(Entity.newBuilder().setId("entity-1").setClientId("opentdf"))
         .build();
 
-        GetEntitlementsResponse resp = sdk.getServices().authorization().getEntitlements(request).get();
+        GetEntitlementsResponse resp = ResponseMessageKt.getOrThrow(sdk.getServices().authorization().getEntitlementsBlocking(request, Collections.emptyMap()).execute());
 
         List<EntityEntitlements> entitlements = resp.getEntitlementsList();
 

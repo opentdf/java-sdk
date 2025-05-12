@@ -1,12 +1,11 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.ConnectException;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.nimbusds.jose.*;
 
 import io.opentdf.platform.policy.Value;
-import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
-import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceGrpc.KeyAccessServerRegistryServiceFutureStub;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.sdk.Config.TDFConfig;
@@ -25,13 +24,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StringReader;
-import java.net.URISyntaxException;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.text.ParseException;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 
 /**
  * The TDF class is responsible for handling operations related to
@@ -59,6 +56,8 @@ public class TDF {
     private static final String KEY_ACCESS_SECHMA_VERSION = "1.0";
     private final long maximumSize;
 
+    private final SDK.Services services;
+
     /**
      * Constructs a new TDF instance using the default maximum input size defined by MAX_TDF_INPUT_SIZE.
      * <p>
@@ -66,14 +65,15 @@ public class TDF {
      * input size, which controls the maximum size of the input data that can be processed.
      * For test purposes, an alternative constructor allows for setting a custom maximum input size.
      */
-    public TDF() {
-        this(MAX_TDF_INPUT_SIZE);
+    public TDF(SDK.Services services) {
+        this(MAX_TDF_INPUT_SIZE, services);
     }
 
     // constructor for tests so that we can set a maximum size that's tractable for
     // tests
-    TDF(long maximumInputSize) {
+    public TDF(long maximumInputSize, SDK.Services services) {
         this.maximumSize = maximumInputSize;
+        this.services = services;
     }
 
     public static Logger logger = LoggerFactory.getLogger(TDF.class);
@@ -99,49 +99,37 @@ public class TDF {
 
     private static final Gson gson = new GsonBuilder().create();
 
-    public class SplitKeyException extends IOException {
+    public class SplitKeyException extends SDKException {
         public SplitKeyException(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class DataSizeNotSupported extends RuntimeException {
+    public static class DataSizeNotSupported extends SDKException {
         public DataSizeNotSupported(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class FailedToCreateEncodedTDF extends RuntimeException {
-        public FailedToCreateEncodedTDF(String errorMessage) {
-            super(errorMessage);
-        }
-    }
-
-    public static class KasInfoMissing extends RuntimeException {
+    public static class KasInfoMissing extends SDKException {
         public KasInfoMissing(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class KasPublicKeyMissing extends RuntimeException {
+    public static class KasPublicKeyMissing extends SDKException {
         public KasPublicKeyMissing(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class InputStreamReadFailed extends RuntimeException {
-        public InputStreamReadFailed(String errorMessage) {
-            super(errorMessage);
-        }
-    }
-
-    public static class FailedToCreateGMAC extends RuntimeException {
+    public static class FailedToCreateGMAC extends SDKException {
         public FailedToCreateGMAC(String errorMessage) {
             super(errorMessage);
         }
     }
 
-    public static class TDFReadFailed extends RuntimeException {
+    public static class TDFReadFailed extends SDKException {
         public TDFReadFailed(String errorMessage) {
             super(errorMessage);
         }
@@ -483,17 +471,14 @@ public class TDF {
         return Arrays.copyOfRange(data, data.length - kGMACPayloadLength, data.length);
     }
 
-    public TDFObject createTDF(InputStream payload,
-                               OutputStream outputStream,
-                               Config.TDFConfig tdfConfig, SDK.KAS kas, AttributesServiceFutureStub attrService)
-            throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException, DecoderException {
+    TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig tdfConfig) throws SDKException, IOException {
 
         if (tdfConfig.autoconfigure) {
             Autoconfigure.Granter granter = new Autoconfigure.Granter(new ArrayList<>());
             if (tdfConfig.attributeValues != null && !tdfConfig.attributeValues.isEmpty()) {
                 granter = Autoconfigure.newGranterFromAttributes(tdfConfig.attributeValues.toArray(new Value[0]));
             } else if (tdfConfig.attributes != null && !tdfConfig.attributes.isEmpty()) {
-                granter = Autoconfigure.newGranterFromService(attrService, kas.getKeyCache(),
+                granter = Autoconfigure.newGranterFromService(services.attributes(), services.kas().getKeyCache(),
                         tdfConfig.attributes.toArray(new AttributeValueFQN[0]));
             }
 
@@ -515,7 +500,7 @@ public class TDF {
         }
 
         TDFObject tdfObject = new TDFObject();
-        tdfObject.prepareManifest(tdfConfig, kas);
+        tdfObject.prepareManifest(tdfConfig, services.kas());
 
         long encryptedSegmentSize = tdfConfig.defaultSegmentSize + kGcmIvSize + kAesBlockSize;
         TDFWriter tdfWriter = new TDFWriter(outputStream);
@@ -606,9 +591,16 @@ public class TDF {
             assertion.appliesToState = assertionConfig.appliesToState.toString();
 
             var assertionHashAsHex = assertion.hash();
-            var assertionHash = tdfConfig.hexEncodeRootAndSegmentHashes
-                ? assertionHashAsHex.getBytes(StandardCharsets.UTF_8)
-                : Hex.decodeHex(assertionHashAsHex);
+            byte[] assertionHash;
+            if (tdfConfig.hexEncodeRootAndSegmentHashes) {
+                assertionHash = assertionHashAsHex.getBytes(StandardCharsets.UTF_8);
+            } else {
+                try {
+                    assertionHash = Hex.decodeHex(assertionHashAsHex);
+                } catch (DecoderException e) {
+                    throw new SDKException("error decoding assertion hash", e);
+                }
+            }
             byte[] completeHash = new byte[aggregateHash.size() + assertionHash.length];
             System.arraycopy(aggregateHash.toByteArray(), 0, completeHash, 0, aggregateHash.size());
             System.arraycopy(assertionHash, 0, completeHash, aggregateHash.size(), assertionHash.length);
@@ -624,7 +616,11 @@ public class TDF {
                     assertionHashAsHex,
                     encodedHash
             );
-            assertion.sign(hashValues, assertionSigningKey);
+            try {
+                assertion.sign(hashValues, assertionSigningKey);
+            } catch (KeyLengthException e) {
+                throw new SDKException("error signing assertion hash", e);
+            }
             signedAssertions.add(assertion);
         }
 
@@ -637,7 +633,7 @@ public class TDF {
         return tdfObject;
     }
 
-    public List<String> defaultKases(TDFConfig config) {
+    static List<String> defaultKases(TDFConfig config) {
         List<String> allk = new ArrayList<>();
         List<String> defk = new ArrayList<>();
 
@@ -654,22 +650,20 @@ public class TDF {
         return defk;
     }
 
-    public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas)
-            throws DecoderException, IOException, ParseException, NoSuchAlgorithmException, JOSEException {
-        return loadTDF(tdf, kas, Config.newTDFReaderConfig());
+    Reader loadTDF(SeekableByteChannel tdf, String platformUrl) throws SDKException, IOException {
+        return loadTDF(tdf, Config.newTDFReaderConfig(), platformUrl);
     }
 
-    public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas, KeyAccessServerRegistryServiceFutureStub kasRegistryService, String platformUrl)
-            throws DecoderException, IOException, ParseException, NoSuchAlgorithmException, JOSEException, InterruptedException, ExecutionException, URISyntaxException {
-        return loadTDF(tdf, kas, Config.newTDFReaderConfig(), kasRegistryService, platformUrl);
-    }
-
-    public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas, Config.TDFReaderConfig tdfReaderConfig, KeyAccessServerRegistryServiceFutureStub kasRegistryService, String platformUrl)
-            throws DecoderException, IOException, ParseException, NoSuchAlgorithmException, JOSEException, InterruptedException, ExecutionException, URISyntaxException {
+    Reader loadTDF(SeekableByteChannel tdf, Config.TDFReaderConfig tdfReaderConfig, String platformUrl) throws SDKException, IOException {
         if (!tdfReaderConfig.ignoreKasAllowlist && (tdfReaderConfig.kasAllowlist == null || tdfReaderConfig.kasAllowlist.isEmpty())) {
             ListKeyAccessServersRequest request = ListKeyAccessServersRequest.newBuilder()
                     .build();
-            ListKeyAccessServersResponse response = kasRegistryService.listKeyAccessServers(request).get();
+            ListKeyAccessServersResponse response;
+            try {
+                response = RequestHelper.getOrThrow(services.kasRegistry().listKeyAccessServersBlocking(request, Collections.emptyMap()).execute());
+            } catch (ConnectException e) {
+                throw new SDKException("error getting kas servers", e);
+            }
             tdfReaderConfig.kasAllowlist = new HashSet<>();
 
             for (var entry : response.getKeyAccessServersList()) {
@@ -677,13 +671,10 @@ public class TDF {
             }
             tdfReaderConfig.kasAllowlist.add(Config.getKasAddress(platformUrl));
         }
-        return loadTDF(tdf, kas, tdfReaderConfig);
+        return loadTDF(tdf, tdfReaderConfig);
     }
 
-    public Reader loadTDF(SeekableByteChannel tdf, SDK.KAS kas,
-                          Config.TDFReaderConfig tdfReaderConfig)
-            throws RootSignatureValidationException, SegmentSizeMismatch,
-            IOException, FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException, DecoderException {
+    Reader loadTDF(SeekableByteChannel tdf, Config.TDFReaderConfig tdfReaderConfig) throws SDKException, IOException {
 
         TDFReader tdfReader = new TDFReader(tdf);
         String manifestJson = tdfReader.manifest();
@@ -696,7 +687,12 @@ public class TDF {
         Set<String> foundSplits = new HashSet<>();
 
         Map<Autoconfigure.KeySplitStep, Exception> skippedSplits = new HashMap<>();
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        MessageDigest digest = null;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new SDKException("error getting instance of SHA-256 digest", e);
+        }
 
         if (manifest.payload.isEncrypted) {
             for (Manifest.KeyAccess keyAccess : manifest.encryptionInformation.keyAccessObj) {
@@ -718,7 +714,7 @@ public class TDF {
                         logger.error("KasAllowlist: kas url {} is not allowed", realAddress);
                         throw new KasAllowlistException("KasAllowlist: kas url "+realAddress+" is not allowed");
                     }
-                    unwrappedKey = kas.unwrap(keyAccess, manifest.encryptionInformation.policy, tdfReaderConfig.sessionKeyType);
+                    unwrappedKey = services.kas().unwrap(keyAccess, manifest.encryptionInformation.policy, tdfReaderConfig.sessionKeyType);
                 } catch (Exception e) {
                     skippedSplits.put(ss, e);
                     continue;
@@ -825,14 +821,28 @@ public class TDF {
                 }
             }
 
-            var hashValues = assertion.verify(assertionKey);
+            Manifest.Assertion.HashValues hashValues = null;
+            try {
+                hashValues = assertion.verify(assertionKey);
+            } catch (ParseException | JOSEException e) {
+                throw new SDKException("error validating assertion hash", e);
+            }
             var hashOfAssertionAsHex = assertion.hash();
 
             if (!Objects.equals(hashOfAssertionAsHex, hashValues.getAssertionHash())) {
                 throw new AssertionException("assertion hash mismatch", assertion.id);
             }
 
-            byte[] hashOfAssertion = isLegacyTdf ? hashOfAssertionAsHex.getBytes(StandardCharsets.UTF_8) : Hex.decodeHex(hashOfAssertionAsHex);
+            byte[] hashOfAssertion;
+            if (isLegacyTdf) {
+                hashOfAssertion = hashOfAssertionAsHex.getBytes(StandardCharsets.UTF_8);
+            } else {
+                try {
+                    hashOfAssertion = Hex.decodeHex(hashOfAssertionAsHex);
+                } catch (DecoderException e) {
+                    throw new SDKException("error decoding assertion hash", e);
+                }
+            }
             var signature = new byte[aggregateHashByteArrayBytes.length + hashOfAssertion.length];
             System.arraycopy(aggregateHashByteArrayBytes, 0, signature, 0, aggregateHashByteArrayBytes.length);
             System.arraycopy(hashOfAssertion, 0, signature, aggregateHashByteArrayBytes.length, hashOfAssertion.length);

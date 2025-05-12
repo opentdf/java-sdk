@@ -1,6 +1,6 @@
 package io.opentdf.platform.sdk;
 
-import com.google.common.base.Supplier;
+import com.connectrpc.ResponseMessageKt;
 import io.opentdf.platform.policy.Attribute;
 import io.opentdf.platform.policy.AttributeRuleTypeEnum;
 import io.opentdf.platform.policy.AttributeValueSelector;
@@ -8,10 +8,9 @@ import io.opentdf.platform.policy.KasPublicKey;
 import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
 import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.Value;
-import io.opentdf.platform.policy.attributes.AttributesServiceGrpc.AttributesServiceFutureStub;
+import io.opentdf.platform.policy.attributes.AttributesServiceClient;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
-import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse.AttributeAndValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,7 +29,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.StringJoiner;
-import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -106,7 +105,7 @@ public class Autoconfigure {
             }
 
             try {
-                URLDecoder.decode(matcher.group(2), StandardCharsets.UTF_8.name());
+                URLDecoder.decode(matcher.group(2), StandardCharsets.UTF_8);
             } catch (Exception e) {
                 throw new AutoConfigureException("invalid type: error in attribute name [" + matcher.group(2) + "]");
             }
@@ -689,7 +688,7 @@ public class Autoconfigure {
             if (!v.hasAttribute()) {
                 throw new AutoConfigureException("tried to use an attribute that is not initialized");
             }
-            return AttributeAndValue.newBuilder()
+            return GetAttributeValuesByFqnsResponse.AttributeAndValue.newBuilder()
                     .setValue(v)
                     .setAttribute(v.getAttribute())
                     .build();
@@ -699,57 +698,60 @@ public class Autoconfigure {
     }
 
     // Gets a list of directory of KAS grants for a list of attribute FQNs
-    public static Granter newGranterFromService(AttributesServiceFutureStub as, KASKeyCache keyCache, AttributeValueFQN... fqns) throws AutoConfigureException, ExecutionException, InterruptedException {
-
+    public static Granter newGranterFromService(AttributesServiceClient as, KASKeyCache keyCache, AttributeValueFQN... fqns) throws AutoConfigureException {
         GetAttributeValuesByFqnsRequest request = GetAttributeValuesByFqnsRequest.newBuilder()
                 .addAllFqns(Arrays.stream(fqns).map(AttributeValueFQN::toString).collect(Collectors.toList()))
                 .setWithValue(AttributeValueSelector.newBuilder().setWithKeyAccessGrants(true).build())
                 .build();
 
-        GetAttributeValuesByFqnsResponse av = as.getAttributeValuesByFqns(request).get();
+        GetAttributeValuesByFqnsResponse av = ResponseMessageKt.getOrThrow(
+                as.getAttributeValuesByFqnsBlocking(request, Collections.emptyMap()).execute()
+        );
 
         return getGranter(keyCache, new ArrayList<>(av.getFqnAttributeValuesMap().values()));
     }
 
-    private static Granter getGranter(@Nullable KASKeyCache keyCache, List<AttributeAndValue> values) {
-        Granter grants = new Granter(values.stream().map(AttributeAndValue::getValue).map(Value::getFqn).map(AttributeValueFQN::new).collect(Collectors.toList()));
+    private static List<KeyAccessServer> getGrants(GetAttributeValuesByFqnsResponse.AttributeAndValue attributeAndValue) {
+        var val = attributeAndValue.getValue();
+        var attribute = attributeAndValue.getAttribute();
+
+        if (!val.getGrantsList().isEmpty()) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("adding grants from attribute value [{}]: {}", val.getFqn(), val.getGrantsList().stream().map(KeyAccessServer::getUri).collect(Collectors.toList()));
+            }
+            return val.getGrantsList();
+        } else if (!attribute.getGrantsList().isEmpty()) {
+            var attributeGrants = attribute.getGrantsList();
+            if (logger.isDebugEnabled()) {
+                logger.debug("adding grants from attribute [{}]: {}", attribute.getFqn(), attributeGrants.stream().map(KeyAccessServer::getId).collect(Collectors.toList()));
+            }
+            return attributeGrants;
+        } else if (!attribute.getNamespace().getGrantsList().isEmpty()) {
+            var nsGrants = attribute.getNamespace().getGrantsList();
+            if (logger.isDebugEnabled()) {
+                logger.debug("adding grants from namespace [{}]: [{}]", attribute.getNamespace().getName(), nsGrants.stream().map(KeyAccessServer::getId).collect(Collectors.toList()));
+            }
+            return nsGrants;
+        } else {
+            // this is needed to mark the fact that we have an empty
+            if (logger.isDebugEnabled()) {
+                logger.debug("didn't find any grants on value, attribute, or namespace for attribute value [{}]", val.getFqn());
+            }
+            return Collections.emptyList();
+        }
+
+    }
+
+    private static Granter getGranter(@Nullable KASKeyCache keyCache, List<GetAttributeValuesByFqnsResponse.AttributeAndValue> values) {
+        Granter grants = new Granter(values.stream().map(GetAttributeValuesByFqnsResponse.AttributeAndValue::getValue).map(Value::getFqn).map(AttributeValueFQN::new).collect(Collectors.toList()));
 
         for (var attributeAndValue: values) {
-            var val = attributeAndValue.getValue();
-            var attribute = attributeAndValue.getAttribute();
-            String fqnstr = val.getFqn();
+            var attributeGrants = getGrants(attributeAndValue);
+            String fqnstr = attributeAndValue.getValue().getFqn();
             AttributeValueFQN fqn = new AttributeValueFQN(fqnstr);
-
-            if (!val.getGrantsList().isEmpty()) {
-                if (logger.isDebugEnabled()) {
-                    logger.debug("adding grants from attribute value [{}]: {}", val.getFqn(), val.getGrantsList().stream().map(KeyAccessServer::getUri).collect(Collectors.toList()));
-                }
-                grants.addAllGrants(fqn, val.getGrantsList(), attribute);
-                if (keyCache != null) {
-                    storeKeysToCache(val.getGrantsList(), keyCache);
-                }
-            } else if (!attribute.getGrantsList().isEmpty()) {
-                var attributeGrants = attribute.getGrantsList();
-                if (logger.isDebugEnabled()) {
-                    logger.debug("adding grants from attribute [{}]: {}", attribute.getFqn(), attributeGrants.stream().map(KeyAccessServer::getId).collect(Collectors.toList()));
-                }
-                grants.addAllGrants(fqn, attributeGrants, attribute);
-                if (keyCache != null) {
-                    storeKeysToCache(attributeGrants, keyCache);
-                }
-            } else if (!attribute.getNamespace().getGrantsList().isEmpty()) {
-                var nsGrants = attribute.getNamespace().getGrantsList();
-                if (logger.isDebugEnabled()) {
-                    logger.debug("adding grants from namespace [{}]: [{}]", attribute.getNamespace().getName(), nsGrants.stream().map(KeyAccessServer::getId).collect(Collectors.toList()));
-                }
-                grants.addAllGrants(fqn, nsGrants, attribute);
-                if (keyCache != null) {
-                    storeKeysToCache(nsGrants, keyCache);
-                }
-            } else {
-                // this is needed to mark the fact that we have an empty
-                grants.addAllGrants(fqn, List.of(), attribute);
-                logger.debug("didn't find any grants on value, attribute, or namespace for attribute value [{}]", fqnstr);
+            grants.addAllGrants(fqn, attributeGrants, attributeAndValue.getAttribute());
+            if (keyCache != null) {
+                storeKeysToCache(attributeGrants, keyCache);
             }
         }
 

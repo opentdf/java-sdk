@@ -125,59 +125,6 @@
               <mainClass>io.opentdf.platform.App</mainClass>
           </configuration>
       </plugin>
-      <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-antrun-plugin</artifactId>
-          <version>3.1.0</version>
-          <executions>
-              <!-- Generate Sources Execution under target/generated-sources -->
-              <execution>
-                  <id>generateSources</id>
-                  <phase>generate-sources</phase>
-                  <configuration>
-                      <target>
-                          <!-- Generate OpenTDF Platform Protobuf -->
-                          <exec executable="buf" dir="." failOnError="true">
-                              <arg value="generate"/>
-                              <arg value="https://github.com/opentdf/platform.git#branch=${platform.branch},subdir=service"/>
-                              <arg value="-o"/>
-                              <arg value="target/generated-sources"/>
-                          </exec>
-                          <!-- Generate gRPC Protobuf -->
-                          <!-- <exec executable="buf" dir="." failOnError="true">
-                              <arg value="generate"/>
-                              <arg value="buf.build/grpc-ecosystem/grpc-gateway"/>
-                              <arg value="-o"/>
-                              <arg value="target/generated-sources"/>
-                          </exec> -->
-                      </target>
-                  </configuration>
-                  <goals>
-                      <goal>run</goal>
-                  </goals>
-              </execution>
-          </executions>
-      </plugin>
-      <!-- Add Generate Sources Directory -->
-      <plugin>
-          <groupId>org.codehaus.mojo</groupId>
-          <artifactId>build-helper-maven-plugin</artifactId>
-          <version>3.5.0</version>
-          <executions>
-              <execution>
-                  <id>add-source</id>
-                  <phase>generate-sources</phase>
-                  <goals>
-                      <goal>add-source</goal>
-                  </goals>
-                  <configuration>
-                      <sources>
-                          <source>target/generated-sources</source>
-                      </sources>
-                  </configuration>
-              </execution>
-          </executions>
-      </plugin>
     </plugins>
     <!-- </pluginManagement> -->
   </build>
