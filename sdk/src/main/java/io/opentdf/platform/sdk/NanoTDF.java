@@ -26,7 +26,7 @@ import org.slf4j.LoggerFactory;
  * The NanoTDF format is intended for securely encrypting small data payloads using elliptic-curve cryptography
  * and authenticated encryption.
  */
-public class NanoTDF {
+class NanoTDF {
 
     public static Logger logger = LoggerFactory.getLogger(NanoTDF.class);
 
