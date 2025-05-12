@@ -546,7 +546,7 @@ public class TDFTest {
     }
 
     @Test
-    void legacyTDFRoundTrips() throws IOException, NoSuchAlgorithmException {
+    void legacyTDFRoundTrips() throws IOException {
         final String mimeType = "application/pdf";
         var assertionConfig1 = new AssertionConfig();
         assertionConfig1.id = "assertion1";
