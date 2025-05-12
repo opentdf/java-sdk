@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.8.0](https://github.com/opentdf/java-sdk/compare/v0.7.9...v0.8.0) (2025-05-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sdk:** switch to `connect-rpc` for GRPC ([#244](https://github.com/opentdf/java-sdk/issues/244))
+* **sdk:** DSPX-1037 update sdk api ([#249](https://github.com/opentdf/java-sdk/issues/249))
+
+### Features
+
+* Add initial Dependency Review configuration ([#252](https://github.com/opentdf/java-sdk/issues/252)) ([ba11d49](https://github.com/opentdf/java-sdk/commit/ba11d4924d50ef33539a879818a1e9f53ced47a4))
+* **sdk:** DSPX-1037 update sdk api ([#249](https://github.com/opentdf/java-sdk/issues/249)) ([f2e1307](https://github.com/opentdf/java-sdk/commit/f2e1307ec7ed23289f32ddf620ab39692256c2c0))
+* **sdk:** switch to `connect-rpc` for GRPC ([#244](https://github.com/opentdf/java-sdk/issues/244)) ([ff36a1d](https://github.com/opentdf/java-sdk/commit/ff36a1d90f7f2fdf876b892001c8c8d32425db09))
+
 ## [0.7.9](https://github.com/opentdf/java-sdk/compare/v0.7.8...v0.7.9) (2025-04-28)
 
 
