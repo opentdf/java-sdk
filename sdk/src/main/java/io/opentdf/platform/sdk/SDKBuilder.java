@@ -353,7 +353,7 @@ public class SDKBuilder {
 
     public SDK build() {
         var services = buildServices();
-        return new SDK(services.services, services.trustManager, services.interceptor, services.protocolClient, platformEndpoint);
+        return new SDK(services.services, services.trustManager, services.interceptor, platformEndpoint);
     }
 
     private static ProtocolClient getUnauthenticatedProtocolClient(String endpoint, OkHttpClient httpClient) {
