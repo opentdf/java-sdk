@@ -70,7 +70,7 @@ public class SDKBuilderTest {
         IOUtils.write(EXAMPLE_COM_PEM, fos);
         fos.close();
         SDKBuilder builder = SDKBuilder.newBuilder().sslFactoryFromDirectory(certDirPath.toAbsolutePath().toString());
-        SSLFactory sslFactory = builder.getSslFactory();
+        SSLFactory sslFactory = builder.getSslFactoryFromCertDirectory();
         assertNotNull(sslFactory);
         X509Certificate[] acceptedIssuers = sslFactory.getTrustManager().get().getAcceptedIssuers();
         assertEquals(1, Arrays.stream(acceptedIssuers).filter(x -> x.getIssuerX500Principal().getName()
@@ -85,7 +85,7 @@ public class SDKBuilderTest {
         keystore.store(new FileOutputStream(keyStorePath.toAbsolutePath().toString()), "foo".toCharArray());
         SDKBuilder builder = SDKBuilder.newBuilder().sslFactoryFromKeyStore(keyStorePath.toAbsolutePath().toString(),
                 "foo");
-        SSLFactory sslFactory = builder.getSslFactory();
+        SSLFactory sslFactory = builder.getSslFactoryFromCertDirectory();
         assertNotNull(sslFactory);
         X509Certificate[] acceptedIssuers = sslFactory.getTrustManager().get().getAcceptedIssuers();
         assertEquals(1, Arrays.stream(acceptedIssuers).filter(x -> x.getIssuerX500Principal().getName()
