@@ -33,8 +33,7 @@ public class TDFE2ETest {
                 .clientSecret("opentdf-sdk", "secret")
                 .useInsecurePlaintextConnection(true)
                 .platformEndpoint("localhost:8080")
-                .buildServices()
-                .services;
+                .build();
 
         var kasInfo = new Config.KASInfo();
         kasInfo.URL = "localhost:8080";
@@ -55,11 +54,11 @@ public class TDFE2ETest {
             InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
             ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
-            TDF tdf = new TDF();
-            tdf.createTDF(plainTextInputStream, tdfOutputStream, configPair.tdfConfig, sdk.kas(), sdk.attributes());
+            TDF tdf = new TDF(sdk.getServices());
+            tdf.createTDF(plainTextInputStream, tdfOutputStream, configPair.tdfConfig);
 
             var unwrappedData = new java.io.ByteArrayOutputStream();
-            var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), sdk.kas(), configPair.tdfReaderConfig);
+            var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), configPair.tdfReaderConfig, sdk.getPlatformUrl());
             reader.readPayload(unwrappedData);
 
             assertThat(unwrappedData.toString(StandardCharsets.UTF_8)).isEqualTo("text");
@@ -86,12 +85,12 @@ public class TDFE2ETest {
         String plainText = "text";
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
-        NanoTDF ntdf = new NanoTDF();
-        ntdf.createNanoTDF(ByteBuffer.wrap(plainText.getBytes()), tdfOutputStream, config, sdk.kas());
+        NanoTDF ntdf = new NanoTDF(sdk);
+        ntdf.createNanoTDF(ByteBuffer.wrap(plainText.getBytes()), tdfOutputStream, config);
 
         byte[] nanoTDFBytes = tdfOutputStream.toByteArray();
         ByteArrayOutputStream plainTextStream = new ByteArrayOutputStream();
-        ntdf.readNanoTDF(ByteBuffer.wrap(nanoTDFBytes), plainTextStream, sdk.kas());
+        ntdf.readNanoTDF(ByteBuffer.wrap(nanoTDFBytes), plainTextStream);
 
         String out = new String(plainTextStream.toByteArray(), "UTF-8");
         assertThat(out).isEqualTo("text");

@@ -4,7 +4,7 @@
   <parent>
     <artifactId>sdk-pom</artifactId>
     <groupId>io.opentdf.platform</groupId>
-    <version>0.7.7-SNAPSHOT</version>
+    <version>0.7.10-SNAPSHOT</version>
   </parent>
 
   <groupId>io.opentdf.platform</groupId>
@@ -17,6 +17,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>11</maven.compiler.release>
+    <platform.branch>protocol/go/v0.3.0</platform.branch>
   </properties>
 
   <dependencyManagement>
@@ -123,59 +124,6 @@
           <configuration>
               <mainClass>io.opentdf.platform.App</mainClass>
           </configuration>
-      </plugin>
-      <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-antrun-plugin</artifactId>
-          <version>3.1.0</version>
-          <executions>
-              <!-- Generate Sources Execution under target/generated-sources -->
-              <execution>
-                  <id>generateSources</id>
-                  <phase>generate-sources</phase>
-                  <configuration>
-                      <target>
-                          <!-- Generate OpenTDF Platform Protobuf -->
-                          <exec executable="buf" dir="." failOnError="true">
-                              <arg value="generate"/>
-                              <arg value="https://github.com/opentdf/platform.git#branch=main,subdir=service"/>
-                              <arg value="-o"/>
-                              <arg value="target/generated-sources"/>
-                          </exec>
-                          <!-- Generate gRPC Protobuf -->
-                          <!-- <exec executable="buf" dir="." failOnError="true">
-                              <arg value="generate"/>
-                              <arg value="buf.build/grpc-ecosystem/grpc-gateway"/>
-                              <arg value="-o"/>
-                              <arg value="target/generated-sources"/>
-                          </exec> -->
-                      </target>
-                  </configuration>
-                  <goals>
-                      <goal>run</goal>
-                  </goals>
-              </execution>
-          </executions>
-      </plugin>
-      <!-- Add Generate Sources Directory -->
-      <plugin>
-          <groupId>org.codehaus.mojo</groupId>
-          <artifactId>build-helper-maven-plugin</artifactId>
-          <version>3.5.0</version>
-          <executions>
-              <execution>
-                  <id>add-source</id>
-                  <phase>generate-sources</phase>
-                  <goals>
-                      <goal>add-source</goal>
-                  </goals>
-                  <configuration>
-                      <sources>
-                          <source>target/generated-sources</source>
-                      </sources>
-                  </configuration>
-              </execution>
-          </executions>
       </plugin>
     </plugins>
     <!-- </pluginManagement> -->

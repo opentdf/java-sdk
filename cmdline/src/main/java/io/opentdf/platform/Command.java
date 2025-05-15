@@ -8,7 +8,6 @@ import io.opentdf.platform.sdk.AutoConfigureException;
 import io.opentdf.platform.sdk.Config;
 import io.opentdf.platform.sdk.KeyType;
 import io.opentdf.platform.sdk.Config.AssertionVerificationKeys;
-import io.opentdf.platform.sdk.NanoTDF;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
 import io.opentdf.platform.sdk.TDF;
@@ -24,6 +23,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -51,7 +51,7 @@ import java.util.function.Consumer;
  */
 class Versions {
     // Version of the SDK, managed by release-please.
-    public static final String SDK = "0.7.6"; // x-release-please-version
+    public static final String SDK = "0.7.10-SNAPSHOT"; // x-release-please-version
 
     // This sdk aims to support this version of the TDF spec; currently 4.3.0.
     public static final String TDF_SPEC = "4.3.0";
@@ -162,7 +162,8 @@ class Command {
             @Option(names = {
                     "--encap-key-type" }, defaultValue = Option.NULL_VALUE, description = "Preferred key access key wrap algorithm, one of ${COMPLETION-CANDIDATES}") Optional<KeyType> encapKeyType,
             @Option(names = { "--mime-type" }, defaultValue = Option.NULL_VALUE) Optional<String> mimeType,
-            @Option(names = { "--with-assertions" }, defaultValue = Option.NULL_VALUE) Optional<String> assertion)
+            @Option(names = { "--with-assertions" }, defaultValue = Option.NULL_VALUE) Optional<String> assertion,
+            @Option(names = { "--with-target-mode" }, defaultValue = Option.NULL_VALUE) Optional<String> targetMode)
 
             throws IOException, JOSEException, AutoConfigureException, InterruptedException, ExecutionException, DecoderException {
 
@@ -190,8 +191,8 @@ class Command {
             } catch (JsonSyntaxException e) {
                 // try it as a file path
                 try {
-                    String fielJson = new String(Files.readAllBytes(Paths.get(assertionConfig)));
-                    assertionConfigs = gson.fromJson(fielJson, AssertionConfig[].class);
+                    String fileJson = new String(Files.readAllBytes(Paths.get(assertionConfig)));
+                    assertionConfigs = gson.fromJson(fileJson, AssertionConfig[].class);
                 } catch (JsonSyntaxException e2) {
                     throw new RuntimeException("Failed to parse assertion from file, expects an list of assertions", e2);
                 } catch(Exception e3) {
@@ -214,15 +215,12 @@ class Command {
             configs.add(Config.withAssertionConfig(assertionConfigs));
         }
 
-        if (attributes.isPresent()) {
-            configs.add(Config.withDataAttributes(attributes.get().split(",")));
-        }
+        attributes.ifPresent(s -> configs.add(Config.withDataAttributes(s.split(","))));
+        targetMode.map(Config::withTargetMode).ifPresent(configs::add);
         var tdfConfig = Config.newTDFConfig(configs.toArray(Consumer[]::new));
         try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {
             try (var out = new BufferedOutputStream(System.out)) {
-                new TDF().createTDF(in, out, tdfConfig,
-                        sdk.getServices().kas(),
-                        sdk.getServices().attributes());
+                sdk.createTDF(in, out, tdfConfig);
             }
         }
     }
@@ -245,62 +243,75 @@ class Command {
     void decrypt(@Option(names = { "-f", "--file" }, required = true) Path tdfPath,
             @Option(names = { "--rewrap-key-type" }, defaultValue = Option.NULL_VALUE, description = "Preferred rewrap algorithm, one of ${COMPLETION-CANDIDATES}") Optional<KeyType> rewrapKeyType,
             @Option(names = { "--with-assertion-verification-disabled" }, defaultValue = "false") boolean disableAssertionVerification,
-            @Option(names = { "--with-assertion-verification-keys" }, defaultValue = Option.NULL_VALUE) Optional<String> assertionVerification)
-             throws IOException, TDF.FailedToCreateGMAC, JOSEException, ParseException, NoSuchAlgorithmException, DecoderException {
-        var sdk = buildSDK();
-        var opts = new ArrayList<Consumer<Config.TDFReaderConfig>>();
-        try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
-            try (var stdout = new BufferedOutputStream(System.out)) {
-                if (assertionVerification.isPresent()) {
-                    var assertionVerificationInput = assertionVerification.get();
-                    Gson gson = new Gson();
+            @Option(names = { "--with-assertion-verification-keys" }, defaultValue = Option.NULL_VALUE) Optional<String> assertionVerification,
+            @Option(names = { "--kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<String> kasAllowlistStr,
+            @Option(names = { "--ignore-kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<Boolean> ignoreAllowlist)
+            throws Exception {
+        try (var sdk = buildSDK()) {
+            var opts = new ArrayList<Consumer<Config.TDFReaderConfig>>();
+            try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
+                try (var stdout = new BufferedOutputStream(System.out)) {
+                    if (assertionVerification.isPresent()) {
+                        var assertionVerificationInput = assertionVerification.get();
+                        Gson gson = new Gson();
 
-                    AssertionVerificationKeys assertionVerificationKeys;
-                    try {
-                        assertionVerificationKeys = gson.fromJson(assertionVerificationInput, AssertionVerificationKeys.class);
-                    } catch (JsonSyntaxException e) {
-                        // try it as a file path
+                        AssertionVerificationKeys assertionVerificationKeys;
                         try {
-                            String fileJson = new String(Files.readAllBytes(Paths.get(assertionVerificationInput)));
-                            assertionVerificationKeys = gson.fromJson(fileJson, AssertionVerificationKeys.class);
-                        } catch (JsonSyntaxException e2) {
-                            throw new RuntimeException("Failed to parse assertion verification keys from file", e2);
-                        } catch(Exception e3) {
-                            throw new RuntimeException("Could not parse assertion verification keys as json string or path to file", e3);
+                            assertionVerificationKeys = gson.fromJson(assertionVerificationInput, AssertionVerificationKeys.class);
+                        } catch (JsonSyntaxException e) {
+                            // try it as a file path
+                            try {
+                                String fileJson = new String(Files.readAllBytes(Paths.get(assertionVerificationInput)));
+                                assertionVerificationKeys = gson.fromJson(fileJson, AssertionVerificationKeys.class);
+                            } catch (JsonSyntaxException e2) {
+                                throw new RuntimeException("Failed to parse assertion verification keys from file", e2);
+                            } catch (Exception e3) {
+                                throw new RuntimeException("Could not parse assertion verification keys as json string or path to file", e3);
+                            }
                         }
+
+                        for (Map.Entry<String, AssertionConfig.AssertionKey> entry : assertionVerificationKeys.keys.entrySet()) {
+                            try {
+                                Object correctedKey = correctKeyType(entry.getValue().alg, entry.getValue().key, true);
+                                entry.setValue(new AssertionConfig.AssertionKey(entry.getValue().alg, correctedKey));
+                            } catch (Exception e) {
+                                throw new RuntimeException("Error with assertion verification key: " + e.getMessage(), e);
+                            }
+                        }
+                        opts.add(Config.withAssertionVerificationKeys(assertionVerificationKeys));
                     }
 
-                    for (Map.Entry<String, AssertionConfig.AssertionKey> entry : assertionVerificationKeys.keys.entrySet()){
-                        try {
-                            Object correctedKey = correctKeyType(entry.getValue().alg, entry.getValue().key, true);
-                            entry.setValue(new AssertionConfig.AssertionKey(entry.getValue().alg, correctedKey));
-                        } catch (Exception e) {
-                            throw new RuntimeException("Error with assertion verification key: " + e.getMessage(), e);
-                        }
+                    if (disableAssertionVerification) {
+                        opts.add(Config.withDisableAssertionVerification(true));
                     }
-                    opts.add(Config.withAssertionVerificationKeys(assertionVerificationKeys));
-                }
+                    rewrapKeyType.map(Config::WithSessionKeyType).ifPresent(opts::add);
 
-                if (disableAssertionVerification) {
-                    opts.add(Config.withDisableAssertionVerification(true));
-                }
-                rewrapKeyType.map(Config::WithSessionKeyType).ifPresent(opts::add);
+                    ignoreAllowlist.ifPresent(aBoolean -> opts.add(Config.WithIgnoreKasAllowlist(aBoolean)));
+                    kasAllowlistStr.ifPresent(s -> opts.add(Config.WithKasAllowlist(s.split(","))));
 
-                var readerConfig = Config.newTDFReaderConfig(opts.toArray(new Consumer[0]));
-                var reader = new TDF().loadTDF(in, sdk.getServices().kas(), readerConfig);
-                reader.readPayload(stdout);
+                    var readerConfig = Config.newTDFReaderConfig(opts.toArray(new Consumer[0]));
+                    var reader = sdk.loadTDF(in, readerConfig);
+                    reader.readPayload(stdout);
+                }
             }
         }
     }
 
     @CommandLine.Command(name = "metadata")
-    void readMetadata(@Option(names = { "-f", "--file" }, required = true) Path tdfPath) throws IOException,
-            TDF.FailedToCreateGMAC, JOSEException, NoSuchAlgorithmException, ParseException, DecoderException {
+    void readMetadata(@Option(names = { "-f", "--file" }, required = true) Path tdfPath,
+    @Option(names = { "--kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<String> kasAllowlistStr,
+            @Option(names = { "--ignore-kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<Boolean> ignoreAllowlist) throws IOException,
+            TDF.FailedToCreateGMAC, JOSEException, NoSuchAlgorithmException, ParseException, DecoderException, InterruptedException, ExecutionException, URISyntaxException {
         var sdk = buildSDK();
-
+        var opts = new ArrayList<Consumer<Config.TDFReaderConfig>>();
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
             try (var stdout = new PrintWriter(System.out)) {
-                var reader = new TDF().loadTDF(in, sdk.getServices().kas());
+
+                ignoreAllowlist.map(Config::WithIgnoreKasAllowlist).ifPresent(opts::add);
+                kasAllowlistStr.map(s -> s.split(",")).map(Config::WithKasAllowlist).ifPresent(opts::add);
+
+                var readerConfig = Config.newTDFReaderConfig(opts.toArray(new Consumer[0]));
+                var reader = sdk.loadTDF(in, readerConfig);
                 stdout.write(reader.getMetadata() == null ? "" : reader.getMetadata());
             }
         }
@@ -330,22 +341,26 @@ class Command {
         var nanoTDFConfig = Config.newNanoTDFConfig(configs.toArray(Consumer[]::new));
         try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {
             try (var out = new BufferedOutputStream(System.out)) {
-                NanoTDF ntdf = new NanoTDF();
-                ntdf.createNanoTDF(ByteBuffer.wrap(in.readAllBytes()), out, nanoTDFConfig, sdk.getServices().kas());
+                sdk.createNanoTDF(ByteBuffer.wrap(in.readAllBytes()), out, nanoTDFConfig);
             }
         }
     }
 
     @CommandLine.Command(name = "decryptnano")
-    void readNanoTDF(@Option(names = { "-f", "--file" }, required = true) Path nanoTDFPath) throws Exception {
+    void readNanoTDF(@Option(names = { "-f", "--file" }, required = true) Path nanoTDFPath,
+                     @Option(names = { "--kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<String> kasAllowlistStr,
+                     @Option(names = { "--ignore-kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<Boolean> ignoreAllowlist) throws Exception {
         var sdk = buildSDK();
         try (var in = FileChannel.open(nanoTDFPath, StandardOpenOption.READ)) {
             try (var stdout = new BufferedOutputStream(System.out)) {
-                NanoTDF ntdf = new NanoTDF();
                 ByteBuffer buffer = ByteBuffer.allocate((int) in.size());
                 in.read(buffer);
                 buffer.flip();
-                ntdf.readNanoTDF(buffer, stdout, sdk.getServices().kas());
+                var opts = new ArrayList<Consumer<Config.NanoTDFReaderConfig>>();
+                ignoreAllowlist.map(Config::WithNanoIgnoreKasAllowlist).ifPresent(opts::add);
+                kasAllowlistStr.map(s -> s.split(",")).map(Config::WithNanoKasAllowlist).ifPresent(opts::add);
+                var readerConfig = Config.newNanoTDFReaderConfig(opts.toArray(new Consumer[0]));
+                sdk.readNanoTDF(buffer, stdout, readerConfig);
             }
         }
     }

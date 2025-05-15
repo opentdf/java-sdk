@@ -1,5 +1,9 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.Code;
+import com.connectrpc.ConnectException;
+import com.connectrpc.ResponseMessageKt;
+import com.connectrpc.impl.ProtocolClient;
 import com.google.gson.Gson;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -8,10 +12,7 @@ import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
-import io.grpc.ManagedChannel;
-import io.grpc.StatusRuntimeException;
-import io.grpc.Status;
-import io.opentdf.platform.kas.AccessServiceGrpc;
+import io.opentdf.platform.kas.AccessServiceClient;
 import io.opentdf.platform.kas.PublicKeyRequest;
 import io.opentdf.platform.kas.PublicKeyResponse;
 import io.opentdf.platform.kas.RewrapRequest;
@@ -21,17 +22,16 @@ import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import io.opentdf.platform.sdk.TDF.KasBadRequestException;
 
-import java.nio.charset.StandardCharsets;
+import okhttp3.OkHttpClient;
+
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 
 import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
 import static java.lang.String.format;
@@ -41,9 +41,11 @@ import static java.lang.String.format;
  * This class provides methods to retrieve public keys, unwrap encrypted keys,
  * and manage key caches.
  */
-public class KASClient implements SDK.KAS {
+class KASClient implements SDK.KAS {
 
-    private final Function<String, ManagedChannel> channelFactory;
+    private final OkHttpClient httpClient;
+    private final BiFunction<OkHttpClient, String, ProtocolClient> protocolClientFactory;
+    private final boolean usePlaintext;
     private final RSASSASigner signer;
     private AsymDecryption decryptor;
     private String clientPublicKey;
@@ -52,12 +54,13 @@ public class KASClient implements SDK.KAS {
     /***
      * A client that communicates with KAS
      * 
-     * @param channelFactory A function that produces channels that can be used to
      *                       communicate
      * @param dpopKey
      */
-    public KASClient(Function<String, ManagedChannel> channelFactory, RSAKey dpopKey) {
-        this.channelFactory = channelFactory;
+    KASClient(OkHttpClient httpClient, BiFunction<OkHttpClient, String, ProtocolClient> protocolClientFactory, RSAKey dpopKey, boolean usePlaintext) {
+        this.httpClient = httpClient;
+        this.protocolClientFactory = protocolClientFactory;
+        this.usePlaintext = usePlaintext;
         try {
             this.signer = new RSASSASigner(dpopKey);
         } catch (JOSEException e) {
@@ -68,12 +71,17 @@ public class KASClient implements SDK.KAS {
 
     @Override
     public KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
-        var r = getStub(kasInfo.URL)
-                .publicKey(
-                        PublicKeyRequest.newBuilder().setAlgorithm(String.format("ec:%s", curve.toString())).build());
+        var req = PublicKeyRequest.newBuilder().setAlgorithm(format("ec:%s", curve.toString())).build();
+        var r = getStub(kasInfo.URL).publicKeyBlocking(req, Collections.emptyMap()).execute();
+        PublicKeyResponse res;
+        try {
+            res = ResponseMessageKt.getOrThrow(r);
+        } catch (Exception e) {
+            throw new SDKException("error getting public key", e);
+        }
         var k2 = kasInfo.clone();
-        k2.KID = r.getKid();
-        k2.PublicKey = r.getPublicKey();
+        k2.KID = res.getKid();
+        k2.PublicKey = res.getPublicKey();
         return k2;
     }
 
@@ -88,7 +96,13 @@ public class KASClient implements SDK.KAS {
                 ? PublicKeyRequest.getDefaultInstance()
                 : PublicKeyRequest.newBuilder().setAlgorithm(kasInfo.Algorithm).build();
 
-        PublicKeyResponse resp = getStub(kasInfo.URL).publicKey(request);
+        var req = getStub(kasInfo.URL).publicKeyBlocking(request, Collections.emptyMap()).execute();
+        PublicKeyResponse resp;
+        try {
+            resp = RequestHelper.getOrThrow(req);
+        } catch (ConnectException e) {
+            throw new SDKException("error getting public key", e);
+        }
 
         var kiCopy = new Config.KASInfo();
         kiCopy.KID = resp.getKid();
@@ -105,40 +119,10 @@ public class KASClient implements SDK.KAS {
         return this.kasKeyCache;
     }
 
-    private String normalizeAddress(String urlString) {
-        URL url;
-        try {
-            url = new URL(urlString);
-        } catch (MalformedURLException e) {
-            // if there is no protocol then they either gave us
-            // a correct address or one we don't know how to fix
-            return urlString;
-        }
-
-        // otherwise we take the specified port or default
-        // based on whether the URL uses a scheme that
-        // implies TLS
-        int port;
-        if (url.getPort() == -1) {
-            if ("http".equals(url.getProtocol())) {
-                port = 80;
-            } else {
-                port = 443;
-            }
-        } else {
-            port = url.getPort();
-        }
-
-        return format("%s:%d", url.getHost(), port);
-    }
-
     @Override
     public synchronized void close() {
-        var entries = new ArrayList<>(stubs.values());
-        stubs.clear();
-        for (var entry : entries) {
-            entry.channel.shutdownNow();
-        }
+        this.httpClient.dispatcher().cancelAll();
+        this.httpClient.connectionPool().evictAll();
     }
 
     static class RewrapRequestBody {
@@ -165,7 +149,7 @@ public class KASClient implements SDK.KAS {
     @Override
     public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy,  KeyType sessionKeyType) {
         ECKeyPair ecKeyPair = null;
-        
+
         if (sessionKeyType.isEc()) {
             var curveName = sessionKeyType.getCurveName();
             ecKeyPair = new ECKeyPair(curveName, ECKeyPair.ECAlgorithm.ECDH);
@@ -204,35 +188,36 @@ public class KASClient implements SDK.KAS {
                 .setSignedRequestToken(jwt.serialize())
                 .build();
         RewrapResponse response;
+        var req = getStub(keyAccess.url).rewrapBlocking(request, Collections.emptyMap()).execute();
         try {
-            response = getStub(keyAccess.url).rewrap(request);
-            var wrappedKey = response.getEntityWrappedKey().toByteArray();
-            if (sessionKeyType != KeyType.RSA2048Key) {
-
-                if (ecKeyPair == null) {
-                    throw new SDKException("ECKeyPair is null. Unable to proceed with the unwrap operation.");
-                }
-
-                var kasEphemeralPublicKey = response.getSessionPublicKey();
-                var publicKey = ECKeyPair.publicKeyFromPem(kasEphemeralPublicKey);
-                byte[] symKey = ECKeyPair.computeECDHKey(publicKey, ecKeyPair.getPrivateKey());
-
-                var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symKey);
-
-                AesGcm gcm = new AesGcm(sessionKey);
-                AesGcm.Encrypted encrypted = new AesGcm.Encrypted(wrappedKey);
-                return gcm.decrypt(encrypted);
-            } else {
-                return decryptor.decrypt(wrappedKey);
-            }
-        } catch (StatusRuntimeException e) {
-            if (e.getStatus().getCode() == Status.Code.INVALID_ARGUMENT) {
+            response = RequestHelper.getOrThrow(req);
+        } catch (ConnectException e) {
+            if (e.getCode() == Code.INVALID_ARGUMENT) {
                 // 400 Bad Request
-                throw new KasBadRequestException("rewrap request 400: " + e.toString());
+                throw new KasBadRequestException("rewrap request 400: " + e);
             }
-            throw e;
+            throw new SDKException("error unwrapping key", e);
         }
-        
+
+        var wrappedKey = response.getEntityWrappedKey().toByteArray();
+        if (sessionKeyType != KeyType.RSA2048Key) {
+
+            if (ecKeyPair == null) {
+                throw new SDKException("ECKeyPair is null. Unable to proceed with the unwrap operation.");
+            }
+
+            var kasEphemeralPublicKey = response.getSessionPublicKey();
+            var publicKey = ECKeyPair.publicKeyFromPem(kasEphemeralPublicKey);
+            byte[] symKey = ECKeyPair.computeECDHKey(publicKey, ecKeyPair.getPrivateKey());
+
+            var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symKey);
+
+            AesGcm gcm = new AesGcm(sessionKey);
+            AesGcm.Encrypted encrypted = new AesGcm.Encrypted(wrappedKey);
+            return gcm.decrypt(encrypted);
+        } else {
+            return decryptor.decrypt(wrappedKey);
+        }
     }
 
     public byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL) {
@@ -245,7 +230,7 @@ public class KASClient implements SDK.KAS {
         keyAccess.protocol = "kas";
 
         NanoTDFRewrapRequestBody body = new NanoTDFRewrapRequestBody();
-        body.algorithm = String.format("ec:%s", curve.toString());
+        body.algorithm = format("ec:%s", curve.toString());
         body.clientPublicKey = keyPair.publicKeyInPEMFormat();
         body.keyAccess = keyAccess;
 
@@ -264,12 +249,18 @@ public class KASClient implements SDK.KAS {
             throw new SDKException("error signing KAS request", e);
         }
 
-        var request = RewrapRequest
+        var req = RewrapRequest
                 .newBuilder()
                 .setSignedRequestToken(jwt.serialize())
                 .build();
 
-        var response = getStub(keyAccess.url).rewrap(request);
+        var request = getStub(keyAccess.url).rewrapBlocking(req, Collections.emptyMap()).execute();
+        RewrapResponse response;
+        try {
+            response = RequestHelper.getOrThrow(request);
+        } catch (ConnectException e) {
+            throw new SDKException("error rewrapping key", e);
+        }
         var wrappedKey = response.getEntityWrappedKey().toByteArray();
 
         // Generate symmetric key
@@ -291,27 +282,13 @@ public class KASClient implements SDK.KAS {
         return gcm.decrypt(encrypted);
     }
 
-    private final HashMap<String, CacheEntry> stubs = new HashMap<>();
-
-    private static class CacheEntry {
-        final ManagedChannel channel;
-        final AccessServiceGrpc.AccessServiceBlockingStub stub;
-
-        private CacheEntry(ManagedChannel channel, AccessServiceGrpc.AccessServiceBlockingStub stub) {
-            this.channel = channel;
-            this.stub = stub;
-        }
-    }
+    private final HashMap<String, AccessServiceClient> stubs = new HashMap<>();
 
     // make this protected so we can test the address normalization logic
-    synchronized AccessServiceGrpc.AccessServiceBlockingStub getStub(String url) {
-        var realAddress = normalizeAddress(url);
-        if (!stubs.containsKey(realAddress)) {
-            var channel = channelFactory.apply(realAddress);
-            var stub = AccessServiceGrpc.newBlockingStub(channel);
-            stubs.put(realAddress, new CacheEntry(channel, stub));
-        }
-
-        return stubs.get(realAddress).stub;
+    synchronized AccessServiceClient getStub(String url) {
+        return stubs.computeIfAbsent(AddressNormalizer.normalizeAddress(url, usePlaintext), (String address) -> {
+            var client = protocolClientFactory.apply(httpClient, address);
+            return new AccessServiceClient(client);
+        });
     }
 }

@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.7.9](https://github.com/opentdf/java-sdk/compare/v0.7.8...v0.7.9) (2025-04-28)
+
+
+### Features
+
+* **sdk:** KAS Allowlist ([#245](https://github.com/opentdf/java-sdk/issues/245)) ([e48cdbd](https://github.com/opentdf/java-sdk/commit/e48cdbd3cefeb04be3812d1c7fc77427872be146))
+
+## [0.7.8](https://github.com/opentdf/java-sdk/compare/v0.7.7...v0.7.8) (2025-04-09)
+
+
+### Bug Fixes
+
+* deal with the extra layer of hex ([#236](https://github.com/opentdf/java-sdk/issues/236)) ([7e961c1](https://github.com/opentdf/java-sdk/commit/7e961c196c1708da18f0d9dd49d8427f3452f615))
+
+## [0.7.7](https://github.com/opentdf/java-sdk/compare/v0.7.6...v0.7.7) (2025-04-07)
+
+
+### Features
+
+* **sdk:** EC-wrapped key support for ZTDF ([#224](https://github.com/opentdf/java-sdk/issues/224)) ([d062691](https://github.com/opentdf/java-sdk/commit/d062691887320b16e4271a63de6bae3bb8645000))
+
+
+### Bug Fixes
+
+* **cmdline:** Disable failing encryptnano ecdsa ([#227](https://github.com/opentdf/java-sdk/issues/227)) ([80ca207](https://github.com/opentdf/java-sdk/commit/80ca207bf663f2797bfc02b3f9135e169ef5f66d))
+* **cmdline:** Enable ec-wrapped cfg ([#231](https://github.com/opentdf/java-sdk/issues/231)) ([ee39ed5](https://github.com/opentdf/java-sdk/commit/ee39ed573c40e66e028ea48c0e71885f37472a52))
+* if a version &lt; 4.3.0 is specified create an old-style TDF ([#234](https://github.com/opentdf/java-sdk/issues/234)) ([082a9e7](https://github.com/opentdf/java-sdk/commit/082a9e71657ff18f811b5f560aec0099ebe623b3))
+* **sdk:** Fixes nano ECDSA policy binding config ([#225](https://github.com/opentdf/java-sdk/issues/225)) ([f3e9fed](https://github.com/opentdf/java-sdk/commit/f3e9fedcc68c85625e4a1aab46600c046d65e244))
+* **sdk:** Remove temporary ec salt value ([#228](https://github.com/opentdf/java-sdk/issues/228)) ([0fe37c6](https://github.com/opentdf/java-sdk/commit/0fe37c6cd136c9a58708677ceac56488ec1c1e46))
+* **sdk:** Set ec-wrapped to new salt value ([#230](https://github.com/opentdf/java-sdk/issues/230)) ([d3be28e](https://github.com/opentdf/java-sdk/commit/d3be28ee1dcff63b8e146c01eaf7d797af122856))
+* **sdk:** Update version information ([#232](https://github.com/opentdf/java-sdk/issues/232)) ([f9eeb0d](https://github.com/opentdf/java-sdk/commit/f9eeb0da8b2cf07d1dea222bd16f7eac5a8de390))
+
 ## [0.7.6](https://github.com/opentdf/java-sdk/compare/v0.7.5...v0.7.6) (2025-02-06)
 
 

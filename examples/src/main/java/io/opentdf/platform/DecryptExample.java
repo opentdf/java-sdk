@@ -7,10 +7,13 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import com.nimbusds.jose.JOSEException;
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.text.ParseException;
+import java.util.concurrent.ExecutionException;
+
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
@@ -21,7 +24,7 @@ public class DecryptExample {
     public static void main(String[] args) throws IOException,
             InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException,
             BadPaddingException, InvalidKeyException, TDF.FailedToCreateGMAC,
-            JOSEException, ParseException, NoSuchAlgorithmException, DecoderException, org.apache.commons.cli.ParseException {
+            JOSEException, ParseException, NoSuchAlgorithmException, DecoderException, org.apache.commons.cli.ParseException, InterruptedException, ExecutionException, URISyntaxException {
 
         // Create Options object
         Options options = new Options();
@@ -53,7 +56,7 @@ public class DecryptExample {
 
         Path path = Paths.get("my.ciphertext");
         try (var in = FileChannel.open(path, StandardOpenOption.READ)) {
-            var reader = new TDF().loadTDF(in, sdk.getServices().kas(), Config.newTDFReaderConfig(Config.WithSessionKeyType(sessionKeyType)));
+            var reader = sdk.loadTDF(in, Config.newTDFReaderConfig(Config.WithSessionKeyType(sessionKeyType)));
             reader.readPayload(System.out);
         }
 

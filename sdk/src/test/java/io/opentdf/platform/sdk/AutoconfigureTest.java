@@ -6,14 +6,23 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.connectrpc.ResponseMessage;
+import com.connectrpc.UnaryBlockingCall;
 import io.opentdf.platform.policy.Attribute;
+import io.opentdf.platform.policy.AttributeRuleTypeEnum;
+import io.opentdf.platform.policy.KasPublicKey;
+import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
+import io.opentdf.platform.policy.KasPublicKeySet;
+import io.opentdf.platform.policy.KeyAccessServer;
+import io.opentdf.platform.policy.Namespace;
+import io.opentdf.platform.policy.PublicKey;
 import io.opentdf.platform.policy.Value;
-import io.opentdf.platform.policy.attributes.AttributesServiceGrpc;
+import io.opentdf.platform.policy.attributes.AttributesServiceClient;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
@@ -21,25 +30,16 @@ import io.opentdf.platform.sdk.Autoconfigure.Granter.AttributeBooleanExpression;
 import io.opentdf.platform.sdk.Autoconfigure.Granter.BooleanKeyExpression;
 import io.opentdf.platform.sdk.Autoconfigure.KeySplitStep;
 import io.opentdf.platform.sdk.Autoconfigure.Granter;
-import io.opentdf.platform.policy.Namespace;
-import io.opentdf.platform.policy.PublicKey;
-import io.opentdf.platform.policy.KeyAccessServer;
-import io.opentdf.platform.policy.AttributeRuleTypeEnum;
-import io.opentdf.platform.policy.KasPublicKey;
-import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
-import io.opentdf.platform.policy.KasPublicKeySet;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import com.google.common.util.concurrent.SettableFuture;
-
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -574,33 +574,36 @@ public class AutoconfigureTest {
         );
 
         for (ReasonerTestCase tc : testCases) {
-            assertDoesNotThrow(() -> {
-                AttributesServiceGrpc.AttributesServiceFutureStub attributeGrpcStub = mock(
-                        AttributesServiceGrpc.AttributesServiceFutureStub.class);
-                lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
-                        .thenAnswer(
-                                invocation -> {
-                                    GetAttributeValuesByFqnsResponse resp = getResponse(
-                                            (GetAttributeValuesByFqnsRequest) invocation.getArguments()[0]);
-                                    SettableFuture<GetAttributeValuesByFqnsResponse> future = SettableFuture.create();
-                                    future.set(resp); // Set the request as the future's result
-                                    return future;
-                                });
+            var attributeService = mock(AttributesServiceClient.class);
+            when(attributeService.getAttributeValuesByFqnsBlocking(any(), any())).thenAnswer(invocation -> {
+                var request = (GetAttributeValuesByFqnsRequest) invocation.getArgument(0);
+                return new UnaryBlockingCall<GetAttributeValuesByFqnsResponse>() {
+                    @Override
+                    public ResponseMessage<GetAttributeValuesByFqnsResponse> execute() {
+                        return new ResponseMessage.Success<>(getResponse(request), Collections.emptyMap(), Collections.emptyMap());
+                    }
 
-                Granter reasoner = Autoconfigure.newGranterFromService(attributeGrpcStub, new KASKeyCache(),
-                        tc.getPolicy().toArray(new AttributeValueFQN[0]));
-                assertThat(reasoner).isNotNull();
-
-                var wrapper = new Object() {
-                    int i = 0;
+                    @Override
+                    public void cancel() {
+                        // not really calling anything
+                    }
                 };
-                List<KeySplitStep> plan = reasoner.plan(tc.getDefaults(), () -> {
-                    return String.valueOf(wrapper.i++ + 1);
-                }
-
-                );
-                assertThat(plan).hasSameElementsAs(tc.getPlan());
             });
+
+
+            Granter reasoner = Autoconfigure.newGranterFromService(attributeService, new KASKeyCache(),
+                    tc.getPolicy().toArray(new AttributeValueFQN[0]));
+            assertThat(reasoner).isNotNull();
+
+            var wrapper = new Object() {
+                int i = 0;
+            };
+            List<KeySplitStep> plan = reasoner.plan(tc.getDefaults(), () -> {
+                        return String.valueOf(wrapper.i++ + 1);
+                    }
+
+            );
+            assertThat(plan).hasSameElementsAs(tc.getPlan());
         }
     }
 
@@ -869,7 +872,7 @@ public class AutoconfigureTest {
     }
 
     @Test
-    void testKeyCacheFromGrants() throws InterruptedException, ExecutionException {
+    void testKeyCacheFromGrants() {
         // Create the KasPublicKey object
         KasPublicKey kasPublicKey1 = KasPublicKey.newBuilder()
                 .setAlg(KasPublicKeyAlgEnum.KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1)
@@ -896,21 +899,23 @@ public class AutoconfigureTest {
                 .setUri("https://example.com/kas")
                 .build();
 
-        AttributesServiceGrpc.AttributesServiceFutureStub attributeGrpcStub = mock(
-                AttributesServiceGrpc.AttributesServiceFutureStub.class);
-        lenient().when(attributeGrpcStub.getAttributeValuesByFqns(any(GetAttributeValuesByFqnsRequest.class)))
-                .thenAnswer(
-                        invocation -> {
-                            GetAttributeValuesByFqnsResponse resp = getResponseWithGrants(
-                                    (GetAttributeValuesByFqnsRequest) invocation.getArguments()[0], List.of(kas1));
-                            SettableFuture<GetAttributeValuesByFqnsResponse> future = SettableFuture.create();
-                            future.set(resp); // Set the request as the future's result
-                            return future;
-                        });
+        AttributesServiceClient attributesServiceClient = mock(AttributesServiceClient.class);
+        when(attributesServiceClient.getAttributeValuesByFqnsBlocking(any(), any())).thenAnswer(invocation -> {
+            var request = (GetAttributeValuesByFqnsRequest)invocation.getArgument(0);
+            return new UnaryBlockingCall<GetAttributeValuesByFqnsResponse>(){
+                @Override
+                public ResponseMessage<GetAttributeValuesByFqnsResponse> execute() {
+                    return new ResponseMessage.Success<>(getResponseWithGrants(request, List.of(kas1)), Collections.emptyMap(), Collections.emptyMap());
+                }
+                @Override public void cancel() {
+                    // not really calling anything
+                }
+            };
+        });
 
         KASKeyCache keyCache = new KASKeyCache();
 
-        Granter reasoner = Autoconfigure.newGranterFromService(attributeGrpcStub, keyCache,
+        Granter reasoner = Autoconfigure.newGranterFromService(attributesServiceClient, keyCache,
                 List.of(clsS, rel2gbr, rel2usa, n2kHCS, n2kSI).toArray(new AttributeValueFQN[0]));
         assertThat(reasoner).isNotNull();
 
@@ -928,7 +933,6 @@ public class AutoconfigureTest {
         assertEquals("test-kid-2", storedKASInfo2.KID);
         assertEquals("rsa:2048", storedKASInfo2.Algorithm);
         assertEquals("public-key-pem-2", storedKASInfo2.PublicKey);
-
     }
 
 }

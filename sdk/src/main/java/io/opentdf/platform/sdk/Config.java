@@ -1,15 +1,17 @@
 package io.opentdf.platform.sdk;
 
+import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
 import io.opentdf.platform.sdk.nanotdf.ECCMode;
 import io.opentdf.platform.sdk.nanotdf.Header;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import io.opentdf.platform.sdk.nanotdf.SymmetricAndPayloadConfig;
 
-import io.opentdf.platform.policy.Value;
-
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.*;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * Configuration class for setting various configurations related to TDF.
@@ -98,6 +100,8 @@ public class Config {
         AssertionVerificationKeys assertionVerificationKeys = new AssertionVerificationKeys();
         boolean disableAssertionVerification;
         KeyType sessionKeyType;
+        Set<String> kasAllowlist;
+        boolean ignoreKasAllowlist;
     }
 
     @SafeVarargs
@@ -105,6 +109,7 @@ public class Config {
         TDFReaderConfig config = new TDFReaderConfig();
         config.disableAssertionVerification = false;
         config.sessionKeyType = KeyType.RSA2048Key;
+        config.kasAllowlist = new HashSet<>();
         for (Consumer<TDFReaderConfig> option : options) {
             option.accept(config);
         }
@@ -123,6 +128,23 @@ public class Config {
     public static Consumer<TDFReaderConfig> WithSessionKeyType(KeyType keyType) {
         return (TDFReaderConfig config) -> config.sessionKeyType = keyType;
     }
+    public static Consumer<TDFReaderConfig> WithKasAllowlist(String... kasAllowlist) {
+        return (TDFReaderConfig config) -> config.kasAllowlist = Arrays
+                .stream(kasAllowlist)
+                .map(Config::getKasAddress).collect(Collectors.toSet());
+    }
+
+    public static Consumer<TDFReaderConfig> withKasAllowlist(Set<String> kasAllowlist) {
+        return (TDFReaderConfig config) -> {
+            config.kasAllowlist = kasAllowlist;
+        };
+    }
+
+    public static Consumer<TDFReaderConfig> WithIgnoreKasAllowlist(boolean ignore) {
+        return (TDFReaderConfig config) -> config.ignoreKasAllowlist = ignore;
+    }
+
+
     public static class TDFConfig {
         public Boolean autoconfigure;
         public int defaultSegmentSize;
@@ -140,6 +162,8 @@ public class Config {
         public String mimeType;
         public List<Autoconfigure.KeySplitStep> splitPlan;
         public KeyType wrappingKeyType;
+        public boolean hexEncodeRootAndSegmentHashes;
+        public boolean renderVersionInfoInManifest;
 
         public TDFConfig() {
             this.autoconfigure = true;
@@ -154,6 +178,8 @@ public class Config {
             this.mimeType = DEFAULT_MIME_TYPE;
             this.splitPlan = new ArrayList<>();
             this.wrappingKeyType = KeyType.RSA2048Key;
+            this.hexEncodeRootAndSegmentHashes = false;
+            this.renderVersionInfoInManifest = true;
         }
     }
 
@@ -251,6 +277,18 @@ public class Config {
         };
     }
 
+    // specify TDF version for TDF creation to target. Versions less than 4.3.0 will add a
+    // layer of hex encoding to their segment hashes and will not include version information
+    // in their manifests.
+    public static Consumer<TDFConfig> withTargetMode(String targetVersion) {
+        Version version = new Version(targetVersion == null ? "0.0.0" : targetVersion);
+        return (TDFConfig config) -> {
+            var legacyTDF = version.compareTo(new Version("4.3.0")) < 0;
+            config.renderVersionInfoInManifest = !legacyTDF;
+            config.hexEncodeRootAndSegmentHashes = legacyTDF;
+        };
+    }
+
     public static Consumer<TDFConfig> WithWrappingKeyAlg(KeyType    keyType) {
         return (TDFConfig config) -> config.wrappingKeyType = keyType;
     }
@@ -338,6 +376,38 @@ public class Config {
         return (NanoTDFConfig config) -> config.eccMode.setECDSABinding(enable);
     }
 
+    public static class NanoTDFReaderConfig {
+        Set<String> kasAllowlist;
+        boolean ignoreKasAllowlist;
+    }
+
+    public static NanoTDFReaderConfig newNanoTDFReaderConfig(Consumer<NanoTDFReaderConfig>... options) {
+        NanoTDFReaderConfig config = new NanoTDFReaderConfig();
+        for (Consumer<NanoTDFReaderConfig> option : options) {
+            option.accept(config);
+        }
+        return config;
+    }
+
+    public static Consumer<NanoTDFReaderConfig> WithNanoKasAllowlist(String... kasAllowlist) {
+        return (NanoTDFReaderConfig config) -> {
+            // apply getKasAddress to each kasAllowlist entry and add to hashset
+            config.kasAllowlist = Arrays.stream(kasAllowlist)
+                    .map(Config::getKasAddress)
+                    .collect(Collectors.toSet());
+        };
+    }
+
+    public static Consumer<NanoTDFReaderConfig> withNanoKasAllowlist(Set<String> kasAllowlist) {
+        return (NanoTDFReaderConfig config) -> {
+            config.kasAllowlist = kasAllowlist;
+        };
+    }
+
+    public static Consumer<NanoTDFReaderConfig> WithNanoIgnoreKasAllowlist(boolean ignore) {
+        return (NanoTDFReaderConfig config) -> config.ignoreKasAllowlist = ignore;
+    }
+
     public static class HeaderInfo {
         private final Header header;
         private final AesGcm key;
@@ -373,7 +443,7 @@ public class Config {
             this.useCollection = useCollection;
         }
 
-        public synchronized HeaderInfo getHeaderInfo() throws InterruptedException {
+        public synchronized HeaderInfo getHeaderInfo() throws SDKException {
             int iteration = iterationCounter;
             iterationCounter = (iterationCounter + 1) % MAX_COLLECTION_ITERATION;
 
@@ -382,7 +452,12 @@ public class Config {
                 return null;
             }
             while (!updatedHeaderInfo) {
-                this.wait();
+                try {
+                    this.wait();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new SDKException("interrupted while waiting for header info", e);
+                }
             }
             return new HeaderInfo(headerInfo.getHeader(), headerInfo.getKey(), iteration);
         }
@@ -391,6 +466,39 @@ public class Config {
             this.headerInfo = headerInfo;
             updatedHeaderInfo = true;
             this.notifyAll();
+        }
+    }
+
+    public static String getKasAddress(String kasURL) throws SDKException {
+        // Prepend "https://" if no scheme is provided
+        if (!kasURL.contains("://")) {
+            kasURL = "https://" + kasURL;
+        }
+
+        URI uri;
+        try {
+            uri = new URI(kasURL);
+        } catch (URISyntaxException e) {
+            throw new SDKException("error constructing KAS url", e);
+        }
+
+        // Default to "https" if no scheme is provided
+        String scheme = uri.getScheme();
+        if (scheme == null) {
+            scheme = "https";
+        }
+
+        // Default to port 443 if no port is provided
+        int port = uri.getPort();
+        if (port == -1) {
+            port = 443;
+        }
+
+        // Reconstruct the URL with only the scheme, host, and port
+        try {
+            return new URI(scheme, null, uri.getHost(), port, null, null, null).toString();
+        } catch (URISyntaxException e) {
+            throw new SDKException("error creating KAS URL from host and port", e);
         }
     }
 }

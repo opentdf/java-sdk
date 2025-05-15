@@ -1,9 +1,11 @@
 package io.opentdf.platform;
+import com.connectrpc.ResponseMessageKt;
+import io.opentdf.platform.policy.namespaces.CreateNamespaceRequest;
+import io.opentdf.platform.policy.namespaces.CreateNamespaceResponse;
 import io.opentdf.platform.sdk.*;
 
+import java.util.Collections;
 import java.util.concurrent.ExecutionException;
-
-import io.opentdf.platform.policy.namespaces.*;
 
 public class CreateNamespace {
     public static void main(String[] args) throws ExecutionException, InterruptedException{
@@ -19,7 +21,7 @@ public class CreateNamespace {
 
         CreateNamespaceRequest request = CreateNamespaceRequest.newBuilder().setName("mynamespace.com").build();
 
-        CreateNamespaceResponse resp = sdk.getServices().namespaces().createNamespace(request).get();
+        CreateNamespaceResponse resp = ResponseMessageKt.getOrThrow(sdk.getServices().namespaces().createNamespaceBlocking(request, Collections.emptyMap()).execute());
 
         System.out.println(resp.getNamespace().getName());
         

@@ -1,36 +1,52 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.ResponseMessage;
+import com.connectrpc.UnaryBlockingCall;
 import com.nimbusds.jose.JOSEException;
+import io.opentdf.platform.policy.KeyAccessServer;
+import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
+import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
+import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.TDF.Reader;
 import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
-import org.bouncycastle.jce.interfaces.ECPrivateKey;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import javax.annotation.Nonnull;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class TDFTest {
+    protected static KeyAccessServerRegistryServiceClient kasRegistryService;
+    protected static String platformUrl = "http://localhost:8080";
+
     protected static SDK.KAS kas = new SDK.KAS() {
         @Override
         public void close() {
@@ -38,7 +54,14 @@ public class TDFTest {
 
         @Override
         public Config.KASInfo getPublicKey(Config.KASInfo kasInfo) {
-            int index = Integer.parseInt(kasInfo.URL);
+            // handle platform url
+            int index;
+            // if the kasinfo url contains the platform url, remove it
+            if (kasInfo.URL.startsWith(platformUrl)) {
+                index = Integer.parseInt(kasInfo.URL.replaceFirst("^" + Pattern.quote(platformUrl) + "/kas", ""));
+            } else {
+                index = Integer.parseInt(kasInfo.URL.replaceFirst("^https://example.com/kas", ""));
+            }
             var kiCopy = new Config.KASInfo();
             kiCopy.KID = "r1";
             kiCopy.PublicKey = CryptoUtils.getPublicKeyPEM(keypairs.get(index).getPublic());
@@ -50,7 +73,13 @@ public class TDFTest {
         public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy, KeyType sessionKeyType) {
 
             try {
-                int index = Integer.parseInt(keyAccess.url);
+                int index;
+                // if the keyAccess.url contains the platform url, remove it
+                if (keyAccess.url.startsWith(platformUrl)) {
+                    index = Integer.parseInt(keyAccess.url.replaceFirst("^" + Pattern.quote(platformUrl) + "/kas", ""));
+                } else {
+                    index = Integer.parseInt(keyAccess.url.replaceFirst("^https://example.com/kas", ""));
+                }
                 var bytes = Base64.getDecoder().decode(keyAccess.wrappedKey);
                 if (sessionKeyType.isEc()) {
                     var  kasPrivateKey = CryptoUtils.getPrivateKeyPEM(keypairs.get(index).getPrivate());
@@ -92,7 +121,7 @@ public class TDFTest {
     private static ArrayList<KeyPair> keypairs = new ArrayList<>();
 
     @BeforeAll
-    static void createKeypairs() {
+    static void setupKeyPairsAndMocks() {
         for (int i = 0; i < 2 + new Random().nextInt(5); i++) {
             if (i % 2 == 0) {
                 keypairs.add(CryptoUtils.generateRSAKeypair());
@@ -100,6 +129,34 @@ public class TDFTest {
                 keypairs.add(CryptoUtils.generateECKeypair(KeyType.EC256Key.getCurveName()));
             }
         }
+
+        kasRegistryService = mock(KeyAccessServerRegistryServiceClient.class);
+        List<KeyAccessServer> kasRegEntries = new ArrayList<>();
+        for (Config.KASInfo kasInfo : getRSAKASInfos()) {
+            kasRegEntries.add(KeyAccessServer.newBuilder()
+                        .setUri(kasInfo.URL).build());
+        }
+        for (Config.KASInfo kasInfo : getECKASInfos()) {
+            kasRegEntries.add(KeyAccessServer.newBuilder()
+                        .setUri(kasInfo.URL).build());
+        }
+        ListKeyAccessServersResponse mockResponse = ListKeyAccessServersResponse.newBuilder()
+                .addAllKeyAccessServers(kasRegEntries)
+                .build();
+
+        // Stub the listKeyAccessServers method
+        when(kasRegistryService.listKeyAccessServersBlocking(any(ListKeyAccessServersRequest.class), any()))
+                .thenReturn(new UnaryBlockingCall<>() {
+                    @Override
+                    public ResponseMessage<ListKeyAccessServersResponse> execute() {
+                        return new ResponseMessage.Success<>(mockResponse, Collections.emptyMap(), Collections.emptyMap());
+                    }
+
+                    @Override
+                    public void cancel() {
+                        // this never happens in tests
+                    }
+                });
     }
 
     @Test
@@ -158,12 +215,11 @@ public class TDFTest {
             InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
             ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
-            TDF tdf = new TDF();
-            tdf.createTDF(plainTextInputStream, tdfOutputStream, configPair.tdfConfig, kas, null);
+            TDF tdf = new TDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build());
+            tdf.createTDF(plainTextInputStream, tdfOutputStream, configPair.tdfConfig);
 
             var unwrappedData = new ByteArrayOutputStream();
-            var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas,
-                    configPair.tdfReaderConfig);
+            var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), configPair.tdfReaderConfig, platformUrl);
             assertThat(reader.getManifest().payload.mimeType).isEqualTo("application/octet-stream");
 
             reader.readPayload(unwrappedData);
@@ -197,7 +253,7 @@ public class TDFTest {
                 keypair.getPrivate());
 
         var rsaKasInfo = new Config.KASInfo();
-        rsaKasInfo.URL = Integer.toString(0);
+        rsaKasInfo.URL = "https://example.com/kas"+ 0;
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
@@ -208,8 +264,8 @@ public class TDFTest {
         InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
-        TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, null);
+        TDF tdf = new TDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build());
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
 
         var assertionVerificationKeys = new Config.AssertionVerificationKeys();
         assertionVerificationKeys.keys.put(assertion1Id,
@@ -218,8 +274,7 @@ public class TDFTest {
         var unwrappedData = new ByteArrayOutputStream();
         Config.TDFReaderConfig readerConfig = Config.newTDFReaderConfig(
                 Config.withAssertionVerificationKeys(assertionVerificationKeys));
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas,
-                readerConfig);
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), readerConfig, platformUrl);
         reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
@@ -252,24 +307,25 @@ public class TDFTest {
         InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
-        TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, null);
+        TDF tdf = new TDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build());
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
 
         var assertionVerificationKeys = new Config.AssertionVerificationKeys();
         assertionVerificationKeys.keys.put(assertion1Id,
                 new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256, keypair.getPublic()));
 
         var unwrappedData = new ByteArrayOutputStream();
-        assertThrows(JOSEException.class, () -> {
-            tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas,
-                    Config.newTDFReaderConfig());
+        var dataToUnwrap = new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray());
+        var emptyConfig= Config.newTDFReaderConfig();
+        var thrown = assertThrows(SDKException.class, () -> {
+            tdf.loadTDF(dataToUnwrap, emptyConfig, platformUrl);
         });
+        assertThat(thrown.getCause()).isInstanceOf(JOSEException.class);
 
         //  try with assertion verification disabled and not passing the assertion verification keys
         Config.TDFReaderConfig readerConfig = Config.newTDFReaderConfig(
                 Config.withDisableAssertionVerification(true));
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas,
-                readerConfig);
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), readerConfig, platformUrl);
         reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
@@ -301,7 +357,7 @@ public class TDFTest {
         assertionConfig2.statement.value = "{\"uuid\":\"f74efb60-4a9a-11ef-a6f1-8ee1a61c148a\",\"body\":{\"dataAttributes\":null,\"dissem\":null}}";
 
         var rsaKasInfo = new Config.KASInfo();
-        rsaKasInfo.URL = Integer.toString(0);
+        rsaKasInfo.URL = "https://example.com/kas"+ 0;
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
@@ -312,12 +368,11 @@ public class TDFTest {
         InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
-        TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, null);
+        TDF tdf = new TDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build());
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
 
         var unwrappedData = new ByteArrayOutputStream();
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()),
-                kas, Config.newTDFReaderConfig());
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), Config.newTDFReaderConfig(), platformUrl);
         reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
@@ -365,7 +420,7 @@ public class TDFTest {
         assertionConfig1.signingKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, key);
 
         var rsaKasInfo = new Config.KASInfo();
-        rsaKasInfo.URL = Integer.toString(0);
+        rsaKasInfo.URL = "https://example.com/kas"+ 0;
 
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
@@ -376,8 +431,8 @@ public class TDFTest {
         InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
-        TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, null);
+        TDF tdf = new TDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build());
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
 
         byte[] notkey = new byte[32];
         secureRandom.nextBytes(notkey);
@@ -387,10 +442,8 @@ public class TDFTest {
         Config.TDFReaderConfig readerConfig = Config.newTDFReaderConfig(
             Config.withAssertionVerificationKeys(assertionVerificationKeys));
 
-        var unwrappedData = new ByteArrayOutputStream();
-        Reader reader;
         try {
-            reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas, readerConfig);
+            tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), readerConfig, platformUrl);
             throw new RuntimeException("assertion verify key error thrown");
 
         } catch (SDKException e) {
@@ -412,10 +465,10 @@ public class TDFTest {
         random.nextBytes(data);
         var plainTextInputStream = new ByteArrayInputStream(data);
         var tdfOutputStream = new ByteArrayOutputStream();
-        var tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, null);
+        var tdf = new TDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build());
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
         var unwrappedData = new ByteArrayOutputStream();
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), platformUrl);
         reader.readPayload(unwrappedData);
 
         assertThat(unwrappedData.toByteArray())
@@ -425,7 +478,7 @@ public class TDFTest {
     }
 
     @Test
-    public void testCreatingTooLargeTDF() throws Exception {
+    public void testCreatingTooLargeTDF() {
         var random = new Random();
         var maxSize = random.nextInt(1024);
         var numReturned = new AtomicInteger(0);
@@ -459,13 +512,13 @@ public class TDFTest {
             }
         };
 
-        var tdf = new TDF(maxSize);
+        var tdf = new TDF(maxSize, new FakeServicesBuilder().setKas(kas).build());
         var tdfConfig = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
                 Config.withKasInformation(getRSAKASInfos()),
                 Config.withSegmentSize(Config.MIN_SEGMENT_SIZE));
         assertThrows(TDF.DataSizeNotSupported.class,
-                () -> tdf.createTDF(is, os, tdfConfig, kas, null),
+                () -> tdf.createTDF(is, os, tdfConfig),
                 "didn't throw an exception when we created TDF that was too large");
         assertThat(numReturned.get())
                 .withFailMessage("test returned the wrong number of bytes")
@@ -485,11 +538,159 @@ public class TDFTest {
         InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
         ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
-        TDF tdf = new TDF();
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config, kas, null);
+        TDF tdf = new TDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build());
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
 
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), kas);
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), platformUrl);
         assertThat(reader.getManifest().payload.mimeType).isEqualTo(mimeType);
+    }
+
+    @Test
+    void legacyTDFRoundTrips() throws IOException, NoSuchAlgorithmException {
+        final String mimeType = "application/pdf";
+        var assertionConfig1 = new AssertionConfig();
+        assertionConfig1.id = "assertion1";
+        assertionConfig1.type = AssertionConfig.Type.BaseAssertion;
+        assertionConfig1.scope = AssertionConfig.Scope.TrustedDataObj;
+        assertionConfig1.appliesToState = AssertionConfig.AppliesToState.Unencrypted;
+        assertionConfig1.statement = new AssertionConfig.Statement();
+        assertionConfig1.statement.format = "base64binary";
+        assertionConfig1.statement.schema = "text";
+        assertionConfig1.statement.value = "ICAgIDxlZGoOkVkaD4=";
+
+        Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
+                Config.withKasInformation(getRSAKASInfos()),
+                Config.withTargetMode("4.2.1"),
+                Config.withAssertionConfig(assertionConfig1),
+                Config.withMimeType(mimeType));
+
+        byte[] data = new byte[129];
+        new Random().nextBytes(data);
+        InputStream plainTextInputStream = new ByteArrayInputStream(data);
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+
+        TDF tdf = new TDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build());
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
+
+        var dataOutputStream = new ByteArrayOutputStream();
+
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), platformUrl);
+        var integrityInformation = reader.getManifest().encryptionInformation.integrityInformation;
+        assertThat(reader.getManifest().tdfVersion).isNull();
+        var decodedSignature = Base64.getDecoder().decode(integrityInformation.rootSignature.signature);
+        for (var b: decodedSignature) {
+            assertThat(isHexChar(b))
+                    .withFailMessage("non-hex byte in signature: " + b)
+                    .isTrue();
+        }
+        for (var s: integrityInformation.segments) {
+            var decodedSegmentSignature = Base64.getDecoder().decode(s.hash);
+            for (var b: decodedSegmentSignature) {
+                assertThat(isHexChar(b))
+                        .withFailMessage("non-hex byte in segment signature: " + b)
+                        .isTrue();
+            }
+        }
+        reader.readPayload(dataOutputStream);
+        assertThat(reader.getManifest().payload.mimeType).isEqualTo(mimeType);
+        assertArrayEquals(data, dataOutputStream.toByteArray(), "extracted data does not match");
+        var manifest = reader.getManifest();
+        var assertions = manifest.assertions;
+        assertThat(assertions.size()).isEqualTo(1);
+        var assertion = assertions.get(0);
+        assertThat(assertion.id).isEqualTo("assertion1");
+        assertThat(assertion.statement.format).isEqualTo("base64binary");
+        assertThat(assertion.statement.schema).isEqualTo("text");
+        assertThat(assertion.statement.value).isEqualTo("ICAgIDxlZGoOkVkaD4=");
+        assertThat(assertion.type).isEqualTo(AssertionConfig.Type.BaseAssertion.toString());
+    }
+
+    @Test
+    void testKasAllowlist() throws Exception {
+
+        KeyAccessServerRegistryServiceClient kasRegistryServiceNoUrl = mock(KeyAccessServerRegistryServiceClient.class);
+        List<KeyAccessServer> kasRegEntries = new ArrayList<>();
+        kasRegEntries.add(KeyAccessServer.newBuilder()
+        .setUri("http://example.com/kas0").build());
+
+        ListKeyAccessServersResponse mockResponse = ListKeyAccessServersResponse.newBuilder()
+                .addAllKeyAccessServers(kasRegEntries)
+                .build();
+
+        // Stub the listKeyAccessServers method
+        when(kasRegistryServiceNoUrl.listKeyAccessServersBlocking(any(ListKeyAccessServersRequest.class), any()))
+                .thenReturn(new UnaryBlockingCall<>() {
+                                @Override
+                                public ResponseMessage<ListKeyAccessServersResponse> execute() {
+                                    return new ResponseMessage.Success<>(mockResponse, Collections.emptyMap(), Collections.emptyMap());
+                                }
+
+                                @Override
+                                public void cancel() {
+                                    // we never do this during tests
+                                }
+                            }
+                );
+
+        var rsaKasInfo = new Config.KASInfo();
+        rsaKasInfo.URL = "https://example.com/kas"+Integer.toString(0);
+
+        Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
+                Config.withKasInformation(rsaKasInfo));
+
+        String plainText = "this is extremely sensitive stuff!!!";
+        InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+
+        TDF tdf = new TDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryServiceNoUrl).build());
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
+
+        var unwrappedData = new ByteArrayOutputStream();
+
+        // should throw error because the kas url is not in the allowlist
+        try {
+            tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), Config.newTDFReaderConfig(), platformUrl);
+            throw new RuntimeException("expected allowlist error to be thrown");
+        } catch (Exception e) {
+            assertThat(e).hasMessageContaining("KasAllowlist");
+        }
+
+        // with custom allowlist should succeed
+        Config.TDFReaderConfig readerConfig = Config.newTDFReaderConfig(
+            Config.WithKasAllowlist("https://example.com"));
+        tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), readerConfig, platformUrl);
+
+        // with ignore allowlist should succeed
+        readerConfig = Config.newTDFReaderConfig(
+            Config.WithIgnoreKasAllowlist(true));
+        Reader reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), readerConfig, platformUrl);
+        reader.readPayload(unwrappedData);
+
+        assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
+                .withFailMessage("extracted data does not match")
+                .isEqualTo(plainText);
+
+
+        // use the platform url as kas url, should succeed
+        var platformKasInfo = new Config.KASInfo();
+        platformKasInfo.URL = platformUrl+"/kas"+Integer.toString(0);
+        config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
+                Config.withKasInformation(platformKasInfo));
+        plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
+        tdfOutputStream = new ByteArrayOutputStream();
+        tdf = new TDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryServiceNoUrl).build());
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
+
+        unwrappedData = new ByteArrayOutputStream();
+        reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), Config.newTDFReaderConfig(), platformUrl);
+        reader.readPayload(unwrappedData);
+
+        assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
+                .withFailMessage("extracted data does not match")
+                .isEqualTo(plainText);
     }
 
     @Nonnull
@@ -498,7 +699,7 @@ public class TDFTest {
         for (int i = 0; i < keypairs.size(); i++) {
             if (filter.test(i)) {
                 var kasInfo = new Config.KASInfo();
-                kasInfo.URL = Integer.toString(i);
+                kasInfo.URL = "https://example.com/kas"+Integer.toString(i);
                 kasInfo.PublicKey = null;
                 kasInfos.add(kasInfo);
             }
@@ -514,5 +715,9 @@ public class TDFTest {
     @Nonnull
     private static Config.KASInfo[] getECKASInfos() {
         return getKASInfos(i -> i % 2 != 0);
+    }
+
+    private static boolean isHexChar(byte b) {
+        return (b >= 'a' && b <= 'f') || (b >= '0' && b <= '9');
     }
 }
