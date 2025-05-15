@@ -2,11 +2,17 @@ package io.opentdf.platform.sdk;
 
 import com.connectrpc.Interceptor;
 import io.opentdf.platform.authorization.AuthorizationServiceClient;
+import io.opentdf.platform.authorization.AuthorizationServiceClientInterface;
 import io.opentdf.platform.policy.attributes.AttributesServiceClient;
+import io.opentdf.platform.policy.attributes.AttributesServiceClientInterface;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
+import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClientInterface;
 import io.opentdf.platform.policy.namespaces.NamespaceServiceClient;
+import io.opentdf.platform.policy.namespaces.NamespaceServiceClientInterface;
 import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceClient;
+import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceClientInterface;
 import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClient;
+import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClientInterface;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 
 import javax.net.ssl.TrustManager;
@@ -61,17 +67,17 @@ public class SDK implements AutoCloseable {
      * It extends the AutoCloseable interface, allowing for the release of resources when no longer needed.
      */
     public interface Services extends AutoCloseable {
-        AttributesServiceClient attributes();
+        AttributesServiceClientInterface attributes();
 
-        NamespaceServiceClient namespaces();
+        NamespaceServiceClientInterface namespaces();
 
-        SubjectMappingServiceClient subjectMappings();
+        SubjectMappingServiceClientInterface subjectMappings();
 
-        ResourceMappingServiceClient resourceMappings();
+        ResourceMappingServiceClientInterface resourceMappings();
 
-        AuthorizationServiceClient authorization();
+        AuthorizationServiceClientInterface authorization();
 
-        KeyAccessServerRegistryServiceClient kasRegistry();
+        KeyAccessServerRegistryServiceClientInterface kasRegistry();
 
         KAS kas();
     }
