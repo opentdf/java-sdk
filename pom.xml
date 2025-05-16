@@ -369,8 +369,9 @@
                                 <id>prepare-agent</id>
                                 <goals>
                                     <goal>prepare-agent</goal>
-                                    <goal>report-aggregate</goal>
                                 </goals>
+                                <configuration>
+                                </configuration>
                             </execution>
                             <execution>
                                 <id>report</id>
@@ -378,12 +379,6 @@
                                 <goals>
                                     <goal>report</goal>
                                 </goals>
-                                <configuration>
-                                    <dataFile>${project.parent.basedir}/target/jacoco.exec</dataFile>
-                                    <formats>
-                                        <format>XML</format>
-                                    </formats>
-                                </configuration>
                             </execution>
                             <execution>
                                 <id>post-test-report</id>
@@ -391,6 +386,11 @@
                                 <goals>
                                     <goal>report</goal>
                                 </goals>
+                                <configuration>
+                                    <formats>
+                                        <format>XML</format>
+                                    </formats>
+                                </configuration>
                             </execution>
                         </executions>
                     </plugin>
