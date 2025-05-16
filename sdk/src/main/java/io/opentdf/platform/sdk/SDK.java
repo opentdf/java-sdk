@@ -1,17 +1,12 @@
 package io.opentdf.platform.sdk;
 
 import com.connectrpc.Interceptor;
-import io.opentdf.platform.authorization.AuthorizationServiceClient;
+import com.connectrpc.impl.ProtocolClient;
 import io.opentdf.platform.authorization.AuthorizationServiceClientInterface;
-import io.opentdf.platform.policy.attributes.AttributesServiceClient;
 import io.opentdf.platform.policy.attributes.AttributesServiceClientInterface;
-import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClientInterface;
-import io.opentdf.platform.policy.namespaces.NamespaceServiceClient;
 import io.opentdf.platform.policy.namespaces.NamespaceServiceClientInterface;
-import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceClient;
 import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceClientInterface;
-import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClient;
 import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClientInterface;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 
@@ -34,6 +29,7 @@ public class SDK implements AutoCloseable {
     private final TrustManager trustManager;
     private final Interceptor authInterceptor;
     private final String platformUrl;
+    private final ProtocolClient platformServicesClient;
 
     /**
      * Closes the SDK, including its associated services.
@@ -90,11 +86,12 @@ public class SDK implements AutoCloseable {
         return Optional.ofNullable(authInterceptor);
     }
 
-    SDK(Services services, TrustManager trustManager, Interceptor authInterceptor, String platformUrl) {
+    SDK(Services services, TrustManager trustManager, Interceptor authInterceptor, ProtocolClient platformServicesClient, String platformUrl) {
         this.platformUrl = platformUrl;
         this.services = services;
         this.trustManager = trustManager;
         this.authInterceptor = authInterceptor;
+        this.platformServicesClient = platformServicesClient;
     }
 
     public Services getServices() {
@@ -119,6 +116,10 @@ public class SDK implements AutoCloseable {
     public void readNanoTDF(ByteBuffer nanoTDF, OutputStream out, Config.NanoTDFReaderConfig config) throws SDKException, IOException {
         var ntdf = new NanoTDF(services);
         ntdf.readNanoTDF(nanoTDF, out, config, platformUrl);
+    }
+
+    public ProtocolClient getPlatformServicesClient() {
+        return this.platformServicesClient;
     }
 
     /**
