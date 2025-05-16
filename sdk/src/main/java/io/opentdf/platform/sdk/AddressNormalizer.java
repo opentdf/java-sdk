@@ -9,9 +9,6 @@ import java.net.URISyntaxException;
 class AddressNormalizer {
     private static final Logger logger = LoggerFactory.getLogger(AddressNormalizer.class);
 
-    private AddressNormalizer(){
-    }
-
     static String normalizeAddress(String urlString, boolean usePlaintext) {
         URI uri;
         try {
@@ -45,7 +42,7 @@ class AddressNormalizer {
         }
     }
 
-    public void printThings() {
+    public static void printThings() {
         System.out.println("here is some more code");
     }
 }
