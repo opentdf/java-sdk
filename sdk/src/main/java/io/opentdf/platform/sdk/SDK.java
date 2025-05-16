@@ -1,7 +1,6 @@
 package io.opentdf.platform.sdk;
 
 import com.connectrpc.Interceptor;
-import com.connectrpc.impl.ProtocolClient;
 import io.opentdf.platform.authorization.AuthorizationServiceClient;
 import io.opentdf.platform.authorization.AuthorizationServiceClientInterface;
 import io.opentdf.platform.policy.attributes.AttributesServiceClient;
@@ -34,7 +33,6 @@ public class SDK implements AutoCloseable {
     private final Services services;
     private final TrustManager trustManager;
     private final Interceptor authInterceptor;
-    private final ProtocolClient protocolClient;
     private final String platformUrl;
 
     /**
@@ -92,12 +90,7 @@ public class SDK implements AutoCloseable {
         return Optional.ofNullable(authInterceptor);
     }
 
-    public ProtocolClient getProtocolClient() {
-        return protocolClient;
-    }
-
-    SDK(Services services, TrustManager trustManager, Interceptor authInterceptor, ProtocolClient protocolClient, String platformUrl) {
-        this.protocolClient = protocolClient;
+    SDK(Services services, TrustManager trustManager, Interceptor authInterceptor, String platformUrl) {
         this.platformUrl = platformUrl;
         this.services = services;
         this.trustManager = trustManager;
