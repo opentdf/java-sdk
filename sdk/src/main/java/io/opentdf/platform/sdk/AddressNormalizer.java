@@ -9,9 +9,6 @@ import java.net.URISyntaxException;
 class AddressNormalizer {
     private static final Logger logger = LoggerFactory.getLogger(AddressNormalizer.class);
 
-    private AddressNormalizer(){
-    }
-
     static String normalizeAddress(String urlString, boolean usePlaintext) {
         URI uri;
         try {
@@ -43,5 +40,9 @@ class AddressNormalizer {
         } catch (URISyntaxException e) {
             throw new SDKException("error creating KAS address", e);
         }
+    }
+
+    public static void printThings() {
+        System.out.println("here is some more code");
     }
 }
