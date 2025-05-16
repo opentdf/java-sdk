@@ -23,7 +23,6 @@
         <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
         <sonar.dynamicAnalysis>reuseReports</sonar.dynamicAnalysis>
         <sonar.language>java</sonar.language>
-        <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
     </properties>
     <licenses>
         <license>
@@ -365,12 +364,31 @@
                         <groupId>org.jacoco</groupId>
                         <artifactId>jacoco-maven-plugin</artifactId>
                         <version>${jacoco.version}</version>
+                        <configuration>
+                            <destFile>sdk/target/jacoco.exec</destFile>
+                        </configuration>
                         <executions>
                             <execution>
                                 <id>prepare-agent</id>
                                 <goals>
                                     <goal>prepare-agent</goal>
                                 </goals>
+                                <configuration>
+                                    <destFile>${project.build.directory}/target/jacoco.exec</destFile>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>report</id>
+                                <goals>
+                                    <goal>report</goal>
+                                </goals>
+                                <configuration>
+                                    <dataFile>${project.build.directory}/target/jacoco.exec</dataFile>
+                                    <outputDirectory>${project.build.directory}/target/site/jacoco/</outputDirectory>
+                                    <formats>
+                                        <format>XML</format>
+                                    </formats>
+                                </configuration>
                             </execution>
                         </executions>
                     </plugin>
