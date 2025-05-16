@@ -23,7 +23,6 @@
         <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
         <sonar.dynamicAnalysis>reuseReports</sonar.dynamicAnalysis>
         <sonar.language>java</sonar.language>
-        <sonar.jacoco.reportPaths>${project.build.directory}/sdk/target/site/jacoco/jacoco.xml</sonar.jacoco.reportPaths>
     </properties>
     <licenses>
         <license>
