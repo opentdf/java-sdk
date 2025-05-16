@@ -327,7 +327,6 @@ jobs:
       - platform-integration
       - platform-xtest
       - mavenverify
-      - sonarcloud
       - pr
     runs-on: ubuntu-latest
     if: always()
