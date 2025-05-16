@@ -23,6 +23,7 @@
         <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
         <sonar.dynamicAnalysis>reuseReports</sonar.dynamicAnalysis>
         <sonar.language>java</sonar.language>
+        <sonar.coverage.jacoco.xmlReportPaths>${project.basedir}/sdk/target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
     </properties>
     <licenses>
         <license>
@@ -365,7 +366,7 @@
                         <artifactId>jacoco-maven-plugin</artifactId>
                         <version>${jacoco.version}</version>
                         <configuration>
-                            <destFile>sdk/target/jacoco.exec</destFile>
+                            <destFile>${project.build.directory}/jacoco.exec</destFile>
                         </configuration>
                         <executions>
                             <execution>
@@ -374,7 +375,7 @@
                                     <goal>prepare-agent</goal>
                                 </goals>
                                 <configuration>
-                                    <destFile>${project.build.directory}/target/jacoco.exec</destFile>
+                                    <destFile>${project.build.directory}/jacoco.exec</destFile>
                                 </configuration>
                             </execution>
                             <execution>
@@ -383,8 +384,8 @@
                                     <goal>report</goal>
                                 </goals>
                                 <configuration>
-                                    <dataFile>${project.build.directory}/target/jacoco.exec</dataFile>
-                                    <outputDirectory>${project.build.directory}/target/site/jacoco/</outputDirectory>
+                                    <dataFile>${project.build.directory}/jacoco.exec</dataFile>
+                                    <outputDirectory>${project.build.directory}/site/jacoco/</outputDirectory>
                                     <formats>
                                         <format>XML</format>
                                     </formats>
