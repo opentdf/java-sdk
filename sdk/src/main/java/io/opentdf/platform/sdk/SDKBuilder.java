@@ -217,13 +217,15 @@ public class SDKBuilder {
     static class ServicesAndInternals {
         final Interceptor interceptor;
         final TrustManager trustManager;
+        final ProtocolClient protocolClient;
 
         final SDK.Services services;
 
-        ServicesAndInternals(Interceptor interceptor, TrustManager trustManager, SDK.Services services) {
+        ServicesAndInternals(Interceptor interceptor, TrustManager trustManager, SDK.Services services, ProtocolClient protocolClient) {
             this.interceptor = interceptor;
             this.trustManager = trustManager;
             this.services = services;
+            this.protocolClient = protocolClient;
         }
     }
 
@@ -297,7 +299,8 @@ public class SDKBuilder {
         return new ServicesAndInternals(
                 authInterceptor,
                 sslFactory == null ? null : sslFactory.getTrustManager().orElse(null),
-                services);
+                services,
+                client);
     }
 
     @Nonnull
@@ -308,7 +311,7 @@ public class SDKBuilder {
 
     public SDK build() {
         var services = buildServices();
-        return new SDK(services.services, services.trustManager, services.interceptor, platformEndpoint);
+        return new SDK(services.services, services.trustManager, services.interceptor, services.protocolClient, platformEndpoint);
     }
 
     private ProtocolClient getUnauthenticatedProtocolClient(String endpoint, OkHttpClient httpClient) {
