@@ -74,6 +74,12 @@ jobs:
           java-version: "17"
           distribution: "adopt"
           server-id: github
+      - name: Cache SonarCloud packages
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
       - name: Maven Test Coverage
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -81,12 +87,6 @@ jobs:
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
         run: mvn --batch-mode clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=opentdf_java-sdk -P coverage
-      - name: Cache SonarCloud packages
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        with:
-          path: ~/.sonar/cache
-          key: ${{ runner.os }}-sonar
-          restore-keys: ${{ runner.os }}-sonar
 
   platform-integration:
     runs-on: ubuntu-22.04
