@@ -1,31 +1,31 @@
 package io.opentdf.platform.sdk;
 
-import io.opentdf.platform.authorization.AuthorizationServiceClientInterface;
-import io.opentdf.platform.policy.attributes.AttributesServiceClientInterface;
-import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClientInterface;
-import io.opentdf.platform.policy.namespaces.NamespaceServiceClientInterface;
-import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceClientInterface;
-import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClientInterface;
+import io.opentdf.platform.authorization.AuthorizationServiceClient;
+import io.opentdf.platform.policy.attributes.AttributesServiceClient;
+import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
+import io.opentdf.platform.policy.namespaces.NamespaceServiceClient;
+import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceClient;
+import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClient;
 
 import java.util.Objects;
 
 public class FakeServices implements SDK.Services {
 
-    private final AuthorizationServiceClientInterface authorizationService;
-    private final AttributesServiceClientInterface attributesService;
-    private final NamespaceServiceClientInterface namespaceService;
-    private final SubjectMappingServiceClientInterface subjectMappingService;
-    private final ResourceMappingServiceClientInterface resourceMappingService;
-    private final KeyAccessServerRegistryServiceClientInterface keyAccessServerRegistryServiceFutureStub;
+    private final AuthorizationServiceClient authorizationService;
+    private final AttributesServiceClient attributesService;
+    private final NamespaceServiceClient namespaceService;
+    private final SubjectMappingServiceClient subjectMappingService;
+    private final ResourceMappingServiceClient resourceMappingService;
+    private final KeyAccessServerRegistryServiceClient keyAccessServerRegistryServiceFutureStub;
     private final SDK.KAS kas;
 
     public FakeServices(
-            AuthorizationServiceClientInterface authorizationService,
-            AttributesServiceClientInterface attributesService,
-            NamespaceServiceClientInterface namespaceService,
-            SubjectMappingServiceClientInterface subjectMappingService,
-            ResourceMappingServiceClientInterface resourceMappingService,
-            KeyAccessServerRegistryServiceClientInterface keyAccessServerRegistryServiceFutureStub,
+            AuthorizationServiceClient authorizationService,
+            AttributesServiceClient attributesService,
+            NamespaceServiceClient namespaceService,
+            SubjectMappingServiceClient subjectMappingService,
+            ResourceMappingServiceClient resourceMappingService,
+            KeyAccessServerRegistryServiceClient keyAccessServerRegistryServiceFutureStub,
             SDK.KAS kas) {
         this.authorizationService = authorizationService;
         this.attributesService = attributesService;
@@ -37,32 +37,32 @@ public class FakeServices implements SDK.Services {
     }
 
     @Override
-    public AuthorizationServiceClientInterface authorization() {
+    public AuthorizationServiceClient authorization() {
         return Objects.requireNonNull(authorizationService);
     }
 
     @Override
-    public AttributesServiceClientInterface attributes() {
+    public AttributesServiceClient attributes() {
         return Objects.requireNonNull(attributesService);
     }
 
     @Override
-    public NamespaceServiceClientInterface namespaces() {
+    public NamespaceServiceClient namespaces() {
         return Objects.requireNonNull(namespaceService);
     }
 
     @Override
-    public SubjectMappingServiceClientInterface subjectMappings() {
+    public SubjectMappingServiceClient subjectMappings() {
         return Objects.requireNonNull(subjectMappingService);
     }
 
     @Override
-    public ResourceMappingServiceClientInterface resourceMappings() {
+    public ResourceMappingServiceClient resourceMappings() {
         return Objects.requireNonNull(resourceMappingService);
     }
 
     @Override
-    public KeyAccessServerRegistryServiceClientInterface kasRegistry() {
+    public KeyAccessServerRegistryServiceClient kasRegistry() {
         return Objects.requireNonNull(keyAccessServerRegistryServiceFutureStub);
     }
 

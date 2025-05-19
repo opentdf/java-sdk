@@ -12,7 +12,7 @@
     <properties>
         <jazzer.version>0.22.1</jazzer.version>
         <jazzer.baseurl>https://github.com/CodeIntelligenceTesting/jazzer/releases/download/v${jazzer.version}</jazzer.baseurl>
-        <kotlin.version>2.1.20</kotlin.version>
+        <kotlin.version>2.1.0</kotlin.version>
         <connect.version>0.7.2</connect.version>
         <okhttp.version>4.12.0</okhttp.version>
         <platform.branch>protocol/go/v0.3.0</platform.branch>
@@ -412,6 +412,36 @@
                             <sources>
                                 <source>target/generated-test-sources</source>
                             </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                        <configuration>
+                            <destFile>${project.parent.basedir}/target/jacoco.exec</destFile>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                        <configuration>
+                            <dataFile>${project.parent.basedir}/target/jacoco.exec</dataFile>
+                            <outputDirectory>${project.parent.basedir}/target/site/jacoco/</outputDirectory>
+                            <formats>
+                                <format>XML</format>
+                            </formats>
                         </configuration>
                     </execution>
                 </executions>
