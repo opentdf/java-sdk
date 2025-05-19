@@ -41,8 +41,4 @@ class AddressNormalizer {
             throw new SDKException("error creating KAS address", e);
         }
     }
-
-    public static void printThings() {
-        System.out.println("here is some more code");
-    }
 }

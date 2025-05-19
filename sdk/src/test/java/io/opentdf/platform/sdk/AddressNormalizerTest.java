@@ -24,9 +24,4 @@ class AddressNormalizerTest {
         assertThat(normalizeAddress("example.org:1234", true)).isEqualTo("http://example.org:1234");
         assertThat(normalizeAddress("sftp://example.org", true)).isEqualTo("http://example.org:80");
     }
-
-    @Test
-    void testPrintingStuff() {
-        AddressNormalizer.printThings();
-    }
 }
