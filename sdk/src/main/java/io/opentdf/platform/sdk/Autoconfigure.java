@@ -9,6 +9,7 @@ import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
 import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.policy.attributes.AttributesServiceClient;
+import io.opentdf.platform.policy.attributes.AttributesServiceClientInterface;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
 import org.slf4j.Logger;
@@ -698,7 +699,7 @@ public class Autoconfigure {
     }
 
     // Gets a list of directory of KAS grants for a list of attribute FQNs
-    public static Granter newGranterFromService(AttributesServiceClient as, KASKeyCache keyCache, AttributeValueFQN... fqns) throws AutoConfigureException {
+    public static Granter newGranterFromService(AttributesServiceClientInterface as, KASKeyCache keyCache, AttributeValueFQN... fqns) throws AutoConfigureException {
         GetAttributeValuesByFqnsRequest request = GetAttributeValuesByFqnsRequest.newBuilder()
                 .addAllFqns(Arrays.stream(fqns).map(AttributeValueFQN::toString).collect(Collectors.toList()))
                 .setWithValue(AttributeValueSelector.newBuilder().setWithKeyAccessGrants(true).build())
