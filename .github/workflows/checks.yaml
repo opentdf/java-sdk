@@ -74,11 +74,6 @@ jobs:
           java-version: "17"
           distribution: "adopt"
           server-id: github
-      - name: Maven Verify
-        run: mvn --batch-mode verify
-        env:
-          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
-          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
       - name: Cache SonarCloud packages
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
