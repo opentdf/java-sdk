@@ -116,21 +116,27 @@ public class NanoTDF {
 
         logger.debug("createNanoTDF policy object - {}", policyObjectAsStr);
 
-        AesGcm gcm = new AesGcm(key);
-        byte[] policyObjectAsBytes = policyObjectAsStr.getBytes(StandardCharsets.UTF_8);
-        int authTagSize = SymmetricAndPayloadConfig.sizeOfAuthTagForCipher(nanoTDFConfig.config.getCipherType());
-        byte[] encryptedPolicy = gcm.encrypt(kEmptyIV, authTagSize, policyObjectAsBytes, 0, policyObjectAsBytes.length);
-
+        // Set policy body and embed in header, either as plain text or encrypted
+        final byte[] policyBody;
         PolicyInfo policyInfo = new PolicyInfo();
-        byte[] encryptedPolicyWithoutIV = Arrays.copyOfRange(encryptedPolicy, kEmptyIV.length, encryptedPolicy.length);
-        policyInfo.setEmbeddedEncryptedTextPolicy(encryptedPolicyWithoutIV);
+        AesGcm gcm = new AesGcm(key);
+        if (nanoTDFConfig.policyType == NanoTDFType.PolicyType.EMBEDDED_POLICY_PLAIN_TEXT) {
+            policyBody = policyObjectAsStr.getBytes(StandardCharsets.UTF_8);
+            policyInfo.setEmbeddedPlainTextPolicy(policyBody);
+        } else {
+            byte[] policyObjectAsBytes = policyObjectAsStr.getBytes(StandardCharsets.UTF_8);
+            int authTagSize = SymmetricAndPayloadConfig.sizeOfAuthTagForCipher(nanoTDFConfig.config.getCipherType());
+            byte[] encryptedPolicy = gcm.encrypt(kEmptyIV, authTagSize, policyObjectAsBytes, 0, policyObjectAsBytes.length);
+            policyBody = Arrays.copyOfRange(encryptedPolicy, kEmptyIV.length, encryptedPolicy.length);
+            policyInfo.setEmbeddedEncryptedTextPolicy(policyBody);
+        }
 
+        // Set policy binding (GMAC)
         if (nanoTDFConfig.eccMode.isECDSABindingEnabled()) {
             throw new UnsupportedNanoTDFFeature("ECDSA policy binding is not support");
         } else {
-            byte[] hash = digest.digest(encryptedPolicyWithoutIV);
-            byte[] gmac = Arrays.copyOfRange(hash, hash.length - kNanoTDFGMACLength,
-                    hash.length);
+            byte[] hash = digest.digest(policyBody);
+            byte[] gmac = Arrays.copyOfRange(hash, hash.length - kNanoTDFGMACLength, hash.length);
             policyInfo.setPolicyBinding(gmac);
         }
 
@@ -158,6 +164,12 @@ public class NanoTDF {
         int dataSize = data.limit();
         if (dataSize > kMaxTDFSize) {
             throw new NanoTDFMaxSizeLimit("exceeds max size for nano tdf");
+        }
+
+        // check the policy type, support only embedded policy
+        if (nanoTDFConfig.policyType != NanoTDFType.PolicyType.EMBEDDED_POLICY_PLAIN_TEXT &&
+                nanoTDFConfig.policyType != NanoTDFType.PolicyType.EMBEDDED_POLICY_ENCRYPTED) {
+            throw new UnsupportedNanoTDFFeature("unsupported policy type");
         }
 
         Config.HeaderInfo headerKeyPair = getHeaderInfo(nanoTDFConfig);

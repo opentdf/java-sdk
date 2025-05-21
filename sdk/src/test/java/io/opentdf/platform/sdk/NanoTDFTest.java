@@ -12,6 +12,8 @@ import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import io.opentdf.platform.sdk.nanotdf.Header;
 import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import java.nio.charset.StandardCharsets;
+
+import io.opentdf.platform.sdk.nanotdf.PolicyInfo;
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -311,6 +313,38 @@ public class NanoTDFTest {
 
         ByteBuffer newHeader = getHeaderBuffer(byteBuffer,nanoTDF, config);
         assertThat(header).isNotEqualTo(newHeader);
+    }
+
+    @Test
+    public void testNanoTDFWithPlainTextPolicy() throws Exception {
+        List<String> sampleAttributes = List.of("https://example.com/attr/Classification/value/S");
+        String sampleKasUrl = "https://api.example.com/kas";
+        byte[] sampleData = "test-policy".getBytes(StandardCharsets.UTF_8);
+
+        var kasInfos = new ArrayList<Config.KASInfo>();
+        var kasInfo = new Config.KASInfo();
+        kasInfo.URL = sampleKasUrl;
+        kasInfo.PublicKey = kasPublicKey;
+        kasInfo.KID = KID;
+        kasInfos.add(kasInfo);
+
+        Config.NanoTDFConfig config = Config.newNanoTDFConfig(
+                Config.withNanoKasInformation(kasInfos.toArray(new Config.KASInfo[0])),
+                Config.witDataAttributes(sampleAttributes.toArray(new String[0])),
+                Config.withPolicyType(NanoTDFType.PolicyType.EMBEDDED_POLICY_PLAIN_TEXT)
+        );
+
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+        NanoTDF nanoTDF = new NanoTDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build());
+        nanoTDF.createNanoTDF(ByteBuffer.wrap(sampleData), tdfOutputStream, config);
+
+        byte[] tdfData = tdfOutputStream.toByteArray();
+        Header header = new Header(ByteBuffer.wrap(tdfData));
+        String policyJson = new String(header.getPolicyInfo().getEmbeddedPlainTextPolicy(), StandardCharsets.UTF_8);
+
+        assertThat(policyJson)
+                .as("Policy JSON should contain the expected attribute")
+                .contains(sampleAttributes.get(0));
     }
 
     private ByteBuffer getHeaderBuffer(ByteBuffer input, NanoTDF nanoTDF, Config.NanoTDFConfig config) throws Exception {
