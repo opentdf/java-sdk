@@ -42,10 +42,6 @@ class NanoTDF {
         this(services, new CollectionStore.NoOpCollectionStore());
     }
 
-    NanoTDF(SDK.Services services, boolean collectionStoreEnabled) {
-        this(services, collectionStoreEnabled ? new CollectionStoreImpl() : null);
-    }
-
     NanoTDF(SDK.Services services, CollectionStore collectionStore) {
         this.services = services;
         this.collectionStore = collectionStore;

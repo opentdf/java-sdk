@@ -4,7 +4,7 @@ import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public class CollectionStoreImpl extends LinkedHashMap<ByteBuffer, NanoTDF.CollectionKey>
+class CollectionStoreImpl extends LinkedHashMap<ByteBuffer, NanoTDF.CollectionKey>
         implements CollectionStore {
     private static final int MAX_SIZE_STORE = 500;
 
