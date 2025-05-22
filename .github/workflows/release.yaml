@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - "release/*"
   release:
     types: [created]
 
@@ -13,19 +14,10 @@ permissions:
 
 jobs:
   release-please:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Generate a token
-        id: generate_token
-        uses: actions/create-github-app-token@f2acddfb5195534d487896a656232b016a682f3c # v1.9.0
-        with:
-          app-id: "${{ secrets.APP_ID }}"
-          private-key: "${{ secrets.AUTOMATION_KEY }}"
-      - uses: googleapis/release-please-action@a02a34c4d625f9be7cb89156071d8567266a2445 # v4.2.0
-        with:
-          token: "${{ steps.generate_token.outputs.token }}"
-          config-file: release-please.json
-          manifest-file: .release-please-manifest.json
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: opentdf/platform/reusable_release-please.yaml@main
   release:
     runs-on: ubuntu-latest
     steps:
