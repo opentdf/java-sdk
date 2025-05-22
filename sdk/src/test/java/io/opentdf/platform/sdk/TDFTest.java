@@ -213,7 +213,19 @@ public class TDFTest {
             ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
             TDF tdf = new TDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build());
-            tdf.createTDF(plainTextInputStream, tdfOutputStream, configPair.tdfConfig);
+            var manifest = tdf.createTDF(plainTextInputStream, tdfOutputStream, configPair.tdfConfig).getManifest();
+
+            assertThat(manifest.assertions).asList().hasSize(1);
+            var assertion = manifest.assertions.get(0);
+            assertThat(assertion.appliesToState).isEqualTo("unencrypted");
+            assertThat(assertion.type).isEqualTo("base");
+            assertThat(assertion.statement.value).isEqualTo("ICAgIDxlZGoOkVkaD4=");
+            assertThat(assertion.statement.schema).isEqualTo("text");
+            assertThat(assertion.statement.format).isEqualTo("base64binary");
+
+            assertThat(manifest.payload.isEncrypted).isTrue();
+            var size = manifest.encryptionInformation.integrityInformation.segments.stream().map(s -> s.segmentSize).reduce(0L, Long::sum);
+            assertThat(size).isEqualTo(plainText.getBytes().length);
 
             var unwrappedData = new ByteArrayOutputStream();
             var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), configPair.tdfReaderConfig, platformUrl);

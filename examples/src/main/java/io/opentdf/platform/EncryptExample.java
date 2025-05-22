@@ -52,6 +52,6 @@ public class EncryptExample {
 
         FileOutputStream fos = new FileOutputStream("my.ciphertext");
 
-        sdk.createTDF(in, fos, tdfConfig);
+        Manifest manifest = sdk.createTDF(in, fos, tdfConfig);
     }
 }

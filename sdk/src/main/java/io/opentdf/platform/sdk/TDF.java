@@ -108,6 +108,10 @@ class TDF {
     }
 
     public static class TDFObject {
+        public Manifest getManifest() {
+            return manifest;
+        }
+
         private Manifest manifest;
         private long size;
         private AesGcm aesGcm;
