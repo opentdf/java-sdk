@@ -18,8 +18,6 @@ import io.opentdf.platform.kas.PublicKeyResponse;
 import io.opentdf.platform.kas.RewrapRequest;
 import io.opentdf.platform.kas.RewrapResponse;
 import io.opentdf.platform.sdk.Config.KASInfo;
-import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
-import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import io.opentdf.platform.sdk.SDK.KasBadRequestException;
 
 import okhttp3.OkHttpClient;

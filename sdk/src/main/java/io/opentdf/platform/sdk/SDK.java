@@ -7,7 +7,6 @@ import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClie
 import io.opentdf.platform.policy.namespaces.NamespaceServiceClient;
 import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceClient;
 import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClient;
-import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 
 import javax.net.ssl.TrustManager;
 import java.io.IOException;

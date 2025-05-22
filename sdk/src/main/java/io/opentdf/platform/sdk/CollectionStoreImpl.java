@@ -1,6 +1,4 @@
-package io.opentdf.platform.sdk.nanotdf;
-
-import io.opentdf.platform.sdk.NanoTDF;
+package io.opentdf.platform.sdk;
 
 import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;

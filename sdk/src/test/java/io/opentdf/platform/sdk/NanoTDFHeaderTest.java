@@ -1,6 +1,5 @@
-package io.opentdf.platform.sdk.nanotdf;
+package io.opentdf.platform.sdk;
 
-import io.opentdf.platform.sdk.AesGcm;
 import org.junit.jupiter.api.Test;
 
 import javax.crypto.BadPaddingException;

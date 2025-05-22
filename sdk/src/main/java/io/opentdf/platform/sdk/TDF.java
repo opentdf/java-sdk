@@ -12,7 +12,6 @@ import io.opentdf.platform.sdk.Config.TDFConfig;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
 import io.opentdf.platform.sdk.Config.KASInfo;
 
-import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
 import org.bouncycastle.jce.interfaces.ECPublicKey;
