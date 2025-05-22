@@ -24,7 +24,7 @@ class SDKTest {
     }
 
     @Test
-    void testReadingProtocolClient() throws IOException {
+    void testReadingProtocolClient() {
         var platformServicesClient = mock(ProtocolClient.class);
         var sdk = new SDK(new FakeServicesBuilder().build(), null, null, platformServicesClient, null);
         assertThat(sdk.getPlatformServicesClient()).isSameAs(platformServicesClient);

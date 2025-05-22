@@ -8,7 +8,6 @@ import io.opentdf.platform.policy.KasPublicKey;
 import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
 import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.Value;
-import io.opentdf.platform.policy.attributes.AttributesServiceClient;
 import io.opentdf.platform.policy.attributes.AttributesServiceClientInterface;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
