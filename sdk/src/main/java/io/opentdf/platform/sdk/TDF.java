@@ -107,7 +107,7 @@ class TDF {
         private String wrappedKey;
     }
 
-    public static class TDFObject {
+    static class TDFObject {
         public Manifest getManifest() {
             return manifest;
         }
@@ -335,7 +335,7 @@ class TDF {
             try {
                 digest = MessageDigest.getInstance("SHA-256");
             } catch (NoSuchAlgorithmException e) {
-                throw new SDKException("error getting instance of SHA-256", e);
+                throw new IllegalStateException("error getting instance of SHA-256", e);
             }
 
             for (Manifest.Segment segment : manifest.encryptionInformation.integrityInformation.segments) {
