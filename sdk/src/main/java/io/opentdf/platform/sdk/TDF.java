@@ -715,7 +715,7 @@ class TDF {
             try {
                 digest = MessageDigest.getInstance("SHA-256");
             } catch (NoSuchAlgorithmException e) {
-                throw new SDKException("error getting instance of SHA-256 digest", e);
+                throw new IllegalStateException("error getting instance of SHA-256 digest", e);
             }
 
             rootSigValue = Base64.getEncoder().encodeToString(digest.digest(aggregateHash.toString().getBytes()));
