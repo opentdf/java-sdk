@@ -3,7 +3,6 @@ package io.opentdf.platform.sdk;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.security.NoSuchAlgorithmException;
 
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 
@@ -11,7 +10,6 @@ import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import com.code_intelligence.jazzer.junit.FuzzTest;
 import com.google.gson.JsonParseException;
 
-import io.opentdf.platform.sdk.TDF.FailedToCreateGMAC;
 import io.opentdf.platform.sdk.TDF.Reader;
 
 public class Fuzzing {
@@ -36,7 +34,7 @@ public class Fuzzing {
     }
 
     @FuzzTest(maxDuration=TEST_DURATION)
-    public void fuzzTDF(FuzzedDataProvider data) throws FailedToCreateGMAC, NoSuchAlgorithmException {
+    public void fuzzTDF(FuzzedDataProvider data) {
         byte[] fuzzBytes = data.consumeRemainingAsBytes();
         byte[] key = new byte[32];      // use consistent zero key for performance and so fuzz can relate to seed
         var assertionVerificationKeys = new Config.AssertionVerificationKeys();

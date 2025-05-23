@@ -8,9 +8,7 @@ import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.Config.NanoTDFReaderConfig;
-import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
-import io.opentdf.platform.sdk.nanotdf.Header;
-import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
+
 import java.nio.charset.StandardCharsets;
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.junit.jupiter.api.BeforeAll;
