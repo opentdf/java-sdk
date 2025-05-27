@@ -1,6 +1,5 @@
 package io.opentdf.platform.sdk;
 
-import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.junit.jupiter.api.Disabled;

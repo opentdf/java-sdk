@@ -1,6 +1,4 @@
-package io.opentdf.platform.sdk.nanotdf;
-
-import io.opentdf.platform.sdk.NanoTDF;
+package io.opentdf.platform.sdk;
 
 public interface CollectionStore {
     NanoTDF.CollectionKey NO_PRIVATE_KEY = new NanoTDF.CollectionKey(null);

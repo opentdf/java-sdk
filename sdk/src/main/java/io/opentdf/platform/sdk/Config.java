@@ -2,10 +2,6 @@ package io.opentdf.platform.sdk;
 
 import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
-import io.opentdf.platform.sdk.nanotdf.ECCMode;
-import io.opentdf.platform.sdk.nanotdf.Header;
-import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
-import io.opentdf.platform.sdk.nanotdf.SymmetricAndPayloadConfig;
 
 import java.net.URI;
 import java.net.URISyntaxException;

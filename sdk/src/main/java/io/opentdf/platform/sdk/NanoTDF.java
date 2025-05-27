@@ -3,8 +3,7 @@ package io.opentdf.platform.sdk;
 import com.connectrpc.ResponseMessageKt;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
-import io.opentdf.platform.sdk.TDF.KasAllowlistException;
-import io.opentdf.platform.sdk.nanotdf.*;
+import io.opentdf.platform.sdk.SDK.KasAllowlistException;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -26,7 +25,7 @@ import org.slf4j.LoggerFactory;
  * The NanoTDF format is intended for securely encrypting small data payloads using elliptic-curve cryptography
  * and authenticated encryption.
  */
-public class NanoTDF {
+class NanoTDF {
 
     public static Logger logger = LoggerFactory.getLogger(NanoTDF.class);
 
@@ -41,10 +40,6 @@ public class NanoTDF {
 
     NanoTDF(SDK.Services services) {
         this(services, new CollectionStore.NoOpCollectionStore());
-    }
-
-    NanoTDF(SDK.Services services, boolean collectionStoreEnabled) {
-        this(services, collectionStoreEnabled ? new CollectionStoreImpl() : null);
     }
 
     NanoTDF(SDK.Services services, CollectionStore collectionStore) {
