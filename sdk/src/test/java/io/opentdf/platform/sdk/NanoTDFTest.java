@@ -11,7 +11,6 @@ import io.opentdf.platform.sdk.Config.NanoTDFReaderConfig;
 
 import java.nio.charset.StandardCharsets;
 
-import io.opentdf.platform.sdk.nanotdf.PolicyInfo;
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
