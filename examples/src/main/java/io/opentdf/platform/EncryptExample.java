@@ -11,8 +11,7 @@ import java.io.IOException;
 import java.util.concurrent.ExecutionException;
 
 public class EncryptExample {
-    public static void main(String[] args) throws IOException, JOSEException, AutoConfigureException,
-            InterruptedException, ExecutionException, DecoderException, ParseException {
+    public static void main(String[] args) throws IOException, ParseException {
         // Create Options object
         Options options = new Options();
 
@@ -53,6 +52,6 @@ public class EncryptExample {
 
         FileOutputStream fos = new FileOutputStream("my.ciphertext");
 
-        sdk.createTDF(in, fos, tdfConfig);
+        Manifest manifest = sdk.createTDF(in, fos, tdfConfig);
     }
 }

@@ -39,7 +39,7 @@ public class TDFReader {
         payload = entries.get(TDF_PAYLOAD_FILE_NAME).getData();
     }
 
-    public String manifest() {
+    String manifest() {
         var out = new ByteArrayOutputStream();
         try {
             manifestEntry.getData().transferTo(out);
@@ -63,7 +63,7 @@ public class TDFReader {
         return totalRead;
     }
 
-    public PolicyObject readPolicyObject() {
+    PolicyObject readPolicyObject() {
         try (var reader = new BufferedReader(new InputStreamReader(manifestEntry.getData()))){
             return Manifest.readPolicyObject(reader);
         } catch (IOException e) {

@@ -1,6 +1,5 @@
 package io.opentdf.platform.sdk;
 
-import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.junit.jupiter.api.Disabled;
@@ -78,21 +77,28 @@ public class TDFE2ETest {
         var kasInfo = new Config.KASInfo();
         kasInfo.URL = "http://localhost:8080";
 
-        Config.NanoTDFConfig config = Config.newNanoTDFConfig(
-                Config.withNanoKasInformation(kasInfo)
-        );
+        for (NanoTDFType.PolicyType policyType : List.of(
+                NanoTDFType.PolicyType.EMBEDDED_POLICY_PLAIN_TEXT,
+                NanoTDFType.PolicyType.EMBEDDED_POLICY_ENCRYPTED)) {
 
-        String plainText = "text";
-        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+            Config.NanoTDFConfig config = Config.newNanoTDFConfig(
+                    Config.withNanoKasInformation(kasInfo),
+                    Config.withPolicyType(policyType)
+            );
 
-        NanoTDF ntdf = new NanoTDF(sdk);
-        ntdf.createNanoTDF(ByteBuffer.wrap(plainText.getBytes()), tdfOutputStream, config);
+            String plainText = "text";
+            ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
-        byte[] nanoTDFBytes = tdfOutputStream.toByteArray();
-        ByteArrayOutputStream plainTextStream = new ByteArrayOutputStream();
-        ntdf.readNanoTDF(ByteBuffer.wrap(nanoTDFBytes), plainTextStream);
+            NanoTDF ntdf = new NanoTDF(sdk);
+            ntdf.createNanoTDF(ByteBuffer.wrap(plainText.getBytes()), tdfOutputStream, config);
 
-        String out = new String(plainTextStream.toByteArray(), "UTF-8");
-        assertThat(out).isEqualTo("text");
+            byte[] nanoTDFBytes = tdfOutputStream.toByteArray();
+            ByteArrayOutputStream plainTextStream = new ByteArrayOutputStream();
+            ntdf.readNanoTDF(ByteBuffer.wrap(nanoTDFBytes), plainTextStream,
+                    Config.newNanoTDFReaderConfig(Config.WithNanoIgnoreKasAllowlist(true)));
+
+            String out = new String(plainTextStream.toByteArray(), StandardCharsets.UTF_8);
+            assertThat(out).isEqualTo("text");
+        }
     }
 }

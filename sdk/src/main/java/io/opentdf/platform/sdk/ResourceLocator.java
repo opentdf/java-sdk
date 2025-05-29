@@ -1,4 +1,4 @@
-package io.opentdf.platform.sdk.nanotdf;
+package io.opentdf.platform.sdk;
 
 import java.nio.ByteBuffer;
 import java.util.Objects;

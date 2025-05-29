@@ -1,20 +1,16 @@
 package io.opentdf.platform;
 
 import io.opentdf.platform.sdk.Config;
-import io.opentdf.platform.sdk.NanoTDF;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
 
-import java.io.ByteArrayInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.security.NoSuchAlgorithmException;
 
 public class EncryptCollectionExample {
-    public static void main(String[] args) throws IOException, NanoTDF.NanoTDFMaxSizeLimit, NanoTDF.UnsupportedNanoTDFFeature, NanoTDF.InvalidNanoTDFConfig, NoSuchAlgorithmException, InterruptedException {
+    public static void main(String[] args) throws IOException {
         String clientId = "opentdf-sdk";
         String clientSecret = "secret";
         String platformEndpoint = "localhost:8080";

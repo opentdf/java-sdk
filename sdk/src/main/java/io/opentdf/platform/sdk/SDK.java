@@ -1,13 +1,14 @@
 package io.opentdf.platform.sdk;
 
 import com.connectrpc.Interceptor;
-import io.opentdf.platform.authorization.AuthorizationServiceClient;
-import io.opentdf.platform.policy.attributes.AttributesServiceClient;
-import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
-import io.opentdf.platform.policy.namespaces.NamespaceServiceClient;
-import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceClient;
-import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClient;
-import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
+
+import com.connectrpc.impl.ProtocolClient;
+import io.opentdf.platform.authorization.AuthorizationServiceClientInterface;
+import io.opentdf.platform.policy.attributes.AttributesServiceClientInterface;
+import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClientInterface;
+import io.opentdf.platform.policy.namespaces.NamespaceServiceClientInterface;
+import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceClientInterface;
+import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClientInterface;
 
 import javax.net.ssl.TrustManager;
 import java.io.IOException;
@@ -28,6 +29,7 @@ public class SDK implements AutoCloseable {
     private final TrustManager trustManager;
     private final Interceptor authInterceptor;
     private final String platformUrl;
+    private final ProtocolClient platformServicesClient;
 
     /**
      * Closes the SDK, including its associated services.
@@ -61,17 +63,17 @@ public class SDK implements AutoCloseable {
      * It extends the AutoCloseable interface, allowing for the release of resources when no longer needed.
      */
     public interface Services extends AutoCloseable {
-        AttributesServiceClient attributes();
+        AttributesServiceClientInterface attributes();
 
-        NamespaceServiceClient namespaces();
+        NamespaceServiceClientInterface namespaces();
 
-        SubjectMappingServiceClient subjectMappings();
+        SubjectMappingServiceClientInterface subjectMappings();
 
-        ResourceMappingServiceClient resourceMappings();
+        ResourceMappingServiceClientInterface resourceMappings();
 
-        AuthorizationServiceClient authorization();
+        AuthorizationServiceClientInterface authorization();
 
-        KeyAccessServerRegistryServiceClient kasRegistry();
+        KeyAccessServerRegistryServiceClientInterface kasRegistry();
 
         KAS kas();
     }
@@ -84,11 +86,12 @@ public class SDK implements AutoCloseable {
         return Optional.ofNullable(authInterceptor);
     }
 
-    SDK(Services services, TrustManager trustManager, Interceptor authInterceptor, String platformUrl) {
+    SDK(Services services, TrustManager trustManager, Interceptor authInterceptor, ProtocolClient platformServicesClient, String platformUrl) {
         this.platformUrl = platformUrl;
         this.services = services;
         this.trustManager = trustManager;
         this.authInterceptor = authInterceptor;
+        this.platformServicesClient = platformServicesClient;
     }
 
     public Services getServices() {
@@ -100,9 +103,9 @@ public class SDK implements AutoCloseable {
         return tdf.loadTDF(channel, config, platformUrl);
     }
 
-    public TDF.TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig config) throws SDKException, IOException {
+    public Manifest createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig config) throws SDKException, IOException {
         var tdf = new TDF(services);
-        return tdf.createTDF(payload, outputStream, config);
+        return tdf.createTDF(payload, outputStream, config).getManifest();
     }
 
     public int createNanoTDF(ByteBuffer payload, OutputStream outputStream, Config.NanoTDFConfig config) throws SDKException, IOException {
@@ -113,6 +116,10 @@ public class SDK implements AutoCloseable {
     public void readNanoTDF(ByteBuffer nanoTDF, OutputStream out, Config.NanoTDFReaderConfig config) throws SDKException, IOException {
         var ntdf = new NanoTDF(services);
         ntdf.readNanoTDF(nanoTDF, out, config, platformUrl);
+    }
+
+    public ProtocolClient getPlatformServicesClient() {
+        return this.platformServicesClient;
     }
 
     /**
@@ -140,5 +147,102 @@ public class SDK implements AutoCloseable {
 
     public String getPlatformUrl() {
         return platformUrl;
+    }
+
+    /**
+     * {@link SplitKeyException} is thrown when the SDK encounters an error related to
+     * the inability to reconstruct a split key during decryption.
+     */
+    public static class SplitKeyException extends SDKException {
+        public SplitKeyException(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    /**
+     * {@link DataSizeNotSupported} is thrown when the user attempts to create
+     * a TDF with a size larger than the maximum size (currently 64GiB).
+     */
+    public static class DataSizeNotSupported extends SDKException {
+        public DataSizeNotSupported(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    /**
+     * {@link KasInfoMissing} is thrown during TDF creation when no KAS information is present.
+     */
+    public static class KasInfoMissing extends SDKException {
+        public KasInfoMissing(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    /**
+     * {@link KasPublicKeyMissing} is thrown during encryption
+     *  when the SDK cannot retrieve the public key for a KAS.
+     */
+    public static class KasPublicKeyMissing extends SDKException {
+        public KasPublicKeyMissing(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    /**
+     * {@link TamperException} is the base class for exceptions related to signature mismatches.
+     */
+    public static class TamperException extends SDKException {
+        public TamperException(String errorMessage) {
+            super("[tamper detected] "+errorMessage);
+        }
+    }
+
+    /**
+     * {@link RootSignatureValidationException} is thrown when the signature on the overall
+     * TDF fails.
+     */
+    public static class RootSignatureValidationException extends TamperException {
+        public RootSignatureValidationException(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    /**
+     * {@link SegmentSignatureMismatch} is thrown when the segment signature does not
+     * match the expected signature.
+     */
+    public static class SegmentSignatureMismatch extends TamperException {
+        public SegmentSignatureMismatch(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    /**
+     * {@link KasBadRequestException} is thrown when a KAS returns a 400 error.
+     */
+    public static class KasBadRequestException extends TamperException {
+        public KasBadRequestException(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+   /**
+     * {@link KasAllowlistException} is thrown during decryption when a TDF refers to
+    * a KAS that is not in the allowlist.
+     */
+    public static class KasAllowlistException extends SDKException {
+        public KasAllowlistException(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    /**
+     * {@link AssertionException} indicates that an assertion was not validated due to
+     * an incorrect signature.
+     */
+    public static class AssertionException extends TamperException {
+        public AssertionException(String errorMessage, String id) {
+            super("assertion id: "+ id + "; " + errorMessage);
+        }
     }
 }

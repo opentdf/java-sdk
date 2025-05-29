@@ -1,4 +1,4 @@
-package io.opentdf.platform.sdk.nanotdf;
+package io.opentdf.platform.sdk;
 
 public class NanoTDFECDSAStruct {
 

@@ -1,5 +1,6 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.impl.ProtocolClient;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.Test;
 
@@ -9,6 +10,7 @@ import java.nio.channels.SeekableByteChannel;
 import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 class SDKTest {
 
@@ -19,6 +21,13 @@ class SDKTest {
             var chan = new SeekableInMemoryByteChannel(ztdf.readAllBytes());
             assertThat(SDK.isTDF(chan)).isTrue();
         }
+    }
+
+    @Test
+    void testReadingProtocolClient() {
+        var platformServicesClient = mock(ProtocolClient.class);
+        var sdk = new SDK(new FakeServicesBuilder().build(), null, null, platformServicesClient, null);
+        assertThat(sdk.getPlatformServicesClient()).isSameAs(platformServicesClient);
     }
 
     @Test
