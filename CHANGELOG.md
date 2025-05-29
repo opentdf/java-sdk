@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/opentdf/java-sdk/compare/v0.8.0...v0.8.1) (2025-05-29)
+
+
+### Bug Fixes
+
+* **ci:** use `dokka-maven-plugin` instead of `javadoc-maven-plugin` ([#262](https://github.com/opentdf/java-sdk/issues/262)) ([ab1e7b1](https://github.com/opentdf/java-sdk/commit/ab1e7b1505d1875768bf99f1217ff2dcca1bacea))
+
 ## [0.8.0](https://github.com/opentdf/java-sdk/compare/v0.7.9...v0.8.0) (2025-05-27)
 
 
