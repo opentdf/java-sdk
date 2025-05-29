@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.8.1](https://github.com/opentdf/java-sdk/compare/v0.8.0...v0.8.1) (2025-05-29)
+
+
+### Bug Fixes
+
+* **ci:** use `dokka-maven-plugin` instead of `javadoc-maven-plugin` ([#262](https://github.com/opentdf/java-sdk/issues/262)) ([ab1e7b1](https://github.com/opentdf/java-sdk/commit/ab1e7b1505d1875768bf99f1217ff2dcca1bacea))
+
+## [0.8.0](https://github.com/opentdf/java-sdk/compare/v0.7.9...v0.8.0) (2025-05-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sdk:** better control which classes we expose ([#254](https://github.com/opentdf/java-sdk/issues/254))
+* **sdk:** expose method to build an http client ([#256](https://github.com/opentdf/java-sdk/issues/256))
+* **sdk:** switch to `connect-rpc` for GRPC ([#244](https://github.com/opentdf/java-sdk/issues/244))
+* **sdk:** DSPX-1037 update sdk api ([#249](https://github.com/opentdf/java-sdk/issues/249))
+
+### Features
+
+* Add initial Dependency Review configuration ([#252](https://github.com/opentdf/java-sdk/issues/252)) ([ba11d49](https://github.com/opentdf/java-sdk/commit/ba11d4924d50ef33539a879818a1e9f53ced47a4))
+* **sdk:** add nanotdf plaintext policy ([#259](https://github.com/opentdf/java-sdk/issues/259)) ([be9cd94](https://github.com/opentdf/java-sdk/commit/be9cd94ba544f91289d64cfc2c7a1014bdfa1cb2))
+* **sdk:** better control which classes we expose ([#254](https://github.com/opentdf/java-sdk/issues/254)) ([e00eeaf](https://github.com/opentdf/java-sdk/commit/e00eeaf9768caaa793717b0ea3045cfa3c73debe))
+* **sdk:** DSPX-1037 update sdk api ([#249](https://github.com/opentdf/java-sdk/issues/249)) ([f2e1307](https://github.com/opentdf/java-sdk/commit/f2e1307ec7ed23289f32ddf620ab39692256c2c0))
+* **sdk:** expose method to build an http client ([#256](https://github.com/opentdf/java-sdk/issues/256)) ([2cac97c](https://github.com/opentdf/java-sdk/commit/2cac97cfdfdbcded64e0e205f968fca523dda4e8))
+* **sdk:** switch to `connect-rpc` for GRPC ([#244](https://github.com/opentdf/java-sdk/issues/244)) ([ff36a1d](https://github.com/opentdf/java-sdk/commit/ff36a1d90f7f2fdf876b892001c8c8d32425db09))
+
+
+### Bug Fixes
+
+* **sdk:** add coverage ([#258](https://github.com/opentdf/java-sdk/issues/258)) ([e6ad1bc](https://github.com/opentdf/java-sdk/commit/e6ad1bcf750b7daed8d81c2e82bbca984f07009a))
+
 ## [0.7.9](https://github.com/opentdf/java-sdk/compare/v0.7.8...v0.7.9) (2025-04-28)
 
 

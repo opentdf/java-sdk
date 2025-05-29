@@ -11,7 +11,7 @@ private class AuthInterceptor(private val ts: TokenSource) : Interceptor{
         return StreamFunction(
             requestFunction = { request ->
                 val requestHeaders = mutableMapOf<String, List<String>>()
-                val authHeaders = ts.getAuthHeaders(request.url, "POST");
+                val authHeaders = ts.getAuthHeaders(request.url, "POST")
                 requestHeaders["Authorization"] = listOf(authHeaders.authHeader)
                 requestHeaders["DPoP"] = listOf(authHeaders.dpopHeader)
 
@@ -32,7 +32,7 @@ private class AuthInterceptor(private val ts: TokenSource) : Interceptor{
         return UnaryFunction(
             requestFunction = { request ->
                 val requestHeaders = mutableMapOf<String, List<String>>()
-                val authHeaders = ts.getAuthHeaders(request.url, request.httpMethod.name);
+                val authHeaders = ts.getAuthHeaders(request.url, request.httpMethod.name)
                 requestHeaders["Authorization"] = listOf(authHeaders.authHeader)
                 requestHeaders["DPoP"] = listOf(authHeaders.dpopHeader)
 

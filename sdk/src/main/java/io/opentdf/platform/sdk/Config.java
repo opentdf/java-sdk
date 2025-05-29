@@ -2,10 +2,6 @@ package io.opentdf.platform.sdk;
 
 import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
-import io.opentdf.platform.sdk.nanotdf.ECCMode;
-import io.opentdf.platform.sdk.nanotdf.Header;
-import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
-import io.opentdf.platform.sdk.nanotdf.SymmetricAndPayloadConfig;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -308,6 +304,7 @@ public class Config {
         public List<String> attributes;
         public List<KASInfo> kasInfoList;
         public CollectionConfig collectionConfig;
+        public NanoTDFType.PolicyType policyType;
 
         public NanoTDFConfig() {
             this.eccMode = new ECCMode();
@@ -323,6 +320,7 @@ public class Config {
             this.attributes = new ArrayList<>();
             this.kasInfoList = new ArrayList<>();
             this.collectionConfig = new CollectionConfig(false);
+            this.policyType = NanoTDFType.PolicyType.EMBEDDED_POLICY_ENCRYPTED;
         }
     }
 
@@ -374,6 +372,10 @@ public class Config {
 
     public static Consumer<NanoTDFConfig> WithECDSAPolicyBinding(boolean enable) {
         return (NanoTDFConfig config) -> config.eccMode.setECDSABinding(enable);
+    }
+
+    public static Consumer<NanoTDFConfig> withPolicyType(NanoTDFType.PolicyType policyType) {
+        return (NanoTDFConfig config) -> config.policyType = policyType;
     }
 
     public static class NanoTDFReaderConfig {

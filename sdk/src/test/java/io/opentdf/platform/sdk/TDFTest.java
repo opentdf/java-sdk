@@ -9,8 +9,6 @@ import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.TDF.Reader;
-import io.opentdf.platform.sdk.nanotdf.ECKeyPair;
-import io.opentdf.platform.sdk.nanotdf.NanoTDFType;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -23,7 +21,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -216,7 +213,19 @@ public class TDFTest {
             ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
 
             TDF tdf = new TDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build());
-            tdf.createTDF(plainTextInputStream, tdfOutputStream, configPair.tdfConfig);
+            var manifest = tdf.createTDF(plainTextInputStream, tdfOutputStream, configPair.tdfConfig).getManifest();
+
+            assertThat(manifest.assertions).asList().hasSize(1);
+            var assertion = manifest.assertions.get(0);
+            assertThat(assertion.appliesToState).isEqualTo("unencrypted");
+            assertThat(assertion.type).isEqualTo("base");
+            assertThat(assertion.statement.value).isEqualTo("ICAgIDxlZGoOkVkaD4=");
+            assertThat(assertion.statement.schema).isEqualTo("text");
+            assertThat(assertion.statement.format).isEqualTo("base64binary");
+
+            assertThat(manifest.payload.isEncrypted).isTrue();
+            var size = manifest.encryptionInformation.integrityInformation.segments.stream().map(s -> s.segmentSize).reduce(0L, Long::sum);
+            assertThat(size).isEqualTo(plainText.getBytes().length);
 
             var unwrappedData = new ByteArrayOutputStream();
             var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), configPair.tdfReaderConfig, platformUrl);
@@ -517,7 +526,7 @@ public class TDFTest {
                 Config.withAutoconfigure(false),
                 Config.withKasInformation(getRSAKASInfos()),
                 Config.withSegmentSize(Config.MIN_SEGMENT_SIZE));
-        assertThrows(TDF.DataSizeNotSupported.class,
+        assertThrows(SDK.DataSizeNotSupported.class,
                 () -> tdf.createTDF(is, os, tdfConfig),
                 "didn't throw an exception when we created TDF that was too large");
         assertThat(numReturned.get())
@@ -546,7 +555,7 @@ public class TDFTest {
     }
 
     @Test
-    void legacyTDFRoundTrips() throws IOException, NoSuchAlgorithmException {
+    void legacyTDFRoundTrips() throws IOException {
         final String mimeType = "application/pdf";
         var assertionConfig1 = new AssertionConfig();
         assertionConfig1.id = "assertion1";
