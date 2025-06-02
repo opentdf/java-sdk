@@ -23,4 +23,4 @@ jobs:
         github.event.issue.pull_request &&
         startsWith(github.event.comment.body, '/backport')
       )
-    uses: opentdf/platform/reusable_backport.yaml@main
+    uses: opentdf/platform/.github/workflows/reusable_backport.yaml@main
