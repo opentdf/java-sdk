@@ -11,12 +11,12 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
+import java.security.interfaces.ECPublicKey;
 import java.util.*;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
-import org.bouncycastle.jce.interfaces.ECPublicKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

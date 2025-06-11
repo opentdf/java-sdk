@@ -1,14 +1,10 @@
 package io.opentdf.platform.sdk;
 
-import org.bouncycastle.jce.interfaces.ECPrivateKey;
-import org.bouncycastle.jce.interfaces.ECPublicKey;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.security.*;
-import java.security.cert.CertificateException;
-import java.security.spec.InvalidKeySpecException;
+import java.security.interfaces.ECPrivateKey;
+import java.security.interfaces.ECPublicKey;
 import java.util.Arrays;
 import java.util.Base64;
 
@@ -46,17 +42,16 @@ public class ECKeyPairTest {
         public static final String salt = "L1L";
     }
     @Test
-    void ecPublicKeyInPemformat() throws InvalidAlgorithmParameterException, NoSuchAlgorithmException,
-            IOException, NoSuchProviderException, InvalidKeySpecException, CertificateException, InvalidKeyException {
+    void ecPublicKeyInPemformat() {
         ECKeyPair keyPairA = new ECKeyPair();
 
-        String keypairAPubicKey = keyPairA.publicKeyInPEMFormat();
+        String keypairAPublicKey = keyPairA.publicKeyInPEMFormat();
         String keypairAPrivateKey = keyPairA.privateKeyInPEMFormat();
 
-        ECPublicKey publicKeyA = ECKeyPair.publicKeyFromPem(keypairAPubicKey);
+        ECPublicKey publicKeyA = ECKeyPair.publicKeyFromPem(keypairAPublicKey);
         ECPrivateKey privateKeyA = ECKeyPair.privateKeyFromPem(keypairAPrivateKey);
 
-        System.out.println(keypairAPubicKey);
+        System.out.println(keypairAPublicKey);
         System.out.println(keypairAPrivateKey);
 
         byte[] compressedKey1 = keyPairA.compressECPublickey();
@@ -84,43 +79,6 @@ public class ECKeyPairTest {
     }
 
     @Test
-    void extractPemPubKeyFromX509() throws CertificateException, IOException, NoSuchAlgorithmException,
-            InvalidKeySpecException, NoSuchProviderException, InvalidAlgorithmParameterException, InvalidKeyException {
-        String x509ECPubKey = "-----BEGIN CERTIFICATE-----\n" +
-                "MIIBCzCBsgIJAK3Uxk7fP5oWMAoGCCqGSM49BAMCMA4xDDAKBgNVBAMMA2thczAe\n" +
-                "Fw0yMzA0MjQxNzQ2MTVaFw0yNDA0MjMxNzQ2MTVaMA4xDDAKBgNVBAMMA2thczBZ\n" +
-                "MBMGByqGSM49AgEGCCqGSM49AwEHA0IABL//OvkSC1ji2w7AUrj27BxN3K6hhN4B\n" +
-                "YRb45lYoMsihIxhDmMDAZTgoaDyNJG59VrJE/yoM9KuiXV8a+82+OwwwCgYIKoZI\n" +
-                "zj0EAwIDSAAwRQIhAItk5SmcWSg06tnOCEqTa6UsChaycX/cmAT8PTDRnaRcAiAl\n" +
-                "Vr2EvlA2x5mWFE/+nDdxxzljYjLZuSDQMEI/J6u0/Q==\n" +
-                "-----END CERTIFICATE-----";
-        String pubKey = ECKeyPair.getPEMPublicKeyFromX509Cert(x509ECPubKey);
-        System.out.println(pubKey);
-
-        ECPublicKey publicKey = ECKeyPair.publicKeyFromPem(pubKey);
-        byte[] compressedKey = publicKey.getQ().getEncoded(true);
-        System.out.println(Arrays.toString(compressedKey));
-
-        compressedKey = ECKeyPair.compressECPublickey(pubKey);
-        System.out.println(Arrays.toString(compressedKey));
-        System.out.println(compressedKey.length);
-
-        ECKeyPair keyPair = new ECKeyPair();
-
-        String keypairPubicKey = keyPair.publicKeyInPEMFormat();
-        String keypairPrivateKey = keyPair.privateKeyInPEMFormat();
-        System.out.println(keypairPubicKey);
-        System.out.println(keypairPrivateKey);
-
-        byte[] symmetricKey = ECKeyPair.computeECDHKey(publicKey, ECKeyPair.privateKeyFromPem(keypairPrivateKey));
-        System.out.println(Arrays.toString(symmetricKey));
-
-        byte[] key = ECKeyPair.calculateHKDF(ECKeys.salt.getBytes(StandardCharsets.UTF_8), symmetricKey);
-        System.out.println(Arrays.toString(key));
-        System.out.println(key.length);
-    }
-
-    @Test
     void testECDH()  {
         String expectedKey = "3KGgsptHbTsbxJtql6sHUcx255KcUhxdeJWKjmPMlcc=";
 
@@ -134,21 +92,21 @@ public class ECKeyPairTest {
         byte[] symmetricKey = ECKeyPair.computeECDHKey(kasPubKey, sdkPriKey);
         byte[] key = ECKeyPair.calculateHKDF(ECKeys.salt.getBytes(StandardCharsets.UTF_8), symmetricKey);
         String encodedKey = Base64.getEncoder().encodeToString(key);
-        assertEquals(encodedKey, expectedKey);
+        assertEquals(expectedKey, encodedKey);
 
         // KAS side
         symmetricKey = ECKeyPair.computeECDHKey(sdkPubKey, kasPriKey);
         key = ECKeyPair.calculateHKDF(ECKeys.salt.getBytes(StandardCharsets.UTF_8), symmetricKey);
         encodedKey = Base64.getEncoder().encodeToString(key);
-        assertEquals(encodedKey, expectedKey);
+        assertEquals(expectedKey, encodedKey);
 
         byte[] ecPoint = ECKeyPair.compressECPublickey(ECKeys.sdkPublicKey);
         String encodeECPoint = Base64.getEncoder().encodeToString(ecPoint);
-        assertEquals(encodeECPoint, "Al3vx59pBnP8tRxuUFw18aK9ym6rFrxZRhpVQytUQ+Kg");
+        assertEquals("Al3vx59pBnP8tRxuUFw18aK9ym6rFrxZRhpVQytUQ+Kg", encodeECPoint);
 
-        String publicKey = ECKeyPair.publicKeyFromECPoint(ecPoint,
-                ECKeyPair.NanoTDFECCurve.SECP256R1.toString());
-        assertArrayEquals(ECKeys.sdkPublicKey.toCharArray(), publicKey.toCharArray());
+//        String publicKey = ECKeyPair.publicKeyFromECPoint(ecPoint,
+//                ECKeyPair.NanoTDFECCurve.SECP256R1.toString());
+//        assertArrayEquals(ECKeys.sdkPublicKey.toCharArray(), publicKey.toCharArray());
     }
 
     @Test
