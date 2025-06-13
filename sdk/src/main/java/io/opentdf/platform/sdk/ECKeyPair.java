@@ -204,7 +204,7 @@ public class ECKeyPair {
             ECParameterSpec ecParameterSpec = algorithmParameters.getParameterSpec(ECParameterSpec.class);
 
             ECPublicKeySpec spec = new ECPublicKeySpec(jpoint, ecParameterSpec);
-            KeyFactory keyFactory = KeyFactory.getInstance("ECDSA");
+            KeyFactory keyFactory = KeyFactory.getInstance("EC");
             PublicKey publicKey = keyFactory.generatePublic(spec);
 
             // EC Public keu to pem format.
