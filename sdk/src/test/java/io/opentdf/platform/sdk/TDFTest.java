@@ -2,6 +2,7 @@ package io.opentdf.platform.sdk;
 
 import com.connectrpc.ResponseMessage;
 import com.connectrpc.UnaryBlockingCall;
+import com.google.gson.reflect.TypeToken;
 import com.nimbusds.jose.JOSEException;
 import com.google.gson.Gson;
 import io.opentdf.platform.policy.KeyAccessServer;
@@ -664,17 +665,22 @@ public class TDFTest {
 
         // Deserialize and check the metadata JSON
         Gson gson = new Gson();
-        // This line is crucial. It correctly types the variable.
-        Map<String, String> metadataMap = gson.fromJson(sysAssertion.statement.value, Map.class);
+        java.lang.reflect.Type mapType = new TypeToken<Map<String, String>>() {
+        }.getType();
+        Map<String, String> metadataMap = gson.fromJson(sysAssertion.statement.value, mapType);
 
-        // Now, these assertions will work correctly because AssertJ knows metadataMap
-        // is a Map.
         assertThat(metadataMap).containsKey("tdf_spec_version");
+        assertThat(metadataMap.get("tdf_spec_version")).isEqualTo(TDF.TDF_SPEC_VERSION);
         assertThat(metadataMap).containsKey("creation_date");
+        assertThat(metadataMap.get("creation_date")).isNotBlank();
         assertThat(metadataMap).containsKey("operating_system");
+        assertThat(metadataMap.get("operating_system")).isEqualTo(System.getProperty("os.name"));
         assertThat(metadataMap).containsKey("sdk_version");
+        assertThat(metadataMap.get("sdk_version")).isEqualTo("Java-" + SdkInfo.VERSION);
         assertThat(metadataMap).containsKey("java_version");
+        assertThat(metadataMap.get("java_version")).isEqualTo(System.getProperty("java.version"));
         assertThat(metadataMap).containsKey("architecture");
+        assertThat(metadataMap.get("architecture")).isEqualTo(System.getProperty("os.arch"));
     }
 
     @Test
