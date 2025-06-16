@@ -52,7 +52,10 @@ class TDF {
     public static final byte[] GLOBAL_KEY_SALT = tdfECKeySaltCompute();
     static final String EMPTY_SPLIT_ID = ""; // Made package-private for TDFTest usage if needed, or could be private if
                                              // not used by TDFTest
-    public static final String TDF_VERSION = "4.3.0"; // Made public for TDFTest usage
+    /**
+     * The TDF specification version this SDK implements.
+     */
+    public static final String TDF_SPEC_VERSION = "4.3.0";
     private static final String KEY_ACCESS_SCHEMA_VERSION = "1.0";
     private final long maximumSize;
 
@@ -148,7 +151,7 @@ class TDF {
         private static final Base64.Encoder encoder = Base64.getEncoder();
 
         private void prepareManifest(Config.TDFConfig tdfConfig, SDK.KAS kas) {
-            manifest.tdfVersion = tdfConfig.renderVersionInfoInManifest ? TDF_VERSION : null;
+            manifest.tdfVersion = tdfConfig.renderVersionInfoInManifest ? TDF_SPEC_VERSION : null;
             manifest.encryptionInformation.keyAccessType = kSplitKeyType;
             manifest.encryptionInformation.keyAccessObj = new ArrayList<>();
 
@@ -441,14 +444,9 @@ class TDF {
 
         // Add System Metadata Assertion if configured
         if (tdfConfig.systemMetadataAssertion) {
-            // TDF_VERSION is used for both tdfSpecVersion and as a placeholder for
-            // sdkInternalVersion.
-            // Consider defining a specific SDK_VERSION constant for the second parameter
-            // if a distinct SDK version string (e.g., "0.1.0") is desired.
-            AssertionConfig systemAssertion = AssertionConfig.getSystemMetadataAssertionConfig(TDF_VERSION,
-                    TDF_VERSION);
-            // tdfConfig.assertionConfigList is initialized in TDFConfig constructor, so it
-            // won't be null.
+            AssertionConfig systemAssertion = AssertionConfig.getSystemMetadataAssertionConfig(
+                    TDF_SPEC_VERSION, // This is the TDF specification version
+                    SdkInfo.VERSION); // This is the SDK's own version from pom.xml
             tdfConfig.assertionConfigList.add(systemAssertion);
         }
 

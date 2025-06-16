@@ -16,7 +16,8 @@ class Version implements Comparable<Version> {
     private final String prereleaseAndMetadata;
     private static final Logger log = LoggerFactory.getLogger(Version.class);
 
-    Pattern SEMVER_PATTERN = Pattern.compile("^(?<major>0|[1-9]\\d*)\\.(?<minor>0|[1-9]\\d*)\\.(?<patch>0|[1-9]\\d*)(?<prereleaseAndMetadata>\\D.*)?$");
+    Pattern SEMVER_PATTERN = Pattern.compile(
+            "^(?<major>0|[1-9]\\d*)\\.(?<minor>0|[1-9]\\d*)\\.(?<patch>0|[1-9]\\d*)(?<prereleaseAndMetadata>\\D.*)?$");
 
     @Override
     public String toString() {
@@ -63,7 +64,8 @@ class Version implements Comparable<Version> {
 
     @Override
     public boolean equals(Object o) {
-        if (o == null || getClass() != o.getClass()) return false;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Version version = (Version) o;
         return major == version.major && minor == version.minor && patch == version.patch;
     }

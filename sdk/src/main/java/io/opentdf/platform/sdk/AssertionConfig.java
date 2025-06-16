@@ -1,6 +1,5 @@
 package io.opentdf.platform.sdk;
 
-
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
 
@@ -11,7 +10,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.Objects;
 
 /**
- * Represents the configuration for assertions, encapsulating various types, scopes, states, keys,
+ * Represents the configuration for assertions, encapsulating various types,
+ * scopes, states, keys,
  * and statements involved in assertion handling.
  */
 public class AssertionConfig {
@@ -134,58 +134,61 @@ public class AssertionConfig {
      */
     static private class SystemMetadata {
         @SerializedName("tdf_spec_version")
-        String tdfSpecVersion;
+        final String tdfSpecVersion;
 
         @SerializedName("creation_date")
-        String creationDate;
+        final String creationDate;
 
         @SerializedName("operating_system")
-        String operatingSystem;
+        final String operatingSystem;
 
         @SerializedName("sdk_version")
-        String sdkVersion;
-
-        @SerializedName("hostname")
-        String hostname;
+        final String sdkVersion;
 
         @SerializedName("java_version") // Corresponds to "go_version" in the Go example
-        String javaVersion;
+        final String javaVersion;
 
         @SerializedName("architecture")
-        String architecture;
+        final String architecture;
+
+        SystemMetadata(String tdfSpecVersion, String creationDate, String operatingSystem,
+                String sdkVersion, String javaVersion, String architecture) {
+            this.tdfSpecVersion = tdfSpecVersion;
+            this.creationDate = creationDate;
+            this.operatingSystem = operatingSystem;
+            this.sdkVersion = sdkVersion;
+            this.javaVersion = javaVersion;
+            this.architecture = architecture;
+        }
     }
 
     /**
      * Returns a default assertion configuration with predefined system metadata.
-     * This method mimics the behavior of the Go function GetSystemMetadataAssertionConfig.
+     * This method mimics the behavior of the Go function
+     * GetSystemMetadataAssertionConfig.
      *
      * @param tdfSpecVersionFromSDK The TDF specification version (e.g., "4.3.0").
-     * @param sdkInternalVersion    The internal version of this SDK (e.g., "1.0.0"), which will be prefixed with "Java-".
+     * @param sdkInternalVersion    The internal version of this SDK (e.g.,
+     *                              "1.0.0"), which will be prefixed with "Java-".
      * @return An {@link AssertionConfig} populated with system metadata.
      * @throws SDKException if there's an error marshalling the metadata to JSON.
      */
-    public static AssertionConfig getSystemMetadataAssertionConfig(String tdfSpecVersionFromSDK, String sdkInternalVersion) {
-        SystemMetadata metadata = new SystemMetadata();
-        metadata.tdfSpecVersion = tdfSpecVersionFromSDK;
-        metadata.creationDate = OffsetDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
-        metadata.operatingSystem = System.getProperty("os.name");
-        metadata.sdkVersion = "Java-" + sdkInternalVersion;
-        metadata.javaVersion = System.getProperty("java.version");
-        metadata.architecture = System.getProperty("os.arch");
+    public static AssertionConfig getSystemMetadataAssertionConfig(String tdfSpecVersionFromSDK,
+            String sdkInternalVersion) {
+        String creationDate = OffsetDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        String operatingSystem = System.getProperty("os.name");
+        String sdkVersion = "Java-" + sdkInternalVersion;
+        String javaVersion = System.getProperty("java.version");
+        String architecture = System.getProperty("os.arch");
 
-        try {
-            metadata.hostname = InetAddress.getLocalHost().getHostName();
-        } catch (UnknownHostException e) {
-            // Mimic Go behavior: if hostname retrieval fails, it's omitted.
-            // Gson will omit null fields by default.
-            // Optionally, log this exception: e.g., logger.warn("Could not retrieve hostname", e);
-        }
+        SystemMetadata metadata = new SystemMetadata(tdfSpecVersionFromSDK, creationDate, operatingSystem,
+                sdkVersion, javaVersion, architecture);
 
         Gson gson = new Gson(); // A new Gson instance is used for simplicity here.
         String metadataJSON;
         try {
             metadataJSON = gson.toJson(metadata);
-        } catch (Exception e) { // Catch general exception from Gson, though it's usually for I/O or reflection issues.
+        } catch (com.google.gson.JsonIOException | com.google.gson.JsonSyntaxException e) {
             throw new SDKException("Failed to marshal system metadata to JSON", e);
         }
 
