@@ -670,7 +670,7 @@ public class TDFTest {
         assertThat(metadataMap).containsKey("creation_date");
         assertThat(metadataMap).containsKey("operating_system");
         assertThat(metadataMap.get("operating_system")).isEqualTo(System.getProperty("os.name"));
-        assertThat(metadataMap)containsKey("sdk_version");
+        assertThat(metadataMap).containsKey("sdk_version");
         assertThat(metadataMap.get("sdk_version")).startsWith("Java-");
         assertThat(metadataMap).containsKey("java_version"); // Corresponds to go_version
         assertThat(metadataMap.get("java_version")).isEqualTo(System.getProperty("java.version"));
