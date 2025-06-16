@@ -3,6 +3,7 @@ package io.opentdf.platform.sdk;
 import com.connectrpc.ResponseMessage;
 import com.connectrpc.UnaryBlockingCall;
 import com.nimbusds.jose.JOSEException;
+import com.google.gson.Gson;
 import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
@@ -25,6 +26,7 @@ import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.Map;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -613,6 +615,52 @@ public class TDFTest {
         assertThat(assertion.statement.schema).isEqualTo("text");
         assertThat(assertion.statement.value).isEqualTo("ICAgIDxlZGoOkVkaD4=");
         assertThat(assertion.type).isEqualTo(AssertionConfig.Type.BaseAssertion.toString());
+    }
+
+    @Test
+    void testSystemMetadataAssertion() throws Exception {
+        Config.TDFConfig tdfConfig = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
+                Config.withKasInformation(getRSAKASInfos()),
+                Config.withSystemMetadataAssertion() // Enable system metadata assertion
+        );
+
+        String plainText = "Test data for system metadata assertion.";
+        InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes(StandardCharsets.UTF_8));
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+
+        TDF tdf = new TDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build());
+        var createdManifest = tdf.createTDF(plainTextInputStream, tdfOutputStream, tdfConfig).getManifest();
+
+        // Verify the created manifest directly
+        assertThat(createdManifest.assertions).isNotNull();
+        assertThat(createdManifest.assertions.size()).isEqualTo(1);
+        Manifest.Assertion sysAssertion = createdManifest.assertions.get(0);
+        assertThat(sysAssertion.id).isEqualTo("default-assertion");
+        assertThat(sysAssertion.type).isEqualTo(AssertionConfig.Type.BaseAssertion.toString());
+        assertThat(sysAssertion.scope).isEqualTo(AssertionConfig.Scope.Payload.toString());
+        assertThat(sysAssertion.appliesToState).isEqualTo(AssertionConfig.AppliesToState.Unencrypted.toString());
+        assertThat(sysAssertion.statement.format).isEqualTo("json");
+        assertThat(sysAssertion.statement.schema).isEqualTo("metadata");
+
+        // Deserialize and check the metadata JSON
+        Gson gson = new Gson();
+        Map<String, String> metadataMap = gson.fromJson(sysAssertion.statement.value, Map.class);
+        assertThat(metadataMap).containsKey("tdf_spec_version");
+        assertThat(metadataMap.get("tdf_spec_version")).isEqualTo(TDF.TDF_VERSION); // Assuming TDF_VERSION is accessible or use a known value
+        assertThat(metadataMap).containsKey("creation_date");
+        assertThat(metadataMap).containsKey("operating_system");
+        assertThat(metadataMap.get("operating_system")).isEqualTo(System.getProperty("os.name"));
+        assertThat(metadataMap).containsKey("sdk_version");
+        assertThat(metadataMap.get("sdk_version")).startsWith("Java-");
+        assertThat(metadataMap).containsKey("java_version"); // Corresponds to go_version
+        assertThat(metadataMap.get("java_version")).isEqualTo(System.getProperty("java.version"));
+        assertThat(metadataMap).containsKey("architecture");
+        assertThat(metadataMap.get("architecture")).isEqualTo(System.getProperty("os.arch"));
+        // Hostname is optional, so we just check if it's there or not, not its specific value.
+        // If it's not retrievable, Gson will omit it.
+        // assertThat(metadataMap).containsKey("hostname"); // This could fail if hostname is not retrievable
+
     }
 
     @Test

@@ -427,6 +427,16 @@ class TDF {
             throw new SDK.KasInfoMissing("kas information is missing, no key access template specified or inferred");
         }
 
+        // Add System Metadata Assertion if configured
+        if (tdfConfig.systemMetadataAssertion) {
+            // TDF_VERSION is used for both tdfSpecVersion and as a placeholder for sdkInternalVersion.
+            // Consider defining a specific SDK_VERSION constant for the second parameter
+            // if a distinct SDK version string (e.g., "0.1.0") is desired.
+            AssertionConfig systemAssertion = AssertionConfig.getSystemMetadataAssertionConfig(TDF_VERSION, TDF_VERSION);
+            // tdfConfig.assertionConfigList is initialized in TDFConfig constructor, so it won't be null.
+            tdfConfig.assertionConfigList.add(systemAssertion);
+        }
+
         TDFObject tdfObject = new TDFObject();
         tdfObject.prepareManifest(tdfConfig, services.kas());
 
@@ -510,6 +520,7 @@ class TDF {
         tdfObject.manifest.payload.isEncrypted = true;
 
         List<Manifest.Assertion> signedAssertions = new ArrayList<>(tdfConfig.assertionConfigList.size());
+
         for (var assertionConfig : tdfConfig.assertionConfigList) {
             var assertion = new Manifest.Assertion();
             assertion.id = assertionConfig.id;

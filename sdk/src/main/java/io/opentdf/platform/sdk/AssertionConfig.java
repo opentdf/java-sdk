@@ -1,6 +1,13 @@
 package io.opentdf.platform.sdk;
 
 
+import com.google.gson.Gson;
+import com.google.gson.annotations.SerializedName;
+
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Objects;
 
 /**
@@ -120,4 +127,80 @@ public class AssertionConfig {
     public AppliesToState appliesToState;
     public Statement statement;
     public AssertionKey signingKey;
+
+    /**
+     * Inner class to hold system metadata for assertion.
+     * Fields are named to match the JSON output of the original Go function.
+     */
+    static private class SystemMetadata {
+        @SerializedName("tdf_spec_version")
+        String tdfSpecVersion;
+
+        @SerializedName("creation_date")
+        String creationDate;
+
+        @SerializedName("operating_system")
+        String operatingSystem;
+
+        @SerializedName("sdk_version")
+        String sdkVersion;
+
+        @SerializedName("hostname")
+        String hostname;
+
+        @SerializedName("java_version") // Corresponds to "go_version" in the Go example
+        String javaVersion;
+
+        @SerializedName("architecture")
+        String architecture;
+    }
+
+    /**
+     * Returns a default assertion configuration with predefined system metadata.
+     * This method mimics the behavior of the Go function GetSystemMetadataAssertionConfig.
+     *
+     * @param tdfSpecVersionFromSDK The TDF specification version (e.g., "4.3.0").
+     * @param sdkInternalVersion    The internal version of this SDK (e.g., "1.0.0"), which will be prefixed with "Java-".
+     * @return An {@link AssertionConfig} populated with system metadata.
+     * @throws SDKException if there's an error marshalling the metadata to JSON.
+     */
+    public static AssertionConfig getSystemMetadataAssertionConfig(String tdfSpecVersionFromSDK, String sdkInternalVersion) {
+        SystemMetadata metadata = new SystemMetadata();
+        metadata.tdfSpecVersion = tdfSpecVersionFromSDK;
+        metadata.creationDate = OffsetDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        metadata.operatingSystem = System.getProperty("os.name");
+        metadata.sdkVersion = "Java-" + sdkInternalVersion;
+        metadata.javaVersion = System.getProperty("java.version");
+        metadata.architecture = System.getProperty("os.arch");
+
+        try {
+            metadata.hostname = InetAddress.getLocalHost().getHostName();
+        } catch (UnknownHostException e) {
+            // Mimic Go behavior: if hostname retrieval fails, it's omitted.
+            // Gson will omit null fields by default.
+            // Optionally, log this exception: e.g., logger.warn("Could not retrieve hostname", e);
+        }
+
+        Gson gson = new Gson(); // A new Gson instance is used for simplicity here.
+        String metadataJSON;
+        try {
+            metadataJSON = gson.toJson(metadata);
+        } catch (Exception e) { // Catch general exception from Gson, though it's usually for I/O or reflection issues.
+            throw new SDKException("Failed to marshal system metadata to JSON", e);
+        }
+
+        AssertionConfig config = new AssertionConfig();
+        config.id = "default-assertion";
+        config.type = Type.BaseAssertion;
+        config.scope = Scope.Payload; // Maps from Go's PayloadScope
+        config.appliesToState = AppliesToState.Unencrypted;
+
+        Statement statement = new Statement();
+        statement.format = "json";
+        statement.schema = "metadata";
+        statement.value = metadataJSON;
+        config.statement = statement;
+
+        return config;
+    }
 }
