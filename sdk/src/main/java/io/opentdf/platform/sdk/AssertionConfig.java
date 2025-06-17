@@ -199,7 +199,7 @@ public class AssertionConfig {
 
         Statement statement = new Statement();
         statement.format = "json";
-        statement.schema = "metadata";
+        statement.schema = "system-metadata-v1";
         statement.value = metadataJSON;
         config.statement = statement;
 
