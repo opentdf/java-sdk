@@ -18,7 +18,7 @@ public class AssertionConfig {
 
     public enum Type {
         HandlingAssertion("handling"),
-        BaseAssertion("base");
+        BaseAssertion("other");
 
         private final String type;
 
