@@ -192,7 +192,7 @@ public class AssertionConfig {
         }
 
         AssertionConfig config = new AssertionConfig();
-        config.id = "default-assertion";
+        config.id = "system-metadata";
         config.type = Type.BaseAssertion;
         config.scope = Scope.Payload; // Maps from Go's PayloadScope
         config.appliesToState = AppliesToState.Unencrypted;
