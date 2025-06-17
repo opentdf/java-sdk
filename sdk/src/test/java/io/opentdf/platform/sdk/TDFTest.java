@@ -706,7 +706,7 @@ public class TDFTest {
                 assertThat(metadataMap).containsKey("operating_system");
                 assertThat(metadataMap.get("operating_system")).isEqualTo(System.getProperty("os.name"));
                 assertThat(metadataMap).containsKey("sdk_version");
-                assertThat(metadataMap.get("sdk_version")).isEqualTo("Java-" + SdkInfo.VERSION);
+                assertThat(metadataMap.get("sdk_version")).isEqualTo("Java-" + Version.SDK);
                 assertThat(metadataMap).containsKey("java_version");
                 assertThat(metadataMap.get("java_version")).isEqualTo(System.getProperty("java.version"));
                 assertThat(metadataMap).containsKey("architecture");

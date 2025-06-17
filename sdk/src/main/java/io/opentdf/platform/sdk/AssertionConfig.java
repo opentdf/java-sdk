@@ -173,11 +173,10 @@ public class AssertionConfig {
      * @return An {@link AssertionConfig} populated with system metadata.
      * @throws SDKException if there's an error marshalling the metadata to JSON.
      */
-    public static AssertionConfig getSystemMetadataAssertionConfig(String tdfSpecVersionFromSDK,
-            String sdkInternalVersion) {
+    public static AssertionConfig getSystemMetadataAssertionConfig(String tdfSpecVersionFromSDK) {
         String creationDate = OffsetDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
         String operatingSystem = System.getProperty("os.name");
-        String sdkVersion = "Java-" + sdkInternalVersion;
+        String sdkVersion = "Java-" + Version.SDK;
         String javaVersion = System.getProperty("java.version");
         String architecture = System.getProperty("os.arch");
 

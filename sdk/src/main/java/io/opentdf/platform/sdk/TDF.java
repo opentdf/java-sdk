@@ -444,9 +444,7 @@ class TDF {
 
         // Add System Metadata Assertion if configured
         if (tdfConfig.systemMetadataAssertion) {
-            AssertionConfig systemAssertion = AssertionConfig.getSystemMetadataAssertionConfig(
-                    TDF_SPEC_VERSION, // This is the TDF specification version
-                    SdkInfo.VERSION); // This is the SDK's own version from pom.xml
+            AssertionConfig systemAssertion = AssertionConfig.getSystemMetadataAssertionConfig(TDF_SPEC_VERSION);
             tdfConfig.assertionConfigList.add(systemAssertion);
         }
 

@@ -10,6 +10,10 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 
 class Version implements Comparable<Version> {
+
+    // Version of the SDK, managed by release-please.
+    public static final String SDK = "0.8.2-SNAPSHOT"; // x-release-please-version
+
     private final int major;
     private final int minor;
     private final int patch;
