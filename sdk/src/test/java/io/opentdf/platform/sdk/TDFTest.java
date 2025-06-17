@@ -685,13 +685,13 @@ public class TDFTest {
                 assertThat(createdManifest.assertions).isNotNull();
                 assertThat(createdManifest.assertions.size()).isEqualTo(1);
                 Manifest.Assertion sysAssertion = createdManifest.assertions.get(0);
-                assertThat(sysAssertion.id).isEqualTo("default-assertion");
+                assertThat(sysAssertion.id).isEqualTo("system-metadata");
                 assertThat(sysAssertion.type).isEqualTo(AssertionConfig.Type.BaseAssertion.toString());
                 assertThat(sysAssertion.scope).isEqualTo(AssertionConfig.Scope.Payload.toString());
                 assertThat(sysAssertion.appliesToState)
                                 .isEqualTo(AssertionConfig.AppliesToState.Unencrypted.toString());
                 assertThat(sysAssertion.statement.format).isEqualTo("json");
-                assertThat(sysAssertion.statement.schema).isEqualTo("metadata");
+                assertThat(sysAssertion.statement.schema).isEqualTo("system-metadata-v1");
 
                 // Deserialize and check the metadata JSON
                 Gson gson = new Gson();
