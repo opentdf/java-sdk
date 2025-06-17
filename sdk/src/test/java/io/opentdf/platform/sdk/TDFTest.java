@@ -236,7 +236,7 @@ public class TDFTest {
                         assertThat(manifest.assertions).asList().hasSize(1);
                         var assertion = manifest.assertions.get(0);
                         assertThat(assertion.appliesToState).isEqualTo("unencrypted");
-                        assertThat(assertion.type).isEqualTo("base");
+                        assertThat(assertion.type).isEqualTo("other");
                         assertThat(assertion.statement.value).isEqualTo("ICAgIDxlZGoOkVkaD4=");
                         assertThat(assertion.statement.schema).isEqualTo("text");
                         assertThat(assertion.statement.format).isEqualTo("base64binary");
