@@ -160,6 +160,7 @@ public class Config {
         public KeyType wrappingKeyType;
         public boolean hexEncodeRootAndSegmentHashes;
         public boolean renderVersionInfoInManifest;
+        public boolean systemMetadataAssertion;
 
         public TDFConfig() {
             this.autoconfigure = true;
@@ -176,6 +177,7 @@ public class Config {
             this.wrappingKeyType = KeyType.RSA2048Key;
             this.hexEncodeRootAndSegmentHashes = false;
             this.renderVersionInfoInManifest = true;
+            this.systemMetadataAssertion = false;
         }
     }
 
@@ -295,6 +297,10 @@ public class Config {
 
     public static Consumer<TDFConfig> withMimeType(String mimeType) {
         return (TDFConfig config) -> config.mimeType = mimeType;
+    }
+
+    public static Consumer<TDFConfig> withSystemMetadataAssertion() {
+        return (TDFConfig config) -> config.systemMetadataAssertion = true;
     }
 
     public static class NanoTDFConfig {
