@@ -28,6 +28,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.text.ParseException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * The TDF class is responsible for handling operations related to
@@ -151,22 +152,6 @@ class TDF {
             String base64PolicyObject = encoder
                     .encodeToString(gson.toJson(policyObject).getBytes(StandardCharsets.UTF_8));
             Map<String, Config.KASInfo> latestKASInfo = new HashMap<>();
-            if (tdfConfig.splitPlan == null || tdfConfig.splitPlan.isEmpty()) {
-                // Default split plan: Split keys across all KASes
-                List<Autoconfigure.KeySplitStep> splitPlan = new ArrayList<>(tdfConfig.kasInfoList.size());
-                int i = 0;
-                for (Config.KASInfo kasInfo : tdfConfig.kasInfoList) {
-                    Autoconfigure.KeySplitStep step = new Autoconfigure.KeySplitStep(kasInfo.URL, "");
-                    if (tdfConfig.kasInfoList.size() > 1) {
-                        step.splitID = String.format("s-%d", i++);
-                    }
-                    splitPlan.add(step);
-                    if (kasInfo.PublicKey != null && !kasInfo.PublicKey.isEmpty()) {
-                        latestKASInfo.put(kasInfo.URL, kasInfo);
-                    }
-                }
-                tdfConfig.splitPlan = splitPlan;
-            }
 
             // Seed anything passed in manually
             for (Config.KASInfo kasInfo : tdfConfig.kasInfoList) {
@@ -177,7 +162,6 @@ class TDF {
 
             // split plan: restructure by conjunctions
             Map<String, List<Config.KASInfo>> conjunction = new HashMap<>();
-            List<String> splitIDs = new ArrayList<>();
 
             for (Autoconfigure.KeySplitStep splitInfo : tdfConfig.splitPlan) {
                 // Public key was passed in with kasInfoList
@@ -192,18 +176,11 @@ class TDF {
                     latestKASInfo.put(splitInfo.kas, getKI);
                     ki = getKI;
                 }
-                if (conjunction.containsKey(splitInfo.splitID)) {
-                    conjunction.get(splitInfo.splitID).add(ki);
-                } else {
-                    List<Config.KASInfo> newList = new ArrayList<>();
-                    newList.add(ki);
-                    conjunction.put(splitInfo.splitID, newList);
-                    splitIDs.add(splitInfo.splitID);
-                }
+                conjunction.computeIfAbsent(splitInfo.splitID, s -> new ArrayList<>()).add(ki);
             }
 
-            List<byte[]> symKeys = new ArrayList<>(splitIDs.size());
-            for (String splitID : splitIDs) {
+            List<byte[]> symKeys = new ArrayList<>(conjunction.size());
+            for (String splitID : conjunction.keySet()) {
                 // Symmetric key
                 byte[] symKey = new byte[GCM_KEY_SIZE];
                 sRandom.nextBytes(symKey);
@@ -401,6 +378,7 @@ class TDF {
 
     TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig tdfConfig) throws SDKException, IOException {
 
+        List<String> dk = defaultKases(tdfConfig);
         if (tdfConfig.autoconfigure) {
             Autoconfigure.Granter granter = new Autoconfigure.Granter(new ArrayList<>());
             if (tdfConfig.attributeValues != null && !tdfConfig.attributeValues.isEmpty()) {
@@ -413,14 +391,9 @@ class TDF {
             if (granter == null) {
                 throw new AutoConfigureException("Failed to create Granter"); // Replace with appropriate error handling
             }
-
-            List<String> dk = defaultKases(tdfConfig);
             tdfConfig.splitPlan = granter.plan(dk, () -> UUID.randomUUID().toString());
-
-            if (tdfConfig.splitPlan == null) {
-                throw new AutoConfigureException("Failed to generate Split Plan"); // Replace with appropriate error
-                // handling
-            }
+        } else {
+            tdfConfig.splitPlan = Autoconfigure.Granter.generatePlanFromDefaultKases(dk, () -> UUID.randomUUID().toString());
         }
 
         if (tdfConfig.kasInfoList.isEmpty() && (tdfConfig.splitPlan == null || tdfConfig.splitPlan.isEmpty())) {
@@ -572,10 +545,7 @@ class TDF {
                 allk.add(kasInfo.URL);
             }
         }
-        if (defk.isEmpty()) {
-            return allk;
-        }
-        return defk;
+        return defk.isEmpty() ? allk : defk;
     }
 
     Reader loadTDF(SeekableByteChannel tdf, String platformUrl) throws SDKException, IOException {

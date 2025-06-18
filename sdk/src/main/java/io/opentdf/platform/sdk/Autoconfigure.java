@@ -14,6 +14,7 @@ import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
@@ -53,11 +54,11 @@ class RuleType {
  * This class includes functionality to create granter instances based on
  * attributes either from a list of attribute values or from a service.
  */
-public class Autoconfigure {
+class Autoconfigure {
 
-    public static Logger logger = LoggerFactory.getLogger(Autoconfigure.class);
+    private static Logger logger = LoggerFactory.getLogger(Autoconfigure.class);
 
-    public static class KeySplitStep {
+    static class KeySplitStep {
         public String kas;
         public String splitID;
 
@@ -93,7 +94,7 @@ public class Autoconfigure {
     }
 
     // Utility class for an attribute name FQN.
-    public static class AttributeNameFQN {
+    static class AttributeNameFQN {
         private final String url;
         private final String key;
 
@@ -156,7 +157,7 @@ public class Autoconfigure {
     }
 
     // Utility class for an attribute value FQN.
-    public static class AttributeValueFQN {
+    static class AttributeValueFQN {
         private final String url;
         private final String key;
 
@@ -203,11 +204,11 @@ public class Autoconfigure {
             return Objects.hash(key);
         }
 
-        public String getKey() {
+        String getKey() {
             return key;
         }
 
-        public String authority() {
+        String authority() {
             Pattern pattern = Pattern.compile("^(https?://[\\w./-]+)/attr/\\S*/value/\\S*$");
             Matcher matcher = pattern.matcher(url);
             if (!matcher.find()) {
@@ -216,7 +217,7 @@ public class Autoconfigure {
             return matcher.group(1);
         }
 
-        public AttributeNameFQN prefix() throws AutoConfigureException {
+        AttributeNameFQN prefix() throws AutoConfigureException {
             Pattern pattern = Pattern.compile("^(https?://[\\w./-]+/attr/\\S*)/value/\\S*$");
             Matcher matcher = pattern.matcher(url);
             if (!matcher.find()) {
@@ -225,7 +226,7 @@ public class Autoconfigure {
             return new AttributeNameFQN(matcher.group(1));
         }
 
-        public String value() {
+        String value() {
             Pattern pattern = Pattern.compile("^https?://[\\w./-]+/attr/\\S*/value/(\\S*)$");
             Matcher matcher = pattern.matcher(url);
             if (!matcher.find()) {
@@ -238,21 +239,21 @@ public class Autoconfigure {
             }
         }
 
-        public String name() {
+        String name() {
             Pattern pattern = Pattern.compile("^https?://[\\w./-]+/attr/(\\S*)/value/\\S*$");
             Matcher matcher = pattern.matcher(url);
             if (!matcher.find()) {
                 throw new RuntimeException("invalid attributeInstance");
             }
             try {
-                return URLDecoder.decode(matcher.group(1), StandardCharsets.UTF_8.name());
-            } catch (UnsupportedEncodingException | IllegalArgumentException e) {
+                return URLDecoder.decode(matcher.group(1), StandardCharsets.UTF_8);
+            } catch (IllegalArgumentException e) {
                 throw new RuntimeException("invalid attributeInstance", e);
             }
         }
     }
 
-    public static class KeyAccessGrant {
+    static class KeyAccessGrant {
         public Attribute attr;
         public List<String> kases;
 
@@ -295,11 +296,11 @@ public class Autoconfigure {
             }
         }
 
-        public KeyAccessGrant byAttribute(AttributeValueFQN fqn) {
+        KeyAccessGrant byAttribute(AttributeValueFQN fqn) {
             return grants.get(fqn.key);
         }
 
-        public List<KeySplitStep> plan(List<String> defaultKas, Supplier<String> genSplitID)
+        @Nonnull List<KeySplitStep> plan(List<String> defaultKas, Supplier<String> genSplitID)
                 throws AutoConfigureException {
             AttributeBooleanExpression b = constructAttributeBoolean();
             BooleanKeyExpression k = insertKeysForAttribute(b);
@@ -311,17 +312,7 @@ public class Autoconfigure {
             int l = k.size();
             if (l == 0) {
                 // default behavior: split key across all default KAS
-                if (defaultKas.isEmpty()) {
-                    throw new AutoConfigureException("no default KAS specified; required for grantless plans");
-                } else if (defaultKas.size() == 1) {
-                    return Collections.singletonList(new KeySplitStep(defaultKas.get(0), ""));
-                } else {
-                    List<KeySplitStep> result = new ArrayList<>();
-                    for (String kas : defaultKas) {
-                        result.add(new KeySplitStep(kas, genSplitID.get()));
-                    }
-                    return result;
-                }
+                return generatePlanFromDefaultKases(defaultKas, genSplitID);
             }
 
             List<KeySplitStep> steps = new ArrayList<>();
@@ -332,6 +323,20 @@ public class Autoconfigure {
                 }
             }
             return steps;
+        }
+
+        static List<KeySplitStep> generatePlanFromDefaultKases(List<String> defaultKas, Supplier<String> genSplitID) {
+            if (defaultKas.isEmpty()) {
+                throw new AutoConfigureException("no default KAS specified; required for grantless plans");
+            } else if (defaultKas.size() == 1) {
+                return Collections.singletonList(new KeySplitStep(defaultKas.get(0), ""));
+            } else {
+                List<KeySplitStep> result = new ArrayList<>();
+                for (String kas : defaultKas) {
+                    result.add(new KeySplitStep(kas, genSplitID.get()));
+                }
+                return result;
+            }
         }
 
         BooleanKeyExpression insertKeysForAttribute(AttributeBooleanExpression e) throws AutoConfigureException {
@@ -348,6 +353,7 @@ public class Autoconfigure {
 
                     List<String> kases = grant.kases;
                     if (kases.isEmpty()) {
+                        // TODO: replace this with a reference to the base key
                         kases = List.of(RuleType.EMPTY_TERM);
                     }
 
@@ -368,6 +374,13 @@ public class Autoconfigure {
             return new BooleanKeyExpression(kcs);
         }
 
+        /**
+         * Constructs an AttributeBooleanExpression from the policy, splitting each attribute
+         * into its own clause. Each clause contains the attribute definition and a list of
+         * values.
+         * @return
+         * @throws AutoConfigureException
+         */
         AttributeBooleanExpression constructAttributeBoolean() throws AutoConfigureException {
             Map<String, SingleAttributeClause> prefixes = new HashMap<>();
             List<String> sortedPrefixes = new ArrayList<>();
@@ -378,7 +391,7 @@ public class Autoconfigure {
                     clause.values.add(aP);
                 } else if (byAttribute(aP) != null) {
                     var x = new SingleAttributeClause(byAttribute(aP).attr,
-                            new ArrayList<AttributeValueFQN>(Arrays.asList(aP)));
+                            new ArrayList<>(Arrays.asList(aP)));
                     prefixes.put(a.getKey(), x);
                     sortedPrefixes.add(a.getKey());
                 }
@@ -389,39 +402,6 @@ public class Autoconfigure {
                     .collect(Collectors.toList());
 
             return new AttributeBooleanExpression(must);
-        }
-
-        static class AttributeMapping {
-
-            private Map<AttributeNameFQN, Attribute> dict;
-
-            public AttributeMapping() {
-                this.dict = new HashMap<>();
-            }
-
-            public void put(Attribute ad) throws AutoConfigureException {
-                if (this.dict == null) {
-                    this.dict = new HashMap<>();
-                }
-
-                AttributeNameFQN prefix = new AttributeNameFQN(ad.getFqn());
-
-                if (this.dict.containsKey(prefix)) {
-                    throw new AutoConfigureException("Attribute prefix already found: [" + prefix.toString() + "]");
-                }
-
-                this.dict.put(prefix, ad);
-            }
-
-            public Attribute get(AttributeNameFQN prefix) throws AutoConfigureException {
-                Attribute ad = this.dict.get(prefix);
-                if (ad == null) {
-                    throw new AutoConfigureException("Unknown attribute type: [" + prefix.toString() + "], not in ["
-                            + this.dict.keySet().toString() + "]");
-                }
-                return ad;
-            }
-
         }
 
         static class SingleAttributeClause {
@@ -435,9 +415,9 @@ public class Autoconfigure {
             }
         }
 
-        class AttributeBooleanExpression {
+        static class AttributeBooleanExpression {
 
-            private List<SingleAttributeClause> must;
+            private final List<SingleAttributeClause> must;
 
             public AttributeBooleanExpression(List<SingleAttributeClause> must) {
                 this.must = must;
@@ -478,7 +458,7 @@ public class Autoconfigure {
 
         }
 
-        public class PublicKeyInfo {
+        public static class PublicKeyInfo {
             private String kas;
 
             public PublicKeyInfo(String kas) {
@@ -494,9 +474,9 @@ public class Autoconfigure {
             }
         }
 
-        public class KeyClause {
-            private String operator;
-            private List<PublicKeyInfo> values;
+        public static class KeyClause {
+            private final String operator;
+            private final List<PublicKeyInfo> values;
 
             public KeyClause(String operator, List<PublicKeyInfo> values) {
                 this.operator = operator;
@@ -531,8 +511,8 @@ public class Autoconfigure {
             }
         }
 
-        public class BooleanKeyExpression {
-            private List<KeyClause> values;
+        public static class BooleanKeyExpression {
+            private final List<KeyClause> values;
 
             public BooleanKeyExpression(List<KeyClause> values) {
                 this.values = values;
@@ -612,7 +592,7 @@ public class Autoconfigure {
 
         }
 
-        class Disjunction extends ArrayList<String> {
+        static class Disjunction extends ArrayList<String> {
 
             public boolean less(Disjunction r) {
                 int m = Math.min(this.size(), r.size());
