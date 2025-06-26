@@ -368,7 +368,7 @@ public class AutoconfigureTest {
         for (ConfigurationTestCase tc : testCases) {
             assertDoesNotThrow(() -> {
                 List<Value> v = valuesToPolicy(tc.getPolicy().toArray(new AttributeValueFQN[0]));
-                Granter grants = Autoconfigure.newGranterFromAttributes(v.toArray(new Value[0]));
+                Granter grants = Autoconfigure.newGranterFromAttributes(null, v.toArray(new Value[0]));
                 assertThat(grants).isNotNull();
                 assertThat(grants.getGrants()).hasSize(tc.getSize());
                 assertThat(policyToStringKeys(tc.getPolicy())).containsAll(grants.getGrants().keySet());
@@ -451,7 +451,7 @@ public class AutoconfigureTest {
                                 new KeySplitStep(KAS_US_HCS, "2"), new KeySplitStep(KAS_US_SA, "3"))));
 
         for (ReasonerTestCase tc : testCases) {
-            Granter reasoner = Autoconfigure.newGranterFromAttributes(
+            Granter reasoner = Autoconfigure.newGranterFromAttributes(null,
                     valuesToPolicy(tc.getPolicy().toArray(new AttributeValueFQN[0])).toArray(new Value[0]));
             assertThat(reasoner).isNotNull();
 
@@ -748,9 +748,7 @@ public class AutoconfigureTest {
                         KasPublicKeySet.newBuilder()))
                 .build();
 
-        List<KeyAccessServer> kases = List.of(kas1);
-
-        Autoconfigure.storeKeysToCache(kases, keyCache);
+        Autoconfigure.storeKeysToCache(Config.KASInfo.fromKeyAccessServer(kas1), keyCache);
 
         verify(keyCache, never()).store(any(Config.KASInfo.class));
     }
@@ -780,11 +778,8 @@ public class AutoconfigureTest {
                 .setUri("https://example.com/kas")
                 .build();
 
-        // Add the KeyAccessServer to a list
-        List<KeyAccessServer> kases = List.of(kas1);
-
         // Call the method under test
-        Autoconfigure.storeKeysToCache(kases, keyCache);
+        Autoconfigure.storeKeysToCache(Config.KASInfo.fromKeyAccessServer(kas1), keyCache);
 
         // Verify that the key was stored in the cache
         Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1");
@@ -826,11 +821,8 @@ public class AutoconfigureTest {
                 .setUri("https://example.com/kas")
                 .build();
 
-        // Add the KeyAccessServer to a list
-        List<KeyAccessServer> kases = List.of(kas1);
-
         // Call the method under test
-        Autoconfigure.storeKeysToCache(kases, keyCache);
+        Autoconfigure.storeKeysToCache(Config.KASInfo.fromKeyAccessServer(kas1), keyCache);
 
         // Verify that the key was stored in the cache
         Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1");
