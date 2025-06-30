@@ -501,41 +501,41 @@ public class AutoconfigureTest {
     @Test
     public void testReasonerSpecificity() {
         List<ReasonerTestCase> testCases = List.of(
-//                new ReasonerTestCase(
-//                        "uns.uns => default",
-//                        List.of(uns2uns),
-//                        List.of(KAS_US),
-//                        List.of(new KeySplitStep(KAS_US, ""))),
-//                new ReasonerTestCase(
-//                        "uns.spk => spk",
-//                        List.of(uns2spk),
-//                        List.of(KAS_US),
-//                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
-//                new ReasonerTestCase(
-//                        "spk.uns => spk",
-//                        List.of(spk2uns),
-//                        List.of(KAS_US),
-//                        List.of(new KeySplitStep(SPECIFIED_KAS, ""))),
-//                new ReasonerTestCase(
-//                        "spk.spk => value.spk",
-//                        List.of(spk2spk),
-//                        List.of(KAS_US),
-//                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
-//                new ReasonerTestCase(
-//                        "spk.spk & spk.uns => value.spk || attr.spk",
-//                        List.of(spk2spk, spk2uns),
-//                        List.of(KAS_US),
-//                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, "1"), new KeySplitStep(SPECIFIED_KAS, "1"))),
-//                new ReasonerTestCase(
-//                        "spk.uns & spk.spk => value.spk || attr.spk",
-//                        List.of(spk2uns, spk2spk),
-//                        List.of(KAS_US),
-//                        List.of(new KeySplitStep(SPECIFIED_KAS, "1"), new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, "1"))),
-//                new ReasonerTestCase(
-//                        "uns.spk & spk.spk => value.spk",
-//                        List.of(spk2spk, uns2spk),
-//                        List.of(KAS_US),
-//                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
+                new ReasonerTestCase(
+                        "uns.uns => default",
+                        List.of(uns2uns),
+                        List.of(KAS_US),
+                        List.of(new KeySplitStep(KAS_US, ""))),
+                new ReasonerTestCase(
+                        "uns.spk => spk",
+                        List.of(uns2spk),
+                        List.of(KAS_US),
+                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
+                new ReasonerTestCase(
+                        "spk.uns => spk",
+                        List.of(spk2uns),
+                        List.of(KAS_US),
+                        List.of(new KeySplitStep(SPECIFIED_KAS, ""))),
+                new ReasonerTestCase(
+                        "spk.spk => value.spk",
+                        List.of(spk2spk),
+                        List.of(KAS_US),
+                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
+                new ReasonerTestCase(
+                        "spk.spk & spk.uns => value.spk || attr.spk",
+                        List.of(spk2spk, spk2uns),
+                        List.of(KAS_US),
+                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, "1"), new KeySplitStep(SPECIFIED_KAS, "1"))),
+                new ReasonerTestCase(
+                        "spk.uns & spk.spk => value.spk || attr.spk",
+                        List.of(spk2uns, spk2spk),
+                        List.of(KAS_US),
+                        List.of(new KeySplitStep(SPECIFIED_KAS, "1"), new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, "1"))),
+                new ReasonerTestCase(
+                        "uns.spk & spk.spk => value.spk",
+                        List.of(spk2spk, uns2spk),
+                        List.of(KAS_US),
+                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
                 new ReasonerTestCase(
                         "uns.spk & uns.uns => spk",
                         List.of(uns2spk, uns2uns),
@@ -598,12 +598,13 @@ public class AutoconfigureTest {
             var wrapper = new Object() {
                 int i = 0;
             };
-            List<KeySplitStep> plan = reasoner.plan(tc.getDefaults(), () -> {
-                        return String.valueOf(wrapper.i++ + 1);
-                    }
+            List<KeySplitStep> plan = reasoner.plan(tc.getDefaults(), () -> String.valueOf(wrapper.i++ + 1)
 
             );
-            assertThat(plan).hasSameElementsAs(tc.getPlan());
+            assertThat(plan)
+                    .as(tc.name)
+                    .hasSameElementsAs(tc.getPlan());
+
         }
     }
 
@@ -748,7 +749,7 @@ public class AutoconfigureTest {
                         KasPublicKeySet.newBuilder()))
                 .build();
 
-        Autoconfigure.storeKeysToCache(Config.KASInfo.fromKeyAccessServer(kas1), keyCache);
+        Autoconfigure.storeKeysToCache(List.of(kas1), Collections.emptyList(), keyCache);
 
         verify(keyCache, never()).store(any(Config.KASInfo.class));
     }
@@ -779,7 +780,7 @@ public class AutoconfigureTest {
                 .build();
 
         // Call the method under test
-        Autoconfigure.storeKeysToCache(Config.KASInfo.fromKeyAccessServer(kas1), keyCache);
+        Autoconfigure.storeKeysToCache(List.of(kas1), Collections.emptyList(), keyCache);
 
         // Verify that the key was stored in the cache
         Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1");
@@ -822,7 +823,7 @@ public class AutoconfigureTest {
                 .build();
 
         // Call the method under test
-        Autoconfigure.storeKeysToCache(Config.KASInfo.fromKeyAccessServer(kas1), keyCache);
+        Autoconfigure.storeKeysToCache(List.of(kas1), Collections.emptyList(), keyCache);
 
         // Verify that the key was stored in the cache
         Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1");

@@ -33,6 +33,7 @@ import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * The RuleType class defines a set of constants that represent various types of attribute rules.
@@ -280,18 +281,15 @@ class Autoconfigure {
             return policy;
         }
 
-        public void addGrant(AttributeValueFQN fqn, String kas, Attribute attr) {
-            grants.computeIfAbsent(fqn.key, k -> new KeyAccessGrant(attr, new ArrayList<>())).kases.add(kas);
-        }
-
-        public void addAllGrants(AttributeValueFQN fqn, List<KeyAccessServer> granted, List<SimpleKasKey> mapped, Attribute attr) {
+        public boolean addAllGrants(AttributeValueFQN fqn, List<KeyAccessServer> granted, List<SimpleKasKey> mapped, Attribute attr, KASKeyCache keyCache) {
             for (var mappedKey: mapped) {
                 mappedKeys.computeIfAbsent(fqn.key, k -> new ArrayList<>()).add(Config.KASInfo.fromSimpleKasKey(mappedKey));
                 grants.computeIfAbsent(fqn.key, k -> new KeyAccessGrant(attr, new ArrayList<>())).kases.add(mappedKey.getKasUri());
             }
+            storeKeysToCache(granted, mapped, keyCache);
 
-            if (!mappedKeys.isEmpty()) {
-                return;
+            if (!mapped.isEmpty()) {
+                return true;
             }
 
             for (var grantedKey: granted) {
@@ -318,21 +316,11 @@ class Autoconfigure {
                 }
             }
 
-            if (mappedKeys.isEmpty() && grants.isEmpty()) {
+            if (!grants.containsKey(fqn.key)) {
                 grants.put(fqn.key, new KeyAccessGrant(attr, new ArrayList<>()));
             }
-        }
 
-        public void addMappedKeys(AttributeValueFQN fqn, List<SimpleKasKey> keys, Attribute attr) {
-            if (keys.isEmpty()) {
-                grants.putIfAbsent(fqn.key, new KeyAccessGrant(attr, new ArrayList<>()));
-            } else {
-                for (SimpleKasKey key : keys) {
-                    if (key != null) {
-                        addGrant(fqn, key.getKasUri(), attr);
-                    }
-                }
-            }
+            return !granted.isEmpty();
         }
 
         KeyAccessGrant byAttribute(AttributeValueFQN fqn) {
@@ -730,37 +718,6 @@ class Autoconfigure {
         return getGranter(keyCache, new ArrayList<>(av.getFqnAttributeValuesMap().values()));
     }
 
-    private static List<KeyAccessServer> getGrants(GetAttributeValuesByFqnsResponse.AttributeAndValue attributeAndValue) {
-        var val = attributeAndValue.getValue();
-        var attribute = attributeAndValue.getAttribute();
-
-        if (!val.getGrantsList().isEmpty()) {
-            if (logger.isDebugEnabled()) {
-                logger.debug("adding grants from attribute value [{}]: {}", val.getFqn(), val.getGrantsList().stream().map(KeyAccessServer::getUri).collect(Collectors.toList()));
-            }
-            return val.getGrantsList();
-        } else if (!attribute.getGrantsList().isEmpty()) {
-            var attributeGrants = attribute.getGrantsList();
-            if (logger.isDebugEnabled()) {
-                logger.debug("adding grants from attribute [{}]: {}", attribute.getFqn(), attributeGrants.stream().map(KeyAccessServer::getId).collect(Collectors.toList()));
-            }
-            return attributeGrants;
-        } else if (!attribute.getNamespace().getGrantsList().isEmpty()) {
-            var nsGrants = attribute.getNamespace().getGrantsList();
-            if (logger.isDebugEnabled()) {
-                logger.debug("adding grants from namespace [{}]: [{}]", attribute.getNamespace().getName(), nsGrants.stream().map(KeyAccessServer::getId).collect(Collectors.toList()));
-            }
-            return nsGrants;
-        } else {
-            // this is needed to mark the fact that we have an empty
-            if (logger.isDebugEnabled()) {
-                logger.debug("didn't find any grants on value, attribute, or namespace for attribute value [{}]", val.getFqn());
-            }
-            return Collections.emptyList();
-        }
-
-    }
-
     private static Granter getGranter(KASKeyCache keyCache, List<GetAttributeValuesByFqnsResponse.AttributeAndValue> values) {
         Granter grants = new Granter(values.stream().map(GetAttributeValuesByFqnsResponse.AttributeAndValue::getValue).map(Value::getFqn).map(AttributeValueFQN::new).collect(Collectors.toList()));
         for (var attributeAndValue: values) {
@@ -771,18 +728,30 @@ class Autoconfigure {
             var attribute = attributeAndValue.getAttribute();
             var namespace = attribute.getNamespace();
 
-            grants.addAllGrants(fqn, value.getGrantsList(), value.getKasKeysList(), value.getAttribute());
-            grants.addAllGrants(fqn, attribute.getGrantsList(), attribute.getKasKeysList(), attribute);
-            grants.addAllGrants(fqn, namespace.getGrantsList(), namespace.getKasKeysList(), attribute);
+
+            if (grants.addAllGrants(fqn, value.getGrantsList(), value.getKasKeysList(), attribute, keyCache)) {
+                storeKeysToCache(value.getGrantsList(), value.getKasKeysList(), keyCache);
+                continue;
+            }
+            if (grants.addAllGrants(fqn, attribute.getGrantsList(), attribute.getKasKeysList(), attribute, keyCache)) {
+                storeKeysToCache(attribute.getGrantsList(), attribute.getKasKeysList(), keyCache);
+                continue;
+            }
+            storeKeysToCache(namespace.getGrantsList(), namespace.getKasKeysList(), keyCache);
+            grants.addAllGrants(fqn, namespace.getGrantsList(), namespace.getKasKeysList(), attribute, keyCache);
         }
 
         return grants;
     }
 
-    static void storeKeysToCache(List<Config.KASInfo> kases, KASKeyCache keyCache) {
-        if (keyCache != null) {
-            kases.forEach(keyCache::store);
+    static void storeKeysToCache(List<KeyAccessServer> kases, List<SimpleKasKey> kasKeys, KASKeyCache keyCache) {
+        if (keyCache == null) {
+            return;
         }
+        for (var kas : kases) {
+            Config.KASInfo.fromKeyAccessServer(kas).forEach(keyCache::store);
+        }
+        kasKeys.stream().map(Config.KASInfo::fromSimpleKasKey).forEach(keyCache::store);
     }
 
     static String algProto2String(KasPublicKeyAlgEnum e) {
