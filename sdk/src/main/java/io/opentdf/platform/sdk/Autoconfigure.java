@@ -1,26 +1,20 @@
 package io.opentdf.platform.sdk;
 
 import com.connectrpc.ResponseMessageKt;
-import io.opentdf.platform.policy.Algorithm;
 import io.opentdf.platform.policy.Attribute;
 import io.opentdf.platform.policy.AttributeRuleTypeEnum;
 import io.opentdf.platform.policy.AttributeValueSelector;
-import io.opentdf.platform.policy.KasKey;
-import io.opentdf.platform.policy.KasPublicKey;
 import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
 import io.opentdf.platform.policy.KeyAccessServer;
-import io.opentdf.platform.policy.PublicKey;
 import io.opentdf.platform.policy.SimpleKasKey;
 import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.policy.attributes.AttributesServiceClientInterface;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
-import org.checkerframework.checker.units.qual.A;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -35,12 +29,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.StringJoiner;
-import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * The RuleType class defines a set of constants that represent various types of attribute rules.
@@ -775,56 +767,16 @@ class Autoconfigure {
             String fqnstr = attributeAndValue.getValue().getFqn();
             AttributeValueFQN fqn = new AttributeValueFQN(fqnstr);
 
-            var attributeGrants = getGrants(attributeAndValue);
-            grants.addAllGrants(fqn, attributeGrants, attributeAndValue.getValue().getKasKeysList(), attributeAndValue.getAttribute());
+            var value = attributeAndValue.getValue();
+            var attribute = attributeAndValue.getAttribute();
+            var namespace = attribute.getNamespace();
 
-            var grantKasInfos = attributeGrants.stream().map(Config.KASInfo::fromKeyAccessServer).reduce((l1, l2) -> new ArrayList<>(){
-                {
-                    addAll(l1);
-                    addAll(l2);
-                }
-            }).orElse(Collections.emptyList());
-            storeKeysToCache(grantKasInfos, keyCache);
-
-            var mappedKeys = getMappedKeys(attributeAndValue);
-            var mappedKasInfos = mappedKeys.stream().map(Config.KASInfo::fromSimpleKasKey).collect(Collectors.toList());
-            // TODO: add all of the grants here
-
-            storeKeysToCache(mappedKasInfos, keyCache);
+            grants.addAllGrants(fqn, value.getGrantsList(), value.getKasKeysList(), value.getAttribute());
+            grants.addAllGrants(fqn, attribute.getGrantsList(), attribute.getKasKeysList(), attribute);
+            grants.addAllGrants(fqn, namespace.getGrantsList(), namespace.getKasKeysList(), attribute);
         }
 
         return grants;
-    }
-
-    private static List<SimpleKasKey> getMappedKeys(GetAttributeValuesByFqnsResponse.AttributeAndValue attributeAndValue) {
-        var val = attributeAndValue.getValue();
-        var attribute = attributeAndValue.getAttribute();
-        Function<SimpleKasKey, String> printKasKey = k -> String.format("%s %s", k.getKasUri(), k.getPublicKey().getKid());
-
-        if (!val.getKasKeysList().isEmpty()) {
-            if (logger.isDebugEnabled()) {
-                logger.debug("adding kas keys from attribute value [{}]: {}", val.getFqn(), val.getKasKeysList().stream().map(printKasKey).collect(Collectors.toList()));
-            }
-            return val.getKasKeysList();
-        } else if (!attribute.getKasKeysList().isEmpty()) {
-            var kasKeys = attribute.getKasKeysList();
-            if (logger.isDebugEnabled()) {
-                logger.debug("adding kas keys from attribute [{}]: {}", attribute.getFqn(), kasKeys.stream().map(printKasKey).collect(Collectors.toList()));
-            }
-            return kasKeys;
-        } else if (!attribute.getNamespace().getKasKeysList().isEmpty()) {
-            var kasKeys = attribute.getNamespace().getKasKeysList();
-            if (logger.isDebugEnabled()) {
-                logger.debug("adding kas keys from namespace [{}]: [{}]", attribute.getNamespace().getName(), kasKeys.stream().map(printKasKey).collect(Collectors.toList()));
-            }
-            return kasKeys;
-        } else {
-            // this is needed to mark the fact that we have an empty
-            if (logger.isDebugEnabled()) {
-                logger.debug("didn't find any kas keys on value, attribute, or namespace for attribute value [{}]", val.getFqn());
-            }
-            return Collections.emptyList();
-        }
     }
 
     static void storeKeysToCache(List<Config.KASInfo> kases, KASKeyCache keyCache) {
