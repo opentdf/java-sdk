@@ -1,5 +1,6 @@
 package io.opentdf.platform.sdk;
 
+import io.opentdf.platform.policy.KasPublicKey;
 import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
 import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.SimpleKasKey;

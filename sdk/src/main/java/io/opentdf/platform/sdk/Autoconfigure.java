@@ -274,6 +274,7 @@ class Autoconfigure {
     static class Granter {
         private final List<AttributeValueFQN> policy;
         private final Map<String, KeyAccessGrant> grants = new HashMap<>();
+        private final Map<String, List<Config.KASInfo>> mappedKeys = new HashMap<>();
 
         public Granter(List<AttributeValueFQN> policy) {
             this.policy = policy;
@@ -291,13 +292,52 @@ class Autoconfigure {
             grants.computeIfAbsent(fqn.key, k -> new KeyAccessGrant(attr, new ArrayList<>())).kases.add(kas);
         }
 
-        public void addAllGrants(AttributeValueFQN fqn, List<KeyAccessServer> gs, Attribute attr) {
-            if (gs.isEmpty()) {
+        public void addAllGrants(AttributeValueFQN fqn, List<KeyAccessServer> granted, List<SimpleKasKey> mapped, Attribute attr) {
+            for (var mappedKey: mapped) {
+                mappedKeys.computeIfAbsent(fqn.key, k -> new ArrayList<>()).add(Config.KASInfo.fromSimpleKasKey(mappedKey));
+                grants.computeIfAbsent(fqn.key, k -> new KeyAccessGrant(attr, new ArrayList<>())).kases.add(mappedKey.getKasUri());
+            }
+
+            if (!mappedKeys.isEmpty()) {
+                return;
+            }
+
+            for (var grantedKey: granted) {
+                grants.computeIfAbsent(fqn.key, k -> new KeyAccessGrant(attr, new ArrayList<>())).kases.add(grantedKey.getUri());
+                if (!grantedKey.getKasKeysList().isEmpty()) {
+                    for (var kas : grantedKey.getKasKeysList()) {
+                        mappedKeys.computeIfAbsent(fqn.key, k -> new ArrayList<>()).add(Config.KASInfo.fromSimpleKasKey(kas));
+                    }
+                    continue;
+                }
+                var cachedGrantKeys = grantedKey.getPublicKey().getCached().getKeysList();
+                if (cachedGrantKeys.isEmpty()) {
+                    logger.info("no keys cached in policy service");
+                    continue;
+                }
+                for (var cachedGrantKey: cachedGrantKeys) {
+                    var mappedKey = new Config.KASInfo();
+                    mappedKey.URL = grantedKey.getUri();
+                    mappedKey.KID = cachedGrantKey.getKid();
+                    mappedKey.Algorithm = Autoconfigure.algProto2String(cachedGrantKey.getAlg());
+                    mappedKey.PublicKey = cachedGrantKey.getPem();
+                    mappedKey.Default = false;
+                    mappedKeys.computeIfAbsent(fqn.key, k -> new ArrayList<>()).add(mappedKey);
+                }
+            }
+
+            if (mappedKeys.isEmpty() && grants.isEmpty()) {
+                grants.put(fqn.key, new KeyAccessGrant(attr, new ArrayList<>()));
+            }
+        }
+
+        public void addMappedKeys(AttributeValueFQN fqn, List<SimpleKasKey> keys, Attribute attr) {
+            if (keys.isEmpty()) {
                 grants.putIfAbsent(fqn.key, new KeyAccessGrant(attr, new ArrayList<>()));
             } else {
-                for (KeyAccessServer g : gs) {
-                    if (g != null) {
-                        addGrant(fqn, g.getUri(), attr);
+                for (SimpleKasKey key : keys) {
+                    if (key != null) {
+                        addGrant(fqn, key.getKasUri(), attr);
                     }
                 }
             }
@@ -731,11 +771,13 @@ class Autoconfigure {
 
     private static Granter getGranter(KASKeyCache keyCache, List<GetAttributeValuesByFqnsResponse.AttributeAndValue> values) {
         Granter grants = new Granter(values.stream().map(GetAttributeValuesByFqnsResponse.AttributeAndValue::getValue).map(Value::getFqn).map(AttributeValueFQN::new).collect(Collectors.toList()));
-        for (var attributeAndValue : values) {
+        for (var attributeAndValue: values) {
             String fqnstr = attributeAndValue.getValue().getFqn();
             AttributeValueFQN fqn = new AttributeValueFQN(fqnstr);
 
             var attributeGrants = getGrants(attributeAndValue);
+            grants.addAllGrants(fqn, attributeGrants, attributeAndValue.getValue().getKasKeysList(), attributeAndValue.getAttribute());
+
             var grantKasInfos = attributeGrants.stream().map(Config.KASInfo::fromKeyAccessServer).reduce((l1, l2) -> new ArrayList<>(){
                 {
                     addAll(l1);
@@ -743,10 +785,10 @@ class Autoconfigure {
                 }
             }).orElse(Collections.emptyList());
             storeKeysToCache(grantKasInfos, keyCache);
-            grants.addAllGrants(fqn, attributeGrants, attributeAndValue.getAttribute());
 
             var mappedKeys = getMappedKeys(attributeAndValue);
             var mappedKasInfos = mappedKeys.stream().map(Config.KASInfo::fromSimpleKasKey).collect(Collectors.toList());
+            // TODO: add all of the grants here
 
             storeKeysToCache(mappedKasInfos, keyCache);
         }
