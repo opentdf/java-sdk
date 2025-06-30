@@ -547,7 +547,7 @@ public class AutoconfigureTest {
                         List.of(KAS_US),
                         List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
                 new ReasonerTestCase(
-                        "uns.uns & uns.spk => spk",
+                        "uns.uns & spk.spk => spk",
                         List.of(uns2uns, spk2spk),
                         List.of(KAS_US),
                         List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
