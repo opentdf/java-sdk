@@ -36,9 +36,7 @@ public class Planner {
             }
 
             this.granter = granter;
-            tdfConfig.splitPlan = granter.plan(() -> UUID.randomUUID().toString());
         } else {
-            tdfConfig.splitPlan = Autoconfigure.Granter.generatePlanFromDefaultKases(dk, () -> UUID.randomUUID().toString());
             this.granter = null;
         }
 

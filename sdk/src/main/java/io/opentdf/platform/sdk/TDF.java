@@ -348,9 +348,10 @@ class TDF {
     TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig tdfConfig) throws SDKException, IOException {
 
         Planner planner = new Planner(tdfConfig, services);
+        Map<String, List<KASInfo>> splits = planner.getSplits(tdfConfig);
 
         TDFObject tdfObject = new TDFObject();
-        tdfObject.prepareManifest(tdfConfig, services.kas(), planner.getSplits(tdfConfig));
+        tdfObject.prepareManifest(tdfConfig, services.kas(), splits);
 
         long encryptedSegmentSize = tdfConfig.defaultSegmentSize + kGcmIvSize + kAesBlockSize;
         TDFWriter tdfWriter = new TDFWriter(outputStream);
