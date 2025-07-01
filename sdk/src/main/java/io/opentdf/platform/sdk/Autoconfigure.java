@@ -343,9 +343,11 @@ class Autoconfigure {
 
         List<KeySplitStep> getSplits(List<String> defaultKases, Supplier<String> genSplitID, Supplier<Optional<SimpleKasKey>> baseKeySupplier) throws AutoConfigureException {
             if (hasMappedKeys) {
+                logger.debug("generating plan from mapped keys");
                 return planFromAttributes(genSplitID);
             }
             if (hasGrants) {
+                logger.debug("generating plan from grants");
                 return plan(genSplitID);
             }
 
