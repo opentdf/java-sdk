@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.regex.Matcher;
@@ -467,12 +468,10 @@ public class AutoconfigureTest {
             var wrapper = new Object() {
                 int i = 0;
             };
-            List<KeySplitStep> plan = reasoner.plan(tc.getDefaults(), () -> {
-                        return String.valueOf(wrapper.i++ + 1);
-                    }
-
-            );
-            assertThat(plan).isEqualTo(tc.getPlan());
+            List<KeySplitStep> plan = reasoner.getSplits(tc.getDefaults(), () -> String.valueOf(wrapper.i++ + 1), () -> Optional.empty());
+            assertThat(plan)
+                    .as(tc.name)
+                    .isEqualTo(tc.getPlan());
         }
     }
 
@@ -598,9 +597,7 @@ public class AutoconfigureTest {
             var wrapper = new Object() {
                 int i = 0;
             };
-            List<KeySplitStep> plan = reasoner.plan(tc.getDefaults(), () -> String.valueOf(wrapper.i++ + 1)
-
-            );
+            List<KeySplitStep> plan = reasoner.getSplits(tc.getDefaults(), () -> String.valueOf(wrapper.i++ + 1), () -> Optional.empty());
             assertThat(plan)
                     .as(tc.name)
                     .hasSameElementsAs(tc.getPlan());
@@ -783,7 +780,7 @@ public class AutoconfigureTest {
         Autoconfigure.storeKeysToCache(List.of(kas1), Collections.emptyList(), keyCache);
 
         // Verify that the key was stored in the cache
-        Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1");
+        Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1", "test-kid");
         assertNotNull(storedKASInfo);
         assertEquals("https://example.com/kas", storedKASInfo.URL);
         assertEquals("test-kid", storedKASInfo.KID);
@@ -826,14 +823,14 @@ public class AutoconfigureTest {
         Autoconfigure.storeKeysToCache(List.of(kas1), Collections.emptyList(), keyCache);
 
         // Verify that the key was stored in the cache
-        Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1");
+        Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1", "test-kid");
         assertNotNull(storedKASInfo);
         assertEquals("https://example.com/kas", storedKASInfo.URL);
         assertEquals("test-kid", storedKASInfo.KID);
         assertEquals("ec:secp256r1", storedKASInfo.Algorithm);
         assertEquals("public-key-pem", storedKASInfo.PublicKey);
 
-        Config.KASInfo storedKASInfo2 = keyCache.get("https://example.com/kas", "rsa:2048");
+        Config.KASInfo storedKASInfo2 = keyCache.get("https://example.com/kas", "rsa:2048", "test-kid-2");
         assertNotNull(storedKASInfo2);
         assertEquals("https://example.com/kas", storedKASInfo2.URL);
         assertEquals("test-kid-2", storedKASInfo2.KID);
@@ -913,14 +910,14 @@ public class AutoconfigureTest {
         assertThat(reasoner).isNotNull();
 
         // Verify that the key was stored in the cache
-        Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1");
+        Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1", "test-kid");
         assertNotNull(storedKASInfo);
         assertEquals("https://example.com/kas", storedKASInfo.URL);
         assertEquals("test-kid", storedKASInfo.KID);
         assertEquals("ec:secp256r1", storedKASInfo.Algorithm);
         assertEquals("public-key-pem", storedKASInfo.PublicKey);
 
-        Config.KASInfo storedKASInfo2 = keyCache.get("https://example.com/kas", "rsa:2048");
+        Config.KASInfo storedKASInfo2 = keyCache.get("https://example.com/kas", "rsa:2048", "test-kid-2");
         assertNotNull(storedKASInfo2);
         assertEquals("https://example.com/kas", storedKASInfo2.URL);
         assertEquals("test-kid-2", storedKASInfo2.KID);

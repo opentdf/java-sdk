@@ -24,9 +24,9 @@ public class KASKeyCache {
         this.cache = new HashMap<>();
     }
 
-    public Config.KASInfo get(String url, String algorithm) {
-        log.debug("retrieving kasinfo for url = [{}], algorithm = [{}]", url, algorithm);
-        KASKeyRequest cacheKey = new KASKeyRequest(url, algorithm);
+    public Config.KASInfo get(String url, String algorithm, String kid) {
+        log.debug("retrieving kasinfo for url = [{}], algorithm = [{}], kid = [{}]", url, algorithm, kid);
+        KASKeyRequest cacheKey = new KASKeyRequest(url, algorithm, kid);
         LocalDateTime now = LocalDateTime.now();
         TimeStampedKASInfo cachedValue = cache.get(cacheKey);
 
@@ -49,7 +49,7 @@ public class KASKeyCache {
 
     public void store(Config.KASInfo kasInfo) {
         log.debug("storing kasInfo into the cache {}", kasInfo);
-        KASKeyRequest cacheKey = new KASKeyRequest(kasInfo.URL, kasInfo.Algorithm);
+        KASKeyRequest cacheKey = new KASKeyRequest(kasInfo.URL, kasInfo.Algorithm, kasInfo.KID);
         cache.put(cacheKey, new TimeStampedKASInfo(kasInfo, LocalDateTime.now()));
     }
 }
@@ -85,10 +85,12 @@ class TimeStampedKASInfo {
 class KASKeyRequest {
     private String url;
     private String algorithm;
+    private String kid;
 
-    public KASKeyRequest(String url, String algorithm) {
+    public KASKeyRequest(String url, String algorithm, String kid) {
         this.url = url;
         this.algorithm = algorithm;
+        this.kid = kid;
     }
 
     // Override equals and hashCode to ensure proper functioning of the HashMap

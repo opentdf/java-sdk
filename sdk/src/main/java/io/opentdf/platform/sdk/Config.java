@@ -1,7 +1,6 @@
 package io.opentdf.platform.sdk;
 
-import io.opentdf.platform.policy.KasPublicKey;
-import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
+import io.opentdf.platform.policy.Algorithm;
 import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.SimpleKasKey;
 import io.opentdf.platform.policy.Value;
@@ -42,8 +41,6 @@ public class Config {
         HS256,
         GMAC
     }
-
-    public static final int K_HTTP_OK = 200;
 
     public static class KASInfo implements Cloneable {
         public String URL;
@@ -106,7 +103,7 @@ public class Config {
             Config.KASInfo kasInfo = new Config.KASInfo();
             kasInfo.URL = ki.getKasUri();
             kasInfo.KID = ki.getPublicKey().getKid();
-            kasInfo.Algorithm = algProto2String(Enum.valueOf(KasPublicKeyAlgEnum.class, ki.getPublicKey().getAlgorithm().name()));
+            kasInfo.Algorithm = algProto2String(ki.getPublicKey().getAlgorithm());
             kasInfo.PublicKey = ki.getPublicKey().getPem();
 
             return kasInfo;

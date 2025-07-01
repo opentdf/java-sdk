@@ -5,11 +5,9 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.nimbusds.jose.*;
 
-import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.sdk.Config.TDFConfig;
-import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
 import io.opentdf.platform.sdk.Config.KASInfo;
 
 import org.apache.commons.codec.DecoderException;
@@ -28,7 +26,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.text.ParseException;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * The TDF class is responsible for handling operations related to
@@ -143,7 +140,7 @@ class TDF {
 
         private static final Base64.Encoder encoder = Base64.getEncoder();
 
-        private void prepareManifest(Config.TDFConfig tdfConfig, SDK.KAS kas) {
+        private void prepareManifest(Config.TDFConfig tdfConfig, SDK.KAS kas, Map<String, List<KASInfo>> splits) {
             manifest.tdfVersion = tdfConfig.renderVersionInfoInManifest ? TDF_VERSION : null;
             manifest.encryptionInformation.keyAccessType = kSplitKeyType;
             manifest.encryptionInformation.keyAccessObj = new ArrayList<>();
@@ -151,36 +148,10 @@ class TDF {
             PolicyObject policyObject = createPolicyObject(tdfConfig.attributes);
             String base64PolicyObject = encoder
                     .encodeToString(gson.toJson(policyObject).getBytes(StandardCharsets.UTF_8));
-            Map<String, Config.KASInfo> latestKASInfo = new HashMap<>();
 
-            // Seed anything passed in manually
-            for (Config.KASInfo kasInfo : tdfConfig.kasInfoList) {
-                if (kasInfo.PublicKey != null && !kasInfo.PublicKey.isEmpty()) {
-                    latestKASInfo.put(kasInfo.URL, kasInfo);
-                }
-            }
 
-            // split plan: restructure by conjunctions
-            Map<String, List<Config.KASInfo>> conjunction = new HashMap<>();
-
-            for (Autoconfigure.KeySplitStep splitInfo : tdfConfig.splitPlan) {
-                // Public key was passed in with kasInfoList
-                // TODO First look up in attribute information / add to split plan?
-                Config.KASInfo ki = latestKASInfo.get(splitInfo.kas);
-                if (ki == null || ki.PublicKey == null || ki.PublicKey.isBlank()) {
-                    logger.info("no public key provided for KAS at {}, retrieving", splitInfo.kas);
-                    var getKI = new Config.KASInfo();
-                    getKI.URL = splitInfo.kas;
-                    getKI.Algorithm = tdfConfig.wrappingKeyType.toString();
-                    getKI = kas.getPublicKey(getKI);
-                    latestKASInfo.put(splitInfo.kas, getKI);
-                    ki = getKI;
-                }
-                conjunction.computeIfAbsent(splitInfo.splitID, s -> new ArrayList<>()).add(ki);
-            }
-
-            List<byte[]> symKeys = new ArrayList<>(conjunction.size());
-            for (String splitID : conjunction.keySet()) {
+            List<byte[]> symKeys = new ArrayList<>(splits.size());
+            for (String splitID : splits.keySet()) {
                 // Symmetric key
                 byte[] symKey = new byte[GCM_KEY_SIZE];
                 sRandom.nextBytes(symKey);
@@ -207,7 +178,7 @@ class TDF {
                     encryptedMetadata = encoder.encodeToString(metadata.getBytes(StandardCharsets.UTF_8));
                 }
 
-                for (Config.KASInfo kasInfo : conjunction.get(splitID)) {
+                for (Config.KASInfo kasInfo : splits.get(splitID)) {
                     if (kasInfo.PublicKey == null || kasInfo.PublicKey.isEmpty()) {
                         throw new SDK.KasPublicKeyMissing("Kas public key is missing in kas information list");
                     }
@@ -278,7 +249,6 @@ class TDF {
         }
     }
 
-
     private static final Base64.Decoder decoder = Base64.getDecoder();
 
     public static class Reader {
@@ -303,7 +273,6 @@ class TDF {
             this.aesGcm = new AesGcm(payloadKey);
             this.payloadKey = payloadKey;
             this.unencryptedMetadata = unencryptedMetadata;
-
         }
 
         public void readPayload(OutputStream outputStream) throws SDK.SegmentSignatureMismatch, IOException {
@@ -378,30 +347,10 @@ class TDF {
 
     TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig tdfConfig) throws SDKException, IOException {
 
-        List<String> dk = defaultKases(tdfConfig);
-        if (tdfConfig.autoconfigure) {
-            Autoconfigure.Granter granter = new Autoconfigure.Granter(new ArrayList<>());
-            if (tdfConfig.attributeValues != null && !tdfConfig.attributeValues.isEmpty()) {
-                granter = Autoconfigure.newGranterFromAttributes(services.kas().getKeyCache(), tdfConfig.attributeValues.toArray(new Value[0]));
-            } else if (tdfConfig.attributes != null && !tdfConfig.attributes.isEmpty()) {
-                granter = Autoconfigure.newGranterFromService(services.attributes(), services.kas().getKeyCache(),
-                        tdfConfig.attributes.toArray(new AttributeValueFQN[0]));
-            }
-
-            if (granter == null) {
-                throw new AutoConfigureException("Failed to create Granter"); // Replace with appropriate error handling
-            }
-            tdfConfig.splitPlan = granter.plan(dk, () -> UUID.randomUUID().toString());
-        } else {
-            tdfConfig.splitPlan = Autoconfigure.Granter.generatePlanFromDefaultKases(dk, () -> UUID.randomUUID().toString());
-        }
-
-        if (tdfConfig.kasInfoList.isEmpty() && (tdfConfig.splitPlan == null || tdfConfig.splitPlan.isEmpty())) {
-            throw new SDK.KasInfoMissing("kas information is missing, no key access template specified or inferred");
-        }
+        Planner planner = new Planner(tdfConfig, services);
 
         TDFObject tdfObject = new TDFObject();
-        tdfObject.prepareManifest(tdfConfig, services.kas());
+        tdfObject.prepareManifest(tdfConfig, services.kas(), planner.getSplits(tdfConfig));
 
         long encryptedSegmentSize = tdfConfig.defaultSegmentSize + kGcmIvSize + kAesBlockSize;
         TDFWriter tdfWriter = new TDFWriter(outputStream);
@@ -534,19 +483,6 @@ class TDF {
         return tdfObject;
     }
 
-    static List<String> defaultKases(TDFConfig config) {
-        List<String> allk = new ArrayList<>();
-        List<String> defk = new ArrayList<>();
-
-        for (KASInfo kasInfo : config.kasInfoList) {
-            if (kasInfo.Default != null && kasInfo.Default) {
-                defk.add(kasInfo.URL);
-            } else if (defk.isEmpty()) {
-                allk.add(kasInfo.URL);
-            }
-        }
-        return defk.isEmpty() ? allk : defk;
-    }
 
     Reader loadTDF(SeekableByteChannel tdf, String platformUrl) throws SDKException, IOException {
         return loadTDF(tdf, Config.newTDFReaderConfig(), platformUrl);

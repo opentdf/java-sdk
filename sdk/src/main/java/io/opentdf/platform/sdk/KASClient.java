@@ -85,7 +85,7 @@ class KASClient implements SDK.KAS {
 
     @Override
     public Config.KASInfo getPublicKey(Config.KASInfo kasInfo) {
-        Config.KASInfo cachedValue = this.kasKeyCache.get(kasInfo.URL, kasInfo.Algorithm);
+        Config.KASInfo cachedValue = this.kasKeyCache.get(kasInfo.URL, kasInfo.Algorithm, kasInfo.KID);
         if (cachedValue != null) {
             return cachedValue;
         }

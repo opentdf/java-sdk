@@ -35,7 +35,7 @@ class KASKeyCacheTest {
         kasKeyCache.store(kasInfo1);
 
         // Retrieve the item within the time limit
-        Config.KASInfo result = kasKeyCache.get("https://example.com/kas1", "rsa:2048");
+        Config.KASInfo result = kasKeyCache.get("https://example.com/kas1", "rsa:2048", "kid1");
 
         // Ensure the item was correctly retrieved
         assertNotNull(result);
@@ -51,12 +51,12 @@ class KASKeyCacheTest {
         kasKeyCache.store(kasInfo1);
 
         // Simulate time passing by modifying the timestamp directly
-        KASKeyRequest cacheKey = new KASKeyRequest("https://example.com/kas1", "rsa:2048");
+        KASKeyRequest cacheKey = new KASKeyRequest("https://example.com/kas1", "rsa:2048", "kid2");
         TimeStampedKASInfo timeStampedKASInfo = new TimeStampedKASInfo(kasInfo1, LocalDateTime.now().minus(6, ChronoUnit.MINUTES));
         kasKeyCache.cache.put(cacheKey, timeStampedKASInfo);
 
         // Attempt to retrieve the item after the time limit
-        Config.KASInfo result = kasKeyCache.get("https://example.com/kas1", "rsa:2048");
+        Config.KASInfo result = kasKeyCache.get("https://example.com/kas1", "rsa:2048", "kid1");
 
         // Ensure the item was not retrieved (it should have expired)
         assertNull(result);
@@ -72,7 +72,7 @@ class KASKeyCacheTest {
         kasKeyCache.store(kasInfo1);
 
         // Retrieve the item with a null algorithm
-        Config.KASInfo result = kasKeyCache.get("https://example.com/kas1", null);
+        Config.KASInfo result = kasKeyCache.get("https://example.com/kas1", null, null);
 
         // Ensure the item was correctly retrieved
         assertNotNull(result);
@@ -91,7 +91,7 @@ class KASKeyCacheTest {
         kasKeyCache.clear();
 
         // Attempt to retrieve the item after clearing the cache
-        Config.KASInfo result = kasKeyCache.get("https://example.com/kas1", "rsa:2048");
+        Config.KASInfo result = kasKeyCache.get("https://example.com/kas1", "rsa:2048", "kid1");
 
         // Ensure the item was not retrieved (the cache should be empty)
         assertNull(result);
@@ -104,8 +104,8 @@ class KASKeyCacheTest {
         kasKeyCache.store(kasInfo2);
 
         // Retrieve each item and ensure they were correctly stored and retrieved
-        Config.KASInfo result1 = kasKeyCache.get("https://example.com/kas1", "rsa:2048");
-        Config.KASInfo result2 = kasKeyCache.get("https://example.com/kas2", "ec:secp256r1");
+        Config.KASInfo result1 = kasKeyCache.get("https://example.com/kas1", "rsa:2048", "kid1");
+        Config.KASInfo result2 = kasKeyCache.get("https://example.com/kas2", "ec:secp256r1", "kid2");
 
         assertNotNull(result1);
         assertEquals("https://example.com/kas1", result1.URL);
@@ -119,8 +119,8 @@ class KASKeyCacheTest {
     @Test
     void testEqualsAndHashCode() {
         // Create two identical KASKeyRequest objects
-        KASKeyRequest keyRequest1 = new KASKeyRequest("https://example.com/kas1", "rsa:2048");
-        KASKeyRequest keyRequest2 = new KASKeyRequest("https://example.com/kas1", "rsa:2048");
+        KASKeyRequest keyRequest1 = new KASKeyRequest("https://example.com/kas1", "rsa:2048", "kid1");
+        KASKeyRequest keyRequest2 = new KASKeyRequest("https://example.com/kas1", "rsa:2048", "kid1");
 
         // Ensure that equals and hashCode work as expected
         assertEquals(keyRequest1, keyRequest2);
