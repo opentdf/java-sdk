@@ -579,8 +579,8 @@ class Autoconfigure {
         }
 
         static class PublicKeyInfo {
-            private final String kas;
-            private final String kid;
+            final String kas;
+            final String kid;
 
             PublicKeyInfo(String kas) {
                 this(kas, null);
@@ -589,10 +589,6 @@ class Autoconfigure {
             PublicKeyInfo(String kas, String kid) {
                 this.kas = kas;
                 this.kid = kid;
-            }
-
-            Optional<String> getKID() {
-                return Optional.ofNullable(kid);
             }
 
             String getKas() {
