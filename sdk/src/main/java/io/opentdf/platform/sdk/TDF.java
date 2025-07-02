@@ -7,7 +7,6 @@ import com.nimbusds.jose.*;
 
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
-import io.opentdf.platform.sdk.Config.TDFConfig;
 import io.opentdf.platform.sdk.Config.KASInfo;
 
 import org.apache.commons.codec.DecoderException;
@@ -346,7 +345,6 @@ class TDF {
     }
 
     TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig tdfConfig) throws SDKException, IOException {
-
         Planner planner = new Planner(tdfConfig, services);
         Map<String, List<KASInfo>> splits = planner.getSplits(tdfConfig);
 

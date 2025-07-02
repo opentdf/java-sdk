@@ -1,10 +1,20 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.ConnectException;
+import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
+import com.google.gson.annotations.SerializedName;
+import io.opentdf.platform.policy.Algorithm;
+import io.opentdf.platform.policy.SimpleKasKey;
+import io.opentdf.platform.policy.SimpleKasPublicKey;
 import io.opentdf.platform.policy.Value;
+import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRequest;
+import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,17 +22,17 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-import static io.opentdf.platform.sdk.Autoconfigure.Granter.generatePlanFromDefaultKases;
-
 public class Planner {
+    private static final String BASE_KEY = "base_key";
     private final Config.TDFConfig tdfConfig;
-    private final SDK.Services sdkServices;
+    private final SDK.Services services;
+
 
     private static final Logger logger = LoggerFactory.getLogger(Planner.class);
 
     public Planner(Config.TDFConfig config, SDK.Services services) {
-        tdfConfig = Objects.requireNonNull(config);
-        sdkServices = Objects.requireNonNull(services) ;
+        this.tdfConfig = Objects.requireNonNull(config);
+        this.services = Objects.requireNonNull(services);
     }
 
     private static String getUUID() {
@@ -31,13 +41,13 @@ public class Planner {
 
     Map<String, List<Config.KASInfo>> getSplits(Config.TDFConfig tdfConfig) {
         List<Autoconfigure.KeySplitStep> splitPlan;
-        List<String> defaultKases = defaultKases(tdfConfig);
         if (tdfConfig.autoconfigure) {
+            if (tdfConfig.splitPlan != null && !tdfConfig.splitPlan.isEmpty()) {
+                throw new IllegalArgumentException("cannot use autoconfigure with a split plan provided in the TDFConfig");
+            }
             splitPlan = getAutoconfigurePlan(tdfConfig);
         } else if (tdfConfig.splitPlan == null || tdfConfig.splitPlan.isEmpty()) {
-            splitPlan = defaultKases.isEmpty()
-                    ? createPlanFromBaseKey()
-                    : generatePlanFromDefaultKases(defaultKases, Planner::getUUID);
+            splitPlan = generatePlanFromProvidedKases(tdfConfig.kasInfoList);
         } else {
             splitPlan = tdfConfig.splitPlan;
         }
@@ -45,28 +55,92 @@ public class Planner {
         if (tdfConfig.kasInfoList.isEmpty() && tdfConfig.splitPlan.isEmpty()) {
             throw new SDK.KasInfoMissing("kas information is missing, no key access template specified or inferred");
         }
-
-        // split plan: restructure by conjunctions
         return fillInKeys(tdfConfig, splitPlan);
     }
 
     private List<Autoconfigure.KeySplitStep> getAutoconfigurePlan(Config.TDFConfig tdfConfig) {
-        if (tdfConfig.splitPlan != null && !tdfConfig.splitPlan.isEmpty()) {
-            throw new IllegalArgumentException("cannot use autoconfigure with a split plan provided in the TDFConfig");
-        }
         Autoconfigure.Granter granter = new Autoconfigure.Granter(new ArrayList<>());
         if (tdfConfig.attributeValues != null && !tdfConfig.attributeValues.isEmpty()) {
-            granter = Autoconfigure.newGranterFromAttributes(sdkServices.kas().getKeyCache(), tdfConfig.attributeValues.toArray(new Value[0]));
+            granter = Autoconfigure.newGranterFromAttributes(services.kas().getKeyCache(), tdfConfig.attributeValues.toArray(new Value[0]));
         } else if (tdfConfig.attributes != null && !tdfConfig.attributes.isEmpty()) {
-            granter = Autoconfigure.newGranterFromService(sdkServices.attributes(), sdkServices.kas().getKeyCache(),
+            granter = Autoconfigure.newGranterFromService(services.attributes(), services.kas().getKeyCache(),
                     tdfConfig.attributes.toArray(new Autoconfigure.AttributeValueFQN[0]));
         }
-        return granter.getSplits(defaultKases(tdfConfig), Planner::getUUID, Optional::empty);
+        return granter.getSplits(defaultKases(tdfConfig), Planner::getUUID, this::fetchBaseKey);
     }
 
-    private List<Autoconfigure.KeySplitStep> createPlanFromBaseKey() {
-        return null;
+    List<Autoconfigure.KeySplitStep> generatePlanFromProvidedKases(List<Config.KASInfo> kases) {
+        if (kases.size() == 1) {
+            var kasInfo = kases.get(0);
+            return Collections.singletonList(new Autoconfigure.KeySplitStep(kasInfo.URL, "", kasInfo.KID));
+        }
+        List<Autoconfigure.KeySplitStep> splitPlan = new ArrayList<>();
+        for (var kasInfo : kases) {
+            splitPlan.add(new Autoconfigure.KeySplitStep(kasInfo.URL, getUUID(), kasInfo.KID));
+        }
+        return splitPlan;
     }
+
+    Optional<SimpleKasKey> fetchBaseKey() {
+        var responseMessage = services.wellknown()
+                .getWellKnownConfigurationBlocking(GetWellKnownConfigurationRequest.getDefaultInstance(), Collections.emptyMap())
+                .execute();
+        GetWellKnownConfigurationResponse response;
+        try {
+            response = RequestHelper.getOrThrow(responseMessage);
+        } catch (ConnectException e) {
+            logger.error("unable to retrieve configuration from well known endpoint", e);
+            throw new SDKException("unable to retrieve base key from well known endpoint", e);
+        }
+
+        String baseKeyJson;
+        try {
+            baseKeyJson = response
+                    .getConfiguration()
+                    .getFieldsOrThrow(BASE_KEY)
+                    .getStringValue();
+        } catch (IllegalArgumentException e) {
+            logger.info( "no `" + BASE_KEY + "` found in well known configuration.", e);
+            return Optional.empty();
+        }
+
+        BaseKey baseKey;
+        try {
+            baseKey = gson.fromJson(baseKeyJson, BaseKey.class);
+        } catch (JsonSyntaxException e) {
+            throw new SDKException("base key in well known configuration is malformed [" + baseKeyJson + "]", e);
+        }
+
+        if (baseKey == null || baseKey.kasUrl == null || baseKey.publicKey == null || baseKey.publicKey.kid == null || baseKey.publicKey.pem == null || baseKey.publicKey.algorithm == null) {
+            throw new SDKException("base key in well known configuration is missing required fields [" + baseKeyJson + "]");
+        }
+
+        return Optional.of(SimpleKasKey.newBuilder()
+                .setKasUri(baseKey.kasUrl)
+                .setPublicKey(SimpleKasPublicKey.newBuilder()
+                        .setKid(baseKey.publicKey.kid)
+                        .setAlgorithm(baseKey.publicKey.algorithm)
+                        .setPem(baseKey.publicKey.pem)
+                        .build())
+                .build());
+    }
+
+    private static Gson gson = new Gson();
+
+    private static class BaseKey {
+        @SerializedName("kas_url")
+        String kasUrl;
+
+        @SerializedName("public_key")
+        Key publicKey;
+
+        private static class Key {
+            String kid;
+            String pem;
+            Algorithm algorithm;
+        }
+    }
+
 
     private Map<String, List<Config.KASInfo>> fillInKeys(Config.TDFConfig tdfConfig, List<Autoconfigure.KeySplitStep> splitPlan) {
         Map<String, List<Config.KASInfo>> conjunction = new HashMap<>();
@@ -87,7 +161,7 @@ public class Planner {
                 var getKI = new Config.KASInfo();
                 getKI.URL = splitInfo.kas;
                 getKI.Algorithm = tdfConfig.wrappingKeyType.toString();
-                getKI = sdkServices.kas().getPublicKey(getKI);
+                getKI = services.kas().getPublicKey(getKI);
                 latestKASInfo.put(splitInfo.kas, getKI);
                 ki = getKI;
             }
