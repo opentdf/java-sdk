@@ -24,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -294,7 +295,6 @@ class Autoconfigure {
                 mappedKeys.computeIfAbsent(fqn.key, k -> new ArrayList<>()).add(Config.KASInfo.fromSimpleKasKey(mappedKey));
                 grants.computeIfAbsent(fqn.key, k -> new KeyAccessGrant(attr, new ArrayList<>())).kases.add(mappedKey.getKasUri());
             }
-            storeKeysToCache(granted, mapped, keyCache);
 
             if (foundMappedKey) {
                 hasMappedKeys = true;
@@ -582,7 +582,7 @@ class Autoconfigure {
 
         }
 
-        static class PublicKeyInfo {
+        static class PublicKeyInfo implements Comparable<PublicKeyInfo> {
             final String kas;
             final String kid;
 
@@ -597,6 +597,44 @@ class Autoconfigure {
 
             String getKas() {
                 return kas;
+            }
+
+            @Override
+            public boolean equals(Object o) {
+                if (o == null || getClass() != o.getClass()) return false;
+                PublicKeyInfo that = (PublicKeyInfo) o;
+                return Objects.equals(kas, that.kas) && Objects.equals(kid, that.kid);
+            }
+
+            @Override
+            public int hashCode() {
+                return Objects.hash(kas, kid);
+            }
+
+            @Override
+            public String toString() {
+                return "PublicKeyInfo{" +
+                        "kas='" + kas + '\'' +
+                        ", kid='" + kid + '\'' +
+                        '}';
+            }
+
+            @Override
+            public int compareTo(PublicKeyInfo o) {
+                if (this.kas.equals(o.kas)) {
+                    if (this.kid == null && o.kid == null) {
+                        return 0;
+                    }
+                    if (this.kid == null) {
+                        return -1;
+                    }
+                    if (o.kid == null) {
+                        return 1;
+                    }
+                    return this.kid.compareTo(o.kid);
+                } else {
+                    return this.kas.compareTo(o.kas);
+                }
             }
         }
 
@@ -678,7 +716,7 @@ class Autoconfigure {
                                 continue;
                             }
                             Disjunction terms = new Disjunction();
-                            terms.add(k.getKas());
+                            terms.add(k);
                             if (!within(conjunction, terms)) {
                                 conjunction.add(terms);
                             }
@@ -690,25 +728,22 @@ class Autoconfigure {
                 }
 
                 List<KeyClause> newValues = new ArrayList<>();
-                for (List<String> d : conjunction) {
+                for (List<PublicKeyInfo> d : conjunction) {
                     List<PublicKeyInfo> pki = new ArrayList<>();
-                    for (String k : d) {
-                        pki.add(new PublicKeyInfo(k));
-                    }
+                    pki.addAll(d);
                     newValues.add(new KeyClause(RuleType.ANY_OF, pki));
                 }
                 return new BooleanKeyExpression(newValues);
             }
 
             public Disjunction sortedNoDupes(List<PublicKeyInfo> l) {
-                Set<String> set = new HashSet<>();
+                Set<PublicKeyInfo> set = new HashSet<>();
                 Disjunction list = new Disjunction();
 
                 for (PublicKeyInfo e : l) {
-                    String kas = e.getKas();
-                    if (!kas.equals(RuleType.EMPTY_TERM) && !set.contains(kas)) {
-                        set.add(kas);
-                        list.add(kas);
+                    if (!Objects.equals(e.getKas(), RuleType.EMPTY_TERM) && !set.contains(e)) {
+                        set.add(e);
+                        list.add(e);
                     }
                 }
 
@@ -718,7 +753,7 @@ class Autoconfigure {
 
         }
 
-        static class Disjunction extends ArrayList<String> {
+        static class Disjunction extends ArrayList<PublicKeyInfo> {
 
             public boolean less(Disjunction r) {
                 int m = Math.min(this.size(), r.size());

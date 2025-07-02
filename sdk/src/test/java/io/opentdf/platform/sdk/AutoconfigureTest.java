@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import com.connectrpc.ResponseMessage;
 import com.connectrpc.UnaryBlockingCall;
+import io.opentdf.platform.policy.Algorithm;
 import io.opentdf.platform.policy.Attribute;
 import io.opentdf.platform.policy.AttributeRuleTypeEnum;
 import io.opentdf.platform.policy.KasPublicKey;
@@ -21,6 +22,8 @@ import io.opentdf.platform.policy.KasPublicKeySet;
 import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.Namespace;
 import io.opentdf.platform.policy.PublicKey;
+import io.opentdf.platform.policy.SimpleKasKey;
+import io.opentdf.platform.policy.SimpleKasPublicKey;
 import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.policy.attributes.AttributesServiceClient;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
@@ -31,6 +34,7 @@ import io.opentdf.platform.sdk.Autoconfigure.Granter.BooleanKeyExpression;
 import io.opentdf.platform.sdk.Autoconfigure.KeySplitStep;
 import io.opentdf.platform.sdk.Autoconfigure.Granter;
 
+import org.assertj.core.api.AtomicIntegerArrayAssert;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -39,8 +43,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -57,6 +63,16 @@ public class AutoconfigureTest {
     public static final String SPECIFIED_KAS = "https://attr.kas.com/";
     public static final String EVEN_MORE_SPECIFIC_KAS = "https://value.kas.com/";
     private static final String NAMESPACE_KAS = "https://namespace.kas.com/";
+    private static final SimpleKasKey NAMESPACE_KAS_KEY = SimpleKasKey.newBuilder().setKasUri("https://mapped.example.com").setKasId("mapped").setPublicKey(
+            SimpleKasPublicKey.newBuilder().setAlgorithm(Algorithm.ALGORITHM_EC_P521).setPem("namespacekey").setKid("namespacekeykid").build()
+    ).build();
+    private static final SimpleKasKey ATTRIBUTE_KEY = SimpleKasKey.newBuilder().setKasUri("https://mapped.example.com").setKasId("mapped").setPublicKey(
+            SimpleKasPublicKey.newBuilder().setAlgorithm(Algorithm.ALGORITHM_EC_P521).setPem("attrpem").setKid("attrkeykid").build()
+    ).build();
+    private static final SimpleKasKey VALUE_KEY = SimpleKasKey.newBuilder().setKasUri("https://mapped.example.com").setKasId("mapped").setPublicKey(
+            SimpleKasPublicKey.newBuilder().setAlgorithm(Algorithm.ALGORITHM_EC_P521).setPem("valuepem").setKid("valuekeykid").build()
+    ).build();
+    private static Autoconfigure.AttributeNameFQN UNMAPPED;
     private static Autoconfigure.AttributeNameFQN SPKSPECKED;
     private static Autoconfigure.AttributeNameFQN SPKUNSPECKED;
 
@@ -65,6 +81,8 @@ public class AutoconfigureTest {
     private static Autoconfigure.AttributeNameFQN REL;
     private static Autoconfigure.AttributeNameFQN UNSPECKED;
     private static Autoconfigure.AttributeNameFQN SPECKED;
+    private static Autoconfigure.AttributeNameFQN MAPPED;
+    private static Autoconfigure.AttributeNameFQN SPKMAPPED;
 
     private static Autoconfigure.AttributeValueFQN clsA;
     private static Autoconfigure.AttributeValueFQN clsS;
@@ -85,6 +103,9 @@ public class AutoconfigureTest {
     private static Autoconfigure.AttributeValueFQN spk2spk2uns;
     private static Autoconfigure.AttributeValueFQN spk2spk2spk;
 
+    private static Autoconfigure.AttributeValueFQN mp2uns2uns;
+    private static Autoconfigure.AttributeValueFQN mp2uns2mp;
+
     @BeforeAll
     public static void setup() throws AutoConfigureException {
         // Initialize the FQNs (Fully Qualified Names)
@@ -93,8 +114,11 @@ public class AutoconfigureTest {
         REL = new Autoconfigure.AttributeNameFQN("https://virtru.com/attr/Releasable%20To");
         UNSPECKED = new Autoconfigure.AttributeNameFQN("https://other.com/attr/unspecified");
         SPECKED = new Autoconfigure.AttributeNameFQN("https://other.com/attr/specified");
+        MAPPED = new Autoconfigure.AttributeNameFQN("https://other.com/attr/mapped");
+        UNMAPPED = new Autoconfigure.AttributeNameFQN("https://mapped.com/attr/unspecified");
         SPKUNSPECKED = new Autoconfigure.AttributeNameFQN("https://hasgrants.com/attr/unspecified");
         SPKSPECKED = new Autoconfigure.AttributeNameFQN("https://hasgrants.com/attr/specified");
+        SPKMAPPED = new Autoconfigure.AttributeNameFQN("https://hasgrants.com/attr/mapped");
 
         clsA = new Autoconfigure.AttributeValueFQN("https://virtru.com/attr/Classification/value/Allowed");
         clsS = new Autoconfigure.AttributeValueFQN("https://virtru.com/attr/Classification/value/Secret");
@@ -118,6 +142,9 @@ public class AutoconfigureTest {
         spk2uns2spk = new Autoconfigure.AttributeValueFQN("https://hasgrants.com/attr/unspecified/value/specked");
         spk2spk2uns = new Autoconfigure.AttributeValueFQN("https://hasgrants.com/attr/specified/value/unspecked");
         spk2spk2spk = new Autoconfigure.AttributeValueFQN("https://hasgrants.com/attr/specified/value/specked");
+
+        mp2uns2uns = new Autoconfigure.AttributeValueFQN("https://mapped.com/attr/unspecified/value/unspecked");
+        mp2uns2mp = new Autoconfigure.AttributeValueFQN("https://mapped.com/attr/unspecified/value/mapped");
     }
 
     private static String spongeCase(String s) {
@@ -182,6 +209,7 @@ public class AutoconfigureTest {
         Namespace ns1 = Namespace.newBuilder().setId("v").setName("virtru.com").setFqn("https://virtru.com").build();
         Namespace ns2 = Namespace.newBuilder().setId("o").setName("other.com").setFqn("https://other.com").build();
         Namespace ns3 = Namespace.newBuilder().setId("h").setName("hasgrants.com").addGrants(KeyAccessServer.newBuilder().setUri(NAMESPACE_KAS).build()).setFqn("https://hasgrants.com").build();
+        Namespace ns4 = Namespace.newBuilder().setId("m").setName("mapped.com").addKasKeys(NAMESPACE_KAS_KEY).build();
 
         String key = fqn.getKey();
         if (key.equals(CLS.getKey())) {
@@ -215,6 +243,17 @@ public class AutoconfigureTest {
         } else if (key.equals(SPKUNSPECKED.getKey())) {
             return Attribute.newBuilder().setId("SPKUNSPK").setNamespace(ns3)
                     .setName("unspecified").setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ANY_OF)
+                    .setName(fqn.toString())
+                    .build();
+        } else if (key.equals(MAPPED.getKey())) {
+            return Attribute.newBuilder().setId(MAPPED.getKey()).setNamespace(ns4)
+                    .setName("mapped attribute").setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ANY_OF)
+                    .setKasKeys(0, ATTRIBUTE_KEY)
+                    .setName(fqn.toString())
+                    .build();
+        } else if (key.equals(UNMAPPED.getKey())) {
+            return Attribute.newBuilder().setId(UNMAPPED.getKey()).setNamespace(ns4)
+                    .setName("unmapped attribute").setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ANY_OF)
                     .setName(fqn.toString())
                     .build();
         }
@@ -288,7 +327,13 @@ public class AutoconfigureTest {
                 p = p.toBuilder().addGrants(KeyAccessServer.newBuilder().setUri(EVEN_MORE_SPECIFIC_KAS).build())
                         .build();
             }
+        } else if (Objects.equals(UNMAPPED.getKey(), an.getKey())) {
+            if (fqn.value().equalsIgnoreCase("mapped")) {
+                p = p.toBuilder().addKasKeys(VALUE_KEY)
+                        .build();
+            }
         }
+
         return p;
     }
 
@@ -473,6 +518,26 @@ public class AutoconfigureTest {
                     .as(tc.name)
                     .isEqualTo(tc.getPlan());
         }
+    }
+
+    @Test
+    void testUsingAttributeMappedAtNamespace() {
+        Granter granter = Autoconfigure.newGranterFromAttributes(new KASKeyCache(), mockValueFor(mp2uns2uns));
+        var counter = new AtomicInteger(0);
+        var splitPlan = granter.getSplits(Collections.emptyList(), () -> Integer.toString(counter.getAndIncrement()), () -> Optional.empty());
+        assertThat(splitPlan).isEqualTo(List.of(new KeySplitStep("https://mapped.example.com", "", NAMESPACE_KAS_KEY.getPublicKey().getKid())));
+    }
+
+    @Test
+    void testUsingAttributeMappedAtMultiplePlaces() {
+        var attributes = new Value[] { mockValueFor(mp2uns2uns), mockValueFor(mp2uns2mp) };
+        Granter granter = Autoconfigure.newGranterFromAttributes(new KASKeyCache(), attributes);
+        var counter = new AtomicInteger(0);
+        var splitPlan = granter.getSplits(Collections.emptyList(), () -> Integer.toString(counter.getAndIncrement()), () -> Optional.empty());
+        assertThat(splitPlan).isEqualTo(List.of(
+                new KeySplitStep(NAMESPACE_KAS_KEY.getKasUri(), "0", NAMESPACE_KAS_KEY.getPublicKey().getKid()),
+                new KeySplitStep(VALUE_KEY.getKasUri(), "0", VALUE_KEY.getPublicKey().getKid())
+        ));
     }
 
     GetAttributeValuesByFqnsResponse getResponse(GetAttributeValuesByFqnsRequest req) {

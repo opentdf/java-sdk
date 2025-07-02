@@ -52,7 +52,7 @@ public class Planner {
             splitPlan = tdfConfig.splitPlan;
         }
 
-        if (tdfConfig.kasInfoList.isEmpty() && tdfConfig.splitPlan.isEmpty()) {
+        if (tdfConfig.kasInfoList.isEmpty() && splitPlan.isEmpty()) {
             throw new SDK.KasInfoMissing("kas information is missing, no key access template specified or inferred");
         }
         return fillInKeys(tdfConfig, splitPlan);
@@ -112,12 +112,14 @@ public class Planner {
         }
 
         if (baseKey == null || baseKey.kasUrl == null || baseKey.publicKey == null || baseKey.publicKey.kid == null || baseKey.publicKey.pem == null || baseKey.publicKey.algorithm == null) {
-            throw new SDKException("base key in well known configuration is missing required fields [" + baseKeyJson + "]");
+            logger.error("base key in well known configuration is missing required fields [{}]. base key will not be used", baseKeyJson);
+            return Optional.empty();
         }
 
         return Optional.of(SimpleKasKey.newBuilder()
                 .setKasUri(baseKey.kasUrl)
-                .setPublicKey(SimpleKasPublicKey.newBuilder()
+                .setPublicKey(
+                        SimpleKasPublicKey.newBuilder()
                         .setKid(baseKey.publicKey.kid)
                         .setAlgorithm(baseKey.publicKey.algorithm)
                         .setPem(baseKey.publicKey.pem)
