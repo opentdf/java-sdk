@@ -139,7 +139,7 @@ class TDF {
 
         private static final Base64.Encoder encoder = Base64.getEncoder();
 
-        private void prepareManifest(Config.TDFConfig tdfConfig, SDK.KAS kas, Map<String, List<KASInfo>> splits) {
+        private void prepareManifest(Config.TDFConfig tdfConfig, Map<String, List<KASInfo>> splits) {
             manifest.tdfVersion = tdfConfig.renderVersionInfoInManifest ? TDF_VERSION : null;
             manifest.encryptionInformation.keyAccessType = kSplitKeyType;
             manifest.encryptionInformation.keyAccessObj = new ArrayList<>();
@@ -349,7 +349,7 @@ class TDF {
         Map<String, List<KASInfo>> splits = planner.getSplits(tdfConfig);
 
         TDFObject tdfObject = new TDFObject();
-        tdfObject.prepareManifest(tdfConfig, services.kas(), splits);
+        tdfObject.prepareManifest(tdfConfig, splits);
 
         long encryptedSegmentSize = tdfConfig.defaultSegmentSize + kGcmIvSize + kAesBlockSize;
         TDFWriter tdfWriter = new TDFWriter(outputStream);

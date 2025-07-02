@@ -9,9 +9,11 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
 
 class PlannerTest {
 
@@ -84,5 +86,50 @@ class PlannerTest {
         assertThat(splitPlan.get(1).kid).isEqualTo("kid2");
 
         assertThat(splitPlan.get(0).splitID).isNotEqualTo(splitPlan.get(1).splitID);
+    }
+
+    @Test
+    void testFillingInKeysWithAutoConfigure() {
+        var kas = Mockito.mock(SDK.KAS.class);
+        Mockito.when(kas.getPublicKey(Mockito.any())).thenAnswer(invocation -> {
+                Config.KASInfo kasInfo = invocation.getArgument(0, Config.KASInfo.class);
+                var ret = new Config.KASInfo();
+                ret.URL = kasInfo.URL;
+                assertThat(kasInfo.Algorithm).isNullOrEmpty();
+                if (Objects.equals(kasInfo.URL, "https://kas1.example.com")) {
+                    ret.PublicKey = "pem1";
+                    ret.Algorithm = "rsa:2048";
+                    ret.KID = "kid1";
+                } else if (Objects.equals(kasInfo.URL, "https://kas2.example.com")) {
+                    ret.PublicKey = "pem2";
+                    ret.Algorithm = "ec:secp256r1";
+                    ret.KID = "kid2";
+                } else {
+                    throw new IllegalArgumentException("Unexpected KAS URL: " + kasInfo.URL);
+                }
+                return ret;
+        });
+        var tdfConfig = new Config.TDFConfig();
+        tdfConfig.autoconfigure = true;
+        tdfConfig.wrappingKeyType = KeyType.RSA2048Key;
+        var planner = new Planner(new Config.TDFConfig(), new FakeServicesBuilder().setKas(kas).build());
+        var plan = List.of(
+                new Autoconfigure.KeySplitStep("https://kas1.example.com", "split1", null),
+                new Autoconfigure.KeySplitStep("https://kas2.example.com", "split2", "kid2")
+        );
+        Map<String, List<Config.KASInfo>> filledInPlan = planner.resolveKeys(plan);
+        assertThat(filledInPlan.keySet().stream().collect(Collectors.toList())).asList().containsExactlyInAnyOrder("split1", "split2");
+        assertThat(filledInPlan.get("split1")).asList().hasSize(1);
+        var split1KasInfo = filledInPlan.get("split1").get(0);
+        assertThat(split1KasInfo.URL).isEqualTo("https://kas1.example.com");
+        assertThat(split1KasInfo.KID).isEqualTo("kid1");
+        assertThat(split1KasInfo.Algorithm).isEqualTo("rsa:2048");
+        assertThat(split1KasInfo.PublicKey).isEqualTo("pem1");
+        assertThat(filledInPlan.get("split2")).asList().hasSize(1);
+        var split2KasInfo = filledInPlan.get("split2").get(0);
+        assertThat(split2KasInfo.URL).isEqualTo("https://kas2.example.com");
+        assertThat(split2KasInfo.KID).isEqualTo("kid2");
+        assertThat(split2KasInfo.Algorithm).isEqualTo("ec:secp256r1");
+        assertThat(split2KasInfo.PublicKey).isEqualTo("pem2");
     }
 }

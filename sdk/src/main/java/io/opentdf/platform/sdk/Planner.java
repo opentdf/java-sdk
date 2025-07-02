@@ -55,7 +55,7 @@ public class Planner {
         if (tdfConfig.kasInfoList.isEmpty() && splitPlan.isEmpty()) {
             throw new SDK.KasInfoMissing("kas information is missing, no key access template specified or inferred");
         }
-        return fillInKeys(tdfConfig, splitPlan);
+        return resolveKeys(splitPlan);
     }
 
     private List<Autoconfigure.KeySplitStep> getAutoconfigurePlan(Config.TDFConfig tdfConfig) {
@@ -144,7 +144,7 @@ public class Planner {
     }
 
 
-    private Map<String, List<Config.KASInfo>> fillInKeys(Config.TDFConfig tdfConfig, List<Autoconfigure.KeySplitStep> splitPlan) {
+    Map<String, List<Config.KASInfo>> resolveKeys(List<Autoconfigure.KeySplitStep> splitPlan) {
         Map<String, List<Config.KASInfo>> conjunction = new HashMap<>();
         var latestKASInfo = new HashMap<String, Config.KASInfo>();
         // Seed anything passed in manually
@@ -162,7 +162,10 @@ public class Planner {
                 logger.info("no public key provided for KAS at {}, retrieving", splitInfo.kas);
                 var getKI = new Config.KASInfo();
                 getKI.URL = splitInfo.kas;
-                getKI.Algorithm = tdfConfig.wrappingKeyType.toString();
+                if (!tdfConfig.autoconfigure) {
+                    getKI.Algorithm = tdfConfig.wrappingKeyType.toString();
+                }
+                getKI.KID = splitInfo.kid;
                 getKI = services.kas().getPublicKey(getKI);
                 latestKASInfo.put(splitInfo.kas, getKI);
                 ki = getKI;
