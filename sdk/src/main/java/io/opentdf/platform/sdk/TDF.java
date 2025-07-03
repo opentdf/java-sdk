@@ -345,7 +345,7 @@ class TDF {
     }
 
     TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig tdfConfig) throws SDKException, IOException {
-        Planner planner = new Planner(tdfConfig, services);
+        Planner planner = new Planner(tdfConfig, services, Autoconfigure::createGranter);
         Map<String, List<KASInfo>> splits = planner.getSplits(tdfConfig);
 
         TDFObject tdfObject = new TDFObject();

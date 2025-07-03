@@ -824,7 +824,7 @@ class Autoconfigure {
     // Given a policy (list of data attributes or tags),
     // get a set of grants from attribute values to KASes.
     // Unlike `NewGranterFromService`, this works offline.
-    public static Granter newGranterFromAttributes(KASKeyCache keyCache, Value... attrValues) throws AutoConfigureException {
+    static Granter newGranterFromAttributes(KASKeyCache keyCache, Value... attrValues) throws AutoConfigureException {
         var attrsAndValues = Arrays.stream(attrValues).map(v -> {
             if (!v.hasAttribute()) {
                 throw new AutoConfigureException("tried to use an attribute that is not initialized");
@@ -839,7 +839,7 @@ class Autoconfigure {
     }
 
     // Gets a list of directory of KAS grants for a list of attribute FQNs
-    public static Granter newGranterFromService(AttributesServiceClientInterface as, KASKeyCache keyCache, AttributeValueFQN... fqns) throws AutoConfigureException {
+    static Granter newGranterFromService(AttributesServiceClientInterface as, KASKeyCache keyCache, AttributeValueFQN... fqns) throws AutoConfigureException {
         GetAttributeValuesByFqnsRequest request = GetAttributeValuesByFqnsRequest.newBuilder()
                 .addAllFqns(Arrays.stream(fqns).map(AttributeValueFQN::toString).collect(Collectors.toList()))
                 .setWithValue(AttributeValueSelector.newBuilder().setWithKeyAccessGrants(true).build())
@@ -852,6 +852,18 @@ class Autoconfigure {
         return getGranter(keyCache, new ArrayList<>(av.getFqnAttributeValuesMap().values()));
     }
 
+
+    static Autoconfigure.Granter createGranter(SDK.Services services, Config.TDFConfig tdfConfig) {
+        Autoconfigure.Granter granter = new Autoconfigure.Granter(new ArrayList<>());
+        if (tdfConfig.attributeValues != null && !tdfConfig.attributeValues.isEmpty()) {
+            granter = Autoconfigure.newGranterFromAttributes(services.kas().getKeyCache(), tdfConfig.attributeValues.toArray(new Value[0]));
+        } else if (tdfConfig.attributes != null && !tdfConfig.attributes.isEmpty()) {
+            granter = Autoconfigure.newGranterFromService(services.attributes(), services.kas().getKeyCache(),
+                    tdfConfig.attributes.toArray(new Autoconfigure.AttributeValueFQN[0]));
+        }
+        return granter;
+    }
+
     private static Granter getGranter(KASKeyCache keyCache, List<GetAttributeValuesByFqnsResponse.AttributeAndValue> values) {
         Granter grants = new Granter(values.stream().map(GetAttributeValuesByFqnsResponse.AttributeAndValue::getValue).map(Value::getFqn).map(AttributeValueFQN::new).collect(Collectors.toList()));
         for (var attributeAndValue: values) {
@@ -861,7 +873,6 @@ class Autoconfigure {
             var value = attributeAndValue.getValue();
             var attribute = attributeAndValue.getAttribute();
             var namespace = attribute.getNamespace();
-
 
             if (grants.addAllGrants(fqn, value.getGrantsList(), value.getKasKeysList(), attribute, keyCache)) {
                 storeKeysToCache(value.getGrantsList(), value.getKasKeysList(), keyCache);

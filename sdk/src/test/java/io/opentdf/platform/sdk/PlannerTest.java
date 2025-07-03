@@ -32,9 +32,8 @@ class PlannerTest {
         Mockito.when(wellknownService.getWellKnownConfigurationBlocking(Mockito.any(), Mockito.anyMap()))
                 .thenReturn(TestUtil.successfulUnaryCall(response));
 
-        var planner = new Planner(new Config.TDFConfig(), new FakeServicesBuilder().setWellknownService(wellknownService).build());
 
-        var baseKey = planner.fetchBaseKey();
+        var baseKey = Planner.fetchBaseKey(wellknownService);
         assertThat(baseKey).isNotEmpty();
         var simpleKasKey = baseKey.get();
         assertThat(simpleKasKey.getKasUri()).isEqualTo("https://example.com/base_key");
@@ -54,9 +53,26 @@ class PlannerTest {
         Mockito.when(wellknownService.getWellKnownConfigurationBlocking(Mockito.any(), Mockito.anyMap()))
                 .thenReturn(TestUtil.successfulUnaryCall(response));
 
-        var planner = new Planner(new Config.TDFConfig(), new FakeServicesBuilder().setWellknownService(wellknownService).build());
+        var baseKey = Planner.fetchBaseKey(wellknownService);
+        assertThat(baseKey).isEmpty();
+    }
 
-        var baseKey = planner.fetchBaseKey();
+    @Test
+    void fetchBaseKeyWithMissingFields() {
+        var wellknownService = Mockito.mock(WellKnownServiceClientInterface.class);
+        // Missing 'kid', 'pem', and 'algorithm' in public_key
+        var baseKeyJson = "{\"kas_url\":\"https://example.com/base_key\",\"public_key\":{}}";
+        var val = Value.newBuilder().setStringValue(baseKeyJson).build();
+        var config = Struct.newBuilder().putFields("base_key", val).build();
+        var response = GetWellKnownConfigurationResponse
+                .newBuilder()
+                .setConfiguration(config)
+                .build();
+
+        Mockito.when(wellknownService.getWellKnownConfigurationBlocking(Mockito.any(), Mockito.anyMap()))
+                .thenReturn(TestUtil.successfulUnaryCall(response));
+
+        var baseKey = Planner.fetchBaseKey(wellknownService);
         assertThat(baseKey).isEmpty();
     }
 
@@ -76,7 +92,7 @@ class PlannerTest {
         tdfConfig.kasInfoList.add(kas1);
         tdfConfig.kasInfoList.add(kas2);
 
-        var planner = new Planner(tdfConfig, new FakeServicesBuilder().build());
+        var planner = new Planner(tdfConfig, new FakeServicesBuilder().build(), (ignore1, ignored2) -> { throw new IllegalArgumentException("no granter needed"); });
         List<Autoconfigure.KeySplitStep> splitPlan = planner.generatePlanFromProvidedKases(tdfConfig.kasInfoList);
 
         assertThat(splitPlan).asList().hasSize(2);
@@ -116,7 +132,7 @@ class PlannerTest {
         var tdfConfig = new Config.TDFConfig();
         tdfConfig.autoconfigure = true;
         tdfConfig.wrappingKeyType = KeyType.RSA2048Key;
-        var planner = new Planner(new Config.TDFConfig(), new FakeServicesBuilder().setKas(kas).build());
+        var planner = new Planner(new Config.TDFConfig(), new FakeServicesBuilder().setKas(kas).build(), (ignore1, ignored2) ->  { throw new IllegalArgumentException("no granter needed"); });
         var plan = List.of(
                 new Autoconfigure.KeySplitStep("https://kas1.example.com", "split1", null),
                 new Autoconfigure.KeySplitStep("https://kas2.example.com", "split2", "kid2"),
@@ -185,5 +201,56 @@ class PlannerTest {
         var config = new Config.TDFConfig();
         List<String> result = Planner.defaultKases(config);
         Assertions.assertThat(result).isEmpty();
+    }
+
+    @Test
+    void usesProvidedSplitPlanWhenNotAutoconfigure() {
+        var kas = Mockito.mock(SDK.KAS.class);
+        Mockito.when(kas.getPublicKey(Mockito.any())).thenAnswer(invocation -> {
+            Config.KASInfo kasInfo = invocation.getArgument(0, Config.KASInfo.class);
+            var ret = new Config.KASInfo();
+            ret.URL = kasInfo.URL;
+            if (Objects.equals(kasInfo.URL, "https://kas1.example.com")) {
+                ret.PublicKey = "pem1";
+                ret.Algorithm = "rsa:2048";
+                ret.KID = "kid1";
+            } else if (Objects.equals(kasInfo.URL, "https://kas2.example.com")) {
+                ret.PublicKey = "pem2";
+                ret.Algorithm = "ec:secp256r1";
+                ret.KID = "kid2";
+            } else {
+                throw new IllegalArgumentException("Unexpected KAS URL: " + kasInfo.URL);
+            }
+            return ret;
+        });
+        // Arrange
+        var kas1 = new Config.KASInfo();
+        kas1.URL = "https://kas1.example.com";
+        kas1.KID = "kid1";
+        kas1.Algorithm = "rsa:2048";
+
+        var kas2 = new Config.KASInfo();
+        kas2.URL = "https://kas2.example.com";
+        kas2.KID = "kid2";
+        kas2.Algorithm = "ec:secp256";
+
+        var splitStep1 = new Autoconfigure.KeySplitStep(kas1.URL, "split1", kas1.KID);
+        var splitStep2 = new Autoconfigure.KeySplitStep(kas2.URL, "split2", kas2.KID);
+
+        var tdfConfig = new Config.TDFConfig();
+        tdfConfig.autoconfigure = false;
+        tdfConfig.kasInfoList.add(kas1);
+        tdfConfig.kasInfoList.add(kas2);
+        tdfConfig.splitPlan = List.of(splitStep1, splitStep2);
+
+        var planner = new Planner(tdfConfig, new FakeServicesBuilder().setKas(kas).build(), (ignore1, ignored2) -> { throw new IllegalArgumentException("no granter needed"); });
+
+        // Act
+        Map<String, List<Config.KASInfo>> splits = planner.getSplits(tdfConfig);
+
+        // Assert
+        Assertions.assertThat(splits).hasSize(2);
+        Assertions.assertThat(splits.get("split1")).extracting("URL").containsExactly("https://kas1.example.com");
+        Assertions.assertThat(splits.get("split2")).extracting("URL").containsExactly("https://kas2.example.com");
     }
 }

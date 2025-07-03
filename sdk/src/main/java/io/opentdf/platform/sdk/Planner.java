@@ -7,9 +7,9 @@ import com.google.gson.annotations.SerializedName;
 import io.opentdf.platform.policy.Algorithm;
 import io.opentdf.platform.policy.SimpleKasKey;
 import io.opentdf.platform.policy.SimpleKasPublicKey;
-import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRequest;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
+import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClientInterface;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,6 +21,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BiFunction;
+
 
 public class Planner {
     private static final String BASE_KEY = "base_key";
@@ -30,7 +32,7 @@ public class Planner {
 
     private static final Logger logger = LoggerFactory.getLogger(Planner.class);
 
-    public Planner(Config.TDFConfig config, SDK.Services services) {
+    public Planner(Config.TDFConfig config, SDK.Services services, BiFunction<SDK.Services, Config.TDFConfig, Autoconfigure.Granter> granterFactory) {
         this.tdfConfig = Objects.requireNonNull(config);
         this.services = Objects.requireNonNull(services);
     }
@@ -45,7 +47,7 @@ public class Planner {
             if (tdfConfig.splitPlan != null && !tdfConfig.splitPlan.isEmpty()) {
                 throw new IllegalArgumentException("cannot use autoconfigure with a split plan provided in the TDFConfig");
             }
-            splitPlan = getAutoconfigurePlan(tdfConfig);
+            splitPlan = getAutoconfigurePlan(services, tdfConfig);
         } else if (tdfConfig.splitPlan == null || tdfConfig.splitPlan.isEmpty()) {
             splitPlan = generatePlanFromProvidedKases(tdfConfig.kasInfoList);
         } else {
@@ -58,16 +60,11 @@ public class Planner {
         return resolveKeys(splitPlan);
     }
 
-    private List<Autoconfigure.KeySplitStep> getAutoconfigurePlan(Config.TDFConfig tdfConfig) {
-        Autoconfigure.Granter granter = new Autoconfigure.Granter(new ArrayList<>());
-        if (tdfConfig.attributeValues != null && !tdfConfig.attributeValues.isEmpty()) {
-            granter = Autoconfigure.newGranterFromAttributes(services.kas().getKeyCache(), tdfConfig.attributeValues.toArray(new Value[0]));
-        } else if (tdfConfig.attributes != null && !tdfConfig.attributes.isEmpty()) {
-            granter = Autoconfigure.newGranterFromService(services.attributes(), services.kas().getKeyCache(),
-                    tdfConfig.attributes.toArray(new Autoconfigure.AttributeValueFQN[0]));
-        }
-        return granter.getSplits(defaultKases(tdfConfig), Planner::getUUID, this::fetchBaseKey);
+    private static List<Autoconfigure.KeySplitStep> getAutoconfigurePlan(SDK.Services services, Config.TDFConfig tdfConfig) {
+        Autoconfigure.Granter granter = Autoconfigure.createGranter(services, tdfConfig);
+        return granter.getSplits(defaultKases(tdfConfig), Planner::getUUID, () -> Planner.fetchBaseKey(services.wellknown()));
     }
+
 
     List<Autoconfigure.KeySplitStep> generatePlanFromProvidedKases(List<Config.KASInfo> kases) {
         if (kases.size() == 1) {
@@ -81,8 +78,8 @@ public class Planner {
         return splitPlan;
     }
 
-    Optional<SimpleKasKey> fetchBaseKey() {
-        var responseMessage = services.wellknown()
+    static Optional<SimpleKasKey> fetchBaseKey(WellKnownServiceClientInterface wellknown) {
+        var responseMessage = wellknown
                 .getWellKnownConfigurationBlocking(GetWellKnownConfigurationRequest.getDefaultInstance(), Collections.emptyMap())
                 .execute();
         GetWellKnownConfigurationResponse response;
@@ -142,7 +139,6 @@ public class Planner {
             Algorithm algorithm;
         }
     }
-
 
     Map<String, List<Config.KASInfo>> resolveKeys(List<Autoconfigure.KeySplitStep> splitPlan) {
         Map<String, List<Config.KASInfo>> conjunction = new HashMap<>();

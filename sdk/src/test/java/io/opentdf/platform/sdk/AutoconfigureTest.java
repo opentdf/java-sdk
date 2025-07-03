@@ -38,6 +38,7 @@ import io.opentdf.platform.sdk.Autoconfigure.Granter;
 import org.assertj.core.api.AtomicIntegerArrayAssert;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.platform.commons.JUnitException;
 import org.mockito.Mockito;
 
 import java.util.ArrayList;
@@ -532,7 +533,7 @@ public class AutoconfigureTest {
 
     @Test
     void testUsingAttributeMappedAtMultiplePlaces() {
-        var attributes = new Value[] { mockValueFor(mp2uns2uns), mockValueFor(mp2uns2mp) };
+        var attributes = new Value[]{mockValueFor(mp2uns2uns), mockValueFor(mp2uns2mp)};
         Granter granter = Autoconfigure.newGranterFromAttributes(new KASKeyCache(), attributes);
         var counter = new AtomicInteger(0);
         var splitPlan = granter.getSplits(Collections.emptyList(), () -> Integer.toString(counter.getAndIncrement()), () -> Optional.empty());
@@ -756,7 +757,7 @@ public class AutoconfigureTest {
         private final List<KeySplitStep> plan;
 
         ReasonerTestCase(String name, List<AttributeValueFQN> policy, List<String> defaults, String ats, String keyed,
-                String reduced, List<KeySplitStep> plan) {
+                         String reduced, List<KeySplitStep> plan) {
             this.name = name;
             this.policy = policy;
             this.defaults = defaults;
@@ -809,8 +810,8 @@ public class AutoconfigureTest {
     void testStoreKeysToCache_NoKeys() {
         KASKeyCache keyCache = Mockito.mock(KASKeyCache.class);
         KeyAccessServer kas1 = KeyAccessServer.newBuilder().setPublicKey(
-                PublicKey.newBuilder().setCached(
-                        KasPublicKeySet.newBuilder()))
+                        PublicKey.newBuilder().setCached(
+                                KasPublicKeySet.newBuilder()))
                 .build();
 
         Autoconfigure.storeKeysToCache(List.of(kas1), Collections.emptyList(), keyCache);
@@ -906,7 +907,7 @@ public class AutoconfigureTest {
     }
 
     GetAttributeValuesByFqnsResponse getResponseWithGrants(GetAttributeValuesByFqnsRequest req,
-            List<KeyAccessServer> grants) {
+                                                           List<KeyAccessServer> grants) {
         GetAttributeValuesByFqnsResponse.Builder builder = GetAttributeValuesByFqnsResponse.newBuilder();
 
         for (String v : req.getFqnsList()) {
@@ -958,13 +959,15 @@ public class AutoconfigureTest {
 
         AttributesServiceClient attributesServiceClient = mock(AttributesServiceClient.class);
         when(attributesServiceClient.getAttributeValuesByFqnsBlocking(any(), any())).thenAnswer(invocation -> {
-            var request = (GetAttributeValuesByFqnsRequest)invocation.getArgument(0);
-            return new UnaryBlockingCall<GetAttributeValuesByFqnsResponse>(){
+            var request = (GetAttributeValuesByFqnsRequest) invocation.getArgument(0);
+            return new UnaryBlockingCall<GetAttributeValuesByFqnsResponse>() {
                 @Override
                 public ResponseMessage<GetAttributeValuesByFqnsResponse> execute() {
                     return new ResponseMessage.Success<>(getResponseWithGrants(request, List.of(kas1)), Collections.emptyMap(), Collections.emptyMap());
                 }
-                @Override public void cancel() {
+
+                @Override
+                public void cancel() {
                     // not really calling anything
                 }
             };
@@ -996,17 +999,19 @@ public class AutoconfigureTest {
     void testUsingBaseKeyWhenNoMappedKeysOrGrants() {
         Autoconfigure.Granter granter = Autoconfigure.newGranterFromAttributes(null);
         SimpleKasKey key = SimpleKasKey.newBuilder()
-                        .setKasUri("https://example.com/kas")
-                        .setPublicKey(
-                                SimpleKasPublicKey.newBuilder()
-                                        .setKid("thenewkid")
-                                        .setPem("anotherpem")
-                                        .setAlgorithm(Algorithm.ALGORITHM_EC_P521)
-                        ).build();
+                .setKasUri("https://example.com/kas")
+                .setPublicKey(
+                        SimpleKasPublicKey.newBuilder()
+                                .setKid("thenewkid")
+                                .setPem("anotherpem")
+                                .setAlgorithm(Algorithm.ALGORITHM_EC_P521)
+                ).build();
 
         var splits = granter.getSplits(
                 List.of("https://example.org/kas2"),
-                () -> { throw new IllegalStateException("the plan should have a single element"); },
+                () -> {
+                    throw new IllegalStateException("the plan should have a single element");
+                },
                 () -> Optional.of(key));
         assertThat(splits).hasSize(1);
         assertThat(splits.get(0)).isEqualTo(new KeySplitStep("https://example.com/kas", "", "thenewkid"));
@@ -1028,5 +1033,86 @@ public class AutoconfigureTest {
                         new KeySplitStep("https://example.org/kas1", "0", null),
                         new KeySplitStep("https://example.org/kas2", "1", null)
                 );
+    }
+
+    @Test
+    void createsGranterFromAttributeValues() {
+        // Arrange
+        Config.TDFConfig config = new Config.TDFConfig();
+        config.attributeValues = List.of(mockValueFor(spk2spk), mockValueFor(rel2gbr));
+
+        SDK.Services services = mock(SDK.Services.class);
+        SDK.KAS kas = mock(SDK.KAS.class);
+        when(services.kas()).thenReturn(kas);
+        when(services.attributes()).thenThrow(new IllegalStateException("should never use the attribute service when attributes are provided"));
+        when(kas.getKeyCache()).thenReturn(null); // No cache needed for this test
+
+        // Act
+        Autoconfigure.Granter granter = Autoconfigure.createGranter(services, config);
+
+        // Assert
+        assertThat(granter).isNotNull();
+        assertThat(granter.getPolicy()).hasSize(2);
+        assertThat(granter.getPolicy()).containsExactlyInAnyOrder(
+                new AttributeValueFQN("https://other.com/attr/specified/value/specked"),
+                new AttributeValueFQN("https://virtru.com/attr/Releasable%20To/value/GBR")
+        );
+    }
+
+    @Test
+    void createsGranterFromService() {
+        // Arrange
+        SDK.Services services = mock(SDK.Services.class);
+        SDK.KAS kas = mock(SDK.KAS.class);
+        AttributesServiceClient attributesServiceClient = mock(AttributesServiceClient.class);
+
+        // Prepare a request and a mocked response
+        List<AttributeValueFQN> policy = List.of(
+                new AttributeValueFQN("https://other.com/attr/specified/value/specked"),
+                new AttributeValueFQN("https://virtru.com/attr/Releasable%20To/value/GBR")
+        );
+//        GetAttributeValuesByFqnsRequest request = GetAttributeValuesByFqnsRequest.newBuilder()
+//                .addAllFqns(policy.stream().map(AttributeValueFQN::toString).collect(Collectors.toList()))
+//                .build();
+
+        when(services.kas()).thenReturn(kas);
+        when(services.attributes()).thenReturn(attributesServiceClient);
+
+        // Mock the attribute service to return a response with the expected values
+        when(attributesServiceClient.getAttributeValuesByFqnsBlocking(any(), any())).thenAnswer(invocation -> {
+            return new UnaryBlockingCall<GetAttributeValuesByFqnsResponse>() {
+                @Override
+                public ResponseMessage<GetAttributeValuesByFqnsResponse> execute() {
+                    GetAttributeValuesByFqnsResponse.Builder builder = GetAttributeValuesByFqnsResponse.newBuilder();
+                    for (AttributeValueFQN fqn : policy) {
+                        Value value = Value.newBuilder()
+                                .setId(fqn.toString())
+                                .setFqn(fqn.toString())
+                                .build();
+                        builder.putFqnAttributeValues(fqn.toString(),
+                                GetAttributeValuesByFqnsResponse.AttributeAndValue.newBuilder()
+                                        .setValue(value)
+                                        .build());
+                    }
+                    return new ResponseMessage.Success<>(builder.build(), Collections.emptyMap(), Collections.emptyMap());
+                }
+
+                @Override
+                public void cancel() {
+                }
+            };
+        });
+
+        // Act
+        Autoconfigure.Granter granter = Autoconfigure.createGranter(services, new Config.TDFConfig() {{
+            attributeValues = null; // force use of service
+            attributes = policy;
+        }});
+
+        // Assert
+        assertThat(granter).isNotNull();
+        // The policy should be empty because attributeValues is null, but the test ensures the service is called
+        // If you want to check the service call, verify it:
+        verify(services).attributes();
     }
 }
