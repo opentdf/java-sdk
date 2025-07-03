@@ -162,9 +162,7 @@ public class Planner {
                 logger.info("no public key provided for KAS at {}, retrieving", splitInfo.kas);
                 var getKI = new Config.KASInfo();
                 getKI.URL = splitInfo.kas;
-                if (!tdfConfig.autoconfigure) {
-                    getKI.Algorithm = tdfConfig.wrappingKeyType.toString();
-                }
+                getKI.Algorithm = tdfConfig.wrappingKeyType.toString();
                 getKI.KID = splitInfo.kid;
                 getKI = services.kas().getPublicKey(getKI);
                 latestKASInfo.put(splitInfo.kas, getKI);

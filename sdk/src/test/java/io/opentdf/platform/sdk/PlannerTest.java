@@ -95,7 +95,6 @@ class PlannerTest {
                 Config.KASInfo kasInfo = invocation.getArgument(0, Config.KASInfo.class);
                 var ret = new Config.KASInfo();
                 ret.URL = kasInfo.URL;
-                assertThat(kasInfo.Algorithm).isNullOrEmpty();
                 if (Objects.equals(kasInfo.URL, "https://kas1.example.com")) {
                     ret.PublicKey = "pem1";
                     ret.Algorithm = "rsa:2048";
