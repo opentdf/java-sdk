@@ -662,7 +662,7 @@ public class AutoconfigureTest {
             var wrapper = new Object() {
                 int i = 0;
             };
-            List<KeySplitStep> plan = reasoner.getSplits(tc.getDefaults(), () -> String.valueOf(wrapper.i++ + 1), () -> Optional.empty());
+            List<KeySplitStep> plan = reasoner.getSplits(tc.getDefaults(), () -> String.valueOf(wrapper.i++ + 1), Optional::empty);
             assertThat(plan)
                     .as(tc.name)
                     .hasSameElementsAs(tc.getPlan());
@@ -1024,11 +1024,11 @@ public class AutoconfigureTest {
                 splitGen,
                 Optional::empty);
 
-        assertThat(splits).hasSize(2);
-        assertThat(splits).asList()
-                .containsExactly(
-                        new KeySplitStep("https://example.org/kas1", "0", null),
-                        new KeySplitStep("https://example.org/kas2", "1", null)
+        assertThat(splits)
+                .hasSize(2)
+                .asList().containsExactly(
+                    new KeySplitStep("https://example.org/kas1", "0", null),
+                    new KeySplitStep("https://example.org/kas2", "1", null)
                 );
     }
 

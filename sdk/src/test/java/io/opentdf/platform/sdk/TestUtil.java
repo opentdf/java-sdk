@@ -15,7 +15,7 @@ public class TestUtil {
 
             @Override
             public void cancel() {
-
+                // in tests we don't need to preserve server resources, so no-op
             }
         };
     }

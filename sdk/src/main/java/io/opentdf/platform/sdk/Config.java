@@ -1,6 +1,5 @@
 package io.opentdf.platform.sdk;
 
-import io.opentdf.platform.policy.Algorithm;
 import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.SimpleKasKey;
 import io.opentdf.platform.policy.Value;
