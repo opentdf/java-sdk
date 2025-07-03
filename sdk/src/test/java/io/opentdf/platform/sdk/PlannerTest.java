@@ -5,6 +5,7 @@ import com.google.protobuf.Value;
 import io.opentdf.platform.policy.Algorithm;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClientInterface;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -138,5 +139,51 @@ class PlannerTest {
         assertThat(split3KasInfo.URL).isEqualTo("https://kas3.example.com");
         assertThat(split3KasInfo.Algorithm).isEqualTo("rsa:4096");
         assertThat(split3KasInfo.PublicKey).isEqualTo("pem3");
+    }
+
+    @Test
+    void returnsOnlyDefaultKasesIfPresent() {
+        var kas1 = new Config.KASInfo();
+        kas1.URL = "https://kas1.example.com";
+        kas1.Default = true;
+
+        var kas2 = new Config.KASInfo();
+        kas2.URL = "https://kas2.example.com";
+        kas2.Default = false;
+
+        var kas3 = new Config.KASInfo();
+        kas3.URL = "https://kas3.example.com";
+        kas3.Default = true;
+
+        var config = new Config.TDFConfig();
+        config.kasInfoList.addAll(List.of(kas1, kas2, kas3));
+
+        List<String> result = Planner.defaultKases(config);
+
+        Assertions.assertThat(result).containsExactlyInAnyOrder("https://kas1.example.com", "https://kas3.example.com");
+    }
+
+    @Test
+    void returnsAllKasesIfNoDefault() {
+        var kas1 = new Config.KASInfo();
+        kas1.URL = "https://kas1.example.com";
+        kas1.Default = false;
+
+        var kas2 = new Config.KASInfo();
+        kas2.URL = "https://kas2.example.com";
+        kas2.Default = null; // not set
+
+        var config = new Config.TDFConfig();
+        config.kasInfoList.addAll(List.of(kas1, kas2));
+
+        List<String> result = Planner.defaultKases(config);
+        Assertions.assertThat(result).containsExactlyInAnyOrder("https://kas1.example.com", "https://kas2.example.com");
+    }
+
+    @Test
+    void returnsEmptyListIfNoKases() {
+        var config = new Config.TDFConfig();
+        List<String> result = Planner.defaultKases(config);
+        Assertions.assertThat(result).isEmpty();
     }
 }
