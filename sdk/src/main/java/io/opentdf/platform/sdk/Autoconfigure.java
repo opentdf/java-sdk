@@ -254,9 +254,9 @@ class Autoconfigure {
                 throw new RuntimeException("invalid attributeInstance");
             }
             try {
-                return URLDecoder.decode(matcher.group(1), StandardCharsets.UTF_8);
-            } catch (IllegalArgumentException e) {
-                throw new RuntimeException("invalid attributeInstance", e);
+                return URLDecoder.decode(matcher.group(1), StandardCharsets.UTF_8.name());
+            }  catch (UnsupportedEncodingException e) {
+                throw new RuntimeException("illegal attribute instance", e);
             }
         }
     }
@@ -867,7 +867,7 @@ class Autoconfigure {
         return granter;
     }
 
-    private static Granter getGranter(KASKeyCache keyCache, List<GetAttributeValuesByFqnsResponse.AttributeAndValue> values) {
+    private static Granter getGranter(@Nullable KASKeyCache keyCache, List<GetAttributeValuesByFqnsResponse.AttributeAndValue> values) {
         List<AttributeValueFQN> attributeValues = values.stream()
                 .map(GetAttributeValuesByFqnsResponse.AttributeAndValue::getValue)
                 .map(Value::getFqn)
