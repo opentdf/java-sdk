@@ -255,7 +255,7 @@ class Autoconfigure {
             }
             try {
                 return URLDecoder.decode(matcher.group(1), StandardCharsets.UTF_8.name());
-            }  catch (UnsupportedEncodingException e) {
+            }  catch (UnsupportedEncodingException | IllegalArgumentException e) {
                 throw new RuntimeException("illegal attribute instance", e);
             }
         }
@@ -382,7 +382,7 @@ class Autoconfigure {
             k = k.reduce();
             int l = k.size();
             if (l == 0) {
-                throw new IllegalStateException("generated an empty plan");
+                throw new AutoConfigureException("generated an empty plan");
             }
 
             List<KeySplitStep> steps = new ArrayList<>();
