@@ -891,8 +891,9 @@ class Autoconfigure {
                 storeKeysToCache(attribute.getGrantsList(), attribute.getKasKeysList(), keyCache);
                 continue;
             }
-            storeKeysToCache(namespace.getGrantsList(), namespace.getKasKeysList(), keyCache);
-            grants.addAllGrants(fqn, namespace.getGrantsList(), namespace.getKasKeysList(), attribute);
+            if (grants.addAllGrants(fqn, namespace.getGrantsList(), namespace.getKasKeysList(), attribute)) {
+                storeKeysToCache(namespace.getGrantsList(), namespace.getKasKeysList(), keyCache);
+            }
         }
 
         return grants;
