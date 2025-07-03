@@ -868,7 +868,13 @@ class Autoconfigure {
     }
 
     private static Granter getGranter(KASKeyCache keyCache, List<GetAttributeValuesByFqnsResponse.AttributeAndValue> values) {
-        Granter grants = new Granter(values.stream().map(GetAttributeValuesByFqnsResponse.AttributeAndValue::getValue).map(Value::getFqn).map(AttributeValueFQN::new).collect(Collectors.toList()));
+        List<AttributeValueFQN> attributeValues = values.stream()
+                .map(GetAttributeValuesByFqnsResponse.AttributeAndValue::getValue)
+                .map(Value::getFqn)
+                .map(AttributeValueFQN::new)
+                .collect(Collectors.toList());
+
+        Granter grants = new Granter(attributeValues);
         for (var attributeAndValue: values) {
             String fqnstr = attributeAndValue.getValue().getFqn();
             AttributeValueFQN fqn = new AttributeValueFQN(fqnstr);
