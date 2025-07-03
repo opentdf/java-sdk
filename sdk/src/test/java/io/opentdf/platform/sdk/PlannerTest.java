@@ -3,7 +3,6 @@ package io.opentdf.platform.sdk;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
 import io.opentdf.platform.policy.Algorithm;
-import io.opentdf.platform.policy.PublicKey;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClientInterface;
 import org.assertj.core.api.Assertions;
