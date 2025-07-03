@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -35,10 +34,8 @@ import io.opentdf.platform.sdk.Autoconfigure.Granter.BooleanKeyExpression;
 import io.opentdf.platform.sdk.Autoconfigure.KeySplitStep;
 import io.opentdf.platform.sdk.Autoconfigure.Granter;
 
-import org.assertj.core.api.AtomicIntegerArrayAssert;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.platform.commons.JUnitException;
 import org.mockito.Mockito;
 
 import java.util.ArrayList;
@@ -49,6 +46,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.regex.Matcher;
@@ -1071,9 +1069,6 @@ public class AutoconfigureTest {
                 new AttributeValueFQN("https://other.com/attr/specified/value/specked"),
                 new AttributeValueFQN("https://virtru.com/attr/Releasable%20To/value/GBR")
         );
-//        GetAttributeValuesByFqnsRequest request = GetAttributeValuesByFqnsRequest.newBuilder()
-//                .addAllFqns(policy.stream().map(AttributeValueFQN::toString).collect(Collectors.toList()))
-//                .build();
 
         when(services.kas()).thenReturn(kas);
         when(services.attributes()).thenReturn(attributesServiceClient);
@@ -1114,5 +1109,48 @@ public class AutoconfigureTest {
         // The policy should be empty because attributeValues is null, but the test ensures the service is called
         // If you want to check the service call, verify it:
         verify(services).attributes();
+    }
+
+    @Test
+    void getSplits_usesAutoconfigurePlan_whenAutoconfigureTrue() {
+        var tdfConfig = new Config.TDFConfig();
+        tdfConfig.autoconfigure = true;
+        tdfConfig.kasInfoList = new ArrayList<>();
+        tdfConfig.splitPlan = null;
+
+        var kas = Mockito.mock(SDK.KAS.class);
+        Mockito.when(kas.getKeyCache()).thenReturn(new KASKeyCache());
+        Config.KASInfo kasInfo = new Config.KASInfo() {{
+            URL = "https://kas.example.com";
+            Algorithm = "ec:secp256r1";
+            KID = "kid";
+        }};
+        Mockito.when(kas.getPublicKey(any())).thenReturn(kasInfo);
+
+        var services = new FakeServicesBuilder().setKas(kas).build();
+
+        // Mock granterFactory to return a granter with a known split plan
+        var expectedSplit = new Autoconfigure.KeySplitStep("https://kas.example.com", "", "kid");
+        var granter = Mockito.mock(Autoconfigure.Granter.class);
+        Mockito.when(granter.getSplits(
+                        Mockito.anyList(),
+                        Mockito.any(),
+                        Mockito.any()))
+                .thenReturn(List.of(expectedSplit));
+
+        BiFunction<SDK.Services, Config.TDFConfig, Granter> granterFactory =
+                (s, c) -> granter;
+
+        var planner = new Planner(tdfConfig, services, granterFactory);
+
+        // Act
+        var splits = planner.getSplits(tdfConfig);
+
+        // Assert
+        assertThat(splits).containsKey("");
+        assertThat(splits.get("")).hasSize(1);
+        assertThat(splits.get("").get(0).URL).isEqualTo("https://kas.example.com");
+        assertThat(splits.get("").get(0).KID).isEqualTo("kid");
+        assertThat(splits.get("").get(0).Algorithm).isEqualTo("ec:secp256r1");
     }
 }

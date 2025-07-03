@@ -28,6 +28,7 @@ public class Planner {
     private static final String BASE_KEY = "base_key";
     private final Config.TDFConfig tdfConfig;
     private final SDK.Services services;
+    private final BiFunction<SDK.Services, Config.TDFConfig, Autoconfigure.Granter> granterFactory;
 
 
     private static final Logger logger = LoggerFactory.getLogger(Planner.class);
@@ -35,6 +36,7 @@ public class Planner {
     public Planner(Config.TDFConfig config, SDK.Services services, BiFunction<SDK.Services, Config.TDFConfig, Autoconfigure.Granter> granterFactory) {
         this.tdfConfig = Objects.requireNonNull(config);
         this.services = Objects.requireNonNull(services);
+        this.granterFactory = granterFactory;
     }
 
     private static String getUUID() {
@@ -60,8 +62,8 @@ public class Planner {
         return resolveKeys(splitPlan);
     }
 
-    private static List<Autoconfigure.KeySplitStep> getAutoconfigurePlan(SDK.Services services, Config.TDFConfig tdfConfig) {
-        Autoconfigure.Granter granter = Autoconfigure.createGranter(services, tdfConfig);
+    private List<Autoconfigure.KeySplitStep> getAutoconfigurePlan(SDK.Services services, Config.TDFConfig tdfConfig) {
+        Autoconfigure.Granter granter = granterFactory.apply(services, tdfConfig);
         return granter.getSplits(defaultKases(tdfConfig), Planner::getUUID, () -> Planner.fetchBaseKey(services.wellknown()));
     }
 

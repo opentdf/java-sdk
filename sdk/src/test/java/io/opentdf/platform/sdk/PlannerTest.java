@@ -3,6 +3,7 @@ package io.opentdf.platform.sdk;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
 import io.opentdf.platform.policy.Algorithm;
+import io.opentdf.platform.policy.PublicKey;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClientInterface;
 import org.assertj.core.api.Assertions;
@@ -132,29 +133,42 @@ class PlannerTest {
         var tdfConfig = new Config.TDFConfig();
         tdfConfig.autoconfigure = true;
         tdfConfig.wrappingKeyType = KeyType.RSA2048Key;
-        var planner = new Planner(new Config.TDFConfig(), new FakeServicesBuilder().setKas(kas).build(), (ignore1, ignored2) ->  { throw new IllegalArgumentException("no granter needed"); });
+        tdfConfig.kasInfoList = List.of(
+                new Config.KASInfo() {{
+                    URL = "https://kas4.example.com";
+                    KID = "kid4";
+                    Algorithm = "ec:secp384r1";
+                    PublicKey = "pem4";
+                }}
+        );
+        var planner = new Planner(tdfConfig, new FakeServicesBuilder().setKas(kas).build(), (ignore1, ignored2) ->  { throw new IllegalArgumentException("no granter needed"); });
         var plan = List.of(
                 new Autoconfigure.KeySplitStep("https://kas1.example.com", "split1", null),
+                new Autoconfigure.KeySplitStep("https://kas4.example.com", "split1", "kid4"),
                 new Autoconfigure.KeySplitStep("https://kas2.example.com", "split2", "kid2"),
                 new Autoconfigure.KeySplitStep("https://kas3.example.com", "split2", "kid3")
         );
         Map<String, List<Config.KASInfo>> filledInPlan = planner.resolveKeys(plan);
         assertThat(filledInPlan.keySet().stream().collect(Collectors.toList())).asList().containsExactlyInAnyOrder("split1", "split2");
-        assertThat(filledInPlan.get("split1")).asList().hasSize(1);
-        var split1KasInfo = filledInPlan.get("split1").get(0);
-        assertThat(split1KasInfo.URL).isEqualTo("https://kas1.example.com");
-        assertThat(split1KasInfo.KID).isEqualTo("kid1");
-        assertThat(split1KasInfo.Algorithm).isEqualTo("rsa:2048");
-        assertThat(split1KasInfo.PublicKey).isEqualTo("pem1");
+        assertThat(filledInPlan.get("split1")).asList().hasSize(2);
+        var kasInfo1 = filledInPlan.get("split1").stream().filter(k -> "kid1".equals(k.KID)).findFirst().get();
+        assertThat(kasInfo1.URL).isEqualTo("https://kas1.example.com");
+        assertThat(kasInfo1.Algorithm).isEqualTo("rsa:2048");
+        assertThat(kasInfo1.PublicKey).isEqualTo("pem1");
+        var kasInfo4 = filledInPlan.get("split1").stream().filter(k -> "kid4".equals(k.KID)).findFirst().get();
+        assertThat(kasInfo4.URL).isEqualTo("https://kas4.example.com");
+        assertThat(kasInfo4.Algorithm).isEqualTo("ec:secp384r1");
+        assertThat(kasInfo4.PublicKey).isEqualTo("pem4");
+
         assertThat(filledInPlan.get("split2")).asList().hasSize(2);
-        var split2KasInfo = filledInPlan.get("split2").stream().filter(kasInfo -> "kid2".equals(kasInfo.KID)).findFirst().get();
-        assertThat(split2KasInfo.URL).isEqualTo("https://kas2.example.com");
-        assertThat(split2KasInfo.Algorithm).isEqualTo("ec:secp256r1");
-        assertThat(split2KasInfo.PublicKey).isEqualTo("pem2");
-        var split3KasInfo = filledInPlan.get("split2").stream().filter(kasInfo -> "kid3".equals(kasInfo.KID)).findFirst().get();
-        assertThat(split3KasInfo.URL).isEqualTo("https://kas3.example.com");
-        assertThat(split3KasInfo.Algorithm).isEqualTo("rsa:4096");
-        assertThat(split3KasInfo.PublicKey).isEqualTo("pem3");
+        var kasInfo2 = filledInPlan.get("split2").stream().filter(kasInfo -> "kid2".equals(kasInfo.KID)).findFirst().get();
+        assertThat(kasInfo2.URL).isEqualTo("https://kas2.example.com");
+        assertThat(kasInfo2.Algorithm).isEqualTo("ec:secp256r1");
+        assertThat(kasInfo2.PublicKey).isEqualTo("pem2");
+        var kasInfo3 = filledInPlan.get("split2").stream().filter(kasInfo -> "kid3".equals(kasInfo.KID)).findFirst().get();
+        assertThat(kasInfo3.URL).isEqualTo("https://kas3.example.com");
+        assertThat(kasInfo3.Algorithm).isEqualTo("rsa:4096");
+        assertThat(kasInfo3.PublicKey).isEqualTo("pem3");
     }
 
     @Test
