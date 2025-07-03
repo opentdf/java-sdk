@@ -127,7 +127,7 @@ public class Planner {
                 .build());
     }
 
-    private static Gson gson = new Gson();
+    private static final Gson gson = new Gson();
 
     private static class BaseKey {
         @SerializedName("kas_url")

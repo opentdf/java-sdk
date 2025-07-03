@@ -362,7 +362,7 @@ class Autoconfigure {
 
             logger.warn("no grants or mapped keys found, generating plan from default KASes. this is deprecated");
             // this is a little bit weird because we don't take into account the KIDs here. This is the way
-            // that it works in
+            // that it works in the go SDK but it seems a bit odd
             return generatePlanFromDefaultKases(defaultKases, genSplitID);
         }
 

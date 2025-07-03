@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -47,6 +48,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -990,4 +992,41 @@ public class AutoconfigureTest {
         assertEquals("public-key-pem-2", storedKASInfo2.PublicKey);
     }
 
+    @Test
+    void testUsingBaseKeyWhenNoMappedKeysOrGrants() {
+        Autoconfigure.Granter granter = Autoconfigure.newGranterFromAttributes(null);
+        SimpleKasKey key = SimpleKasKey.newBuilder()
+                        .setKasUri("https://example.com/kas")
+                        .setPublicKey(
+                                SimpleKasPublicKey.newBuilder()
+                                        .setKid("thenewkid")
+                                        .setPem("anotherpem")
+                                        .setAlgorithm(Algorithm.ALGORITHM_EC_P521)
+                        ).build();
+
+        var splits = granter.getSplits(
+                List.of("https://example.org/kas2"),
+                () -> { throw new IllegalStateException("the plan should have a single element"); },
+                () -> Optional.of(key));
+        assertThat(splits).hasSize(1);
+        assertThat(splits.get(0)).isEqualTo(new KeySplitStep("https://example.com/kas", "", "thenewkid"));
+    }
+
+    @Test
+    void testUsingDefaultKasesWhenNothingElseProvided() {
+        Autoconfigure.Granter granter = Autoconfigure.newGranterFromAttributes(null);
+        var counter = new AtomicInteger();
+        Supplier<String> splitGen = () -> String.valueOf(counter.getAndIncrement());
+        var splits = granter.getSplits(
+                List.of("https://example.org/kas1", "https://example.org/kas2"),
+                splitGen,
+                Optional::empty);
+
+        assertThat(splits).hasSize(2);
+        assertThat(splits).asList()
+                .containsExactly(
+                        new KeySplitStep("https://example.org/kas1", "0", null),
+                        new KeySplitStep("https://example.org/kas2", "1", null)
+                );
+    }
 }
