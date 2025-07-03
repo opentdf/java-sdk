@@ -88,7 +88,6 @@ public class Planner {
         try {
             response = RequestHelper.getOrThrow(responseMessage);
         } catch (ConnectException e) {
-            logger.error("unable to retrieve configuration from well known endpoint", e);
             throw new SDKException("unable to retrieve base key from well known endpoint", e);
         }
 

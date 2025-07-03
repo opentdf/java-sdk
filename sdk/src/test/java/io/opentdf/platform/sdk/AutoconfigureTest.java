@@ -1,16 +1,5 @@
 package io.opentdf.platform.sdk;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 import com.connectrpc.ResponseMessage;
 import com.connectrpc.UnaryBlockingCall;
 import io.opentdf.platform.policy.Algorithm;
@@ -29,11 +18,10 @@ import io.opentdf.platform.policy.attributes.AttributesServiceClient;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
+import io.opentdf.platform.sdk.Autoconfigure.Granter;
 import io.opentdf.platform.sdk.Autoconfigure.Granter.AttributeBooleanExpression;
 import io.opentdf.platform.sdk.Autoconfigure.Granter.BooleanKeyExpression;
 import io.opentdf.platform.sdk.Autoconfigure.KeySplitStep;
-import io.opentdf.platform.sdk.Autoconfigure.Granter;
-
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -48,9 +36,20 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class AutoconfigureTest {
 
@@ -514,7 +513,7 @@ public class AutoconfigureTest {
             var wrapper = new Object() {
                 int i = 0;
             };
-            List<KeySplitStep> plan = reasoner.getSplits(tc.getDefaults(), () -> String.valueOf(wrapper.i++ + 1), () -> Optional.empty());
+            List<KeySplitStep> plan = reasoner.getSplits(tc.getDefaults(), () -> String.valueOf(wrapper.i++ + 1), Optional::empty);
             assertThat(plan)
                     .as(tc.name)
                     .isEqualTo(tc.getPlan());
@@ -525,7 +524,7 @@ public class AutoconfigureTest {
     void testUsingAttributeMappedAtNamespace() {
         Granter granter = Autoconfigure.newGranterFromAttributes(new KASKeyCache(), mockValueFor(mp2uns2uns));
         var counter = new AtomicInteger(0);
-        var splitPlan = granter.getSplits(Collections.emptyList(), () -> Integer.toString(counter.getAndIncrement()), () -> Optional.empty());
+        var splitPlan = granter.getSplits(Collections.emptyList(), () -> Integer.toString(counter.getAndIncrement()), Optional::empty);
         assertThat(splitPlan).isEqualTo(List.of(new KeySplitStep("https://mapped.example.com", "", NAMESPACE_KAS_KEY.getPublicKey().getKid())));
     }
 
@@ -534,7 +533,7 @@ public class AutoconfigureTest {
         var attributes = new Value[]{mockValueFor(mp2uns2uns), mockValueFor(mp2uns2mp)};
         Granter granter = Autoconfigure.newGranterFromAttributes(new KASKeyCache(), attributes);
         var counter = new AtomicInteger(0);
-        var splitPlan = granter.getSplits(Collections.emptyList(), () -> Integer.toString(counter.getAndIncrement()), () -> Optional.empty());
+        var splitPlan = granter.getSplits(Collections.emptyList(), () -> Integer.toString(counter.getAndIncrement()), Optional::empty);
         assertThat(splitPlan).isEqualTo(List.of(
                 new KeySplitStep(NAMESPACE_KAS_KEY.getKasUri(), "0", NAMESPACE_KAS_KEY.getPublicKey().getKid()),
                 new KeySplitStep(VALUE_KEY.getKasUri(), "0", VALUE_KEY.getPublicKey().getKid())
@@ -1075,27 +1074,18 @@ public class AutoconfigureTest {
 
         // Mock the attribute service to return a response with the expected values
         when(attributesServiceClient.getAttributeValuesByFqnsBlocking(any(), any())).thenAnswer(invocation -> {
-            return new UnaryBlockingCall<GetAttributeValuesByFqnsResponse>() {
-                @Override
-                public ResponseMessage<GetAttributeValuesByFqnsResponse> execute() {
-                    GetAttributeValuesByFqnsResponse.Builder builder = GetAttributeValuesByFqnsResponse.newBuilder();
-                    for (AttributeValueFQN fqn : policy) {
-                        Value value = Value.newBuilder()
-                                .setId(fqn.toString())
-                                .setFqn(fqn.toString())
-                                .build();
-                        builder.putFqnAttributeValues(fqn.toString(),
-                                GetAttributeValuesByFqnsResponse.AttributeAndValue.newBuilder()
-                                        .setValue(value)
-                                        .build());
-                    }
-                    return new ResponseMessage.Success<>(builder.build(), Collections.emptyMap(), Collections.emptyMap());
-                }
-
-                @Override
-                public void cancel() {
-                }
-            };
+            GetAttributeValuesByFqnsResponse.Builder builder = GetAttributeValuesByFqnsResponse.newBuilder();
+            for (AttributeValueFQN fqn : policy) {
+                Value value = Value.newBuilder()
+                        .setId(fqn.toString())
+                        .setFqn(fqn.toString())
+                        .build();
+                builder.putFqnAttributeValues(fqn.toString(),
+                        GetAttributeValuesByFqnsResponse.AttributeAndValue.newBuilder()
+                                .setValue(value)
+                                .build());
+            }
+            return TestUtil.successfulUnaryCall(builder.build());
         });
 
         // Act

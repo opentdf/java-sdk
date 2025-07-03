@@ -150,7 +150,9 @@ class TDF {
 
 
             List<byte[]> symKeys = new ArrayList<>(splits.size());
-            for (String splitID : splits.keySet()) {
+            for (var split : splits.entrySet()) {
+                String splitID = split.getKey();
+
                 // Symmetric key
                 byte[] symKey = new byte[GCM_KEY_SIZE];
                 sRandom.nextBytes(symKey);
@@ -177,7 +179,8 @@ class TDF {
                     encryptedMetadata = encoder.encodeToString(metadata.getBytes(StandardCharsets.UTF_8));
                 }
 
-                for (Config.KASInfo kasInfo : splits.get(splitID)) {
+                List<KASInfo> kasInfos = split.getValue();
+                for (Config.KASInfo kasInfo : kasInfos) {
                     if (kasInfo.PublicKey == null || kasInfo.PublicKey.isEmpty()) {
                         throw new SDK.KasPublicKeyMissing("Kas public key is missing in kas information list");
                     }

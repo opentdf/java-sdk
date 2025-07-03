@@ -24,7 +24,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -60,6 +59,10 @@ class RuleType {
 class Autoconfigure {
 
     private static Logger logger = LoggerFactory.getLogger(Autoconfigure.class);
+
+    private Autoconfigure() {
+        // Prevent instantiation, this class is a utility class that is only used statically
+    }
 
     static class KeySplitStep {
         final String kas;
@@ -288,7 +291,7 @@ class Autoconfigure {
             return policy;
         }
 
-        boolean addAllGrants(AttributeValueFQN fqn, List<KeyAccessServer> granted, List<SimpleKasKey> mapped, Attribute attr, KASKeyCache keyCache) {
+        boolean addAllGrants(AttributeValueFQN fqn, List<KeyAccessServer> granted, List<SimpleKasKey> mapped, Attribute attr) {
             boolean foundMappedKey = false;
             for (var mappedKey: mapped) {
                 foundMappedKey = true;
@@ -312,10 +315,11 @@ class Autoconfigure {
                     continue;
                 }
                 var cachedGrantKeys = grantedKey.getPublicKey().getCached().getKeysList();
-                if (cachedGrantKeys.isEmpty()) {
-                    logger.debug("no keys cached in policy service");
-                    continue;
+
+                if (logger.isDebugEnabled()) {
+                    logger.debug("found {} keys cached in policy service", cachedGrantKeys.size());
                 }
+
                 for (var cachedGrantKey: cachedGrantKeys) {
                     var mappedKey = new Config.KASInfo();
                     mappedKey.URL = grantedKey.getUri();
@@ -444,7 +448,6 @@ class Autoconfigure {
 
                     List<String> kases = grant.kases;
                     if (kases.isEmpty()) {
-                        // TODO: replace this with a reference to the base key
                         kases = List.of(RuleType.EMPTY_TERM);
                     }
 
@@ -469,13 +472,13 @@ class Autoconfigure {
             for (var clause : e.must) {
                 ArrayList<PublicKeyInfo> keys = new ArrayList<>();
                 if (clause.values.isEmpty()) {
-                    logger.warn("No values found for attribute: " + clause.def.getFqn());
+                    logger.warn("No values found for attribute {}", clause.def.getFqn());
                     continue;
                 }
                 for (var value : clause.values) {
                     var mapped = mappedKeys.get(value.key);
                     if (mapped == null) {
-                        logger.warn("No keys found for attribute value {} ", value);
+                        logger.warn("No keys found for attribute value {}", value);
                         continue;
                     }
                     for (var kasInfo : mapped) {
@@ -874,16 +877,16 @@ class Autoconfigure {
             var attribute = attributeAndValue.getAttribute();
             var namespace = attribute.getNamespace();
 
-            if (grants.addAllGrants(fqn, value.getGrantsList(), value.getKasKeysList(), attribute, keyCache)) {
+            if (grants.addAllGrants(fqn, value.getGrantsList(), value.getKasKeysList(), attribute)) {
                 storeKeysToCache(value.getGrantsList(), value.getKasKeysList(), keyCache);
                 continue;
             }
-            if (grants.addAllGrants(fqn, attribute.getGrantsList(), attribute.getKasKeysList(), attribute, keyCache)) {
+            if (grants.addAllGrants(fqn, attribute.getGrantsList(), attribute.getKasKeysList(), attribute)) {
                 storeKeysToCache(attribute.getGrantsList(), attribute.getKasKeysList(), keyCache);
                 continue;
             }
             storeKeysToCache(namespace.getGrantsList(), namespace.getKasKeysList(), keyCache);
-            grants.addAllGrants(fqn, namespace.getGrantsList(), namespace.getKasKeysList(), attribute, keyCache);
+            grants.addAllGrants(fqn, namespace.getGrantsList(), namespace.getKasKeysList(), attribute);
         }
 
         return grants;

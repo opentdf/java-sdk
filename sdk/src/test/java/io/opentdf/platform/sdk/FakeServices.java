@@ -1,16 +1,10 @@
 package io.opentdf.platform.sdk;
 
-import io.opentdf.platform.authorization.AuthorizationServiceClient;
 import io.opentdf.platform.authorization.AuthorizationServiceClientInterface;
-import io.opentdf.platform.policy.attributes.AttributesServiceClient;
 import io.opentdf.platform.policy.attributes.AttributesServiceClientInterface;
-import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClientInterface;
-import io.opentdf.platform.policy.namespaces.NamespaceServiceClient;
 import io.opentdf.platform.policy.namespaces.NamespaceServiceClientInterface;
-import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceClient;
 import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceClientInterface;
-import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClient;
 import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClientInterface;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClientInterface;
 
