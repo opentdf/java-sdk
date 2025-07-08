@@ -203,7 +203,7 @@ class KASClient implements SDK.KAS {
         }
 
         var wrappedKey = response.getEntityWrappedKey().toByteArray();
-        if (sessionKeyType != KeyType.RSA2048Key) {
+        if (sessionKeyType.isEc()) {
 
             if (ecKeyPair == null) {
                 throw new SDKException("ECKeyPair is null. Unable to proceed with the unwrap operation.");
@@ -233,7 +233,7 @@ class KASClient implements SDK.KAS {
         keyAccess.protocol = "kas";
 
         NanoTDFRewrapRequestBody body = new NanoTDFRewrapRequestBody();
-        body.algorithm = format("ec:%s", curve.toString());
+        body.algorithm = format("ec:%s", curve.curveName);
         body.clientPublicKey = keyPair.publicKeyInPEMFormat();
         body.keyAccess = keyAccess;
 
