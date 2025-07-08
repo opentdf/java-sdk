@@ -21,14 +21,14 @@ public class NanoTDFType {
 
 
         ECCurve(String curveName, int keySize, int compressedPubKeySize, int curveMode) {
-            this(curveName, compressedPubKeySize, keySize, curveMode, true);
+            this(curveName, keySize, compressedPubKeySize, curveMode, true);
         }
 
         ECCurve(String curveName, int keySize, int compressedPubKeySize, int curveMode, boolean isSupported) {
-            this.compressedPubKeySize = compressedPubKeySize;
-            this.keySize = keySize;
-            this.curveMode = curveMode;
             this.curveName = curveName ;
+            this.keySize = keySize;
+            this.compressedPubKeySize = compressedPubKeySize;
+            this.curveMode = curveMode;
             this.isSupported = isSupported;
         }
 
