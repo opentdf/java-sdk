@@ -1,7 +1,7 @@
 package io.opentdf.platform.sdk;
 
-import com.connectrpc.ResponseMessage;
-import com.connectrpc.UnaryBlockingCall;
+import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
 import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
@@ -11,18 +11,20 @@ import io.opentdf.platform.sdk.Config.NanoTDFReaderConfig;
 
 import java.nio.charset.StandardCharsets;
 
+import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
+import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClientInterface;
 import org.apache.commons.io.output.ByteArrayOutputStream;
+import org.apache.commons.lang3.NotImplementedException;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
-import java.security.KeyPair;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Random;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
@@ -45,20 +47,35 @@ public class NanoTDFTest {
             "oVP7Vpcx\n" +
             "-----END PRIVATE KEY-----";
 
+    private static final String BASE_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\n" +
+            "MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEzcPM21p19N27oyMG6i3KrrDdgyiNDLgN\n" +
+            "rTJMvZRj3V/48ysDKw5jzngtzVLpkur/l5XBGjEiCr0aGlSo8Db0YVYFRm5g74P2\n" +
+            "nt8xOedHSPGYq0NMDt4Il6bt1rNUSVm+\n" +
+            "-----END PUBLIC KEY-----\n";
+
+    private static final String BASE_KEY_PRIVATE = "-----BEGIN PRIVATE KEY-----\n" +
+            "MIG2AgEAMBAGByqGSM49AgEGBSuBBAAiBIGeMIGbAgEBBDA8zHdzkI8OhDojcRcQ\n" +
+            "xMqV3Gs+XGeQ/9SKbIRsyab0jJhMAEhRqzF3DQ4RSipIIX6hZANiAATNw8zbWnX0\n" +
+            "3bujIwbqLcqusN2DKI0MuA2tMky9lGPdX/jzKwMrDmPOeC3NUumS6v+XlcEaMSIK\n" +
+            "vRoaVKjwNvRhVgVGbmDvg/ae3zE550dI8ZirQ0wO3giXpu3Ws1RJWb4=\n" +
+            "-----END PRIVATE KEY-----\n";
+
     private static final String KID = "r1";
+    private static final String BASE_KID = "basekid";
 
     protected static KeyAccessServerRegistryServiceClient kasRegistryService;
     protected static List<String> registeredKases = List.of(
             "https://api.example.com/kas",
             "https://other.org/kas2",
             "http://localhost:8181/kas",
-            "https://localhost:8383/kas"
+            "https://localhost:8383/kas",
+            "https://api.kaswithbasekey.example.com"
     );
     protected static String platformUrl = "http://localhost:8080";
     
     protected static SDK.KAS kas = new SDK.KAS() {
         @Override
-        public void close() throws Exception {
+        public void close() {
         }
 
         @Override
@@ -70,10 +87,16 @@ public class NanoTDFTest {
 
         @Override
         public KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
+            var k2 = kasInfo.clone();
+            if (Objects.equals(kasInfo.KID, BASE_KID)) {
+                assertThat(kasInfo.URL).isEqualTo("https://api.kaswithbasekey.example.com");
+                assertThat(kasInfo.Algorithm).isEqualTo("ec:secp384r1");
+                k2.PublicKey = BASE_PUBLIC_KEY;
+                return k2;
+            }
             if (kasInfo.Algorithm != null && !"ec:secp256r1".equals(kasInfo.Algorithm)) {
                 throw new IllegalArgumentException("Unexpected algorithm: " + kasInfo);
             }
-            var k2 = kasInfo.clone();
             k2.KID = KID;
             k2.PublicKey = kasPublicKey;
             return k2;
@@ -81,18 +104,12 @@ public class NanoTDFTest {
 
         @Override
         public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy, KeyType sessionKeyType) {
-            int index = Integer.parseInt(keyAccess.url);
-            var decryptor = new AsymDecryption(keypairs.get(index).getPrivate());
-            var bytes = Base64.getDecoder().decode(keyAccess.wrappedKey);
-            try {
-                return decryptor.decrypt(bytes);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
+            throw new NotImplementedException("no unwrapping ZTDFs here");
         }
 
         @Override
         public byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL) {
+            String key = Objects.equals(kasURL, "https://api.kaswithbasekey.example.com") ? BASE_KEY_PRIVATE : kasPrivateKey;
 
             byte[] headerAsBytes = Base64.getDecoder().decode(header);
             Header nTDFHeader = new Header(ByteBuffer.wrap(headerAsBytes));
@@ -102,7 +119,7 @@ public class NanoTDFTest {
 
             // Generate symmetric key
             byte[] symmetricKey = ECKeyPair.computeECDHKey(ECKeyPair.publicKeyFromPem(publicKeyAsPem),
-                    ECKeyPair.privateKeyFromPem(kasPrivateKey));
+                    ECKeyPair.privateKeyFromPem(key));
 
             // Generate HKDF key
             MessageDigest digest;
@@ -112,8 +129,7 @@ public class NanoTDFTest {
                 throw new SDKException("error creating SHA-256 message digest", e);
             }
             byte[] hashOfSalt = digest.digest(NanoTDF.MAGIC_NUMBER_AND_VERSION);
-            byte[] key = ECKeyPair.calculateHKDF(hashOfSalt, symmetricKey);
-            return key;
+            return ECKeyPair.calculateHKDF(hashOfSalt, symmetricKey);
         }
 
         @Override
@@ -136,20 +152,8 @@ public class NanoTDFTest {
 
         // Stub the listKeyAccessServers method
         when(kasRegistryService.listKeyAccessServersBlocking(any(ListKeyAccessServersRequest.class), any()))
-                .thenReturn(new UnaryBlockingCall<>() {
-                    @Override
-                    public ResponseMessage<ListKeyAccessServersResponse> execute() {
-                        return new ResponseMessage.Success<>(mockResponse, Collections.emptyMap(), Collections.emptyMap());
-                    }
-
-                    @Override
-                    public void cancel() {
-                        // this never happens in tests
-                    }
-                });
+                .thenReturn(TestUtil.successfulUnaryCall(mockResponse));
     }
-
-    private static ArrayList<KeyPair> keypairs = new ArrayList<>();
 
     @Test
     void encryptionAndDecryptionWithValidKey() throws Exception {
@@ -199,6 +203,39 @@ public class NanoTDFTest {
             nanoTDF.readNanoTDF(ByteBuffer.wrap(nTDFBytes), dataStream, platformUrl);
             assertThat(dataStream.toByteArray()).isEqualTo(data);
         }
+    }
+
+    @Test
+    void encryptionAndDecryptWithBaseKey() throws Exception {
+        var baseKeyJson = "{\"kas_url\":\"https://api.kaswithbasekey.example.com\",\"public_key\":{\"algorithm\":\"ALGORITHM_EC_P384\",\"kid\":\"thebasekid\",\"pem\": \"" + BASE_PUBLIC_KEY +  "\"}}";
+        var val = Value.newBuilder().setStringValue(baseKeyJson).build();
+        var config = Struct.newBuilder().putFields("base_key", val).build();
+        WellKnownServiceClientInterface wellknown = mock(WellKnownServiceClientInterface.class);
+        GetWellKnownConfigurationResponse response = GetWellKnownConfigurationResponse.newBuilder().setConfiguration(config).build();
+
+        when(wellknown.getWellKnownConfigurationBlocking(any(), any())).thenReturn(TestUtil.successfulUnaryCall(response));
+
+        Config.NanoTDFConfig nanoConfig = Config.newNanoTDFConfig(
+                Config.witDataAttributes("https://example.com/attr/Classification/value/S",
+                        "https://example.com/attr/Classification/value/X")
+        );
+
+        String plainText = "Virtru!!";
+        ByteBuffer byteBuffer = ByteBuffer.wrap(plainText.getBytes());
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+
+        NanoTDF nanoTDF = new NanoTDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).setWellknownService(wellknown).build());
+        nanoTDF.createNanoTDF(byteBuffer, tdfOutputStream, nanoConfig);
+
+        byte[] nanoTDFBytes = tdfOutputStream.toByteArray();
+        ByteArrayOutputStream plainTextStream = new ByteArrayOutputStream();
+        nanoTDF = new NanoTDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build());
+        nanoTDF.readNanoTDF(ByteBuffer.wrap(nanoTDFBytes), plainTextStream, platformUrl);
+
+        String out = new String(plainTextStream.toByteArray(), StandardCharsets.UTF_8);
+        assertThat(out).isEqualTo(plainText);
+        // KAS KID
+        assertThat(new String(nanoTDFBytes, StandardCharsets.UTF_8)).contains(KID);
     }
 
     void runBasicTest(String kasUrl, boolean allowed, KeyAccessServerRegistryServiceClient kasReg, NanoTDFReaderConfig decryptConfig) throws Exception {

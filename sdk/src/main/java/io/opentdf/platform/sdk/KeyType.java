@@ -1,5 +1,9 @@
 package io.opentdf.platform.sdk;
 
+import io.opentdf.platform.policy.Algorithm;
+
+import java.util.Set;
+
 public enum KeyType {
     RSA2048Key("rsa:2048"),
     EC256Key("ec:secp256r1"),
@@ -39,7 +43,24 @@ public enum KeyType {
         throw new IllegalArgumentException("No enum constant for key type: " + keyType);
     }
 
+    public static KeyType fromAlgorithm(Algorithm a) {
+        switch (a) {
+            case ALGORITHM_RSA_2048:
+                return RSA2048Key;
+            case ALGORITHM_EC_P256:
+                return EC256Key;
+            case ALGORITHM_EC_P384:
+                return EC384Key;
+            case ALGORITHM_EC_P521:
+                return EC521Key;
+            default:
+                throw new IllegalArgumentException("Unsupported algorithm: " + a);
+        }
+    }
+
+    private static final Set<KeyType> EC_KEY_TYPES = Set.of(EC256Key, EC384Key, EC521Key);
+
     public boolean isEc() {
-        return this != RSA2048Key;
+        return EC_KEY_TYPES.contains(this);
     }
 }

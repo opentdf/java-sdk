@@ -910,14 +910,7 @@ class Autoconfigure {
     }
 
     static String algProto2String(Algorithm e) {
-        switch (e) {
-            case ALGORITHM_EC_P521:
-                return "ec:p521";
-            case ALGORITHM_RSA_2048:
-                return "rsa:2048";
-            default:
-                throw new IllegalArgumentException("Unknown algorithm: " + e);
-        }
+        return KeyType.fromAlgorithm(e).getCurveName();
     }
 
     static String algProto2String(KasPublicKeyAlgEnum e) {

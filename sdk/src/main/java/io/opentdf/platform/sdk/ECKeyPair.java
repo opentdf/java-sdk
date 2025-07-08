@@ -197,18 +197,12 @@ public class ECKeyPair {
             PemObject pemObject = pemReader.readPemObject();
             PublicKey pubKey = ecKeyFac.generatePublic(new X509EncodedKeySpec(pemObject.getContent()));
             return ((ECPublicKey) pubKey).getQ().getEncoded(true);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        } catch (InvalidKeySpecException e) {
-            throw new RuntimeException(e);
-        } catch (NoSuchProviderException e) {
+        } catch (NoSuchAlgorithmException | IOException | InvalidKeySpecException | NoSuchProviderException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public static String publicKeyFromECPoint(byte[] ecPoint, String curveName) {
+    public static String publicKeyFromECPoint(byte[] ecPoint, String curveName) throws RuntimeException {
         try {
             // Create EC Public key
             ECNamedCurveParameterSpec ecSpec = ECNamedCurveTable.getParameterSpec(curveName);
@@ -274,7 +268,7 @@ public class ECKeyPair {
     }
 
     public static byte[] calculateHKDF(byte[] salt, byte[] secret) {
-        byte[] key = new byte[secret.length];
+        byte[] key = new byte[32];
         HKDFParameters params = new HKDFParameters(secret, salt, null);
 
         HKDFBytesGenerator hkdf = new HKDFBytesGenerator(SHA256Digest.newInstance());
