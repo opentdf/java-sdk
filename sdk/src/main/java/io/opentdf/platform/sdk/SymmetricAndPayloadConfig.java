@@ -1,7 +1,5 @@
 package io.opentdf.platform.sdk;
 
-import io.opentdf.platform.policy.Key;
-
 public class SymmetricAndPayloadConfig {
     private Data data;
 

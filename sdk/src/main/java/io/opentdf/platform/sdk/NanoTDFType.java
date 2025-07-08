@@ -41,14 +41,13 @@ public class NanoTDFType {
             throw new IllegalArgumentException("No enum constant for curve mode: " + curveMode);
         }
 
-        public static ECCurve fromAlgorithm(String algorithm) {
+        static ECCurve fromAlgorithm(String algorithm) {
             if (algorithm == null) {
                 log.warn("got a null algorithm, returning SECP256R1 as default");
                 return SECP256R1;
             }
-
-            assert algorithm.startsWith("ec:");
-            var searchKey = algorithm.substring("ec:".length());
+            var searchKey = algorithm.startsWith("ec:") ? algorithm.substring("ec:".length()) : algorithm;
+            log.debug("looking for algorithm [{}]", searchKey);
             return Arrays.stream(ECCurve.values())
                     .filter(v -> v.curveName.equalsIgnoreCase(searchKey))
                     .findAny()

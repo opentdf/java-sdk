@@ -1,6 +1,6 @@
 package io.opentdf.platform.sdk;
 
-import java.util.Optional;
+import javax.annotation.Nonnull;
 
 import static io.opentdf.platform.sdk.NanoTDFType.ECCurve.SECP256R1;
 import static io.opentdf.platform.sdk.NanoTDFType.ECCurve.SECP384R1;
@@ -24,15 +24,18 @@ public enum KeyType {
         this(keyType, null);
     }
 
-    public Optional<NanoTDFType.ECCurve> getECEcurve() {
-        return Optional.ofNullable(curve);
+    @Nonnull
+    NanoTDFType.ECCurve getECCurve() {
+        if (!isEc()) {
+            throw new IllegalStateException("This key type does not have an ECCurve associated with it: " + keyType);
+        }
+        return curve;
     }
 
     @Override
     public String toString() {
         return keyType;
     }
-
 
     public static KeyType fromString(String keyType) {
         for (KeyType type : KeyType.values()) {

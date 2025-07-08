@@ -147,9 +147,8 @@ class KASClient implements SDK.KAS {
     @Override
     public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy,  KeyType sessionKeyType) {
         ECKeyPair ecKeyPair = null;
-
         if (sessionKeyType.isEc()) {
-            var curve = sessionKeyType.getECEcurve().get();
+            var curve = sessionKeyType.getECCurve();
             ecKeyPair = new ECKeyPair(curve, ECKeyPair.ECAlgorithm.ECDH);
             clientPublicKey = ecKeyPair.publicKeyInPEMFormat();
         } else {
