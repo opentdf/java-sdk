@@ -32,6 +32,8 @@ public class ECKeyPair {
         Security.addProvider(new BouncyCastleProvider());
     }
 
+    private final NanoTDFType.ECCurve curve;
+
     public enum ECAlgorithm {
         ECDH,
         ECDSA
@@ -40,13 +42,13 @@ public class ECKeyPair {
     private static final BouncyCastleProvider BOUNCY_CASTLE_PROVIDER = new BouncyCastleProvider();
 
     private KeyPair keyPair;
-    private String curveName;
 
     public ECKeyPair() {
-        this("secp256r1", ECAlgorithm.ECDH);
+        this(NanoTDFType.ECCurve.SECP256R1, ECAlgorithm.ECDH);
     }
 
-    public ECKeyPair(String curveName, ECAlgorithm algorithm) {
+    public ECKeyPair(NanoTDFType.ECCurve curve, ECAlgorithm algorithm) {
+        this.curve = curve;
         KeyPairGenerator generator;
 
         try {
@@ -61,19 +63,13 @@ public class ECKeyPair {
             throw new RuntimeException(e);
         }
 
-        ECGenParameterSpec spec = new ECGenParameterSpec(curveName);
+        ECGenParameterSpec spec = new ECGenParameterSpec(this.curve.curveName);
         try {
             generator.initialize(spec);
         } catch (InvalidAlgorithmParameterException e) {
             throw new RuntimeException(e);
         }
         this.keyPair = generator.generateKeyPair();
-        this.curveName = curveName;
-    }
-
-    public ECKeyPair(ECPublicKey publicKey, ECPrivateKey privateKey, String curveName) {
-        this.keyPair = new KeyPair(publicKey, privateKey);
-        this.curveName = curveName;
     }
 
     public ECPublicKey getPublicKey() {
@@ -116,10 +112,6 @@ public class ECKeyPair {
 
     public int keySize() {
         return this.keyPair.getPrivate().getEncoded().length * 8;
-    }
-
-    public String curveName() {
-        return this.curveName;
     }
 
     public byte[] compressECPublickey() {

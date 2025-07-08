@@ -47,8 +47,7 @@ public class ECKeyPairTest {
         public static final String salt = "L1L";
     }
     @Test
-    void ecPublicKeyInPemformat() throws InvalidAlgorithmParameterException, NoSuchAlgorithmException,
-            IOException, NoSuchProviderException, InvalidKeySpecException, CertificateException, InvalidKeyException {
+    void ecPublicKeyInPemformat() {
         ECKeyPair keyPairA = new ECKeyPair();
 
         String keypairAPubicKey = keyPairA.publicKeyInPEMFormat();
@@ -156,7 +155,7 @@ public class ECKeyPairTest {
 
         String plainText = "Virtru!";
         for (var curve: NanoTDFType.ECCurve.values()) {
-            ECKeyPair keyPair = new ECKeyPair(curve.name(), ECKeyPair.ECAlgorithm.ECDSA);
+            ECKeyPair keyPair = new ECKeyPair(curve, ECKeyPair.ECAlgorithm.ECDSA);
             byte[] signature = ECKeyPair.computeECDSASig(plainText.getBytes(), keyPair.getPrivateKey());
             boolean verify = ECKeyPair.verifyECDSAig(plainText.getBytes(), signature, keyPair.getPublicKey());
             assertEquals(verify, true);

@@ -150,7 +150,7 @@ class KASClient implements SDK.KAS {
 
         if (sessionKeyType.isEc()) {
             var curve = sessionKeyType.getECEcurve().get();
-            ecKeyPair = new ECKeyPair(curve.curveName, ECKeyPair.ECAlgorithm.ECDH);
+            ecKeyPair = new ECKeyPair(curve, ECKeyPair.ECAlgorithm.ECDH);
             clientPublicKey = ecKeyPair.publicKeyInPEMFormat();
         } else {
             // Initialize the RSA key pair only once and reuse it for future unwrap operations
@@ -219,7 +219,7 @@ class KASClient implements SDK.KAS {
     }
 
     public byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL) {
-        ECKeyPair keyPair = new ECKeyPair(curve.toString(), ECKeyPair.ECAlgorithm.ECDH);
+        ECKeyPair keyPair = new ECKeyPair(curve, ECKeyPair.ECAlgorithm.ECDH);
 
         NanoTDFKeyAccess keyAccess = new NanoTDFKeyAccess();
         keyAccess.header = header;

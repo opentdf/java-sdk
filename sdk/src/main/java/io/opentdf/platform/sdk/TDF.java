@@ -279,7 +279,7 @@ class TDF {
         private ECKeyWrappedKeyInfo createECWrappedKey(Config.TDFConfig tdfConfig, Config.KASInfo kasInfo, byte[] symKey)  {
             var curve = tdfConfig.wrappingKeyType.getECEcurve().get();
             assert curve != null : "Wrapping key type must be an EC key type";
-            var keyPair = new ECKeyPair(curve.curveName, ECKeyPair.ECAlgorithm.ECDH);
+            var keyPair = new ECKeyPair(curve, ECKeyPair.ECAlgorithm.ECDH);
 
             ECPublicKey kasPubKey = ECKeyPair.publicKeyFromPem(kasInfo.PublicKey);
             byte[] symmetricKey = ECKeyPair.computeECDHKey(kasPubKey, keyPair.getPrivateKey());

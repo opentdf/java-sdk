@@ -201,11 +201,11 @@ public class NanoTDFHeaderTest {
                 byte[] tag = new byte[tagSize];
 
                 ECCMode eccMode = new ECCMode((byte) 0x0); // no ecdsa binding and 'secp256r1'
-                ECKeyPair sdkECKeyPair = new ECKeyPair(eccMode.getEllipticCurveType().curveName, ECKeyPair.ECAlgorithm.ECDH);
+                ECKeyPair sdkECKeyPair = new ECKeyPair(eccMode.getEllipticCurveType(), ECKeyPair.ECAlgorithm.ECDH);
                 String sdkPrivateKeyForEncrypt = sdkECKeyPair.privateKeyInPEMFormat();
                 String sdkPublicKeyForEncrypt = sdkECKeyPair.publicKeyInPEMFormat();
 
-                ECKeyPair kasECKeyPair = new ECKeyPair(eccMode.getEllipticCurveType().curveName, ECKeyPair.ECAlgorithm.ECDH);
+                ECKeyPair kasECKeyPair = new ECKeyPair(eccMode.getEllipticCurveType(), ECKeyPair.ECAlgorithm.ECDH);
                 String kasPublicKey = kasECKeyPair.publicKeyInPEMFormat();
                 // Encrypt
                 Header header = new Header();
