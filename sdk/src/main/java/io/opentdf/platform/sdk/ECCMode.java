@@ -44,7 +44,7 @@ public class ECCMode {
         }
     }
 
-    public NanoTDFType.ECCurve getEllipticCurveType() {
+    public NanoTDFType.ECCurve getCurve() {
         return NanoTDFType.ECCurve.values()[data.curveMode];
     }
 

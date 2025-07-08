@@ -1,6 +1,12 @@
 package io.opentdf.platform.sdk;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Arrays;
+
 public class NanoTDFType {
+    private static final Logger log = LoggerFactory.getLogger(NanoTDFType.class);
     enum ECCurve {
         SECP256R1("secp256r1", 32, 33, 0x00),
         SECP384R1("secp384r1", 48, 49, 0x01),
@@ -33,6 +39,20 @@ public class NanoTDFType {
                 }
             }
             throw new IllegalArgumentException("No enum constant for curve mode: " + curveMode);
+        }
+
+        public static ECCurve fromAlgorithm(String algorithm) {
+            if (algorithm == null) {
+                log.warn("got a null algorithm, returning SECP256R1 as default");
+                return SECP256R1;
+            }
+
+            assert algorithm.startsWith("ec:");
+            var searchKey = algorithm.substring("ec:".length());
+            return Arrays.stream(ECCurve.values())
+                    .filter(v -> v.curveName.equalsIgnoreCase(searchKey))
+                    .findAny()
+                    .orElseThrow(() -> new IllegalArgumentException(String.format("No enum constant for algorithm: %s", algorithm)));
         }
     }
     // ResourceLocator Protocol

@@ -169,7 +169,7 @@ public class NanoTDFHeaderTest {
                 header2.setPolicyInfo(policyInfo);
 
                 int sizeToRead = policyInfo.getTotalSize();
-                int compressedPubKeySize = header2.getECCMode().getEllipticCurveType().keySize;
+                int compressedPubKeySize = header2.getECCMode().getCurve().keySize;
                 byte[] ephemeralKey = new byte[compressedPubKeySize]; // size of compressed public key
                 System.arraycopy(remainingBytesArray, sizeToRead, ephemeralKey, 0, ephemeralKey.length);
                 header2.setEphemeralKey(ephemeralKey);
@@ -201,11 +201,11 @@ public class NanoTDFHeaderTest {
                 byte[] tag = new byte[tagSize];
 
                 ECCMode eccMode = new ECCMode((byte) 0x0); // no ecdsa binding and 'secp256r1'
-                ECKeyPair sdkECKeyPair = new ECKeyPair(eccMode.getEllipticCurveType(), ECKeyPair.ECAlgorithm.ECDH);
+                ECKeyPair sdkECKeyPair = new ECKeyPair(eccMode.getCurve(), ECKeyPair.ECAlgorithm.ECDH);
                 String sdkPrivateKeyForEncrypt = sdkECKeyPair.privateKeyInPEMFormat();
                 String sdkPublicKeyForEncrypt = sdkECKeyPair.publicKeyInPEMFormat();
 
-                ECKeyPair kasECKeyPair = new ECKeyPair(eccMode.getEllipticCurveType(), ECKeyPair.ECAlgorithm.ECDH);
+                ECKeyPair kasECKeyPair = new ECKeyPair(eccMode.getCurve(), ECKeyPair.ECAlgorithm.ECDH);
                 String kasPublicKey = kasECKeyPair.publicKeyInPEMFormat();
                 // Encrypt
                 Header header = new Header();

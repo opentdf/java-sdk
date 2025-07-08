@@ -76,6 +76,7 @@ public class NanoTDFTest {
             var k2 = kasInfo.clone();
             k2.KID = KID;
             k2.PublicKey = kasPublicKey;
+            k2.Algorithm = "ec:secp256r1";
             return k2;
         }
 
@@ -98,7 +99,7 @@ public class NanoTDFTest {
             Header nTDFHeader = new Header(ByteBuffer.wrap(headerAsBytes));
             byte[] ephemeralKey = nTDFHeader.getEphemeralKey();
 
-            String publicKeyAsPem = ECKeyPair.publicKeyFromECPoint(ephemeralKey, nTDFHeader.getECCMode().getEllipticCurveType().curveName);
+            String publicKeyAsPem = ECKeyPair.publicKeyFromECPoint(ephemeralKey, nTDFHeader.getECCMode().getCurve().curveName);
 
             // Generate symmetric key
             byte[] symmetricKey = ECKeyPair.computeECDHKey(ECKeyPair.publicKeyFromPem(publicKeyAsPem),
@@ -162,6 +163,7 @@ public class NanoTDFTest {
 
         Config.NanoTDFConfig config = Config.newNanoTDFConfig(
                 Config.withNanoKasInformation(kasInfos.toArray(new Config.KASInfo[0])),
+                Config.withEllipticCurve("secp384r1"),
                 Config.witDataAttributes("https://example.com/attr/Classification/value/S",
                         "https://example.com/attr/Classification/value/X")
         );
@@ -201,18 +203,36 @@ public class NanoTDFTest {
         }
     }
 
-    void runBasicTest(String kasUrl, boolean allowed, KeyAccessServerRegistryServiceClient kasReg, NanoTDFReaderConfig decryptConfig) throws Exception {
+    @Test
+    void testWithDifferentConfigAndKeyValues() throws Exception {
         var kasInfos = new ArrayList<>();
         var kasInfo = new Config.KASInfo();
-        kasInfo.URL = kasUrl;
+        kasInfo.URL = "https://api.example.com/kas";
         kasInfo.PublicKey = null;
         kasInfos.add(kasInfo);
-
-        Config.NanoTDFConfig config = Config.newNanoTDFConfig(
+        var config = Config.newNanoTDFConfig(
                 Config.withNanoKasInformation(kasInfos.toArray(new Config.KASInfo[0])),
-                Config.witDataAttributes("https://example.com/attr/Classification/value/S",
-                        "https://example.com/attr/Classification/value/X")
+                Config.withEllipticCurve("secp384r1"),
+                Config.witDataAttributes("https://example.com/attr/Classification/value/S", "https://example.com/attr/Classification/value/X")
         );
+        runBasicTest(null, true, kasRegistryService, null, config);
+    }
+
+    void runBasicTest(String kasUrl, boolean allowed, KeyAccessServerRegistryServiceClient kasReg, NanoTDFReaderConfig decryptConfig, Config.NanoTDFConfig writerConfig) throws Exception {
+        Config.NanoTDFConfig config;
+        if (writerConfig == null) {
+            var kasInfos = new ArrayList<>();
+            var kasInfo = new Config.KASInfo();
+            kasInfo.URL = kasUrl;
+            kasInfo.PublicKey = null;
+            kasInfos.add(kasInfo);
+            config = Config.newNanoTDFConfig(
+                    Config.withNanoKasInformation(kasInfos.toArray(new Config.KASInfo[0])),
+                    Config.witDataAttributes("https://example.com/attr/Classification/value/S", "https://example.com/attr/Classification/value/X")
+            );
+        } else {
+            config = writerConfig;
+        }
 
         String plainText = "Virtru!!";
         ByteBuffer byteBuffer = ByteBuffer.wrap(plainText.getBytes());
@@ -244,8 +264,6 @@ public class NanoTDFTest {
                 assertThat(e.getMessage()).contains("KasAllowlist");
             }
         }
-
-        
     }
 
     @Test
@@ -265,18 +283,18 @@ public class NanoTDFTest {
                 "https://localhost:8080/kas"
         );
         for (String kasUrl : kasUrlsSuccess) {
-            runBasicTest(kasUrl, true, kasRegistryService, null);
+            runBasicTest(kasUrl, true, kasRegistryService, null, null);
         }
         for (String kasUrl : kasUrlsFail) {
-            runBasicTest(kasUrl, false, kasRegistryService, null);
+            runBasicTest(kasUrl, false, kasRegistryService, null, null);
         } 
         
         // test with kasAllowlist
-        runBasicTest("http://api.example.com/kas", true, null, Config.newNanoTDFReaderConfig(Config.WithNanoKasAllowlist("http://api.example.com/kas")));
-        runBasicTest(platformUrl+"/kas", false, null, Config.newNanoTDFReaderConfig(Config.WithNanoKasAllowlist("http://api.example.com/kas")));
+        runBasicTest("http://api.example.com/kas", true, null, Config.newNanoTDFReaderConfig(Config.WithNanoKasAllowlist("http://api.example.com/kas")), null);
+        runBasicTest(platformUrl+"/kas", false, null, Config.newNanoTDFReaderConfig(Config.WithNanoKasAllowlist("http://api.example.com/kas")), null);
 
         // test ignore kasAllowlist
-        runBasicTest(platformUrl+"/kas", true, null, Config.newNanoTDFReaderConfig(Config.WithNanoKasAllowlist("http://api.example.com/kas"), Config.WithNanoIgnoreKasAllowlist(true)));
+        runBasicTest(platformUrl+"/kas", true, null, Config.newNanoTDFReaderConfig(Config.WithNanoKasAllowlist("http://api.example.com/kas"), Config.WithNanoIgnoreKasAllowlist(true)), null);
     }
 
     @Test

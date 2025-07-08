@@ -24,6 +24,7 @@ import javax.crypto.KeyAgreement;
 import java.io.*;
 import java.security.*;
 import java.security.spec.*;
+import java.util.Objects;
 // https://www.bouncycastle.org/latest_releases.html
 
 public class ECKeyPair {
@@ -48,7 +49,7 @@ public class ECKeyPair {
     }
 
     public ECKeyPair(NanoTDFType.ECCurve curve, ECAlgorithm algorithm) {
-        this.curve = curve;
+        this.curve = Objects.requireNonNull(curve);
         KeyPairGenerator generator;
 
         try {
@@ -78,6 +79,10 @@ public class ECKeyPair {
 
     public ECPrivateKey getPrivateKey() {
         return (ECPrivateKey) this.keyPair.getPrivate();
+    }
+
+    NanoTDFType.ECCurve getCurve() {
+        return this.curve;
     }
 
     public String publicKeyInPEMFormat() {
