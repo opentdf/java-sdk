@@ -47,7 +47,7 @@ class HeaderTest {
         ECCMode mode = new ECCMode((byte) 1); // Initialize the ECCMode object
         header.setECCMode(mode); // Set the ECCMode object
 
-        int keySize = mode.getCurve().keySize;
+        int keySize = mode.getCurve().compressedPubKeySize;
         byte[] key = new byte[keySize]; // Ensure the key size is correct
         header.setEphemeralKey(key);
         assertArrayEquals(key, header.getEphemeralKey());

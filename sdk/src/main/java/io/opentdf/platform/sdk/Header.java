@@ -26,7 +26,7 @@ public class Header {
         this.payloadConfig = new SymmetricAndPayloadConfig(buffer.get());
         this.policyInfo = new PolicyInfo(buffer, this.eccMode);
 
-        int compressedPubKeySize = this.eccMode.getCurve().keySize;
+        int compressedPubKeySize = this.eccMode.getCurve().compressedPubKeySize;
         this.ephemeralKey = new byte[compressedPubKeySize];
         buffer.get(this.ephemeralKey);
     }
@@ -79,10 +79,10 @@ public class Header {
     }
 
     public void setEphemeralKey(byte[] bytes) {
-        if (bytes.length < eccMode.getCurve().keySize) {
+        if (bytes.length < eccMode.getCurve().compressedPubKeySize) {
             throw new IllegalArgumentException("Failed to read ephemeral key - invalid buffer size.");
         }
-        ephemeralKey = Arrays.copyOf(bytes, eccMode.getCurve().keySize);
+        ephemeralKey = Arrays.copyOf(bytes, eccMode.getCurve().compressedPubKeySize);
     }
 
     public byte[] getEphemeralKey() {

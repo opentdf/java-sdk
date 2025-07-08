@@ -54,7 +54,7 @@ public class ECCMode {
     }
 
     public static int getECDSASignatureStructSize(NanoTDFType.ECCurve curve) {
-        int keySize = curve.compressedPubKeySize;
+        int keySize = curve.keySize;
         return (1 + keySize + 1 + keySize);
     }
 
