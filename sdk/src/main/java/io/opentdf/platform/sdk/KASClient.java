@@ -21,6 +21,8 @@ import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.SDK.KasBadRequestException;
 
 import okhttp3.OkHttpClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -49,6 +51,8 @@ class KASClient implements SDK.KAS {
     private String clientPublicKey;
     private KASKeyCache kasKeyCache;
 
+    private static final Logger log = LoggerFactory.getLogger(KASClient.class);
+
     /***
      * A client that communicates with KAS
      * 
@@ -69,7 +73,9 @@ class KASClient implements SDK.KAS {
 
     @Override
     public KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
-        var req = PublicKeyRequest.newBuilder().setAlgorithm(format("ec:%s", curve.toString())).build();
+        log.debug("retrieving public key with kasinfo = [{}]", kasInfo);
+
+        var req = PublicKeyRequest.newBuilder().setAlgorithm(format("ec:%s", curve.curveName)).build();
         var r = getStub(kasInfo.URL).publicKeyBlocking(req, Collections.emptyMap()).execute();
         PublicKeyResponse res;
         try {
