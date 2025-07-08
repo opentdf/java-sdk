@@ -44,10 +44,6 @@ public class ECCMode {
         }
     }
 
-    public NanoTDFType.ECCurve getCurve() {
-        return NanoTDFType.ECCurve.values()[data.curveMode];
-    }
-
     public boolean isECDSABindingEnabled() {
         return data.useECDSABinding == 1;
     }
@@ -60,6 +56,10 @@ public class ECCMode {
     public static int getECDSASignatureStructSize(NanoTDFType.ECCurve curve) {
         int keySize = curve.compressedPubKeySize;
         return (1 + keySize + 1 + keySize);
+    }
+
+    public NanoTDFType.ECCurve getCurve() {
+        return NanoTDFType.ECCurve.fromCurveMode(data.curveMode);
     }
 
     private class ECCModeStruct {
