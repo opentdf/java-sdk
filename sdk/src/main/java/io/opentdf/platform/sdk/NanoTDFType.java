@@ -1,21 +1,38 @@
 package io.opentdf.platform.sdk;
 
 public class NanoTDFType {
-    public enum ECCurve {
-        SECP256R1("secp256r1"),
-        SECP384R1("secp384r1"),
-        SECP521R1("secp384r1"),
-        SECP256K1("secp256k1");
+    enum ECCurve {
+        SECP256R1("secp256r1", 32, 33, 0x00),
+        SECP384R1("secp384r1", 48, 49, 0x01),
+        SECP521R1("secp512r1", 66, 67, 0x02),
+        SECP256K1("secp256k1",-1, -1, -1, false); // Note: SECP256K1 is not supported by the SDK
 
-        private final String name;
+        final int curveMode;
+        final int keySize;
+        final int compressedPubKeySize;
+        final String curveName;
+        final boolean isSupported;
 
-        ECCurve(String curveName) {
-            this.name = curveName;
+
+        ECCurve(String curveName, int compressedPubKeySize, int keySize, int curveMode) {
+            this(curveName, compressedPubKeySize, keySize, curveMode, true);
         }
 
-        @Override
-        public String toString() {
-            return name;
+        ECCurve(String curveName, int compressedPubKeySize, int keySize, int curveMode, boolean isSupported) {
+            this.compressedPubKeySize = compressedPubKeySize;
+            this.keySize = keySize;
+            this.curveMode = curveMode;
+            this.curveName = curveName ;
+            this.isSupported = isSupported;
+        }
+
+        static ECCurve fromCurveMode(int curveMode) {
+            for (ECCurve curve : ECCurve.values()) {
+                if (curve.curveMode == curveMode) {
+                    return curve;
+                }
+            }
+            throw new IllegalArgumentException("No enum constant for curve mode: " + curveMode);
         }
     }
     // ResourceLocator Protocol

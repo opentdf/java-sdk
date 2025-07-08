@@ -1,15 +1,31 @@
 package io.opentdf.platform.sdk;
 
+import java.util.Optional;
+
+import static io.opentdf.platform.sdk.NanoTDFType.ECCurve.SECP256R1;
+import static io.opentdf.platform.sdk.NanoTDFType.ECCurve.SECP384R1;
+import static io.opentdf.platform.sdk.NanoTDFType.ECCurve.SECP521R1;
+
 public enum KeyType {
     RSA2048Key("rsa:2048"),
-    EC256Key("ec:secp256r1"),
-    EC384Key("ec:secp384r1"),
-    EC521Key("ec:secp521r1");
+    EC256Key("ec:secp256r1", SECP256R1),
+    EC384Key("ec:secp384r1", SECP384R1),
+    EC521Key("ec:secp521r1", SECP521R1);
 
     private final String keyType;
+    private final NanoTDFType.ECCurve curve;
+
+    KeyType(String keyType, NanoTDFType.ECCurve ecCurve) {
+        this.keyType = keyType;
+        this.curve = ecCurve;
+    }
 
     KeyType(String keyType) {
-        this.keyType = keyType;
+        this(keyType, null);
+    }
+
+    public Optional<NanoTDFType.ECCurve> getECEcurve() {
+        return Optional.ofNullable(curve);
     }
 
     @Override
@@ -17,18 +33,6 @@ public enum KeyType {
         return keyType;
     }
 
-    public String getCurveName() {
-        switch (this) {
-            case EC256Key:
-                return "secp256r1";
-            case EC384Key:
-                return "secp384r1";
-            case EC521Key:
-                return "secp521r1";
-            default:
-                throw new IllegalArgumentException("Unsupported key type: " + this);
-        }
-    }
 
     public static KeyType fromString(String keyType) {
         for (KeyType type : KeyType.values()) {
@@ -40,6 +44,6 @@ public enum KeyType {
     }
 
     public boolean isEc() {
-        return this != RSA2048Key;
+        return this.curve != null;
     }
 }

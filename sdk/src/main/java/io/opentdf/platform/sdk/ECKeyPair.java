@@ -39,30 +39,6 @@ public class ECKeyPair {
 
     private static final BouncyCastleProvider BOUNCY_CASTLE_PROVIDER = new BouncyCastleProvider();
 
-    public enum NanoTDFECCurve {
-        SECP256R1("secp256r1", KeyType.EC256Key),
-        PRIME256V1("prime256v1", KeyType.EC256Key),
-        SECP384R1("secp384r1", KeyType.EC384Key),
-        SECP521R1("secp521r1", KeyType.EC521Key);
-
-        private String name;
-        private KeyType keyType;
-
-        NanoTDFECCurve(String curveName, KeyType keyType) {
-            this.name = curveName;
-            this.keyType = keyType;
-        }
-
-        @Override
-        public String toString() {
-            return name;
-        }
-
-        public KeyType getKeyType() {
-            return keyType;
-        }
-    }
-
     private KeyPair keyPair;
     private String curveName;
 
@@ -106,19 +82,6 @@ public class ECKeyPair {
 
     public ECPrivateKey getPrivateKey() {
         return (ECPrivateKey) this.keyPair.getPrivate();
-    }
-
-    public static int getECKeySize(String curveName) {
-        if (curveName.equalsIgnoreCase(NanoTDFECCurve.SECP256R1.toString()) ||
-                curveName.equalsIgnoreCase(NanoTDFECCurve.PRIME256V1.toString())) {
-            return 32;
-        } else if (curveName.equalsIgnoreCase(NanoTDFECCurve.SECP384R1.toString())) {
-            return 48;
-        } else if (curveName.equalsIgnoreCase(NanoTDFECCurve.SECP521R1.toString())) {
-            return 66;
-        } else {
-            throw new IllegalArgumentException("Unsupported ECC algorithm.");
-        }
     }
 
     public String publicKeyInPEMFormat() {

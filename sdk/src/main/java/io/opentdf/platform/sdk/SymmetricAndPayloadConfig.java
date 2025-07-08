@@ -1,5 +1,7 @@
 package io.opentdf.platform.sdk;
 
+import io.opentdf.platform.policy.Key;
+
 public class SymmetricAndPayloadConfig {
     private Data data;
 
@@ -17,7 +19,7 @@ public class SymmetricAndPayloadConfig {
         setSymmetricCipherType(NanoTDFType.Cipher.values()[cipherType]);
 
         int signatureECCMode = (value >> 4) & 0x07;
-        setSignatureECCMode(NanoTDFType.ECCurve.values()[signatureECCMode]);
+        data.signatureECCMode = signatureECCMode;
 
         int hasSignature = (value >> 7) & 0x01; // most significant bit
         data.hasSignature = hasSignature;
@@ -27,22 +29,11 @@ public class SymmetricAndPayloadConfig {
         data.hasSignature = flag ? 1 : 0;
     }
 
-    public void setSignatureECCMode(NanoTDFType.ECCurve curve) {
-        switch (curve) {
-            case SECP256R1:
-                data.signatureECCMode = 0x00;
-                break;
-            case SECP384R1:
-                data.signatureECCMode = 0x01;
-                break;
-            case SECP521R1:
-                data.signatureECCMode = 0x02;
-                break;
-            case SECP256K1:
-                throw new RuntimeException("SDK doesn't support 'secp256k1' curve");
-            default:
-                throw new RuntimeException("Unsupported ECC algorithm.");
+    public void setSignatureECCMode(NanoTDFType.ECCurve eccCurve) {
+        if (!eccCurve.isSupported) {
+            throw new RuntimeException(String.format("Unsupported ECC algorithm: %s", eccCurve.curveName));
         }
+        data.signatureECCMode = eccCurve.curveMode;
     }
 
     public void setSymmetricCipherType(NanoTDFType.Cipher cipherType) {
@@ -77,10 +68,6 @@ public class SymmetricAndPayloadConfig {
         return data.hasSignature == 1;
     }
 
-    public NanoTDFType.ECCurve getSignatureECCMode() {
-        return NanoTDFType.ECCurve.values()[data.signatureECCMode];
-    }
-
     public NanoTDFType.Cipher getCipherType() {
         return NanoTDFType.Cipher.values()[data.symmetricCipherEnum];
     }
@@ -109,6 +96,10 @@ public class SymmetricAndPayloadConfig {
             default:
                 throw new IllegalArgumentException("Unsupported symmetric cipher for signature.");
         }
+    }
+
+    public NanoTDFType.ECCurve getSignatureECCMode() {
+        return NanoTDFType.ECCurve.fromCurveMode(this.data.signatureECCMode);
     }
 
     private static class Data {

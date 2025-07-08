@@ -149,8 +149,8 @@ class KASClient implements SDK.KAS {
         ECKeyPair ecKeyPair = null;
 
         if (sessionKeyType.isEc()) {
-            var curveName = sessionKeyType.getCurveName();
-            ecKeyPair = new ECKeyPair(curveName, ECKeyPair.ECAlgorithm.ECDH);
+            var curve = sessionKeyType.getECEcurve().get();
+            ecKeyPair = new ECKeyPair(curve.curveName, ECKeyPair.ECAlgorithm.ECDH);
             clientPublicKey = ecKeyPair.publicKeyInPEMFormat();
         } else {
             // Initialize the RSA key pair only once and reuse it for future unwrap operations

@@ -104,7 +104,7 @@ public class NanoTDFHeaderTest {
                 header.setECCMode(eccMode);
 
                 SymmetricAndPayloadConfig payloadConfig = new SymmetricAndPayloadConfig((byte) 0x0); // no signature and
-                                                                                                     // AES_256_GCM_64_TAG
+                // AES_256_GCM_64_TAG
                 header.setPayloadConfig(payloadConfig);
 
                 PolicyInfo policyInfo = new PolicyInfo();
@@ -114,8 +114,7 @@ public class NanoTDFHeaderTest {
                 header.setPolicyInfo(policyInfo);
                 header.setEphemeralKey(compressedPubKey);
 
-                int headerSize = header.getTotalSize();
-                headerSize = header.writeIntoBuffer(ByteBuffer.wrap(headerData));
+                int headerSize = header.writeIntoBuffer(ByteBuffer.wrap(headerData));
                 assertEquals(headerData.length, headerSize);
                 assertTrue(Arrays.equals(headerData, expectedHeader));
         }
@@ -170,8 +169,7 @@ public class NanoTDFHeaderTest {
                 header2.setPolicyInfo(policyInfo);
 
                 int sizeToRead = policyInfo.getTotalSize();
-                int compressedPubKeySize = ECCMode
-                                .getECCompressedPubKeySize(header2.getECCMode().getEllipticCurveType());
+                int compressedPubKeySize = header2.getECCMode().getEllipticCurveType().keySize;
                 byte[] ephemeralKey = new byte[compressedPubKeySize]; // size of compressed public key
                 System.arraycopy(remainingBytesArray, sizeToRead, ephemeralKey, 0, ephemeralKey.length);
                 header2.setEphemeralKey(ephemeralKey);
@@ -203,11 +201,11 @@ public class NanoTDFHeaderTest {
                 byte[] tag = new byte[tagSize];
 
                 ECCMode eccMode = new ECCMode((byte) 0x0); // no ecdsa binding and 'secp256r1'
-                ECKeyPair sdkECKeyPair = new ECKeyPair(eccMode.getCurveName(), ECKeyPair.ECAlgorithm.ECDH);
+                ECKeyPair sdkECKeyPair = new ECKeyPair(eccMode.getEllipticCurveType().curveName, ECKeyPair.ECAlgorithm.ECDH);
                 String sdkPrivateKeyForEncrypt = sdkECKeyPair.privateKeyInPEMFormat();
                 String sdkPublicKeyForEncrypt = sdkECKeyPair.publicKeyInPEMFormat();
 
-                ECKeyPair kasECKeyPair = new ECKeyPair(eccMode.getCurveName(), ECKeyPair.ECAlgorithm.ECDH);
+                ECKeyPair kasECKeyPair = new ECKeyPair(eccMode.getEllipticCurveType().curveName, ECKeyPair.ECAlgorithm.ECDH);
                 String kasPublicKey = kasECKeyPair.publicKeyInPEMFormat();
                 // Encrypt
                 Header header = new Header();

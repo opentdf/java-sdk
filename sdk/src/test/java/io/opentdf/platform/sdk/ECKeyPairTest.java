@@ -12,6 +12,7 @@ import java.security.spec.InvalidKeySpecException;
 import java.util.Arrays;
 import java.util.Base64;
 
+import static io.opentdf.platform.sdk.NanoTDFType.ECCurve.SECP256R1;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -63,8 +64,7 @@ public class ECKeyPairTest {
         byte[] compressedKey2 = ECKeyPair.compressECPublickey(keyPairA.publicKeyInPEMFormat());
         assertArrayEquals(compressedKey1, compressedKey2);
 
-        String publicKey = ECKeyPair.publicKeyFromECPoint(compressedKey1,
-                ECKeyPair.NanoTDFECCurve.SECP256R1.toString());
+        String publicKey = ECKeyPair.publicKeyFromECPoint(compressedKey1, SECP256R1.curveName);
         assertEquals(keyPairA.publicKeyInPEMFormat(), publicKey);
 
         ECKeyPair keyPairB = new ECKeyPair();
@@ -147,7 +147,7 @@ public class ECKeyPairTest {
         assertEquals(encodeECPoint, "Al3vx59pBnP8tRxuUFw18aK9ym6rFrxZRhpVQytUQ+Kg");
 
         String publicKey = ECKeyPair.publicKeyFromECPoint(ecPoint,
-                ECKeyPair.NanoTDFECCurve.SECP256R1.toString());
+                SECP256R1.name());
         assertArrayEquals(ECKeys.sdkPublicKey.toCharArray(), publicKey.toCharArray());
     }
 
@@ -155,9 +155,8 @@ public class ECKeyPairTest {
     void testECDSA() {
 
         String plainText = "Virtru!";
-        for (ECKeyPair.NanoTDFECCurve curve: ECKeyPair.NanoTDFECCurve.values()) {
-
-            ECKeyPair keyPair = new ECKeyPair(curve.toString(), ECKeyPair.ECAlgorithm.ECDSA);
+        for (var curve: NanoTDFType.ECCurve.values()) {
+            ECKeyPair keyPair = new ECKeyPair(curve.name(), ECKeyPair.ECAlgorithm.ECDSA);
             byte[] signature = ECKeyPair.computeECDSASig(plainText.getBytes(), keyPair.getPrivateKey());
             boolean verify = ECKeyPair.verifyECDSAig(plainText.getBytes(), signature, keyPair.getPublicKey());
             assertEquals(verify, true);

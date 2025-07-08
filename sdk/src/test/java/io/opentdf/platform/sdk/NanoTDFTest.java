@@ -98,7 +98,7 @@ public class NanoTDFTest {
             Header nTDFHeader = new Header(ByteBuffer.wrap(headerAsBytes));
             byte[] ephemeralKey = nTDFHeader.getEphemeralKey();
 
-            String publicKeyAsPem = ECKeyPair.publicKeyFromECPoint(ephemeralKey, nTDFHeader.getECCMode().getCurveName());
+            String publicKeyAsPem = ECKeyPair.publicKeyFromECPoint(ephemeralKey, nTDFHeader.getECCMode().getEllipticCurveType().curveName);
 
             // Generate symmetric key
             byte[] symmetricKey = ECKeyPair.computeECDHKey(ECKeyPair.publicKeyFromPem(publicKeyAsPem),

@@ -89,7 +89,7 @@ class NanoTDF {
         ResourceLocator kasURL = new ResourceLocator(nanoTDFConfig.kasInfoList.get(0).URL, kasInfo.KID);
         assert kasURL.getIdentifier() != null : "Identifier in ResourceLocator cannot be null";
 
-        ECKeyPair keyPair = new ECKeyPair(nanoTDFConfig.eccMode.getCurveName(), ECKeyPair.ECAlgorithm.ECDSA);
+        ECKeyPair keyPair = new ECKeyPair(nanoTDFConfig.eccMode.getEllipticCurveType().curveName, ECKeyPair.ECAlgorithm.ECDSA);
 
         // Generate symmetric key
         ECPublicKey kasPublicKey = ECKeyPair.publicKeyFromPem(kasInfo.PublicKey);
