@@ -4,7 +4,7 @@ public class NanoTDFType {
     enum ECCurve {
         SECP256R1("secp256r1", 32, 33, 0x00),
         SECP384R1("secp384r1", 48, 49, 0x01),
-        SECP521R1("secp512r1", 66, 67, 0x02),
+        SECP521R1("secp521r1", 66, 67, 0x02),
         SECP256K1("secp256k1",-1, -1, -1, false); // Note: SECP256K1 is not supported by the SDK
 
         final int curveMode;
