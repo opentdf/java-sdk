@@ -3,8 +3,10 @@ package io.opentdf.platform.sdk;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.Optional;
 
 public class NanoTDFType {
     private static final Logger log = LoggerFactory.getLogger(NanoTDFType.class);
@@ -33,6 +35,7 @@ public class NanoTDFType {
             this.isSupported = isSupported;
         }
 
+        @Nonnull
         static ECCurve fromCurveMode(int curveMode) {
             for (ECCurve curve : ECCurve.values()) {
                 if (curve.getCurveMode() == curveMode) {
@@ -42,14 +45,14 @@ public class NanoTDFType {
             throw new IllegalArgumentException("No enum constant for curve mode: " + curveMode);
         }
 
-        static ECCurve fromAlgorithm(String platformAlgorithm) {
-            Objects.requireNonNull(platformAlgorithm, "Algorithm cannot be null");
-
+        static Optional<ECCurve> fromAlgorithm(String platformAlgorithm) {
             log.debug("looking for platformAlgorithm [{}]", platformAlgorithm);
+            if (platformAlgorithm == null) {
+                return Optional.empty();
+            }
             return Arrays.stream(ECCurve.values())
                     .filter(v -> v.getPlatformCurveName().equals(platformAlgorithm))
-                    .findAny()
-                    .orElseThrow(() -> new IllegalArgumentException(String.format("No enum constant for platformAlgorithm: %s", platformAlgorithm)));
+                    .findAny();
         }
 
         int getCurveMode() {

@@ -1,5 +1,7 @@
 package io.opentdf.platform.sdk;
 
+import javax.annotation.Nonnull;
+
 public class ECCMode {
     private ECCModeStruct data;
 
@@ -58,6 +60,8 @@ public class ECCMode {
         return (1 + keySize + 1 + keySize);
     }
 
+
+    @Nonnull
     public NanoTDFType.ECCurve getCurve() {
         return NanoTDFType.ECCurve.fromCurveMode(data.curveMode);
     }
