@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
+import java.util.Objects;
 
 public class NanoTDFType {
     private static final Logger log = LoggerFactory.getLogger(NanoTDFType.class);
@@ -42,10 +43,8 @@ public class NanoTDFType {
         }
 
         static ECCurve fromAlgorithm(String algorithm) {
-            if (algorithm == null) {
-                log.warn("got a null algorithm, returning SECP256R1 as default");
-                return SECP256R1;
-            }
+            Objects.requireNonNull(algorithm, "Algorithm cannot be null");
+
             var searchKey = algorithm.startsWith("ec:") ? algorithm.substring("ec:".length()) : algorithm;
             log.debug("looking for algorithm [{}]", searchKey);
             return Arrays.stream(ECCurve.values())
