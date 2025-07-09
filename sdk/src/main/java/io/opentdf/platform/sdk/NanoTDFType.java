@@ -17,6 +17,8 @@ public class NanoTDFType {
 
         private final int curveMode;
         private final int keySize;
+        // compressedPubKeySize is a byte bigger since it encodes the X coordinate plus a byte that tells
+        // if the Y coordinate is positive or negative
         private final int compressedPubKeySize;
         private final String curveName;
         private final boolean isSupported;
