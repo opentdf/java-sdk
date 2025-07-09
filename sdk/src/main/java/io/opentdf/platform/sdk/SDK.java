@@ -9,6 +9,7 @@ import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClie
 import io.opentdf.platform.policy.namespaces.NamespaceServiceClientInterface;
 import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceClientInterface;
 import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClientInterface;
+import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClientInterface;
 
 import javax.net.ssl.TrustManager;
 import java.io.IOException;
@@ -74,6 +75,8 @@ public class SDK implements AutoCloseable {
         AuthorizationServiceClientInterface authorization();
 
         KeyAccessServerRegistryServiceClientInterface kasRegistry();
+
+        WellKnownServiceClientInterface wellknown();
 
         KAS kas();
     }

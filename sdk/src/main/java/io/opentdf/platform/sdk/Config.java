@@ -1,13 +1,20 @@
 package io.opentdf.platform.sdk;
 
+import io.opentdf.platform.policy.KeyAccessServer;
+import io.opentdf.platform.policy.SimpleKasKey;
 import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static io.opentdf.platform.sdk.Autoconfigure.algProto2String;
 
 /**
  * Configuration class for setting various configurations related to TDF.
@@ -22,6 +29,7 @@ public class Config {
     public static final String KAS_PUBLIC_KEY_PATH = "/kas_public_key";
     public static final String DEFAULT_MIME_TYPE = "application/octet-stream";
     public static final int MAX_COLLECTION_ITERATION = (1 << 24) - 1;
+    private static Logger logger = LoggerFactory.getLogger(Config.class);
 
     public enum TDFFormat {
         JSONFormat,
@@ -32,8 +40,6 @@ public class Config {
         HS256,
         GMAC
     }
-
-    public static final int K_HTTP_OK = 200;
 
     public static class KASInfo implements Cloneable {
         public String URL;
@@ -70,6 +76,36 @@ public class Config {
                 sb.append("Algorithm:\"").append(this.Algorithm).append("\",");
             }
             return sb.append("}").toString();
+        }
+
+        public static List<KASInfo> fromKeyAccessServer(KeyAccessServer kas) {
+            var keys = kas.getPublicKey().getCached().getKeysList();
+            if (keys.isEmpty()) {
+                logger.warn("Invalid KAS key mapping for kas [{}]: publicKey is empty", kas.getUri());
+                return Collections.emptyList();
+            }
+            return keys.stream().flatMap(ki -> {
+                if (ki.getPem().isEmpty()) {
+                    logger.warn("Invalid KAS key mapping for kas [{}]: publicKey PEM is empty", kas.getUri());
+                    return Stream.empty();
+                }
+                Config.KASInfo kasInfo = new Config.KASInfo();
+                kasInfo.URL = kas.getUri();
+                kasInfo.KID = ki.getKid();
+                kasInfo.Algorithm = algProto2String(ki.getAlg());
+                kasInfo.PublicKey = ki.getPem();
+                return Stream.of(kasInfo);
+            }).collect(Collectors.toList());
+        }
+
+        public static KASInfo fromSimpleKasKey(SimpleKasKey ki) {
+            Config.KASInfo kasInfo = new Config.KASInfo();
+            kasInfo.URL = ki.getKasUri();
+            kasInfo.KID = ki.getPublicKey().getKid();
+            kasInfo.Algorithm = algProto2String(ki.getPublicKey().getAlgorithm());
+            kasInfo.PublicKey = ki.getPublicKey().getPem();
+
+            return kasInfo;
         }
     }
 

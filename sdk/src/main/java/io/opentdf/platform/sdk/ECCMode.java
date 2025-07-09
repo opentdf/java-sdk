@@ -1,5 +1,7 @@
 package io.opentdf.platform.sdk;
 
+import java.util.Objects;
+
 public class ECCMode {
     private ECCModeStruct data;
 
@@ -113,6 +115,18 @@ public class ECCMode {
             default:
                 throw new RuntimeException("Unsupported ECC algorithm.");
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) return false;
+        ECCMode eccMode = (ECCMode) o;
+        return Objects.equals(data, eccMode.data);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(data);
     }
 
     private class ECCModeStruct {

@@ -152,10 +152,9 @@ public class AesGcm {
             System.arraycopy(iv, 0, cipherTextWithNonce, 0, iv.length);
             System.arraycopy(cipherText, 0, cipherTextWithNonce, iv.length, cipherText.length);
             return cipherTextWithNonce;
-        } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
-            throw new RuntimeException("error gcm decrypt", e);
-        } catch (InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
-            throw new RuntimeException("error gcm decrypt", e);
+        } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidAlgorithmParameterException |
+                 InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
+            throw new RuntimeException("error gcm encrypt", e);
         }
     }
 

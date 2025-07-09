@@ -16,6 +16,8 @@ import java.util.*;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClientInterface;
+import org.bouncycastle.jcajce.provider.asymmetric.ec.KeyFactorySpi;
 import org.bouncycastle.jce.interfaces.ECPublicKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,6 +67,17 @@ class NanoTDF {
         }
     }
 
+    private static Optional<Config.KASInfo> getBaseKey(WellKnownServiceClientInterface wellKnownService) {
+        var key = Planner.fetchBaseKey(wellKnownService);
+        key.ifPresent(k -> {
+            if (!KeyType.fromAlgorithm(k.getPublicKey().getAlgorithm()).isEc()) {
+                throw new SDKException(String.format("base key is not an EC key, cannot create NanoTDF using a key of type %s",
+                        k.getPublicKey().getAlgorithm()));
+            }
+        });
+        return key.map(Config.KASInfo::fromSimpleKasKey);
+    }
+
     private Config.HeaderInfo getHeaderInfo(Config.NanoTDFConfig nanoTDFConfig) throws InvalidNanoTDFConfig, UnsupportedNanoTDFFeature {
         if (nanoTDFConfig.collectionConfig.useCollection) {
             Config.HeaderInfo headerInfo = nanoTDFConfig.collectionConfig.getHeaderInfo();
@@ -74,22 +87,19 @@ class NanoTDF {
         }
 
         Gson gson = new GsonBuilder().create();
-        if (nanoTDFConfig.kasInfoList.isEmpty()) {
-            throw new InvalidNanoTDFConfig("kas url is missing");
+        Optional<Config.KASInfo> maybeKas = getKasInfo(nanoTDFConfig).or(() -> NanoTDF.getBaseKey(services.wellknown()));
+
+        if (maybeKas.isEmpty()) {
+            throw new SDKException("no KAS info provided and couldn't get base key, cannot create NanoTDF");
         }
 
-        Config.KASInfo kasInfo = nanoTDFConfig.kasInfoList.get(0);
-        String url = kasInfo.URL;
-        if (kasInfo.PublicKey == null || kasInfo.PublicKey.isEmpty()) {
-            logger.info("no public key provided for KAS at {}, retrieving", url);
-            kasInfo = services.kas().getECPublicKey(kasInfo, nanoTDFConfig.eccMode.getEllipticCurveType());
-        }
+        var kasInfo = maybeKas.get();
 
         // Kas url resource locator
-        ResourceLocator kasURL = new ResourceLocator(nanoTDFConfig.kasInfoList.get(0).URL, kasInfo.KID);
+        ResourceLocator kasURL = new ResourceLocator(kasInfo.URL, kasInfo.KID);
         assert kasURL.getIdentifier() != null : "Identifier in ResourceLocator cannot be null";
 
-        ECKeyPair keyPair = new ECKeyPair(nanoTDFConfig.eccMode.getCurveName(), ECKeyPair.ECAlgorithm.ECDSA);
+        ECKeyPair keyPair = new ECKeyPair(kasInfo.Algorithm, ECKeyPair.ECAlgorithm.ECDSA);
 
         // Generate symmetric key
         ECPublicKey kasPublicKey = ECKeyPair.publicKeyFromPem(kasInfo.PublicKey);
@@ -138,7 +148,12 @@ class NanoTDF {
         // Create header
         byte[] compressedPubKey = keyPair.compressECPublickey();
         Header header = new Header();
-        header.setECCMode(nanoTDFConfig.eccMode);
+        var mode = new ECCMode();
+        mode.setEllipticCurve(Enum.valueOf(NanoTDFType.ECCurve.class, keyPair.curveName()));
+        if (logger.isWarnEnabled() && !nanoTDFConfig.eccMode.equals(mode)) {
+            logger.warn("ECC mode provided in NanoTDFConfig: {}, ECC mode from key: {}", nanoTDFConfig.eccMode, mode);
+        }
+        header.setECCMode(mode);
         header.setPayloadConfig(nanoTDFConfig.config);
         header.setEphemeralKey(compressedPubKey);
         header.setKasLocator(kasURL);
@@ -150,6 +165,21 @@ class NanoTDF {
         }
 
         return headerInfo;
+    }
+
+    private Optional<Config.KASInfo> getKasInfo(Config.NanoTDFConfig nanoTDFConfig) {
+        if (nanoTDFConfig.kasInfoList.isEmpty()) {
+            logger.debug("no kas info provided in NanoTDFConfig");
+            return Optional.empty();
+        }
+
+        Config.KASInfo kasInfo = nanoTDFConfig.kasInfoList.get(0);
+        String url = kasInfo.URL;
+        if (kasInfo.PublicKey == null || kasInfo.PublicKey.isEmpty()) {
+            logger.info("no public key provided for KAS at {}, retrieving", url);
+            kasInfo = services.kas().getECPublicKey(kasInfo, nanoTDFConfig.eccMode.getEllipticCurveType());
+        }
+        return Optional.of(kasInfo);
     }
 
     public int createNanoTDF(ByteBuffer data, OutputStream outputStream,
