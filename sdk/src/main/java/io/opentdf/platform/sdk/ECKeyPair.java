@@ -64,7 +64,7 @@ public class ECKeyPair {
             throw new RuntimeException(e);
         }
 
-        ECGenParameterSpec spec = new ECGenParameterSpec(this.curve.curveName);
+        ECGenParameterSpec spec = new ECGenParameterSpec(this.curve.getCurveName());
         try {
             generator.initialize(spec);
         } catch (InvalidAlgorithmParameterException e) {

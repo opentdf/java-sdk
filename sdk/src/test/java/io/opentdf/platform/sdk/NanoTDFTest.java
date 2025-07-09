@@ -99,7 +99,7 @@ public class NanoTDFTest {
             Header nTDFHeader = new Header(ByteBuffer.wrap(headerAsBytes));
             byte[] ephemeralKey = nTDFHeader.getEphemeralKey();
 
-            String publicKeyAsPem = ECKeyPair.publicKeyFromECPoint(ephemeralKey, nTDFHeader.getECCMode().getCurve().curveName);
+            String publicKeyAsPem = ECKeyPair.publicKeyFromECPoint(ephemeralKey, nTDFHeader.getECCMode().getCurve().getCurveName());
 
             // Generate symmetric key
             byte[] symmetricKey = ECKeyPair.computeECDHKey(ECKeyPair.publicKeyFromPem(publicKeyAsPem),
@@ -341,6 +341,7 @@ public class NanoTDFTest {
         kasInfo.URL = sampleKasUrl;
         kasInfo.PublicKey = kasPublicKey;
         kasInfo.KID = KID;
+        kasInfo.Algorithm = "ec:secp256r1";
         kasInfos.add(kasInfo);
 
         Config.NanoTDFConfig config = Config.newNanoTDFConfig(

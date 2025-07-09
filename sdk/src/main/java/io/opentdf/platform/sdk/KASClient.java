@@ -75,7 +75,7 @@ class KASClient implements SDK.KAS {
     public KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
         log.debug("retrieving public key with kasinfo = [{}]", kasInfo);
 
-        var req = PublicKeyRequest.newBuilder().setAlgorithm(format("ec:%s", curve.curveName)).build();
+        var req = PublicKeyRequest.newBuilder().setAlgorithm(curve.getPlatformCurveName()).build();
         var r = getStub(kasInfo.URL).publicKeyBlocking(req, Collections.emptyMap()).execute();
         PublicKeyResponse res;
         try {
@@ -233,7 +233,7 @@ class KASClient implements SDK.KAS {
         keyAccess.protocol = "kas";
 
         NanoTDFRewrapRequestBody body = new NanoTDFRewrapRequestBody();
-        body.algorithm = format("ec:%s", curve.curveName);
+        body.algorithm = format("ec:%s", curve.getCurveName());
         body.clientPublicKey = keyPair.publicKeyInPEMFormat();
         body.keyAccess = keyAccess;
 

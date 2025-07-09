@@ -28,10 +28,10 @@ public class SymmetricAndPayloadConfig {
     }
 
     public void setSignatureECCMode(NanoTDFType.ECCurve eccCurve) {
-        if (!eccCurve.isSupported) {
-            throw new RuntimeException(String.format("Unsupported ECC algorithm: %s", eccCurve.curveName));
+        if (!eccCurve.isSupported()) {
+            throw new SDKException(String.format("Unsupported ECC algorithm: %s", eccCurve.getCurveName()));
         }
-        data.signatureECCMode = eccCurve.curveMode;
+        data.signatureECCMode = eccCurve.getCurveMode();
     }
 
     public void setSymmetricCipherType(NanoTDFType.Cipher cipherType) {

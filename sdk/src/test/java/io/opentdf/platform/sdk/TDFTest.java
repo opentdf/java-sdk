@@ -123,7 +123,7 @@ public class TDFTest {
             if (i % 2 == 0) {
                 keypairs.add(CryptoUtils.generateRSAKeypair());
             } else {
-                keypairs.add(CryptoUtils.generateECKeypair(NanoTDFType.ECCurve.SECP256R1.curveName));
+                keypairs.add(CryptoUtils.generateECKeypair(NanoTDFType.ECCurve.SECP256R1.getCurveName()));
             }
         }
 

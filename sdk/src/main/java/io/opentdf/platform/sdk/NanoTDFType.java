@@ -14,11 +14,11 @@ public class NanoTDFType {
         SECP521R1("secp521r1", 66, 67, 0x02),
         SECP256K1("secp256k1",-1, -1, -1, false); // Note: SECP256K1 is not supported by the SDK
 
-        final int curveMode;
-        final int keySize;
-        final int compressedPubKeySize;
-        final String curveName;
-        final boolean isSupported;
+        private final int curveMode;
+        private final int keySize;
+        private final int compressedPubKeySize;
+        private final String curveName;
+        private final boolean isSupported;
 
 
         ECCurve(String curveName, int keySize, int compressedPubKeySize, int curveMode) {
@@ -35,22 +35,45 @@ public class NanoTDFType {
 
         static ECCurve fromCurveMode(int curveMode) {
             for (ECCurve curve : ECCurve.values()) {
-                if (curve.curveMode == curveMode) {
+                if (curve.getCurveMode() == curveMode) {
                     return curve;
                 }
             }
             throw new IllegalArgumentException("No enum constant for curve mode: " + curveMode);
         }
 
-        static ECCurve fromAlgorithm(String algorithm) {
-            Objects.requireNonNull(algorithm, "Algorithm cannot be null");
+        static ECCurve fromAlgorithm(String platformAlgorithm) {
+            Objects.requireNonNull(platformAlgorithm, "Algorithm cannot be null");
 
-            var searchKey = algorithm.startsWith("ec:") ? algorithm.substring("ec:".length()) : algorithm;
-            log.debug("looking for algorithm [{}]", searchKey);
+            log.debug("looking for platformAlgorithm [{}]", platformAlgorithm);
             return Arrays.stream(ECCurve.values())
-                    .filter(v -> v.curveName.equalsIgnoreCase(searchKey))
+                    .filter(v -> v.getPlatformCurveName().equals(platformAlgorithm))
                     .findAny()
-                    .orElseThrow(() -> new IllegalArgumentException(String.format("No enum constant for algorithm: %s", algorithm)));
+                    .orElseThrow(() -> new IllegalArgumentException(String.format("No enum constant for platformAlgorithm: %s", platformAlgorithm)));
+        }
+
+        int getCurveMode() {
+            return curveMode;
+        }
+
+        int getKeySize() {
+            return keySize;
+        }
+
+        int getCompressedPubKeySize() {
+            return compressedPubKeySize;
+        }
+
+        String getCurveName() {
+            return curveName;
+        }
+
+        String getPlatformCurveName() {
+            return String.format("ec:%s", curveName);
+        }
+
+        boolean isSupported() {
+            return isSupported;
         }
     }
     // ResourceLocator Protocol

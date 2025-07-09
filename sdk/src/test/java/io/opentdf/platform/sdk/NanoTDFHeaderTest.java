@@ -169,7 +169,7 @@ public class NanoTDFHeaderTest {
                 header2.setPolicyInfo(policyInfo);
 
                 int sizeToRead = policyInfo.getTotalSize();
-                int compressedPubKeySize = header2.getECCMode().getCurve().compressedPubKeySize;
+                int compressedPubKeySize = header2.getECCMode().getCurve().getCompressedPubKeySize();
                 byte[] ephemeralKey = new byte[compressedPubKeySize]; // size of compressed public key
                 System.arraycopy(remainingBytesArray, sizeToRead, ephemeralKey, 0, ephemeralKey.length);
                 header2.setEphemeralKey(ephemeralKey);

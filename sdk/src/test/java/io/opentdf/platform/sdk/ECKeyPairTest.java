@@ -63,7 +63,7 @@ public class ECKeyPairTest {
         byte[] compressedKey2 = ECKeyPair.compressECPublickey(keyPairA.publicKeyInPEMFormat());
         assertArrayEquals(compressedKey1, compressedKey2);
 
-        String publicKey = ECKeyPair.publicKeyFromECPoint(compressedKey1, SECP256R1.curveName);
+        String publicKey = ECKeyPair.publicKeyFromECPoint(compressedKey1, SECP256R1.getCurveName());
         assertEquals(keyPairA.publicKeyInPEMFormat(), publicKey);
 
         ECKeyPair keyPairB = new ECKeyPair();
