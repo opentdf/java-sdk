@@ -20,8 +20,6 @@ import org.bouncycastle.jce.interfaces.ECPublicKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static io.opentdf.platform.sdk.NanoTDFType.ECCurve.SECP256R1;
-
 /**
  * The NanoTDF class provides methods to create and read NanoTDF (Tiny Data Format) files.
  * The NanoTDF format is intended for securely encrypting small data payloads using elliptic-curve cryptography
@@ -91,19 +89,7 @@ class NanoTDF {
         ResourceLocator kasURL = new ResourceLocator(nanoTDFConfig.kasInfoList.get(0).URL, kasInfo.KID);
         assert kasURL.getIdentifier() != null : "Identifier in ResourceLocator cannot be null";
 
-        // it might be better to pull the curve from the OIDC in the PEM but it looks like we
-        // are just taking the Algorithm as correct
-        Optional<NanoTDFType.ECCurve> specifiedCurve = NanoTDFType.ECCurve.fromAlgorithm(kasInfo.Algorithm);
-        NanoTDFType.ECCurve ecCurve;
-        if (specifiedCurve.isEmpty()) {
-            logger.info("no curve specified in KASInfo, using the curve from config", nanoTDFConfig.eccMode.getCurve());
-            ecCurve = nanoTDFConfig.eccMode.getCurve();
-        } else {
-            if (specifiedCurve.get() != nanoTDFConfig.eccMode.getCurve()) {
-                logger.warn("ECCurve in NanoTDFConfig [{}] does not match the curve in KASInfo, using KASInfo curve [{}]", nanoTDFConfig.eccMode.getCurve(), specifiedCurve);
-            }
-            ecCurve = specifiedCurve.get();
-        }
+        NanoTDFType.ECCurve ecCurve = getEcCurve(nanoTDFConfig, kasInfo);
         ECKeyPair keyPair = new ECKeyPair(ecCurve, ECKeyPair.ECAlgorithm.ECDSA);
 
         // Generate symmetric key
@@ -172,6 +158,23 @@ class NanoTDF {
         }
 
         return headerInfo;
+    }
+
+    private static NanoTDFType.ECCurve getEcCurve(Config.NanoTDFConfig nanoTDFConfig, Config.KASInfo kasInfo) {
+        // it might be better to pull the curve from the OIDC in the PEM but it looks like we
+        // are just taking the Algorithm as correct
+        Optional<NanoTDFType.ECCurve> specifiedCurve = NanoTDFType.ECCurve.fromAlgorithm(kasInfo.Algorithm);
+        NanoTDFType.ECCurve ecCurve;
+        if (specifiedCurve.isEmpty()) {
+            logger.info("no curve specified in KASInfo, using the curve from config [{}]", nanoTDFConfig.eccMode.getCurve());
+            ecCurve = nanoTDFConfig.eccMode.getCurve();
+        } else {
+            if (specifiedCurve.get() != nanoTDFConfig.eccMode.getCurve()) {
+                logger.warn("ECCurve in NanoTDFConfig [{}] does not match the curve in KASInfo, using KASInfo curve [{}]", nanoTDFConfig.eccMode.getCurve(), specifiedCurve);
+            }
+            ecCurve = specifiedCurve.get();
+        }
+        return ecCurve;
     }
 
     public int createNanoTDF(ByteBuffer data, OutputStream outputStream,

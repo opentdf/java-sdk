@@ -5,7 +5,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import java.util.Arrays;
-import java.util.Objects;
 import java.util.Optional;
 
 public class NanoTDFType {
