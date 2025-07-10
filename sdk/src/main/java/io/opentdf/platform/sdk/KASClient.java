@@ -21,6 +21,8 @@ import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.SDK.KasBadRequestException;
 
 import okhttp3.OkHttpClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -49,6 +51,8 @@ class KASClient implements SDK.KAS {
     private String clientPublicKey;
     private KASKeyCache kasKeyCache;
 
+    private static final Logger log = LoggerFactory.getLogger(KASClient.class);
+
     /***
      * A client that communicates with KAS
      * 
@@ -69,7 +73,9 @@ class KASClient implements SDK.KAS {
 
     @Override
     public KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
-        var req = PublicKeyRequest.newBuilder().setAlgorithm(format("ec:%s", curve.toString())).build();
+        log.debug("retrieving public key with kasinfo = [{}]", kasInfo);
+
+        var req = PublicKeyRequest.newBuilder().setAlgorithm(curve.getPlatformCurveName()).build();
         var r = getStub(kasInfo.URL).publicKeyBlocking(req, Collections.emptyMap()).execute();
         PublicKeyResponse res;
         try {
@@ -147,10 +153,9 @@ class KASClient implements SDK.KAS {
     @Override
     public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy,  KeyType sessionKeyType) {
         ECKeyPair ecKeyPair = null;
-
         if (sessionKeyType.isEc()) {
-            var curveName = sessionKeyType.getCurveName();
-            ecKeyPair = new ECKeyPair(curveName, ECKeyPair.ECAlgorithm.ECDH);
+            var curve = sessionKeyType.getECCurve();
+            ecKeyPair = new ECKeyPair(curve, ECKeyPair.ECAlgorithm.ECDH);
             clientPublicKey = ecKeyPair.publicKeyInPEMFormat();
         } else {
             // Initialize the RSA key pair only once and reuse it for future unwrap operations
@@ -198,7 +203,7 @@ class KASClient implements SDK.KAS {
         }
 
         var wrappedKey = response.getEntityWrappedKey().toByteArray();
-        if (sessionKeyType != KeyType.RSA2048Key) {
+        if (sessionKeyType.isEc()) {
 
             if (ecKeyPair == null) {
                 throw new SDKException("ECKeyPair is null. Unable to proceed with the unwrap operation.");
@@ -219,7 +224,7 @@ class KASClient implements SDK.KAS {
     }
 
     public byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL) {
-        ECKeyPair keyPair = new ECKeyPair(curve.toString(), ECKeyPair.ECAlgorithm.ECDH);
+        ECKeyPair keyPair = new ECKeyPair(curve, ECKeyPair.ECAlgorithm.ECDH);
 
         NanoTDFKeyAccess keyAccess = new NanoTDFKeyAccess();
         keyAccess.header = header;
@@ -228,7 +233,7 @@ class KASClient implements SDK.KAS {
         keyAccess.protocol = "kas";
 
         NanoTDFRewrapRequestBody body = new NanoTDFRewrapRequestBody();
-        body.algorithm = format("ec:%s", curve.toString());
+        body.algorithm = format("ec:%s", curve.getCurveName());
         body.clientPublicKey = keyPair.publicKeyInPEMFormat();
         body.keyAccess = keyAccess;
 

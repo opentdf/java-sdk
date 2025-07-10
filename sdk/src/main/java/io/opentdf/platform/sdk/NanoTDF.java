@@ -82,14 +82,15 @@ class NanoTDF {
         String url = kasInfo.URL;
         if (kasInfo.PublicKey == null || kasInfo.PublicKey.isEmpty()) {
             logger.info("no public key provided for KAS at {}, retrieving", url);
-            kasInfo = services.kas().getECPublicKey(kasInfo, nanoTDFConfig.eccMode.getEllipticCurveType());
+            kasInfo = services.kas().getECPublicKey(kasInfo, nanoTDFConfig.eccMode.getCurve());
         }
 
         // Kas url resource locator
         ResourceLocator kasURL = new ResourceLocator(nanoTDFConfig.kasInfoList.get(0).URL, kasInfo.KID);
         assert kasURL.getIdentifier() != null : "Identifier in ResourceLocator cannot be null";
 
-        ECKeyPair keyPair = new ECKeyPair(nanoTDFConfig.eccMode.getCurveName(), ECKeyPair.ECAlgorithm.ECDSA);
+        NanoTDFType.ECCurve ecCurve = getEcCurve(nanoTDFConfig, kasInfo);
+        ECKeyPair keyPair = new ECKeyPair(ecCurve, ECKeyPair.ECAlgorithm.ECDSA);
 
         // Generate symmetric key
         ECPublicKey kasPublicKey = ECKeyPair.publicKeyFromPem(kasInfo.PublicKey);
@@ -138,7 +139,14 @@ class NanoTDF {
         // Create header
         byte[] compressedPubKey = keyPair.compressECPublickey();
         Header header = new Header();
-        header.setECCMode(nanoTDFConfig.eccMode);
+        ECCMode mode;
+        if (nanoTDFConfig.eccMode.getCurve() != keyPair.getCurve()) {
+            mode = new ECCMode(nanoTDFConfig.eccMode.getECCModeAsByte());
+            mode.setEllipticCurve(keyPair.getCurve());
+        } else {
+            mode = nanoTDFConfig.eccMode;
+        }
+        header.setECCMode(mode);
         header.setPayloadConfig(nanoTDFConfig.config);
         header.setEphemeralKey(compressedPubKey);
         header.setKasLocator(kasURL);
@@ -150,6 +158,23 @@ class NanoTDF {
         }
 
         return headerInfo;
+    }
+
+    private static NanoTDFType.ECCurve getEcCurve(Config.NanoTDFConfig nanoTDFConfig, Config.KASInfo kasInfo) {
+        // it might be better to pull the curve from the OIDC in the PEM but it looks like we
+        // are just taking the Algorithm as correct
+        Optional<NanoTDFType.ECCurve> specifiedCurve = NanoTDFType.ECCurve.fromAlgorithm(kasInfo.Algorithm);
+        NanoTDFType.ECCurve ecCurve;
+        if (specifiedCurve.isEmpty()) {
+            logger.info("no curve specified in KASInfo, using the curve from config [{}]", nanoTDFConfig.eccMode.getCurve());
+            ecCurve = nanoTDFConfig.eccMode.getCurve();
+        } else {
+            if (specifiedCurve.get() != nanoTDFConfig.eccMode.getCurve()) {
+                logger.warn("ECCurve in NanoTDFConfig [{}] does not match the curve in KASInfo, using KASInfo curve [{}]", nanoTDFConfig.eccMode.getCurve(), specifiedCurve);
+            }
+            ecCurve = specifiedCurve.get();
+        }
+        return ecCurve;
     }
 
     public int createNanoTDF(ByteBuffer data, OutputStream outputStream,
@@ -276,7 +301,7 @@ class NanoTDF {
             }
 
 
-            key = services.kas().unwrapNanoTDF(header.getECCMode().getEllipticCurveType(),
+            key = services.kas().unwrapNanoTDF(header.getECCMode().getCurve(),
                     base64HeaderData,
                     kasUrl);
             collectionStore.store(header, new CollectionKey(key));
