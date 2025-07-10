@@ -47,7 +47,7 @@ public class PolicyInfo {
 
         int bindingBytesSize = 8; // GMAC length
         if (this.hasECDSABinding) { // ECDSA - The size of binding depends on the curve.
-            bindingBytesSize = ECCMode.getECDSASignatureStructSize(eccMode.getEllipticCurveType());
+            bindingBytesSize = ECCMode.getECDSASignatureStructSize(eccMode.getCurve());
         }
 
         this.binding = new byte[bindingBytesSize];
