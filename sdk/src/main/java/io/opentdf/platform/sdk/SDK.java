@@ -159,11 +159,11 @@ public class SDK implements AutoCloseable {
     }
 
     /**
-     * Decodes a PolicyObject from the manifest. Use {@link SDK#decodePolicyObject(Manifest)}
+     * Decodes a PolicyObject from the manifest. Use {@link SDK#readManifest(SeekableByteChannel)}
      * to get the manifest from a TDF.
-     * @param manifest
-     * @return
-     * @throws SDKException
+     * @param manifest The manifest containing the policy.
+     * @return The decoded {@link PolicyObject}.
+     * @throws SDKException if there is an error during decoding.
      */
     public static PolicyObject decodePolicyObject(Manifest manifest) throws SDKException {
         return Manifest.decodePolicyObject(manifest);
