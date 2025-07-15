@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -153,7 +154,7 @@ public class ManifestTest {
         final Manifest manifest;
         try (var mStream = getClass().getResourceAsStream("/io.opentdf.platform.sdk.TestData/manifest-with-object-statement-value.json")) {
             assert mStream != null;
-            var manifestJson = new String(mStream.readAllBytes());
+            var manifestJson = new String(mStream.readAllBytes(), StandardCharsets.UTF_8);
             manifest = Manifest.readManifest(manifestJson);
         }
 
