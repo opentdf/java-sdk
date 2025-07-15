@@ -148,9 +148,9 @@ public class SDK implements AutoCloseable {
     /**
      * Reads the manifest without decrypting the TDF
      * @param tdfBytes A SeekableByteChannel containing the TDF data
-     * @return
-     * @throws SDKException
-     * @throws IOException
+     * @return The parsed {@link Manifest} object
+     * @throws SDKException if an SDK-specific error occurs
+     * @throws IOException if an I/O error occurs
      */
     public static Manifest readManifest(SeekableByteChannel tdfBytes) throws SDKException, IOException {
         TDFReader reader = new TDFReader(tdfBytes);
