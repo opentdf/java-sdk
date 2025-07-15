@@ -146,7 +146,7 @@ public class SDK implements AutoCloseable {
     }
 
     /**
-     * Reads the manifest without decrypting the TDF
+     * Reads the {@link Manifest} without decrypting the TDF
      * @param tdfBytes A SeekableByteChannel containing the TDF data
      * @return The parsed {@link Manifest} object
      * @throws SDKException if an SDK-specific error occurs
@@ -160,8 +160,8 @@ public class SDK implements AutoCloseable {
 
     /**
      * Decodes a PolicyObject from the manifest. Use {@link SDK#readManifest(SeekableByteChannel)}
-     * to get the manifest from a TDF.
-     * @param manifest The manifest containing the policy.
+     * to get the {@link Manifest} from a TDF.
+     * @param manifest The {@link Manifest} containing the policy.
      * @return The decoded {@link PolicyObject}.
      * @throws SDKException if there is an error during decoding.
      */
