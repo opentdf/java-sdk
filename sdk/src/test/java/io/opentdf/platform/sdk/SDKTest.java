@@ -78,6 +78,21 @@ class SDKTest {
     }
 
     @Test
+    void testExaminingManifest() throws IOException {
+        try (var tdfStream = SDKTest.class.getClassLoader().getResourceAsStream("sample.txt.tdf")) {
+            assertThat(tdfStream)
+                    .withFailMessage("sample.txt.tdf not found in classpath")
+                    .isNotNull();
+            var manifest = SDK.readManifest(new SeekableInMemoryByteChannel(tdfStream.readAllBytes()));
+            assertThat(manifest).isNotNull();
+            assertThat(manifest.encryptionInformation.integrityInformation.encryptedSegmentSizeDefault)
+                    .isEqualTo(1048604);
+            var policyObject = SDK.decodePolicyObject(manifest);
+            assertThat(policyObject.uuid).isEqualTo("98bb8a81-5217-4a31-8852-932d29d71aac");
+        }
+    }
+
+    @Test
     void testReadingRandomBytes() {
         var tdf = new byte[2023];
         new Random().nextBytes(tdf);

@@ -4,8 +4,7 @@ import com.google.gson.Gson;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -62,7 +61,7 @@ public class ManifestTest {
                 "  }\n" +
                 "}";
 
-        Manifest manifest = Manifest.readManifest(new StringReader(kManifestJsonFromTDF));
+        Manifest manifest = Manifest.readManifest(kManifestJsonFromTDF);
 
         // Test payload
         assertEquals(manifest.payload.url, "0.payload");
@@ -85,7 +84,7 @@ public class ManifestTest {
         assertEquals(manifest.encryptionInformation.integrityInformation.segments.get(0).segmentSize, 1048576);
 
         var serialized = Manifest.toJson(manifest);
-        var deserializedAgain = Manifest.readManifest(new StringReader(serialized));
+        var deserializedAgain = Manifest.readManifest(serialized);
 
         assertEquals(manifest, deserializedAgain, "something changed when we deserialized -> serialized -> deserialized");
     }
@@ -140,7 +139,7 @@ public class ManifestTest {
                 "   \"assertions\": null\n"+
                 "}";
 
-        Manifest manifest = Manifest.readManifest(new StringReader(kManifestJsonFromTDF));
+        Manifest manifest = Manifest.readManifest(kManifestJsonFromTDF);
 
         // Test payload for sanity check
         assertEquals(manifest.payload.url, "0.payload");
@@ -155,7 +154,8 @@ public class ManifestTest {
         final Manifest manifest;
         try (var mStream = getClass().getResourceAsStream("/io.opentdf.platform.sdk.TestData/manifest-with-object-statement-value.json")) {
             assert mStream != null;
-            manifest = Manifest.readManifest(new InputStreamReader(mStream)) ;
+            var manifestJson = new String(mStream.readAllBytes(), StandardCharsets.UTF_8);
+            manifest = Manifest.readManifest(manifestJson);
         }
 
         assertThat(manifest.assertions).hasSize(2);
