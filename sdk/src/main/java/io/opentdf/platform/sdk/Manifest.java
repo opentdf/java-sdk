@@ -27,7 +27,6 @@ import org.apache.commons.codec.binary.Hex;
 import org.erdtman.jcs.JsonCanonicalizer;
 
 import java.io.IOException;
-import java.io.Reader;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -500,8 +499,8 @@ public class Manifest {
     public EncryptionInformation encryptionInformation;
     public Payload payload;
     public List<Assertion> assertions = new ArrayList<>();
-    protected static Manifest readManifest(Reader reader) {
-        Manifest result = gson.fromJson(reader, Manifest.class);
+    protected static Manifest readManifest(String manifestJson) {
+        Manifest result = gson.fromJson(manifestJson, Manifest.class);
         if (result.assertions == null) {
             result.assertions = new ArrayList<>();
         }
@@ -539,8 +538,7 @@ public class Manifest {
         return result;
     }
 
-    static PolicyObject readPolicyObject(Reader reader) {
-        var manifest = readManifest(reader);
+    static PolicyObject decodePolicyObject(Manifest manifest) {
         var policyBase64 = manifest.encryptionInformation.policy;
         var policyBytes = Base64.getDecoder().decode(policyBase64);
         var policyJson = new String(policyBytes, StandardCharsets.UTF_8);

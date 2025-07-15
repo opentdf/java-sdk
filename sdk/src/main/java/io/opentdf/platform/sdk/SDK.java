@@ -145,6 +145,30 @@ public class SDK implements AutoCloseable {
                 && entries.stream().anyMatch(e -> "0.payload".equals(e.getName()));
     }
 
+    /**
+     * Reads the manifest without decrypting the TDF
+     * @param tdfBytes A SeekableByteChannel containing the TDF data
+     * @return
+     * @throws SDKException
+     * @throws IOException
+     */
+    public static Manifest readManifest(SeekableByteChannel tdfBytes) throws SDKException, IOException {
+        TDFReader reader = new TDFReader(tdfBytes);
+        String manifestJson = reader.manifest();
+        return Manifest.readManifest(manifestJson);
+    }
+
+    /**
+     * Decodes a PolicyObject from the manifest. Use {@link SDK#decodePolicyObject(Manifest)}
+     * to get the manifest from a TDF.
+     * @param manifest
+     * @return
+     * @throws SDKException
+     */
+    public static PolicyObject decodePolicyObject(Manifest manifest) throws SDKException {
+        return Manifest.decodePolicyObject(manifest);
+    }
+
     public String getPlatformUrl() {
         return platformUrl;
     }
