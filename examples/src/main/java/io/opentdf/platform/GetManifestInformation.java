@@ -11,13 +11,18 @@ import java.nio.file.StandardOpenOption;
 
 public class GetManifestInformation {
     public static void main(String[] args) throws IOException {
-        FileChannel tdfStream = FileChannel.open(Path.of(args[0]), StandardOpenOption.READ);
+        if (args.length < 1) {
+            System.err.println("TDF file path must be provided as an argument.");
+            return;
+        }
 
-        Manifest manifest = SDK.readManifest(tdfStream);
-        System.out.println("loaded a tdf with key access type: " + manifest.encryptionInformation.keyAccessType);
+        try (FileChannel tdfStream = FileChannel.open(Path.of(args[0]), StandardOpenOption.READ)) {
+            Manifest manifest = SDK.readManifest(tdfStream);
+            System.out.println("loaded a TDF with key access type: " + manifest.encryptionInformation.keyAccessType);
 
-        PolicyObject policyObject = SDK.decodePolicyObject(manifest);
-        System.out.println("the policy has uuid: " + policyObject.uuid);
+            PolicyObject policyObject = SDK.decodePolicyObject(manifest);
+            System.out.println("the policy has uuid: " + policyObject.uuid);
+        }
     }
 }
 
