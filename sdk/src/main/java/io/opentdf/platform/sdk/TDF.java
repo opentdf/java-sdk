@@ -22,7 +22,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.StringReader;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
@@ -607,7 +606,7 @@ class TDF {
         TDFReader tdfReader = new TDFReader(tdf);
         String manifestJson = tdfReader.manifest();
         // use Manifest.readManifest in order to validate the Manifest input
-        Manifest manifest = Manifest.readManifest(new StringReader(manifestJson));
+        Manifest manifest = Manifest.readManifest(manifestJson);
         byte[] payloadKey = new byte[GCM_KEY_SIZE];
         String unencryptedMetadata = null;
 
