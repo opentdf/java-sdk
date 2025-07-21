@@ -161,9 +161,9 @@ public class Planner {
                 getKI.URL = splitInfo.kas;
                 getKI.Algorithm = tdfConfig.wrappingKeyType.toString();
                 getKI.KID = splitInfo.kid;
-                getKI = services.kas().getPublicKey(getKI);
-                latestKASInfo.put(splitInfo.kas, getKI);
-                ki = getKI;
+                var retrievedKI = services.kas().getPublicKey(getKI);
+                latestKASInfo.put(splitInfo.kas, retrievedKI);
+                ki = retrievedKI;
             }
             conjunction.computeIfAbsent(splitInfo.splitID, s -> new ArrayList<>()).add(ki);
         }
