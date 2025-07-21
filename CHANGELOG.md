@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.0](https://github.com/opentdf/java-sdk/compare/v0.8.1...v0.9.0) (2025-07-14)
+
+
+### Features
+
+* **sdk:** Get the algorithm from the KASInfo and not the config ([#272](https://github.com/opentdf/java-sdk/issues/272)) ([feff0e8](https://github.com/opentdf/java-sdk/commit/feff0e892671c0fb34d6cbdf2bc9ba9e3a743295))
+
+
+### Bug Fixes
+
+* **sdk:** upgrade the platform protocol code ([#275](https://github.com/opentdf/java-sdk/issues/275)) ([90eaba1](https://github.com/opentdf/java-sdk/commit/90eaba11c59e4e096648e1d47570c58558673b85))
+
 ## [0.8.1](https://github.com/opentdf/java-sdk/compare/v0.8.0...v0.8.1) (2025-05-29)
 
 
