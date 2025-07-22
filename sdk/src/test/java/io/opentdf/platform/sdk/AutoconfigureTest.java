@@ -225,10 +225,15 @@ public class AutoconfigureTest {
                     .setName("Releasable To").setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ANY_OF)
                     .setFqn(fqn.toString()).build();
         } else if (key.equals(SPECKED.getKey())) {
+            var kasKey = SimpleKasKey.newBuilder()
+                    .setKasUri(SPECKED.getKey())
+                    .setPublicKey(SimpleKasPublicKey.newBuilder().setPem("speckedpem")
+                            .setAlgorithm(Algorithm.ALGORITHM_EC_P521)
+                            .setKid("speckedkeykid")).build();
             return Attribute.newBuilder().setId("SPK").setNamespace(ns2)
                     .setName("specified").setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ANY_OF)
                     .setFqn(fqn.toString())
-                    .addGrants(KeyAccessServer.newBuilder().setUri(SPECIFIED_KAS).build())
+                    .addGrants(KeyAccessServer.newBuilder().setUri(SPECIFIED_KAS).addKasKeys(kasKey))
                     .build();
         } else if (key.equals(UNSPECKED.getKey())) {
             return Attribute.newBuilder().setId("UNS").setNamespace(ns2)
