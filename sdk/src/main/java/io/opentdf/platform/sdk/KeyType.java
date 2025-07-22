@@ -86,6 +86,6 @@ public enum KeyType {
     }
 
     public boolean isEc() {
-        return this.curve == SECP256R1 || this.curve == SECP384R1 || this.curve == SECP521R1;
+        return this.curve != null;
     }
 }
