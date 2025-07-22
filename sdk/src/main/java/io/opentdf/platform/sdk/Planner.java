@@ -44,7 +44,7 @@ public class Planner {
         return UUID.randomUUID().toString();
     }
 
-    Map<String, List<Config.KASInfo>> getSplits(Config.TDFConfig tdfConfig) {
+    Map<String, List<Config.KASInfo>> getSplits() {
         List<Autoconfigure.KeySplitTemplate> splitPlan;
         if (tdfConfig.autoconfigure) {
             if (tdfConfig.splitPlan != null && !tdfConfig.splitPlan.isEmpty()) {
@@ -59,8 +59,8 @@ public class Planner {
                     .collect(Collectors.toList());
         }
 
-        if (tdfConfig.kasInfoList.isEmpty() && splitPlan.isEmpty()) {
-            throw new SDK.KasInfoMissing("kas information is missing, no key access template specified or inferred");
+        if (splitPlan.isEmpty()) {
+            throw new SDK.KasInfoMissing("no plan was constructed via autoconfigure, explicit split plan or provided kases");
         }
         return resolveKeys(splitPlan);
     }

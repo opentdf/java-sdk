@@ -261,7 +261,7 @@ class PlannerTest {
         var planner = new Planner(tdfConfig, new FakeServicesBuilder().setKas(kas).build(), (ignore1, ignored2) -> { throw new IllegalArgumentException("no granter needed"); });
 
         // Act
-        Map<String, List<Config.KASInfo>> splits = planner.getSplits(tdfConfig);
+        Map<String, List<Config.KASInfo>> splits = planner.getSplits();
 
         // Assert
         Assertions.assertThat(splits).hasSize(2);

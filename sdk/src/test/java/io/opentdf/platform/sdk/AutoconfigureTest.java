@@ -45,6 +45,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -1149,7 +1150,7 @@ public class AutoconfigureTest {
         var planner = new Planner(tdfConfig, services, granterFactory);
 
         // Act
-        var splits = planner.getSplits(tdfConfig);
+        var splits = planner.getSplits();
 
         // Assert
         assertThat(splits).containsKey("");
@@ -1157,5 +1158,21 @@ public class AutoconfigureTest {
         assertThat(splits.get("").get(0).URL).isEqualTo("https://kas.example.com");
         assertThat(splits.get("").get(0).KID).isEqualTo("kid");
         assertThat(splits.get("").get(0).Algorithm).isEqualTo("ec:secp256r1");
+    }
+
+    @Test
+    void testInvalidConfigurations() {
+        var config = new Config.TDFConfig();
+        config.autoconfigure = true;
+        config.splitPlan = List.of(new KeySplitStep("kas1", ""));
+        Planner planner = new Planner(config, new FakeServicesBuilder().build(), (a, b) -> { throw new IllegalStateException("no way"); });
+        Exception thrown = assertThrows(IllegalArgumentException.class, () -> planner.getSplits());
+        assertThat(thrown.getMessage()).contains("cannot use autoconfigure with a split plan provided in the TDFConfig");
+
+
+        config = new Config.TDFConfig() {{ autoconfigure = false; kasInfoList = Collections.EMPTY_LIST; splitPlan = null; }};
+        var otherPlanner = new Planner(config, new FakeServicesBuilder().build(), (a, b) -> { throw new IllegalStateException("no way"); });
+        thrown = assertThrows(SDK.KasInfoMissing.class, () -> otherPlanner.getSplits());
+        assertThat(thrown.getMessage()).contains("no plan was constructed via autoconfigure, explicit split plan or provided kases");
     }
 }
