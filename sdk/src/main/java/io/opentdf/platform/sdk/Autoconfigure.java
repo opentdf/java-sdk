@@ -5,7 +5,6 @@ import io.opentdf.platform.policy.Algorithm;
 import io.opentdf.platform.policy.Attribute;
 import io.opentdf.platform.policy.AttributeRuleTypeEnum;
 import io.opentdf.platform.policy.AttributeValueSelector;
-import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
 import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.SimpleKasKey;
 import io.opentdf.platform.policy.Value;
@@ -381,7 +380,7 @@ public class Autoconfigure {
             }
             if (hasGrants) {
                 logger.debug("generating plan from grants");
-                return plan(genSplitID);
+                return planUsingGrants(genSplitID);
             }
 
             var baseKey = baseKeySupplier.get();
@@ -401,7 +400,7 @@ public class Autoconfigure {
         }
 
         @Nonnull
-        List<KeySplitTemplate> plan(Supplier<String> genSplitID)
+        List<KeySplitTemplate> planUsingGrants(Supplier<String> genSplitID)
                 throws AutoConfigureException {
             AttributeBooleanExpression b = constructAttributeBoolean();
             BooleanKeyExpression k = insertKeysForAttribute(b);
@@ -419,7 +418,8 @@ public class Autoconfigure {
             for (KeyClause v : k.values) {
                 String splitID = (l > 1) ? genSplitID.get() : "";
                 for (PublicKeyInfo o : v.values) {
-                    steps.add(new KeySplitTemplate(o.kas, splitID, o.kid, null));
+                    // grants only have KAS URLs, no KIDs or algorithms
+                    steps.add(new KeySplitTemplate(o.kas, splitID, null, null));
                 }
             }
             return steps;
@@ -444,7 +444,8 @@ public class Autoconfigure {
             for (KeyClause v : k.values) {
                 String splitID = (l > 1) ? genSplitID.get() : "";
                 for (PublicKeyInfo o : v.values) {
-                    steps.add(new KeySplitTemplate(o.kas, splitID, o.kid, o.algorithm != null ? KeyType.fromString(o.algorithm) : null));
+                    KeyType keyType = o.algorithm != null ? KeyType.fromString(o.algorithm) : null;
+                    steps.add(new KeySplitTemplate(o.kas, splitID, o.kid, keyType));
                 }
             }
             return steps;
