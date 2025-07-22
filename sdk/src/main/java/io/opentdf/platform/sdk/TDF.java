@@ -288,7 +288,7 @@ class TDF {
 
         private ECKeyWrappedKeyInfo createECWrappedKey(Config.TDFConfig tdfConfig, Config.KASInfo kasInfo,
                 byte[] symKey) {
-            var curveName = tdfConfig.wrappingKeyType.getCurveName();
+            var curveName = tdfConfig.wrappingKeyType.getECCurve();
             var keyPair = new ECKeyPair(curveName, ECKeyPair.ECAlgorithm.ECDH);
 
             ECPublicKey kasPubKey = ECKeyPair.publicKeyFromPem(kasInfo.PublicKey);
@@ -632,7 +632,7 @@ class TDF {
         TDFReader tdfReader = new TDFReader(tdf);
         String manifestJson = tdfReader.manifest();
         // use Manifest.readManifest in order to validate the Manifest input
-        Manifest manifest = Manifest.readManifest(new StringReader(manifestJson));
+        Manifest manifest = Manifest.readManifest(manifestJson);
         byte[] payloadKey = new byte[GCM_KEY_SIZE];
         String unencryptedMetadata = null;
 

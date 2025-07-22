@@ -24,6 +24,7 @@ import javax.crypto.KeyAgreement;
 import java.io.*;
 import java.security.*;
 import java.security.spec.*;
+import java.util.Objects;
 // https://www.bouncycastle.org/latest_releases.html
 
 public class ECKeyPair {
@@ -32,6 +33,8 @@ public class ECKeyPair {
         Security.addProvider(new BouncyCastleProvider());
     }
 
+    private final NanoTDFType.ECCurve curve;
+
     public enum ECAlgorithm {
         ECDH,
         ECDSA
@@ -39,38 +42,14 @@ public class ECKeyPair {
 
     private static final BouncyCastleProvider BOUNCY_CASTLE_PROVIDER = new BouncyCastleProvider();
 
-    public enum NanoTDFECCurve {
-        SECP256R1("secp256r1", KeyType.EC256Key),
-        PRIME256V1("prime256v1", KeyType.EC256Key),
-        SECP384R1("secp384r1", KeyType.EC384Key),
-        SECP521R1("secp521r1", KeyType.EC521Key);
-
-        private String name;
-        private KeyType keyType;
-
-        NanoTDFECCurve(String curveName, KeyType keyType) {
-            this.name = curveName;
-            this.keyType = keyType;
-        }
-
-        @Override
-        public String toString() {
-            return name;
-        }
-
-        public KeyType getKeyType() {
-            return keyType;
-        }
-    }
-
     private KeyPair keyPair;
-    private String curveName;
 
     public ECKeyPair() {
-        this("secp256r1", ECAlgorithm.ECDH);
+        this(NanoTDFType.ECCurve.SECP256R1, ECAlgorithm.ECDH);
     }
 
-    public ECKeyPair(String curveName, ECAlgorithm algorithm) {
+    public ECKeyPair(NanoTDFType.ECCurve curve, ECAlgorithm algorithm) {
+        this.curve = Objects.requireNonNull(curve);
         KeyPairGenerator generator;
 
         try {
@@ -85,19 +64,13 @@ public class ECKeyPair {
             throw new RuntimeException(e);
         }
 
-        ECGenParameterSpec spec = new ECGenParameterSpec(curveName);
+        ECGenParameterSpec spec = new ECGenParameterSpec(this.curve.getCurveName());
         try {
             generator.initialize(spec);
         } catch (InvalidAlgorithmParameterException e) {
             throw new RuntimeException(e);
         }
         this.keyPair = generator.generateKeyPair();
-        this.curveName = curveName;
-    }
-
-    public ECKeyPair(ECPublicKey publicKey, ECPrivateKey privateKey, String curveName) {
-        this.keyPair = new KeyPair(publicKey, privateKey);
-        this.curveName = curveName;
     }
 
     public ECPublicKey getPublicKey() {
@@ -108,17 +81,8 @@ public class ECKeyPair {
         return (ECPrivateKey) this.keyPair.getPrivate();
     }
 
-    public static int getECKeySize(String curveName) {
-        if (curveName.equalsIgnoreCase(NanoTDFECCurve.SECP256R1.toString()) ||
-                curveName.equalsIgnoreCase(NanoTDFECCurve.PRIME256V1.toString())) {
-            return 32;
-        } else if (curveName.equalsIgnoreCase(NanoTDFECCurve.SECP384R1.toString())) {
-            return 48;
-        } else if (curveName.equalsIgnoreCase(NanoTDFECCurve.SECP521R1.toString())) {
-            return 66;
-        } else {
-            throw new IllegalArgumentException("Unsupported ECC algorithm.");
-        }
+    NanoTDFType.ECCurve getCurve() {
+        return this.curve;
     }
 
     public String publicKeyInPEMFormat() {
@@ -153,10 +117,6 @@ public class ECKeyPair {
 
     public int keySize() {
         return this.keyPair.getPrivate().getEncoded().length * 8;
-    }
-
-    public String curveName() {
-        return this.curveName;
     }
 
     public byte[] compressECPublickey() {

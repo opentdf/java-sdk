@@ -130,7 +130,7 @@ public class TDFTest {
                         if (i % 2 == 0) {
                                 keypairs.add(CryptoUtils.generateRSAKeypair());
                         } else {
-                                keypairs.add(CryptoUtils.generateECKeypair(KeyType.EC256Key.getCurveName()));
+                                keypairs.add(CryptoUtils.generateECKeypair(KeyType.EC256Key.getECCurve().getCurveName()));
                         }
                 }
 

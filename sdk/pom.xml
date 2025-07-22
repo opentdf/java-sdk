@@ -8,7 +8,7 @@
     <parent>
         <artifactId>sdk-pom</artifactId>
         <groupId>io.opentdf.platform</groupId>
-        <version>0.8.2-SNAPSHOT</version>
+        <version>0.9.1-SNAPSHOT</version>
     </parent>
     <packaging>jar</packaging>
     <properties>
@@ -18,7 +18,7 @@
         <kotlin.version>2.1.0</kotlin.version>
         <connect.version>0.7.2</connect.version>
         <okhttp.version>4.12.0</okhttp.version>
-        <platform.branch>protocol/go/v0.3.0</platform.branch>
+        <platform.branch>protocol/go/v0.5.0</platform.branch>
     </properties>
     <dependencies>
         <!-- Logging Dependencies -->
