@@ -22,6 +22,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 
 public class Planner {
@@ -33,7 +34,7 @@ public class Planner {
 
     private static final Logger logger = LoggerFactory.getLogger(Planner.class);
 
-    public Planner(Config.TDFConfig config, SDK.Services services, BiFunction<SDK.Services, Config.TDFConfig, Autoconfigure.Granter> granterFactory) {
+    Planner(Config.TDFConfig config, SDK.Services services, BiFunction<SDK.Services, Config.TDFConfig, Autoconfigure.Granter> granterFactory) {
         this.tdfConfig = Objects.requireNonNull(config);
         this.services = Objects.requireNonNull(services);
         this.granterFactory = granterFactory;
@@ -44,7 +45,7 @@ public class Planner {
     }
 
     Map<String, List<Config.KASInfo>> getSplits(Config.TDFConfig tdfConfig) {
-        List<Autoconfigure.KeySplitStep> splitPlan;
+        List<Autoconfigure.KeySplitTemplate> splitPlan;
         if (tdfConfig.autoconfigure) {
             if (tdfConfig.splitPlan != null && !tdfConfig.splitPlan.isEmpty()) {
                 throw new IllegalArgumentException("cannot use autoconfigure with a split plan provided in the TDFConfig");
@@ -53,7 +54,9 @@ public class Planner {
         } else if (tdfConfig.splitPlan == null || tdfConfig.splitPlan.isEmpty()) {
             splitPlan = generatePlanFromProvidedKases(tdfConfig.kasInfoList);
         } else {
-            splitPlan = tdfConfig.splitPlan;
+            splitPlan = tdfConfig.splitPlan.stream()
+                    .map(k -> new Autoconfigure.KeySplitTemplate(k.kas, k.splitID, null, null))
+                    .collect(Collectors.toList());
         }
 
         if (tdfConfig.kasInfoList.isEmpty() && splitPlan.isEmpty()) {
@@ -62,20 +65,21 @@ public class Planner {
         return resolveKeys(splitPlan);
     }
 
-    private List<Autoconfigure.KeySplitStep> getAutoconfigurePlan(SDK.Services services, Config.TDFConfig tdfConfig) {
+    private List<Autoconfigure.KeySplitTemplate> getAutoconfigurePlan(SDK.Services services, Config.TDFConfig tdfConfig) {
         Autoconfigure.Granter granter = granterFactory.apply(services, tdfConfig);
         return granter.getSplits(defaultKases(tdfConfig), Planner::getUUID, () -> Planner.fetchBaseKey(services.wellknown()));
     }
 
 
-    List<Autoconfigure.KeySplitStep> generatePlanFromProvidedKases(List<Config.KASInfo> kases) {
+    List<Autoconfigure.KeySplitTemplate> generatePlanFromProvidedKases(List<Config.KASInfo> kases) {
         if (kases.size() == 1) {
             var kasInfo = kases.get(0);
-            return Collections.singletonList(new Autoconfigure.KeySplitStep(kasInfo.URL, "", kasInfo.KID));
+            return Collections.singletonList(new Autoconfigure.KeySplitTemplate(kasInfo.URL, "", kasInfo.KID, null));
         }
-        List<Autoconfigure.KeySplitStep> splitPlan = new ArrayList<>();
+        List<Autoconfigure.KeySplitTemplate> splitPlan = new ArrayList<>();
         for (var kasInfo : kases) {
-            splitPlan.add(new Autoconfigure.KeySplitStep(kasInfo.URL, getUUID(), kasInfo.KID));
+            var keyType = kasInfo.Algorithm == null ? null : KeyType.fromString(kasInfo.Algorithm);
+            splitPlan.add(new Autoconfigure.KeySplitTemplate(kasInfo.URL, getUUID(), kasInfo.KID, keyType));
         }
         return splitPlan;
     }
@@ -141,7 +145,7 @@ public class Planner {
         }
     }
 
-    Map<String, List<Config.KASInfo>> resolveKeys(List<Autoconfigure.KeySplitStep> splitPlan) {
+    Map<String, List<Config.KASInfo>> resolveKeys(List<Autoconfigure.KeySplitTemplate> splitPlan) {
         Map<String, List<Config.KASInfo>> conjunction = new HashMap<>();
         var latestKASInfo = new HashMap<String, Config.KASInfo>();
         // Seed anything passed in manually
@@ -151,7 +155,7 @@ public class Planner {
             }
         }
 
-        for (Autoconfigure.KeySplitStep splitInfo: splitPlan) {
+        for (var splitInfo: splitPlan) {
             // Public key was passed in with kasInfoList
             // TODO First look up in attribute information / add to split plan?
             Config.KASInfo ki = latestKASInfo.get(splitInfo.kas);
@@ -159,11 +163,11 @@ public class Planner {
                 logger.info("no public key provided for KAS at {}, retrieving", splitInfo.kas);
                 var getKI = new Config.KASInfo();
                 getKI.URL = splitInfo.kas;
-                getKI.Algorithm = tdfConfig.wrappingKeyType.toString();
-                getKI.KID = splitInfo.kid;
-                var retrievedKI = services.kas().getPublicKey(getKI);
-                latestKASInfo.put(splitInfo.kas, retrievedKI);
-                ki = retrievedKI;
+                getKI.Algorithm = splitInfo.keyType == null
+                        ? (tdfConfig.wrappingKeyType == null ? null : tdfConfig.wrappingKeyType.toString())
+                        : splitInfo.keyType.toString();
+                ki = services.kas().getPublicKey(getKI);
+                latestKASInfo.put(splitInfo.kas, ki);
             }
             conjunction.computeIfAbsent(splitInfo.splitID, s -> new ArrayList<>()).add(ki);
         }

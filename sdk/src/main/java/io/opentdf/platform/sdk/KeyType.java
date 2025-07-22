@@ -1,7 +1,13 @@
 package io.opentdf.platform.sdk;
 
+import io.opentdf.platform.policy.Algorithm;
+import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
+
 import javax.annotation.Nonnull;
 
+import java.util.Optional;
+
+import static io.opentdf.platform.policy.Algorithm.ALGORITHM_EC_P521;
 import static io.opentdf.platform.sdk.NanoTDFType.ECCurve.SECP256R1;
 import static io.opentdf.platform.sdk.NanoTDFType.ECCurve.SECP384R1;
 import static io.opentdf.platform.sdk.NanoTDFType.ECCurve.SECP521R1;
@@ -44,6 +50,53 @@ public enum KeyType {
             }
         }
         throw new IllegalArgumentException("No enum constant for key type: " + keyType);
+    }
+
+    public static KeyType fromAlgorithm(Algorithm algorithm) {
+        if (algorithm == null) {
+            throw new IllegalArgumentException("Algorithm cannot be null");
+        }
+        switch (algorithm) {
+            case ALGORITHM_RSA_2048:
+                return KeyType.RSA2048Key;
+            case ALGORITHM_EC_P256:
+                return KeyType.EC256Key;
+            case ALGORITHM_EC_P384:
+                return KeyType.EC384Key;
+            case ALGORITHM_EC_P521:
+                return KeyType.EC521Key;
+            default:
+                throw new IllegalArgumentException("Unsupported algorithm: " + algorithm);
+        }
+    }
+
+    public static KeyType fromAlgorithm(KasPublicKeyAlgEnum algorithm) {
+        if (algorithm == null) {
+            throw new IllegalArgumentException("Algorithm cannot be null");
+        }
+        switch (algorithm) {
+            case KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048:
+                return KeyType.RSA2048Key;
+            case KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1:
+                return KeyType.EC256Key;
+            case KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP384R1:
+                return KeyType.EC384Key;
+            case KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP521R1:
+                return KeyType.EC521Key;
+            default:
+                throw new IllegalArgumentException("Unsupported algorithm: " + algorithm);
+        }
+    }
+
+    public static KeyType getKeyTypeToUse(String keyType, Config.TDFConfig config) {
+        if (keyType == null || keyType.isEmpty()) {
+            return config.wrappingKeyType != null ? config.wrappingKeyType : KeyType.RSA2048Key;
+        }
+        try {
+            return KeyType.fromString(keyType);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid key type: " + keyType, e);
+        }
     }
 
     public boolean isEc() {

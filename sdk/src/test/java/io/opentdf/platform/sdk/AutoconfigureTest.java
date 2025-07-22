@@ -442,7 +442,7 @@ public class AutoconfigureTest {
                         "https://virtru.com/attr/Classification/value/Secret&https://virtru.com/attr/Releasable%20To/value/CAN",
                         "[DEFAULT]&(https://kas.ca/)",
                         "(https://kas.ca/)",
-                        List.of(new KeySplitStep(KAS_CA, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(KAS_CA, "", null, null))),
                 new ReasonerTestCase(
                         "one defaulted attr",
                         List.of(clsS),
@@ -450,7 +450,7 @@ public class AutoconfigureTest {
                         "https://virtru.com/attr/Classification/value/Secret",
                         "[DEFAULT]",
                         "",
-                        List.of(new KeySplitStep(KAS_US, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(KAS_US, "", null, null))),
                 new ReasonerTestCase(
                         "empty policy",
                         List.of(),
@@ -458,7 +458,7 @@ public class AutoconfigureTest {
                         "∅",
                         "",
                         "",
-                        List.of(new KeySplitStep(KAS_US, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(KAS_US, "", null, null))),
                 new ReasonerTestCase(
                         "old school splits",
                         List.of(),
@@ -466,8 +466,9 @@ public class AutoconfigureTest {
                         "∅",
                         "",
                         "",
-                        List.of(new KeySplitStep(KAS_AU, "1"), new KeySplitStep(KAS_CA, "2"),
-                                new KeySplitStep(KAS_US, "3"))),
+                        List.of(new Autoconfigure.KeySplitTemplate(KAS_AU, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(KAS_CA, "2", null, null),
+                                new Autoconfigure.KeySplitTemplate(KAS_US, "3", null, null))),
                 new ReasonerTestCase(
                         "simple with all three ops",
                         List.of(clsS, rel2gbr, n2kInt),
@@ -475,7 +476,7 @@ public class AutoconfigureTest {
                         "https://virtru.com/attr/Classification/value/Secret&https://virtru.com/attr/Releasable%20To/value/GBR&https://virtru.com/attr/Need%20to%20Know/value/INT",
                         "[DEFAULT]&(https://kas.uk/)&(https://kas.uk/)",
                         "(https://kas.uk/)",
-                        List.of(new KeySplitStep(KAS_UK, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(KAS_UK, "", null, null))),
                 new ReasonerTestCase(
                         "compartments",
                         List.of(clsS, rel2gbr, rel2usa, n2kHCS, n2kSI),
@@ -483,8 +484,10 @@ public class AutoconfigureTest {
                         "https://virtru.com/attr/Classification/value/Secret&https://virtru.com/attr/Releasable%20To/value/{GBR,USA}&https://virtru.com/attr/Need%20to%20Know/value/{HCS,SI}",
                         "[DEFAULT]&(https://kas.uk/⋁https://kas.us/)&(https://hcs.kas.us/⋀https://si.kas.us/)",
                         "(https://kas.uk/⋁https://kas.us/)&(https://hcs.kas.us/)&(https://si.kas.us/)",
-                        List.of(new KeySplitStep(KAS_UK, "1"), new KeySplitStep(KAS_US, "1"),
-                                new KeySplitStep(KAS_US_HCS, "2"), new KeySplitStep(KAS_US_SA, "3"))),
+                        List.of(new Autoconfigure.KeySplitTemplate(KAS_UK, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(KAS_US, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(KAS_US_HCS, "2", null, null),
+                                new Autoconfigure.KeySplitTemplate(KAS_US_SA, "3", null, null))),
                 new ReasonerTestCase(
                         "compartments - case insensitive",
                         List.of(
@@ -493,8 +496,10 @@ public class AutoconfigureTest {
                         "https://virtru.com/attr/Classification/value/Secret&https://virtru.com/attr/Releasable%20To/value/{GBR,USA}&https://virtru.com/attr/Need%20to%20Know/value/{HCS,SI}",
                         "[DEFAULT]&(https://kas.uk/⋁https://kas.us/)&(https://hcs.kas.us/⋀https://si.kas.us/)",
                         "(https://kas.uk/⋁https://kas.us/)&(https://hcs.kas.us/)&(https://si.kas.us/)",
-                        List.of(new KeySplitStep(KAS_UK, "1"), new KeySplitStep(KAS_US, "1"),
-                                new KeySplitStep(KAS_US_HCS, "2"), new KeySplitStep(KAS_US_SA, "3"))));
+                        List.of(new Autoconfigure.KeySplitTemplate(KAS_UK, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(KAS_US, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(KAS_US_HCS, "2", null, null),
+                                new Autoconfigure.KeySplitTemplate(KAS_US_SA, "3", null, null))));
 
         for (ReasonerTestCase tc : testCases) {
             Granter reasoner = Autoconfigure.newGranterFromAttributes(null,
@@ -513,7 +518,7 @@ public class AutoconfigureTest {
             var wrapper = new Object() {
                 int i = 0;
             };
-            List<KeySplitStep> plan = reasoner.getSplits(tc.getDefaults(), () -> String.valueOf(wrapper.i++ + 1), Optional::empty);
+            List<Autoconfigure.KeySplitTemplate> plan = reasoner.getSplits(tc.getDefaults(), () -> String.valueOf(wrapper.i++ + 1), Optional::empty);
             assertThat(plan)
                     .as(tc.name)
                     .isEqualTo(tc.getPlan());
@@ -525,7 +530,7 @@ public class AutoconfigureTest {
         Granter granter = Autoconfigure.newGranterFromAttributes(new KASKeyCache(), mockValueFor(mp2uns2uns));
         var counter = new AtomicInteger(0);
         var splitPlan = granter.getSplits(Collections.emptyList(), () -> Integer.toString(counter.getAndIncrement()), Optional::empty);
-        assertThat(splitPlan).isEqualTo(List.of(new KeySplitStep("https://mapped.example.com", "", NAMESPACE_KAS_KEY.getPublicKey().getKid())));
+        assertThat(splitPlan).isEqualTo(List.of(new Autoconfigure.KeySplitTemplate("https://mapped.example.com", "", NAMESPACE_KAS_KEY.getPublicKey().getKid(), KeyType.EC521Key)));
     }
 
     @Test
@@ -535,8 +540,8 @@ public class AutoconfigureTest {
         var counter = new AtomicInteger(0);
         var splitPlan = granter.getSplits(Collections.emptyList(), () -> Integer.toString(counter.getAndIncrement()), Optional::empty);
         assertThat(splitPlan).isEqualTo(List.of(
-                new KeySplitStep(NAMESPACE_KAS_KEY.getKasUri(), "0", NAMESPACE_KAS_KEY.getPublicKey().getKid()),
-                new KeySplitStep(VALUE_KEY.getKasUri(), "0", VALUE_KEY.getPublicKey().getKid())
+                new Autoconfigure.KeySplitTemplate(NAMESPACE_KAS_KEY.getKasUri(), "0", NAMESPACE_KAS_KEY.getPublicKey().getKid(), KeyType.EC521Key),
+                new Autoconfigure.KeySplitTemplate(VALUE_KEY.getKasUri(), "0", VALUE_KEY.getPublicKey().getKid(), KeyType.EC521Key)
         ));
     }
 
@@ -569,72 +574,77 @@ public class AutoconfigureTest {
                         "uns.uns => default",
                         List.of(uns2uns),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(KAS_US, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(KAS_US, "", null, null))),
                 new ReasonerTestCase(
                         "uns.spk => spk",
                         List.of(uns2spk),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "", null, null))),
                 new ReasonerTestCase(
                         "spk.uns => spk",
                         List.of(spk2uns),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(SPECIFIED_KAS, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(SPECIFIED_KAS, "", null, null))),
                 new ReasonerTestCase(
                         "spk.spk => value.spk",
                         List.of(spk2spk),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "", null, null))),
                 new ReasonerTestCase(
                         "spk.spk & spk.uns => value.spk || attr.spk",
                         List.of(spk2spk, spk2uns),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, "1"), new KeySplitStep(SPECIFIED_KAS, "1"))),
+                        List.of(new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(SPECIFIED_KAS, "1", null, null))),
                 new ReasonerTestCase(
                         "spk.uns & spk.spk => value.spk || attr.spk",
                         List.of(spk2uns, spk2spk),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(SPECIFIED_KAS, "1"), new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, "1"))),
+                        List.of(new Autoconfigure.KeySplitTemplate(SPECIFIED_KAS, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "1", null, null))),
                 new ReasonerTestCase(
                         "uns.spk & spk.spk => value.spk",
                         List.of(spk2spk, uns2spk),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "", null, null))),
                 new ReasonerTestCase(
                         "uns.spk & uns.uns => spk",
                         List.of(uns2spk, uns2uns),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "", null, null))),
                 new ReasonerTestCase(
                         "uns.uns & uns.spk => spk",
                         List.of(uns2uns, uns2spk),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "", null, null))),
                 new ReasonerTestCase(
                         "uns.uns & spk.spk => spk",
                         List.of(uns2uns, spk2spk),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "", null, null))),
                 new ReasonerTestCase(
                         "spk.uns.uns => ns.spk",
                         List.of(spk2uns2uns, uns2uns),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(NAMESPACE_KAS, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(NAMESPACE_KAS, "", null, null))),
                 new ReasonerTestCase(
                         "spk.uns.uns & uns.uns => ns.spk",
                         List.of(spk2uns2uns, uns2uns),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(NAMESPACE_KAS, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(NAMESPACE_KAS, "", null, null))),
                 new ReasonerTestCase(
                         "spk.uns.uns & uns.spk => ns.spk && spk",
                         List.of(spk2uns2uns, uns2spk),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(NAMESPACE_KAS, "1"), new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, "2"))),
+                        List.of(new Autoconfigure.KeySplitTemplate(NAMESPACE_KAS, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "2", null, null))),
                 new ReasonerTestCase(
                         "spk.uns.uns & spk.spk.uns && spk.uns.spk => ns.spk || attr.spk || value.spk",
                         List.of(spk2uns2uns, spk2spk2uns, spk2uns2spk),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(NAMESPACE_KAS, "1"), new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, "1"), new KeySplitStep(SPECIFIED_KAS, "2")))
+                        List.of(new Autoconfigure.KeySplitTemplate(NAMESPACE_KAS, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(SPECIFIED_KAS, "2", null, null)))
         );
 
         for (ReasonerTestCase tc : testCases) {
@@ -662,7 +672,7 @@ public class AutoconfigureTest {
             var wrapper = new Object() {
                 int i = 0;
             };
-            List<KeySplitStep> plan = reasoner.getSplits(tc.getDefaults(), () -> String.valueOf(wrapper.i++ + 1), Optional::empty);
+            List<Autoconfigure.KeySplitTemplate> plan = reasoner.getSplits(tc.getDefaults(), () -> String.valueOf(wrapper.i++ + 1), Optional::empty);
             assertThat(plan)
                     .as(tc.name)
                     .hasSameElementsAs(tc.getPlan());
@@ -751,10 +761,10 @@ public class AutoconfigureTest {
         private final String ats;
         private final String keyed;
         private final String reduced;
-        private final List<KeySplitStep> plan;
+        private final List<Autoconfigure.KeySplitTemplate> plan;
 
         ReasonerTestCase(String name, List<AttributeValueFQN> policy, List<String> defaults, String ats, String keyed,
-                         String reduced, List<KeySplitStep> plan) {
+                         String reduced, List<Autoconfigure.KeySplitTemplate> plan) {
             this.name = name;
             this.policy = policy;
             this.defaults = defaults;
@@ -764,7 +774,7 @@ public class AutoconfigureTest {
             this.plan = plan;
         }
 
-        ReasonerTestCase(String name, List<AttributeValueFQN> policy, List<String> defaults, List<KeySplitStep> plan) {
+        ReasonerTestCase(String name, List<AttributeValueFQN> policy, List<String> defaults, List<Autoconfigure.KeySplitTemplate> plan) {
             this.name = name;
             this.policy = policy;
             this.defaults = defaults;
@@ -798,7 +808,7 @@ public class AutoconfigureTest {
             return reduced;
         }
 
-        public List<KeySplitStep> getPlan() {
+        public List<Autoconfigure.KeySplitTemplate> getPlan() {
             return plan;
         }
     }
@@ -1011,7 +1021,7 @@ public class AutoconfigureTest {
                 },
                 () -> Optional.of(key));
         assertThat(splits).hasSize(1);
-        assertThat(splits.get(0)).isEqualTo(new KeySplitStep("https://example.com/kas", "", "thenewkid"));
+        assertThat(splits.get(0)).isEqualTo(new Autoconfigure.KeySplitTemplate("https://example.com/kas", "", "thenewkid", KeyType.EC521Key));
     }
 
     @Test
@@ -1027,8 +1037,8 @@ public class AutoconfigureTest {
         assertThat(splits)
                 .hasSize(2)
                 .asList().containsExactly(
-                    new KeySplitStep("https://example.org/kas1", "0", null),
-                    new KeySplitStep("https://example.org/kas2", "1", null)
+                    new Autoconfigure.KeySplitTemplate("https://example.org/kas1", "0", null, null),
+                    new Autoconfigure.KeySplitTemplate("https://example.org/kas2", "1", null, null)
                 );
     }
 
@@ -1120,7 +1130,7 @@ public class AutoconfigureTest {
         var services = new FakeServicesBuilder().setKas(kas).build();
 
         // Mock granterFactory to return a granter with a known split plan
-        var expectedSplit = new Autoconfigure.KeySplitStep("https://kas.example.com", "", "kid");
+        var expectedSplit = new Autoconfigure.KeySplitTemplate("https://kas.example.com", "", "kid", null);
         var granter = Mockito.mock(Autoconfigure.Granter.class);
         Mockito.when(granter.getSplits(
                         Mockito.anyList(),

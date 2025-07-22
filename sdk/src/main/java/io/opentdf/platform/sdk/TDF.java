@@ -213,7 +213,11 @@ class TDF {
             keyAccess.sid = splitID;
             keyAccess.schemaVersion = KEY_ACCESS_SCHEMA_VERSION;
 
-            if (tdfConfig.wrappingKeyType.isEc()) {
+            var algorithm = kasInfo.Algorithm == null || kasInfo.Algorithm.isEmpty()
+                    ? tdfConfig.wrappingKeyType.toString()
+                    : kasInfo.Algorithm;
+
+            if (KeyType.fromString(algorithm).isEc()) {
                 var ecKeyWrappedKeyInfo = createECWrappedKey(tdfConfig, kasInfo, symKey);
                 keyAccess.wrappedKey = ecKeyWrappedKeyInfo.wrappedKey;
                 keyAccess.ephemeralPublicKey = ecKeyWrappedKeyInfo.publicKey;

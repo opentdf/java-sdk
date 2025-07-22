@@ -81,26 +81,27 @@ class PlannerTest {
         var kas1 = new Config.KASInfo();
         kas1.URL = "https://kas1.example.com";
         kas1.KID = "kid1";
-        kas1.Algorithm = "rsa:2048";
 
         var kas2 = new Config.KASInfo();
         kas2.URL = "https://kas2.example.com";
         kas2.KID = "kid2";
-        kas2.Algorithm = "ec:secp256";
+        kas2.Algorithm = "ec:secp256r1";
 
         var tdfConfig = new Config.TDFConfig();
         tdfConfig.kasInfoList.add(kas1);
         tdfConfig.kasInfoList.add(kas2);
 
         var planner = new Planner(tdfConfig, new FakeServicesBuilder().build(), (ignore1, ignored2) -> { throw new IllegalArgumentException("no granter needed"); });
-        List<Autoconfigure.KeySplitStep> splitPlan = planner.generatePlanFromProvidedKases(tdfConfig.kasInfoList);
+        List<Autoconfigure.KeySplitTemplate> splitPlan = planner.generatePlanFromProvidedKases(tdfConfig.kasInfoList);
 
         assertThat(splitPlan).asList().hasSize(2);
         assertThat(splitPlan.get(0).kas).isEqualTo("https://kas1.example.com");
         assertThat(splitPlan.get(0).kid).isEqualTo("kid1");
+        assertThat(splitPlan.get(0).keyType).isNull();
 
         assertThat(splitPlan.get(1).kas).isEqualTo("https://kas2.example.com");
         assertThat(splitPlan.get(1).kid).isEqualTo("kid2");
+        assertThat(splitPlan.get(1).keyType).isEqualTo(KeyType.EC256Key);
 
         assertThat(splitPlan.get(0).splitID).isNotEqualTo(splitPlan.get(1).splitID);
     }
@@ -122,8 +123,9 @@ class PlannerTest {
                     ret.KID = "kid2";
                 } else if (Objects.equals(kasInfo.URL, "https://kas3.example.com")) {
                     ret.PublicKey = "pem3";
-                    ret.Algorithm = "rsa:4096";
+                    ret.Algorithm = "ec:secp384r1";
                     ret.KID = "kid3";
+                    assertThat(kasInfo.Algorithm).isEqualTo("ec:secp384r1");
                 } else {
                     throw new IllegalArgumentException("Unexpected KAS URL: " + kasInfo.URL);
                 }
@@ -142,10 +144,10 @@ class PlannerTest {
         );
         var planner = new Planner(tdfConfig, new FakeServicesBuilder().setKas(kas).build(), (ignore1, ignored2) ->  { throw new IllegalArgumentException("no granter needed"); });
         var plan = List.of(
-                new Autoconfigure.KeySplitStep("https://kas1.example.com", "split1", null),
-                new Autoconfigure.KeySplitStep("https://kas4.example.com", "split1", "kid4"),
-                new Autoconfigure.KeySplitStep("https://kas2.example.com", "split2", "kid2"),
-                new Autoconfigure.KeySplitStep("https://kas3.example.com", "split2", "kid3")
+                new Autoconfigure.KeySplitTemplate("https://kas1.example.com", "split1", null, null),
+                new Autoconfigure.KeySplitTemplate("https://kas4.example.com", "split1", "kid4", null),
+                new Autoconfigure.KeySplitTemplate("https://kas2.example.com", "split2", "kid2", null),
+                new Autoconfigure.KeySplitTemplate("https://kas3.example.com", "split2", null, KeyType.EC384Key)
         );
         Map<String, List<Config.KASInfo>> filledInPlan = planner.resolveKeys(plan);
         assertThat(filledInPlan.keySet().stream().collect(Collectors.toList())).asList().containsExactlyInAnyOrder("split1", "split2");
@@ -166,7 +168,7 @@ class PlannerTest {
         assertThat(kasInfo2.PublicKey).isEqualTo("pem2");
         var kasInfo3 = filledInPlan.get("split2").stream().filter(kasInfo -> "kid3".equals(kasInfo.KID)).findFirst().get();
         assertThat(kasInfo3.URL).isEqualTo("https://kas3.example.com");
-        assertThat(kasInfo3.Algorithm).isEqualTo("rsa:4096");
+        assertThat(kasInfo3.Algorithm).isEqualTo("ec:secp384r1");
         assertThat(kasInfo3.PublicKey).isEqualTo("pem3");
     }
 
@@ -247,8 +249,8 @@ class PlannerTest {
         kas2.KID = "kid2";
         kas2.Algorithm = "ec:secp256";
 
-        var splitStep1 = new Autoconfigure.KeySplitStep(kas1.URL, "split1", kas1.KID);
-        var splitStep2 = new Autoconfigure.KeySplitStep(kas2.URL, "split2", kas2.KID);
+        var splitStep1 = new Autoconfigure.KeySplitStep(kas1.URL, "split1");
+        var splitStep2 = new Autoconfigure.KeySplitStep(kas2.URL, "split2");
 
         var tdfConfig = new Config.TDFConfig();
         tdfConfig.autoconfigure = false;

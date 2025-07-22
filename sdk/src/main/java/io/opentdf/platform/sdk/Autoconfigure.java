@@ -56,7 +56,7 @@ class RuleType {
  * This class includes functionality to create granter instances based on
  * attributes either from a list of attribute values or from a service.
  */
-class Autoconfigure {
+public class Autoconfigure {
 
     private static Logger logger = LoggerFactory.getLogger(Autoconfigure.class);
 
@@ -64,31 +64,61 @@ class Autoconfigure {
         // Prevent instantiation, this class is a utility class that is only used statically
     }
 
-    static class KeySplitStep {
+    static class KeySplitTemplate {
         final String kas;
         final String splitID;
         final String kid;
+        final KeyType keyType;
 
-        KeySplitStep(String kas, String splitId) {
-            this(kas, splitId, null);
+        @Override
+        public String toString() {
+            return "KeySplitTemplate{" +
+                    "kas='" + kas + '\'' +
+                    ", splitID='" + splitID + '\'' +
+                    ", kid='" + kid + '\'' +
+                    ", keyType=" + keyType +
+                    '}';
         }
 
-        KeySplitStep(String kas, String splitId, @Nullable String kid) {
+        @Override
+        public boolean equals(Object o) {
+            if (o == null || getClass() != o.getClass()) return false;
+            KeySplitTemplate that = (KeySplitTemplate) o;
+            return Objects.equals(kas, that.kas) && Objects.equals(splitID, that.splitID) && Objects.equals(kid, that.kid) && keyType == that.keyType;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(kas, splitID, kid, keyType);
+        }
+
+        public KeySplitTemplate(String kas, String splitID, String kid, KeyType keyType) {
+            this.kas = kas;
+            this.splitID = splitID;
+            this.kid = kid;
+            this.keyType = keyType;
+        }
+    }
+
+    public static class KeySplitStep {
+        final String kas;
+        final String splitID;
+
+        KeySplitStep(String kas, String splitId) {
             this.kas = Objects.requireNonNull(kas);
             this.splitID = Objects.requireNonNull(splitId);
-            this.kid = kid;
         }
 
         @Override
         public boolean equals(Object o) {
             if (o == null || getClass() != o.getClass()) return false;
             KeySplitStep that = (KeySplitStep) o;
-            return Objects.equals(kas, that.kas) && Objects.equals(splitID, that.splitID) && Objects.equals(kid, that.kid);
+            return Objects.equals(kas, that.kas) && Objects.equals(splitID, that.splitID);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(kas, splitID, kid);
+            return Objects.hash(kas, splitID);
         }
 
         @Override
@@ -96,7 +126,6 @@ class Autoconfigure {
             return "KeySplitStep{" +
                     "kas='" + kas + '\'' +
                     ", splitID='" + splitID + '\'' +
-                    ", kid='" + kid + '\'' +
                     '}';
         }
     }
@@ -324,7 +353,7 @@ class Autoconfigure {
                     var mappedKey = new Config.KASInfo();
                     mappedKey.URL = grantedKey.getUri();
                     mappedKey.KID = cachedGrantKey.getKid();
-                    mappedKey.Algorithm = Autoconfigure.algProto2String(cachedGrantKey.getAlg());
+                    mappedKey.Algorithm = KeyType.fromAlgorithm(cachedGrantKey.getAlg()).toString();
                     mappedKey.PublicKey = cachedGrantKey.getPem();
                     mappedKey.Default = false;
                     mappedKeys.computeIfAbsent(fqn.key, k -> new ArrayList<>()).add(mappedKey);
@@ -345,7 +374,7 @@ class Autoconfigure {
             return grants.get(fqn.key);
         }
 
-        List<KeySplitStep> getSplits(List<String> defaultKases, Supplier<String> genSplitID, Supplier<Optional<SimpleKasKey>> baseKeySupplier) throws AutoConfigureException {
+        List<KeySplitTemplate> getSplits(List<String> defaultKases, Supplier<String> genSplitID, Supplier<Optional<SimpleKasKey>> baseKeySupplier) throws AutoConfigureException {
             if (hasMappedKeys) {
                 logger.debug("generating plan from mapped keys");
                 return planFromAttributes(genSplitID);
@@ -361,7 +390,8 @@ class Autoconfigure {
                 String kas = key.getKasUri();
                 String splitID = "";
                 String kid = key.getPublicKey().getKid();
-                return Collections.singletonList(new KeySplitStep(kas, splitID, kid));
+                Algorithm algorithm = key.getPublicKey().getAlgorithm();
+                return Collections.singletonList(new KeySplitTemplate(kas, splitID, kid, KeyType.fromAlgorithm(algorithm)));
             }
 
             logger.warn("no grants or mapped keys found, generating plan from default KASes. this is deprecated");
@@ -371,7 +401,7 @@ class Autoconfigure {
         }
 
         @Nonnull
-        List<KeySplitStep> plan(Supplier<String> genSplitID)
+        List<KeySplitTemplate> plan(Supplier<String> genSplitID)
                 throws AutoConfigureException {
             AttributeBooleanExpression b = constructAttributeBoolean();
             BooleanKeyExpression k = insertKeysForAttribute(b);
@@ -385,18 +415,18 @@ class Autoconfigure {
                 throw new AutoConfigureException("generated an empty plan");
             }
 
-            List<KeySplitStep> steps = new ArrayList<>();
+            List<KeySplitTemplate> steps = new ArrayList<>();
             for (KeyClause v : k.values) {
                 String splitID = (l > 1) ? genSplitID.get() : "";
                 for (PublicKeyInfo o : v.values) {
-                    steps.add(new KeySplitStep(o.kas, splitID));
+                    steps.add(new KeySplitTemplate(o.kas, splitID, o.kid, null));
                 }
             }
             return steps;
         }
 
         @Nonnull
-        List<KeySplitStep> planFromAttributes(Supplier<String> genSplitID)
+        List<KeySplitTemplate> planFromAttributes(Supplier<String> genSplitID)
                 throws AutoConfigureException {
             AttributeBooleanExpression b = constructAttributeBoolean();
             BooleanKeyExpression k = assignKeysTo(b);
@@ -410,25 +440,25 @@ class Autoconfigure {
                 return Collections.emptyList();
             }
 
-            List<KeySplitStep> steps = new ArrayList<>();
+            List<KeySplitTemplate> steps = new ArrayList<>();
             for (KeyClause v : k.values) {
                 String splitID = (l > 1) ? genSplitID.get() : "";
                 for (PublicKeyInfo o : v.values) {
-                    steps.add(new KeySplitStep(o.kas, splitID, o.kid));
+                    steps.add(new KeySplitTemplate(o.kas, splitID, o.kid, o.algorithm != null ? KeyType.fromString(o.algorithm) : null));
                 }
             }
             return steps;
         }
 
-        static List<KeySplitStep> generatePlanFromDefaultKases(List<String> defaultKas, Supplier<String> genSplitID) {
+        static List<KeySplitTemplate> generatePlanFromDefaultKases(List<String> defaultKas, Supplier<String> genSplitID) {
             if (defaultKas.isEmpty()) {
                 throw new AutoConfigureException("no default KAS specified; required for grantless plans");
             } else if (defaultKas.size() == 1) {
-                return Collections.singletonList(new KeySplitStep(defaultKas.get(0), ""));
+                return Collections.singletonList(new KeySplitTemplate(defaultKas.get(0), "", null, null));
             } else {
-                List<KeySplitStep> result = new ArrayList<>();
+                List<KeySplitTemplate> result = new ArrayList<>();
                 for (String kas : defaultKas) {
-                    result.add(new KeySplitStep(kas, genSplitID.get()));
+                    result.add(new KeySplitTemplate(kas, genSplitID.get(), null, null));
                 }
                 return result;
             }
@@ -486,7 +516,7 @@ class Autoconfigure {
                             logger.warn("No KAS URL found for attribute value {}", value);
                             continue;
                         }
-                        keys.add(new PublicKeyInfo(kasInfo.URL, kasInfo.KID));
+                        keys.add(new PublicKeyInfo(kasInfo.URL, kasInfo.KID, kasInfo.Algorithm));
                     }
                 }
 
@@ -582,20 +612,21 @@ class Autoconfigure {
                 }
                 return sb.toString();
             }
-
         }
 
         static class PublicKeyInfo implements Comparable<PublicKeyInfo> {
             final String kas;
             final String kid;
+            final String algorithm;
 
             PublicKeyInfo(String kas) {
-                this(kas, null);
+                this(kas, null, null);
             }
 
-            PublicKeyInfo(String kas, String kid) {
-                this.kas = kas;
+            PublicKeyInfo(String kas, String kid, String algorithm) {
+                this.kas = Objects.requireNonNull(kas);
                 this.kid = kid;
+                this.algorithm = algorithm;
             }
 
             String getKas() {
@@ -606,38 +637,34 @@ class Autoconfigure {
             public boolean equals(Object o) {
                 if (o == null || getClass() != o.getClass()) return false;
                 PublicKeyInfo that = (PublicKeyInfo) o;
-                return Objects.equals(kas, that.kas) && Objects.equals(kid, that.kid);
+                return Objects.equals(kas, that.kas) && Objects.equals(kid, that.kid) && Objects.equals(algorithm, that.algorithm);
             }
 
             @Override
             public int hashCode() {
-                return Objects.hash(kas, kid);
-            }
-
-            @Override
-            public String toString() {
-                return "PublicKeyInfo{" +
-                        "kas='" + kas + '\'' +
-                        ", kid='" + kid + '\'' +
-                        '}';
+                return Objects.hash(kas, kid, algorithm);
             }
 
             @Override
             public int compareTo(PublicKeyInfo o) {
-                if (this.kas.equals(o.kas)) {
-                    if (this.kid == null && o.kid == null) {
-                        return 0;
-                    }
-                    if (this.kid == null) {
-                        return -1;
-                    }
-                    if (o.kid == null) {
-                        return 1;
-                    }
-                    return this.kid.compareTo(o.kid);
-                } else {
+                if (this.kas.compareTo(o.kas) != 0) {
                     return this.kas.compareTo(o.kas);
                 }
+                if ((this.kid == null) != (o.kid == null)) {
+                    return this.kid == null ? -1 : 1;
+                }
+                if (this.kid != null) {
+                    if (this.kid.compareTo(o.kid) != 0) {
+                        return this.kid.compareTo(o.kid);
+                    }
+                }
+                if ((this.algorithm == null) != (o.algorithm == null)) {
+                    return this.algorithm == null ? -1 : 1;
+                }
+                if (this.algorithm != null) {
+                    return this.algorithm.compareTo(o.algorithm);
+                }
+                return 0;
             }
         }
 
@@ -908,28 +935,4 @@ class Autoconfigure {
         }
         kasKeys.stream().map(Config.KASInfo::fromSimpleKasKey).forEach(keyCache::store);
     }
-
-    static String algProto2String(Algorithm e) {
-        switch (e) {
-            case ALGORITHM_EC_P521:
-                return "ec:p521";
-            case ALGORITHM_RSA_2048:
-                return "rsa:2048";
-            default:
-                throw new IllegalArgumentException("Unknown algorithm: " + e);
-        }
-    }
-
-    static String algProto2String(KasPublicKeyAlgEnum e) {
-        switch (e) {
-            case KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1:
-                return "ec:secp256r1";
-            case KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048:
-                return "rsa:2048";
-            case KAS_PUBLIC_KEY_ALG_ENUM_UNSPECIFIED:
-            default:
-                return "";
-        }
-    }
-
 }

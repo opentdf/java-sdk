@@ -14,8 +14,6 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static io.opentdf.platform.sdk.Autoconfigure.algProto2String;
-
 /**
  * Configuration class for setting various configurations related to TDF.
  * Contains nested classes and enums for specific configuration settings.
@@ -92,7 +90,7 @@ public class Config {
                 Config.KASInfo kasInfo = new Config.KASInfo();
                 kasInfo.URL = kas.getUri();
                 kasInfo.KID = ki.getKid();
-                kasInfo.Algorithm = algProto2String(ki.getAlg());
+                kasInfo.Algorithm = KeyType.fromAlgorithm(ki.getAlg()).toString();
                 kasInfo.PublicKey = ki.getPem();
                 return Stream.of(kasInfo);
             }).collect(Collectors.toList());
@@ -102,7 +100,7 @@ public class Config {
             Config.KASInfo kasInfo = new Config.KASInfo();
             kasInfo.URL = ki.getKasUri();
             kasInfo.KID = ki.getPublicKey().getKid();
-            kasInfo.Algorithm = algProto2String(ki.getPublicKey().getAlgorithm());
+            kasInfo.Algorithm = KeyType.fromAlgorithm(ki.getPublicKey().getAlgorithm()).toString();
             kasInfo.PublicKey = ki.getPublicKey().getPem();
 
             return kasInfo;
@@ -275,6 +273,11 @@ public class Config {
         };
     }
 
+    /**
+     * Deprecated since 9.1.0, will be removed. To produce key shares use
+     * the key mapping feature
+     */
+    @Deprecated(since = "9.1.0", forRemoval = true)
     public static Consumer<TDFConfig> withSplitPlan(Autoconfigure.KeySplitStep... p) {
         return (TDFConfig config) -> {
             config.splitPlan = new ArrayList<>(Arrays.asList(p));
