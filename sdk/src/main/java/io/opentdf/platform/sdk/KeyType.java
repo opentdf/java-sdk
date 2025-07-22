@@ -5,9 +5,6 @@ import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
 
 import javax.annotation.Nonnull;
 
-import java.util.Optional;
-
-import static io.opentdf.platform.policy.Algorithm.ALGORITHM_EC_P521;
 import static io.opentdf.platform.sdk.NanoTDFType.ECCurve.SECP256R1;
 import static io.opentdf.platform.sdk.NanoTDFType.ECCurve.SECP384R1;
 import static io.opentdf.platform.sdk.NanoTDFType.ECCurve.SECP521R1;
@@ -88,18 +85,7 @@ public enum KeyType {
         }
     }
 
-    public static KeyType getKeyTypeToUse(String keyType, Config.TDFConfig config) {
-        if (keyType == null || keyType.isEmpty()) {
-            return config.wrappingKeyType != null ? config.wrappingKeyType : KeyType.RSA2048Key;
-        }
-        try {
-            return KeyType.fromString(keyType);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid key type: " + keyType, e);
-        }
-    }
-
     public boolean isEc() {
-        return this.curve != null;
+        return this.curve == SECP256R1 || this.curve == SECP384R1 || this.curve == SECP521R1;
     }
 }
