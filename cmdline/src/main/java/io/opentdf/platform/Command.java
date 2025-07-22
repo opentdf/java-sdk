@@ -171,6 +171,7 @@ class Command {
         List<Consumer<Config.TDFConfig>> configs = new ArrayList<>();
         configs.add(Config.withKasInformation(kasInfos));
         metadata.map(Config::withMetaData).ifPresent(configs::add);
+        configs.add(Config.withSystemMetadataAssertion());
         autoconfigure.map(Config::withAutoconfigure).ifPresent(configs::add);
         encapKeyType.map(Config::WithWrappingKeyAlg).ifPresent(configs::add);
         mimeType.map(Config::withMimeType).ifPresent(configs::add);
