@@ -352,7 +352,7 @@ public class Autoconfigure {
                     var mappedKey = new Config.KASInfo();
                     mappedKey.URL = grantedKey.getUri();
                     mappedKey.KID = cachedGrantKey.getKid();
-                    mappedKey.Algorithm = KeyType.fromAlgorithm(cachedGrantKey.getAlg()).toString();
+                    mappedKey.Algorithm = KeyType.fromPublicKeyAlgorithm(cachedGrantKey.getAlg()).toString();
                     mappedKey.PublicKey = cachedGrantKey.getPem();
                     mappedKey.Default = false;
                     mappedKeys.computeIfAbsent(fqn.key, k -> new ArrayList<>()).add(mappedKey);

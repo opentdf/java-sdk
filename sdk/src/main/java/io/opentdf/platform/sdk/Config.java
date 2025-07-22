@@ -90,7 +90,7 @@ public class Config {
                 Config.KASInfo kasInfo = new Config.KASInfo();
                 kasInfo.URL = kas.getUri();
                 kasInfo.KID = ki.getKid();
-                kasInfo.Algorithm = KeyType.fromAlgorithm(ki.getAlg()).toString();
+                kasInfo.Algorithm = KeyType.fromPublicKeyAlgorithm(ki.getAlg()).toString();
                 kasInfo.PublicKey = ki.getPem();
                 return Stream.of(kasInfo);
             }).collect(Collectors.toList());

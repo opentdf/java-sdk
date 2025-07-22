@@ -67,7 +67,7 @@ public enum KeyType {
         }
     }
 
-    public static KeyType fromAlgorithm(KasPublicKeyAlgEnum algorithm) {
+    public static KeyType fromPublicKeyAlgorithm(KasPublicKeyAlgEnum algorithm) {
         if (algorithm == null) {
             throw new IllegalArgumentException("Algorithm cannot be null");
         }
