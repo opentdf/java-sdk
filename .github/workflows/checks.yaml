@@ -311,7 +311,7 @@ jobs:
       contents: read
       packages: read
     needs: platform-integration
-    uses: opentdf/tests/.github/workflows/xtest.yml@main
+    uses: opentdf/tests/.github/workflows/xtest.yml@mkleene-patch-1
     with:
       focus-sdk: java
       java-ref: ${{ github.ref }} latest

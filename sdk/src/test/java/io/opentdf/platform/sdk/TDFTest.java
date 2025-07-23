@@ -291,6 +291,7 @@ public class TDFTest {
                 Config.TDFConfig config = Config.newTDFConfig(
                                 Config.withAutoconfigure(false),
                                 Config.withKasInformation(rsaKasInfo),
+                                Config.withSystemMetadataAssertion(),
                                 Config.withAssertionConfig(assertionConfig));
 
                 String plainText = "this is extremely sensitive stuff!!!";
