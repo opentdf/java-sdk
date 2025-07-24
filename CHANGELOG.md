@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.10.0](https://github.com/opentdf/java-sdk/compare/v0.9.0...v0.10.0) (2025-07-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sdk:** add base key and support for key grants in ZTDF ([#271](https://github.com/opentdf/java-sdk/issues/271))
+
+### Features
+
+* add system metadata assertion ([#270](https://github.com/opentdf/java-sdk/issues/270)) ([d235f13](https://github.com/opentdf/java-sdk/commit/d235f13ae8e20add618ebe30e18d0b485b7ed58f))
+* **sdk:** add base key and support for key grants in ZTDF ([#271](https://github.com/opentdf/java-sdk/issues/271)) ([c3b79db](https://github.com/opentdf/java-sdk/commit/c3b79dbd8786fdcbd18beff76b8cdf26c38b24da))
+
+
+### Bug Fixes
+
+* **sdk:** add methods to examine Manifest and Policy ([#278](https://github.com/opentdf/java-sdk/issues/278)) ([03d5d41](https://github.com/opentdf/java-sdk/commit/03d5d410d093348507e3fc68f0f8bff8445db0a9))
+
 ## [0.9.0](https://github.com/opentdf/java-sdk/compare/v0.8.1...v0.9.0) (2025-07-14)
 
 
