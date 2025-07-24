@@ -33,6 +33,7 @@ import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClient;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRequest;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClient;
+import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClientInterface;
 import nl.altindag.ssl.SSLFactory;
 import nl.altindag.ssl.pem.util.PemUtils;
 import okhttp3.OkHttpClient;
@@ -251,6 +252,7 @@ public class SDKBuilder {
         var resourceMappingService = new ResourceMappingServiceClient(client);
         var authorizationService = new AuthorizationServiceClient(client);
         var kasRegistryService = new KeyAccessServerRegistryServiceClient(client);
+        var wellKnownService = new WellKnownServiceClient(client);
 
         var services = new SDK.Services() {
             @Override
@@ -288,6 +290,11 @@ public class SDKBuilder {
             @Override
             public KeyAccessServerRegistryServiceClient kasRegistry() {
                 return kasRegistryService;
+            }
+
+            @Override
+            public WellKnownServiceClientInterface wellknown() {
+                return wellKnownService;
             }
 
             @Override
