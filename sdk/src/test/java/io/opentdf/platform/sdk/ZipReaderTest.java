@@ -146,5 +146,7 @@ public class ZipReaderTest {
             entry.getData().transferTo(zipData);
             assertThat(zipData.toByteArray()).isEqualTo(namesToData.get(entry.getName()));
         }
+
+        assertThat(reader.getEntries().size()).isEqualTo(namesToData.size());
     }
 }

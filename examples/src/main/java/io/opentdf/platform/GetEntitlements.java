@@ -7,7 +7,6 @@ import io.opentdf.platform.authorization.GetEntitlementsResponse;
 import io.opentdf.platform.sdk.*;
 
 import java.util.Collections;
-import java.util.concurrent.ExecutionException;
 
 import java.util.List;
 
