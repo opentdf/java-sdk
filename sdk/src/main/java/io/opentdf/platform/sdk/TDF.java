@@ -19,7 +19,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.StringReader;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
@@ -147,7 +146,7 @@ class TDF {
 
         private static final Base64.Encoder encoder = Base64.getEncoder();
 
-        private void prepareManifest(Config.TDFConfig tdfConfig, SDK.KAS kas) {
+        private void prepareManifest(Config.TDFConfig tdfConfig, Map<String, List<KASInfo>> splits) {
             manifest.tdfVersion = tdfConfig.renderVersionInfoInManifest ? TDF_SPEC_VERSION : null;
             manifest.encryptionInformation.keyAccessType = kSplitKeyType;
             manifest.encryptionInformation.keyAccessObj = new ArrayList<>();
