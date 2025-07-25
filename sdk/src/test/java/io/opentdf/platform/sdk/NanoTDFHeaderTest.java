@@ -219,7 +219,7 @@ public class NanoTDFHeaderTest {
                 byte[] secret = ECKeyPair.computeECDHKey(ECKeyPair.publicKeyFromPem(kasPublicKey),
                                 ECKeyPair.privateKeyFromPem(sdkPrivateKeyForEncrypt));
                 byte[] saltValue = { 'V', 'I', 'R', 'T', 'R', 'U' };
-                encryptKey = ECKeyPair.calculateHKDF(saltValue, secret);
+                encryptKey = ECKeyPair.calculateSHA256HKDF(saltValue, secret);
 
                 // Encrypt the policy with key from KDF
                 int encryptedPayLoadSize = policy.length() + nanoTDFIvSize + tagSize;

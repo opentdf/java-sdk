@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.Base64;
 
 import static io.opentdf.platform.sdk.NanoTDFType.ECCurve.SECP256R1;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -114,9 +115,22 @@ public class ECKeyPairTest {
         byte[] symmetricKey = ECKeyPair.computeECDHKey(publicKey, ECKeyPair.privateKeyFromPem(keypairPrivateKey));
         System.out.println(Arrays.toString(symmetricKey));
 
-        byte[] key = ECKeyPair.calculateHKDF(ECKeys.salt.getBytes(StandardCharsets.UTF_8), symmetricKey);
+        byte[] key = ECKeyPair.calculateSHA256HKDF(ECKeys.salt.getBytes(StandardCharsets.UTF_8), symmetricKey);
         System.out.println(Arrays.toString(key));
         System.out.println(key.length);
+
+        assertThat(key.length).isEqualTo(32); // SHA-256 produces a 32-byte key
+    }
+
+    @Test
+    void createSymmetricKeysWithOtherC() {
+        ECKeyPair pubPair = new ECKeyPair(NanoTDFType.ECCurve.SECP384R1, ECKeyPair.ECAlgorithm.ECDH);
+        ECKeyPair keyPair = new ECKeyPair(NanoTDFType.ECCurve.SECP384R1, ECKeyPair.ECAlgorithm.ECDH);
+
+        byte[] sharedSecret = ECKeyPair.computeECDHKey(pubPair.getPublicKey(), keyPair.getPrivateKey());
+        byte[] encryptionKey = ECKeyPair.calculateSHA256HKDF(ECKeys.salt.getBytes(StandardCharsets.UTF_8), sharedSecret);
+
+        assertThat(encryptionKey).hasSize(32); // SHA-256 produces a 32-byte key
     }
 
     @Test
@@ -131,13 +145,13 @@ public class ECKeyPairTest {
         ECPrivateKey sdkPriKey = ECKeyPair.privateKeyFromPem(ECKeys.sdkPrivateKey);
 
         byte[] symmetricKey = ECKeyPair.computeECDHKey(kasPubKey, sdkPriKey);
-        byte[] key = ECKeyPair.calculateHKDF(ECKeys.salt.getBytes(StandardCharsets.UTF_8), symmetricKey);
+        byte[] key = ECKeyPair.calculateSHA256HKDF(ECKeys.salt.getBytes(StandardCharsets.UTF_8), symmetricKey);
         String encodedKey = Base64.getEncoder().encodeToString(key);
         assertEquals(encodedKey, expectedKey);
 
         // KAS side
         symmetricKey = ECKeyPair.computeECDHKey(sdkPubKey, kasPriKey);
-        key = ECKeyPair.calculateHKDF(ECKeys.salt.getBytes(StandardCharsets.UTF_8), symmetricKey);
+        key = ECKeyPair.calculateSHA256HKDF(ECKeys.salt.getBytes(StandardCharsets.UTF_8), symmetricKey);
         encodedKey = Base64.getEncoder().encodeToString(key);
         assertEquals(encodedKey, expectedKey);
 

@@ -92,7 +92,7 @@ public class TDFTest {
                                         var publicKey = ECKeyPair.publicKeyFromPem(clientEphemeralPublicKey);
                                         byte[] symKey = ECKeyPair.computeECDHKey(publicKey, privateKey);
 
-                                        var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symKey);
+                                        var sessionKey = ECKeyPair.calculateSHA256HKDF(GLOBAL_KEY_SALT, symKey);
 
                                         AesGcm gcm = new AesGcm(sessionKey);
                                         AesGcm.Encrypted encrypted = new AesGcm.Encrypted(bytes);
