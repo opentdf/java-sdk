@@ -16,6 +16,7 @@ import java.util.*;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClientInterface;
 import org.bouncycastle.jce.interfaces.ECPublicKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,6 +66,32 @@ class NanoTDF {
         }
     }
 
+    private static Optional<Config.KASInfo> getBaseKey(WellKnownServiceClientInterface wellKnownService) {
+        var key = Planner.fetchBaseKey(wellKnownService);
+        key.ifPresent(k -> {
+            if (!KeyType.fromAlgorithm(k.getPublicKey().getAlgorithm()).isEc()) {
+                throw new SDKException(String.format("base key is not an EC key, cannot create NanoTDF using a key of type %s",
+                        k.getPublicKey().getAlgorithm()));
+            }
+        });
+
+        return key.map(Config.KASInfo::fromSimpleKasKey);
+    }
+
+    private Optional<Config.KASInfo> getKasInfo(Config.NanoTDFConfig nanoTDFConfig) {
+        if (nanoTDFConfig.kasInfoList.isEmpty()) {
+            logger.debug("no kas info provided in NanoTDFConfig");
+            return Optional.empty();
+        }
+        Config.KASInfo kasInfo = nanoTDFConfig.kasInfoList.get(0);
+        String url = kasInfo.URL;
+        if (kasInfo.PublicKey == null || kasInfo.PublicKey.isEmpty()) {
+            logger.info("no public key provided for KAS at {}, retrieving", url);
+            kasInfo = services.kas().getECPublicKey(kasInfo, nanoTDFConfig.eccMode.getCurve());
+        }
+        return Optional.of(kasInfo);
+    }
+
     private Config.HeaderInfo getHeaderInfo(Config.NanoTDFConfig nanoTDFConfig) throws InvalidNanoTDFConfig, UnsupportedNanoTDFFeature {
         if (nanoTDFConfig.collectionConfig.useCollection) {
             Config.HeaderInfo headerInfo = nanoTDFConfig.collectionConfig.getHeaderInfo();
@@ -74,11 +101,12 @@ class NanoTDF {
         }
 
         Gson gson = new GsonBuilder().create();
-        if (nanoTDFConfig.kasInfoList.isEmpty()) {
-            throw new InvalidNanoTDFConfig("kas url is missing");
+        Optional<Config.KASInfo> maybeKas = getKasInfo(nanoTDFConfig).or(() -> NanoTDF.getBaseKey(services.wellknown()));
+        if (maybeKas.isEmpty()) {
+            throw new SDKException("no KAS info provided and couldn't get base key, cannot create NanoTDF");
         }
 
-        Config.KASInfo kasInfo = nanoTDFConfig.kasInfoList.get(0);
+        Config.KASInfo kasInfo = maybeKas.get();
         String url = kasInfo.URL;
         if (kasInfo.PublicKey == null || kasInfo.PublicKey.isEmpty()) {
             logger.info("no public key provided for KAS at {}, retrieving", url);
@@ -86,7 +114,7 @@ class NanoTDF {
         }
 
         // Kas url resource locator
-        ResourceLocator kasURL = new ResourceLocator(nanoTDFConfig.kasInfoList.get(0).URL, kasInfo.KID);
+        ResourceLocator kasURL = new ResourceLocator(kasInfo.URL, kasInfo.KID);
         assert kasURL.getIdentifier() != null : "Identifier in ResourceLocator cannot be null";
 
         NanoTDFType.ECCurve ecCurve = getEcCurve(nanoTDFConfig, kasInfo);
@@ -139,12 +167,10 @@ class NanoTDF {
         // Create header
         byte[] compressedPubKey = keyPair.compressECPublickey();
         Header header = new Header();
-        ECCMode mode;
-        if (nanoTDFConfig.eccMode.getCurve() != keyPair.getCurve()) {
-            mode = new ECCMode(nanoTDFConfig.eccMode.getECCModeAsByte());
-            mode.setEllipticCurve(keyPair.getCurve());
-        } else {
-            mode = nanoTDFConfig.eccMode;
+        ECCMode mode = new ECCMode();
+        mode.setEllipticCurve(keyPair.getCurve());
+        if (logger.isWarnEnabled() && !nanoTDFConfig.eccMode.equals(mode)) {
+            logger.warn("ECC mode provided in NanoTDFConfig: {}, ECC mode from key: {}", nanoTDFConfig.eccMode.getCurve(), mode.getCurve());
         }
         header.setECCMode(mode);
         header.setPayloadConfig(nanoTDFConfig.config);
@@ -169,10 +195,10 @@ class NanoTDF {
             logger.info("no curve specified in KASInfo, using the curve from config [{}]", nanoTDFConfig.eccMode.getCurve());
             ecCurve = nanoTDFConfig.eccMode.getCurve();
         } else {
-            if (specifiedCurve.get() != nanoTDFConfig.eccMode.getCurve()) {
-                logger.warn("ECCurve in NanoTDFConfig [{}] does not match the curve in KASInfo, using KASInfo curve [{}]", nanoTDFConfig.eccMode.getCurve(), specifiedCurve);
-            }
             ecCurve = specifiedCurve.get();
+            if (ecCurve != nanoTDFConfig.eccMode.getCurve()) {
+                logger.warn("ECCurve in NanoTDFConfig [{}] does not match the curve in KASInfo, using KASInfo curve [{}]", nanoTDFConfig.eccMode.getCurve(), ecCurve);
+            }
         }
         return ecCurve;
     }
