@@ -247,7 +247,7 @@ class TDF {
             ECPublicKey kasPubKey = ECKeyPair.publicKeyFromPem(kasInfo.PublicKey);
             byte[] symmetricKey = ECKeyPair.computeECDHKey(kasPubKey, keyPair.getPrivateKey());
 
-            var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symmetricKey);
+            var sessionKey = ECKeyPair.calculateSHA256HKDF(GLOBAL_KEY_SALT, symmetricKey);
 
             AesGcm gcm = new AesGcm(sessionKey);
             AesGcm.Encrypted wrappedKey = gcm.encrypt(symKey);

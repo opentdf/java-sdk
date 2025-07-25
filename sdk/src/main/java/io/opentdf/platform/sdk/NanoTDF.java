@@ -104,7 +104,7 @@ class NanoTDF {
             throw new SDKException("error getting instance of SHA-256 digest", e);
         }
         byte[] hashOfSalt = digest.digest(MAGIC_NUMBER_AND_VERSION);
-        byte[] key = ECKeyPair.calculateHKDF(hashOfSalt, symmetricKey);
+        byte[] key = ECKeyPair.calculateSHA256HKDF(hashOfSalt, symmetricKey);
 
         // Encrypt policy
         PolicyObject policyObject = createPolicyObject(nanoTDFConfig.attributes);

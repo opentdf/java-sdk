@@ -29,6 +29,8 @@ import java.util.Objects;
 
 public class ECKeyPair {
 
+    private static final int SHA256_BYTES = 32;
+
     static {
         Security.addProvider(new BouncyCastleProvider());
     }
@@ -233,8 +235,8 @@ public class ECKeyPair {
         }
     }
 
-    public static byte[] calculateHKDF(byte[] salt, byte[] secret) {
-        byte[] key = new byte[secret.length];
+    public static byte[] calculateSHA256HKDF(byte[] salt, byte[] secret) {
+        byte[] key = new byte[SHA256_BYTES];
         HKDFParameters params = new HKDFParameters(secret, salt, null);
 
         HKDFBytesGenerator hkdf = new HKDFBytesGenerator(SHA256Digest.newInstance());
