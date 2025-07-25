@@ -123,7 +123,7 @@ public class ECKeyPairTest {
     }
 
     @Test
-    void createSymmetricKeysWithOtherC() {
+    void createSymmetricKeysWithOtherCurves() {
         ECKeyPair pubPair = new ECKeyPair(NanoTDFType.ECCurve.SECP384R1, ECKeyPair.ECAlgorithm.ECDH);
         ECKeyPair keyPair = new ECKeyPair(NanoTDFType.ECCurve.SECP384R1, ECKeyPair.ECAlgorithm.ECDH);
 
