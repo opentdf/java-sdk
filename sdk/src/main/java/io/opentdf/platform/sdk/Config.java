@@ -1,13 +1,18 @@
 package io.opentdf.platform.sdk;
 
+import io.opentdf.platform.policy.KeyAccessServer;
+import io.opentdf.platform.policy.SimpleKasKey;
 import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Configuration class for setting various configurations related to TDF.
@@ -22,6 +27,7 @@ public class Config {
     public static final String KAS_PUBLIC_KEY_PATH = "/kas_public_key";
     public static final String DEFAULT_MIME_TYPE = "application/octet-stream";
     public static final int MAX_COLLECTION_ITERATION = (1 << 24) - 1;
+    private static Logger logger = LoggerFactory.getLogger(Config.class);
 
     public enum TDFFormat {
         JSONFormat,
@@ -32,8 +38,6 @@ public class Config {
         HS256,
         GMAC
     }
-
-    public static final int K_HTTP_OK = 200;
 
     public static class KASInfo implements Cloneable {
         public String URL;
@@ -70,6 +74,36 @@ public class Config {
                 sb.append("Algorithm:\"").append(this.Algorithm).append("\",");
             }
             return sb.append("}").toString();
+        }
+
+        public static List<KASInfo> fromKeyAccessServer(KeyAccessServer kas) {
+            var keys = kas.getPublicKey().getCached().getKeysList();
+            if (keys.isEmpty()) {
+                logger.warn("Invalid KAS key mapping for kas [{}]: publicKey is empty", kas.getUri());
+                return Collections.emptyList();
+            }
+            return keys.stream().flatMap(ki -> {
+                if (ki.getPem().isEmpty()) {
+                    logger.warn("Invalid KAS key mapping for kas [{}]: publicKey PEM is empty", kas.getUri());
+                    return Stream.empty();
+                }
+                Config.KASInfo kasInfo = new Config.KASInfo();
+                kasInfo.URL = kas.getUri();
+                kasInfo.KID = ki.getKid();
+                kasInfo.Algorithm = KeyType.fromPublicKeyAlgorithm(ki.getAlg()).toString();
+                kasInfo.PublicKey = ki.getPem();
+                return Stream.of(kasInfo);
+            }).collect(Collectors.toList());
+        }
+
+        public static KASInfo fromSimpleKasKey(SimpleKasKey ki) {
+            Config.KASInfo kasInfo = new Config.KASInfo();
+            kasInfo.URL = ki.getKasUri();
+            kasInfo.KID = ki.getPublicKey().getKid();
+            kasInfo.Algorithm = KeyType.fromAlgorithm(ki.getPublicKey().getAlgorithm()).toString();
+            kasInfo.PublicKey = ki.getPublicKey().getPem();
+
+            return kasInfo;
         }
     }
 
@@ -160,6 +194,7 @@ public class Config {
         public KeyType wrappingKeyType;
         public boolean hexEncodeRootAndSegmentHashes;
         public boolean renderVersionInfoInManifest;
+        public boolean systemMetadataAssertion;
 
         public TDFConfig() {
             this.autoconfigure = true;
@@ -176,6 +211,7 @@ public class Config {
             this.wrappingKeyType = KeyType.RSA2048Key;
             this.hexEncodeRootAndSegmentHashes = false;
             this.renderVersionInfoInManifest = true;
+            this.systemMetadataAssertion = false;
         }
     }
 
@@ -239,6 +275,11 @@ public class Config {
         };
     }
 
+    /**
+     * Deprecated since 9.1.0, will be removed. To produce key shares use
+     * the key mapping feature
+     */
+    @Deprecated(since = "9.1.0", forRemoval = true)
     public static Consumer<TDFConfig> withSplitPlan(Autoconfigure.KeySplitStep... p) {
         return (TDFConfig config) -> {
             config.splitPlan = new ArrayList<>(Arrays.asList(p));
@@ -295,6 +336,10 @@ public class Config {
 
     public static Consumer<TDFConfig> withMimeType(String mimeType) {
         return (TDFConfig config) -> config.mimeType = mimeType;
+    }
+
+    public static Consumer<TDFConfig> withSystemMetadataAssertion() {
+        return (TDFConfig config) -> config.systemMetadataAssertion = true;
     }
 
     public static class NanoTDFConfig {

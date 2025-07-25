@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <name>io.opentdf.platform:sdk</name>
     <artifactId>sdk</artifactId>
@@ -11,7 +13,8 @@
     <packaging>jar</packaging>
     <properties>
         <jazzer.version>0.22.1</jazzer.version>
-        <jazzer.baseurl>https://github.com/CodeIntelligenceTesting/jazzer/releases/download/v${jazzer.version}</jazzer.baseurl>
+        <jazzer.baseurl>
+            https://github.com/CodeIntelligenceTesting/jazzer/releases/download/v${jazzer.version}</jazzer.baseurl>
         <kotlin.version>2.1.0</kotlin.version>
         <connect.version>0.7.2</connect.version>
         <okhttp.version>4.12.0</okhttp.version>
@@ -287,6 +290,12 @@
         </dependency>
     </dependencies>
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
         <plugins>
             <!-- Plugin to create source JAR -->
             <plugin>
@@ -362,17 +371,18 @@
                             <target>
                                 <!-- Generate OpenTDF Platform Protobuf -->
                                 <exec executable="buf" dir="." failOnError="true">
-                                    <arg value="generate"/>
-                                    <arg value="https://github.com/opentdf/platform.git#branch=${platform.branch},subdir=service"/>
-                                    <arg value="-o"/>
-                                    <arg value="target"/>
+                                    <arg value="generate" />
+                                    <arg
+                                        value="https://github.com/opentdf/platform.git#branch=${platform.branch},subdir=service" />
+                                    <arg value="-o" />
+                                    <arg value="target" />
                                 </exec>
                                 <!-- Generate gRPC Protobuf -->
                                 <exec executable="buf" dir="." failOnError="true">
-                                    <arg value="generate"/>
-                                    <arg value="buf.build/grpc-ecosystem/grpc-gateway"/>
-                                    <arg value="-o"/>
-                                    <arg value="target"/>
+                                    <arg value="generate" />
+                                    <arg value="buf.build/grpc-ecosystem/grpc-gateway" />
+                                    <arg value="-o" />
+                                    <arg value="target" />
                                 </exec>
                             </target>
                         </configuration>
@@ -475,7 +485,8 @@
             </plugin>
         </plugins>
     </build>
-    <!--profile to execute fuzz test -->
+    <!--profile
+    to execute fuzz test -->
     <profiles>
         <profile>
             <id>fuzz</id>
@@ -499,18 +510,21 @@
                                 <configuration>
                                     <target>
                                         <condition property="jazzer.os" value="windows">
-                                            <os family="windows"/>
+                                            <os family="windows" />
                                         </condition>
                                         <condition property="jazzer.os" value="macos">
-                                            <os family="mac"/>
+                                            <os family="mac" />
                                         </condition>
                                         <condition property="jazzer.os" value="linux">
-                                            <os family="unix"/>
+                                            <os family="unix" />
                                         </condition>
-                                        <echo message="Detected OS: ${jazzer.os}"/>
-                                        <mkdir dir="${project.build.directory}/jazzer"/>
-                                        <get src="${jazzer.baseurl}/jazzer-${jazzer.os}.tar.gz" dest="${project.build.directory}/jazzer/jazzer.tar.gz"/>
-                                        <untar compression="gzip" src="${project.build.directory}/jazzer/jazzer.tar.gz" dest="${project.build.directory}/jazzer"/>
+                                        <echo message="Detected OS: ${jazzer.os}" />
+                                        <mkdir dir="${project.build.directory}/jazzer" />
+                                        <get src="${jazzer.baseurl}/jazzer-${jazzer.os}.tar.gz"
+                                            dest="${project.build.directory}/jazzer/jazzer.tar.gz" />
+                                        <untar compression="gzip"
+                                            src="${project.build.directory}/jazzer/jazzer.tar.gz"
+                                            dest="${project.build.directory}/jazzer" />
                                     </target>
                                 </configuration>
                                 <goals>
@@ -552,22 +566,28 @@
                                 <configuration>
                                     <target>
                                         <path id="project.classpath">
-                                            <pathelement location="${project.build.directory}/classes"/>
-                                            <pathelement location="${project.build.directory}/test-classes"/>
-                                            <fileset dir="${project.build.directory}/dependency-jars">
-                                                <include name="**/*.jar"/>
+                                            <pathelement
+                                                location="${project.build.directory}/classes" />
+                                            <pathelement
+                                                location="${project.build.directory}/test-classes" />
+                                            <fileset
+                                                dir="${project.build.directory}/dependency-jars">
+                                                <include name="**/*.jar" />
                                             </fileset>
                                         </path>
-                                        <pathconvert property="project.classpath.string" pathsep="${path.separator}">
-                                            <path refid="project.classpath"/>
+                                        <pathconvert property="project.classpath.string"
+                                            pathsep="${path.separator}">
+                                            <path refid="project.classpath" />
                                         </pathconvert>
-                                        <property environment="env"/>
+                                        <property environment="env" />
 
-                                        <chmod file="${project.build.directory}/jazzer/jazzer" perm="777"/>
+                                        <chmod file="${project.build.directory}/jazzer/jazzer"
+                                            perm="777" />
 
                                         <exec executable="bash">
-                                            <arg value="-c"/>
-                                            <arg value="if [ -z &quot;${JAVA_HOME}&quot; ]; then JAVA_HOME=$(dirname $(dirname $(which java))); fi; DYLD_LIBRARY_PATH=$(find &quot;${JAVA_HOME}&quot; -type d | grep 'libexec/openjdk.jdk/Contents/Home/lib/server' 2&gt;/dev/null | head -n 1); if [ -z &quot;${DYLD_LIBRARY_PATH}&quot; ]; then DYLD_LIBRARY_PATH=&quot;${JAVA_HOME}/lib/server&quot;; fi; export DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH}; ${project.build.directory}/jazzer/jazzer --cp='${project.classpath.string}' --target_class='io.opentdf.platform.sdk.Fuzzing' --instrumentation_includes='io.opentdf.platform.sdk.**' ${jazzer.testDir}"/>
+                                            <arg value="-c" />
+                                            <arg
+                                                value="if [ -z &quot;${JAVA_HOME}&quot; ]; then JAVA_HOME=$(dirname $(dirname $(which java))); fi; DYLD_LIBRARY_PATH=$(find &quot;${JAVA_HOME}&quot; -type d | grep 'libexec/openjdk.jdk/Contents/Home/lib/server' 2&gt;/dev/null | head -n 1); if [ -z &quot;${DYLD_LIBRARY_PATH}&quot; ]; then DYLD_LIBRARY_PATH=&quot;${JAVA_HOME}/lib/server&quot;; fi; export DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH}; ${project.build.directory}/jazzer/jazzer --cp='${project.classpath.string}' --target_class='io.opentdf.platform.sdk.Fuzzing' --instrumentation_includes='io.opentdf.platform.sdk.**' ${jazzer.testDir}" />
                                         </exec>
                                     </target>
                                 </configuration>

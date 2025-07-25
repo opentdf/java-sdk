@@ -5,11 +5,8 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.nimbusds.jose.*;
 
-import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
-import io.opentdf.platform.sdk.Config.TDFConfig;
-import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
 import io.opentdf.platform.sdk.Config.KASInfo;
 
 import org.apache.commons.codec.DecoderException;
@@ -49,19 +46,27 @@ class TDF {
     }
 
     public static final byte[] GLOBAL_KEY_SALT = tdfECKeySaltCompute();
-    private static final String EMPTY_SPLIT_ID = "";
-    private static final String TDF_VERSION = "4.3.0";
+    static final String EMPTY_SPLIT_ID = ""; // Made package-private for TDFTest usage if needed, or could be private if
+                                             // not used by TDFTest
+    /**
+     * The TDF specification version this SDK implements.
+     */
+    public static final String TDF_SPEC_VERSION = "4.3.0";
     private static final String KEY_ACCESS_SCHEMA_VERSION = "1.0";
     private final long maximumSize;
 
     private final SDK.Services services;
 
     /**
-     * Constructs a new TDF instance using the default maximum input size defined by MAX_TDF_INPUT_SIZE.
+     * Constructs a new TDF instance using the default maximum input size defined by
+     * MAX_TDF_INPUT_SIZE.
      * <p>
-     * This constructor is primarily used to initialize the TDF object with the standard maximum
-     * input size, which controls the maximum size of the input data that can be processed.
-     * For test purposes, an alternative constructor allows for setting a custom maximum input size.
+     * This constructor is primarily used to initialize the TDF object with the
+     * standard maximum
+     * input size, which controls the maximum size of the input data that can be
+     * processed.
+     * For test purposes, an alternative constructor allows for setting a custom
+     * maximum input size.
      */
     TDF(SDK.Services services) {
         this(MAX_TDF_INPUT_SIZE, services);
@@ -141,68 +146,20 @@ class TDF {
 
         private static final Base64.Encoder encoder = Base64.getEncoder();
 
-        private void prepareManifest(Config.TDFConfig tdfConfig, SDK.KAS kas) {
-            manifest.tdfVersion = tdfConfig.renderVersionInfoInManifest ? TDF_VERSION : null;
+        private void prepareManifest(Config.TDFConfig tdfConfig, Map<String, List<KASInfo>> splits) {
+            manifest.tdfVersion = tdfConfig.renderVersionInfoInManifest ? TDF_SPEC_VERSION : null;
             manifest.encryptionInformation.keyAccessType = kSplitKeyType;
             manifest.encryptionInformation.keyAccessObj = new ArrayList<>();
 
             PolicyObject policyObject = createPolicyObject(tdfConfig.attributes);
             String base64PolicyObject = encoder
                     .encodeToString(gson.toJson(policyObject).getBytes(StandardCharsets.UTF_8));
-            Map<String, Config.KASInfo> latestKASInfo = new HashMap<>();
-            if (tdfConfig.splitPlan == null || tdfConfig.splitPlan.isEmpty()) {
-                // Default split plan: Split keys across all KASes
-                List<Autoconfigure.KeySplitStep> splitPlan = new ArrayList<>(tdfConfig.kasInfoList.size());
-                int i = 0;
-                for (Config.KASInfo kasInfo : tdfConfig.kasInfoList) {
-                    Autoconfigure.KeySplitStep step = new Autoconfigure.KeySplitStep(kasInfo.URL, "");
-                    if (tdfConfig.kasInfoList.size() > 1) {
-                        step.splitID = String.format("s-%d", i++);
-                    }
-                    splitPlan.add(step);
-                    if (kasInfo.PublicKey != null && !kasInfo.PublicKey.isEmpty()) {
-                        latestKASInfo.put(kasInfo.URL, kasInfo);
-                    }
-                }
-                tdfConfig.splitPlan = splitPlan;
-            }
 
-            // Seed anything passed in manually
-            for (Config.KASInfo kasInfo : tdfConfig.kasInfoList) {
-                if (kasInfo.PublicKey != null && !kasInfo.PublicKey.isEmpty()) {
-                    latestKASInfo.put(kasInfo.URL, kasInfo);
-                }
-            }
 
-            // split plan: restructure by conjunctions
-            Map<String, List<Config.KASInfo>> conjunction = new HashMap<>();
-            List<String> splitIDs = new ArrayList<>();
+            List<byte[]> symKeys = new ArrayList<>(splits.size());
+            for (var split : splits.entrySet()) {
+                String splitID = split.getKey();
 
-            for (Autoconfigure.KeySplitStep splitInfo : tdfConfig.splitPlan) {
-                // Public key was passed in with kasInfoList
-                // TODO First look up in attribute information / add to split plan?
-                Config.KASInfo ki = latestKASInfo.get(splitInfo.kas);
-                if (ki == null || ki.PublicKey == null || ki.PublicKey.isBlank()) {
-                    logger.info("no public key provided for KAS at {}, retrieving", splitInfo.kas);
-                    var getKI = new Config.KASInfo();
-                    getKI.URL = splitInfo.kas;
-                    getKI.Algorithm = tdfConfig.wrappingKeyType.toString();
-                    getKI = kas.getPublicKey(getKI);
-                    latestKASInfo.put(splitInfo.kas, getKI);
-                    ki = getKI;
-                }
-                if (conjunction.containsKey(splitInfo.splitID)) {
-                    conjunction.get(splitInfo.splitID).add(ki);
-                } else {
-                    List<Config.KASInfo> newList = new ArrayList<>();
-                    newList.add(ki);
-                    conjunction.put(splitInfo.splitID, newList);
-                    splitIDs.add(splitInfo.splitID);
-                }
-            }
-
-            List<byte[]> symKeys = new ArrayList<>(splitIDs.size());
-            for (String splitID : splitIDs) {
                 // Symmetric key
                 byte[] symKey = new byte[GCM_KEY_SIZE];
                 sRandom.nextBytes(symKey);
@@ -229,12 +186,14 @@ class TDF {
                     encryptedMetadata = encoder.encodeToString(metadata.getBytes(StandardCharsets.UTF_8));
                 }
 
-                for (Config.KASInfo kasInfo : conjunction.get(splitID)) {
+                List<KASInfo> kasInfos = split.getValue();
+                for (Config.KASInfo kasInfo : kasInfos) {
                     if (kasInfo.PublicKey == null || kasInfo.PublicKey.isEmpty()) {
                         throw new SDK.KasPublicKeyMissing("Kas public key is missing in kas information list");
                     }
 
-                    var keyAccess = createKeyAccess(tdfConfig, kasInfo, symKey, policyBinding, encryptedMetadata, splitID);
+                    var keyAccess = createKeyAccess(tdfConfig, kasInfo, symKey, policyBinding, encryptedMetadata,
+                            splitID);
                     manifest.encryptionInformation.keyAccessObj.add(keyAccess);
                 }
             }
@@ -252,7 +211,8 @@ class TDF {
             this.aesGcm = new AesGcm(this.payloadKey);
         }
 
-        private Manifest.KeyAccess createKeyAccess(Config.TDFConfig tdfConfig, Config.KASInfo kasInfo, byte[] symKey, Manifest.PolicyBinding policyBinding, String encryptedMetadata, String splitID) {
+        private Manifest.KeyAccess createKeyAccess(Config.TDFConfig tdfConfig, Config.KASInfo kasInfo, byte[] symKey,
+                Manifest.PolicyBinding policyBinding, String encryptedMetadata, String splitID) {
             Manifest.KeyAccess keyAccess = new Manifest.KeyAccess();
             keyAccess.keyType = kWrapped;
             keyAccess.url = kasInfo.URL;
@@ -263,7 +223,11 @@ class TDF {
             keyAccess.sid = splitID;
             keyAccess.schemaVersion = KEY_ACCESS_SCHEMA_VERSION;
 
-            if (tdfConfig.wrappingKeyType.isEc()) {
+            var algorithm = kasInfo.Algorithm == null || kasInfo.Algorithm.isEmpty()
+                    ? tdfConfig.wrappingKeyType.toString()
+                    : kasInfo.Algorithm;
+
+            if (KeyType.fromString(algorithm).isEc()) {
                 var ecKeyWrappedKeyInfo = createECWrappedKey(tdfConfig, kasInfo, symKey);
                 keyAccess.wrappedKey = ecKeyWrappedKeyInfo.wrappedKey;
                 keyAccess.ephemeralPublicKey = ecKeyWrappedKeyInfo.publicKey;
@@ -275,9 +239,10 @@ class TDF {
             return keyAccess;
         }
 
-        private ECKeyWrappedKeyInfo createECWrappedKey(Config.TDFConfig tdfConfig, Config.KASInfo kasInfo, byte[] symKey)  {
-            var curve = tdfConfig.wrappingKeyType.getECCurve();
-            var keyPair = new ECKeyPair(curve, ECKeyPair.ECAlgorithm.ECDH);
+        private ECKeyWrappedKeyInfo createECWrappedKey(Config.TDFConfig tdfConfig, Config.KASInfo kasInfo,
+                byte[] symKey) {
+            var curveName = tdfConfig.wrappingKeyType.getECCurve();
+            var keyPair = new ECKeyPair(curveName, ECKeyPair.ECAlgorithm.ECDH);
 
             ECPublicKey kasPubKey = ECKeyPair.publicKeyFromPem(kasInfo.PublicKey);
             byte[] symmetricKey = ECKeyPair.computeECDHKey(kasPubKey, keyPair.getPrivateKey());
@@ -293,13 +258,12 @@ class TDF {
             return wrappedKeyInfo;
         }
 
-        private String createRSAWrappedKey(Config.KASInfo kasInfo, byte[] symKey)  {
+        private String createRSAWrappedKey(Config.KASInfo kasInfo, byte[] symKey) {
             AsymEncryption asymEncrypt = new AsymEncryption(kasInfo.PublicKey);
             byte[] wrappedKey = asymEncrypt.encrypt(symKey);
             return Base64.getEncoder().encodeToString(wrappedKey);
         }
     }
-
 
     private static final Base64.Decoder decoder = Base64.getDecoder();
 
@@ -325,7 +289,6 @@ class TDF {
             this.aesGcm = new AesGcm(payloadKey);
             this.payloadKey = payloadKey;
             this.unencryptedMetadata = unencryptedMetadata;
-
         }
 
         public void readPayload(OutputStream outputStream) throws SDK.SegmentSignatureMismatch, IOException {
@@ -339,14 +302,17 @@ class TDF {
 
             for (Manifest.Segment segment : manifest.encryptionInformation.integrityInformation.segments) {
                 if (segment.encryptedSegmentSize > Config.MAX_SEGMENT_SIZE) {
-                    throw new IllegalStateException("Segment size " + segment.encryptedSegmentSize + " exceeded limit " + Config.MAX_SEGMENT_SIZE);
-                } // MIN_SEGMENT_SIZE NOT validated out due to tests needing small segment sizes with existing payloads
+                    throw new IllegalStateException("Segment size " + segment.encryptedSegmentSize + " exceeded limit "
+                            + Config.MAX_SEGMENT_SIZE);
+                } // MIN_SEGMENT_SIZE NOT validated out due to tests needing small segment sizes
+                  // with existing payloads
 
                 byte[] readBuf = new byte[(int) segment.encryptedSegmentSize];
                 int bytesRead = tdfReader.readPayloadBytes(readBuf);
 
                 if (readBuf.length != bytesRead) {
-                    throw new IllegalStateException("unable to read bytes for segment (wanted " + segment.encryptedSegmentSize + " but got " + bytesRead + ")");
+                    throw new IllegalStateException("unable to read bytes for segment (wanted "
+                            + segment.encryptedSegmentSize + " but got " + bytesRead + ")");
                 }
 
                 var isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
@@ -392,42 +358,25 @@ class TDF {
         }
 
         if (kGMACPayloadLength > data.length) {
-            throw new IllegalArgumentException("tried to calculate GMAC on too small a payload. payload is "+ data.length + "bytes while GMAC is " + kGMACPayloadLength + " bytes");
+            throw new IllegalArgumentException("tried to calculate GMAC on too small a payload. payload is "
+                    + data.length + "bytes while GMAC is " + kGMACPayloadLength + " bytes");
         }
 
         return Arrays.copyOfRange(data, data.length - kGMACPayloadLength, data.length);
     }
 
     TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig tdfConfig) throws SDKException, IOException {
+        Planner planner = new Planner(tdfConfig, services, Autoconfigure::createGranter);
+        Map<String, List<KASInfo>> splits = planner.getSplits();
 
-        if (tdfConfig.autoconfigure) {
-            Autoconfigure.Granter granter = new Autoconfigure.Granter(new ArrayList<>());
-            if (tdfConfig.attributeValues != null && !tdfConfig.attributeValues.isEmpty()) {
-                granter = Autoconfigure.newGranterFromAttributes(tdfConfig.attributeValues.toArray(new Value[0]));
-            } else if (tdfConfig.attributes != null && !tdfConfig.attributes.isEmpty()) {
-                granter = Autoconfigure.newGranterFromService(services.attributes(), services.kas().getKeyCache(),
-                        tdfConfig.attributes.toArray(new AttributeValueFQN[0]));
-            }
-
-            if (granter == null) {
-                throw new AutoConfigureException("Failed to create Granter"); // Replace with appropriate error handling
-            }
-
-            List<String> dk = defaultKases(tdfConfig);
-            tdfConfig.splitPlan = granter.plan(dk, () -> UUID.randomUUID().toString());
-
-            if (tdfConfig.splitPlan == null) {
-                throw new AutoConfigureException("Failed to generate Split Plan"); // Replace with appropriate error
-                // handling
-            }
-        }
-
-        if (tdfConfig.kasInfoList.isEmpty() && (tdfConfig.splitPlan == null || tdfConfig.splitPlan.isEmpty())) {
-            throw new SDK.KasInfoMissing("kas information is missing, no key access template specified or inferred");
+        // Add System Metadata Assertion if configured
+        if (tdfConfig.systemMetadataAssertion) {
+            AssertionConfig systemAssertion = AssertionConfig.getSystemMetadataAssertionConfig(TDF_SPEC_VERSION);
+            tdfConfig.assertionConfigList.add(systemAssertion);
         }
 
         TDFObject tdfObject = new TDFObject();
-        tdfObject.prepareManifest(tdfConfig, services.kas());
+        tdfObject.prepareManifest(tdfConfig, splits);
 
         long encryptedSegmentSize = tdfConfig.defaultSegmentSize + kGcmIvSize + kAesBlockSize;
         TDFWriter tdfWriter = new TDFWriter(outputStream);
@@ -477,7 +426,8 @@ class TDF {
 
         Manifest.RootSignature rootSignature = new Manifest.RootSignature();
 
-        byte[] rootSig = calculateSignature(aggregateHash.toByteArray(), tdfObject.payloadKey, tdfConfig.integrityAlgorithm);
+        byte[] rootSig = calculateSignature(aggregateHash.toByteArray(), tdfObject.payloadKey,
+                tdfConfig.integrityAlgorithm);
         byte[] encodedRootSig = tdfConfig.hexEncodeRootAndSegmentHashes
                 ? Hex.encodeHexString(rootSig).getBytes(StandardCharsets.UTF_8)
                 : rootSig;
@@ -509,6 +459,7 @@ class TDF {
         tdfObject.manifest.payload.isEncrypted = true;
 
         List<Manifest.Assertion> signedAssertions = new ArrayList<>(tdfConfig.assertionConfigList.size());
+
         for (var assertionConfig : tdfConfig.assertionConfigList) {
             var assertion = new Manifest.Assertion();
             assertion.id = assertionConfig.id;
@@ -541,8 +492,7 @@ class TDF {
             }
             var hashValues = new Manifest.Assertion.HashValues(
                     assertionHashAsHex,
-                    encodedHash
-            );
+                    encodedHash);
             try {
                 assertion.sign(hashValues, assertionSigningKey);
             } catch (KeyLengthException e) {
@@ -560,34 +510,21 @@ class TDF {
         return tdfObject;
     }
 
-    static List<String> defaultKases(TDFConfig config) {
-        List<String> allk = new ArrayList<>();
-        List<String> defk = new ArrayList<>();
-
-        for (KASInfo kasInfo : config.kasInfoList) {
-            if (kasInfo.Default != null && kasInfo.Default) {
-                defk.add(kasInfo.URL);
-            } else if (defk.isEmpty()) {
-                allk.add(kasInfo.URL);
-            }
-        }
-        if (defk.isEmpty()) {
-            return allk;
-        }
-        return defk;
-    }
 
     Reader loadTDF(SeekableByteChannel tdf, String platformUrl) throws SDKException, IOException {
         return loadTDF(tdf, Config.newTDFReaderConfig(), platformUrl);
     }
 
-    Reader loadTDF(SeekableByteChannel tdf, Config.TDFReaderConfig tdfReaderConfig, String platformUrl) throws SDKException, IOException {
-        if (!tdfReaderConfig.ignoreKasAllowlist && (tdfReaderConfig.kasAllowlist == null || tdfReaderConfig.kasAllowlist.isEmpty())) {
+    Reader loadTDF(SeekableByteChannel tdf, Config.TDFReaderConfig tdfReaderConfig, String platformUrl)
+            throws SDKException, IOException {
+        if (!tdfReaderConfig.ignoreKasAllowlist
+                && (tdfReaderConfig.kasAllowlist == null || tdfReaderConfig.kasAllowlist.isEmpty())) {
             ListKeyAccessServersRequest request = ListKeyAccessServersRequest.newBuilder()
                     .build();
             ListKeyAccessServersResponse response;
             try {
-                response = RequestHelper.getOrThrow(services.kasRegistry().listKeyAccessServersBlocking(request, Collections.emptyMap()).execute());
+                response = RequestHelper.getOrThrow(
+                        services.kasRegistry().listKeyAccessServersBlocking(request, Collections.emptyMap()).execute());
             } catch (ConnectException e) {
                 throw new SDKException("error getting kas servers", e);
             }
@@ -607,6 +544,7 @@ class TDF {
         String manifestJson = tdfReader.manifest();
         // use Manifest.readManifest in order to validate the Manifest input
         Manifest manifest = Manifest.readManifest(manifestJson);
+
         byte[] payloadKey = new byte[GCM_KEY_SIZE];
         String unencryptedMetadata = null;
 
@@ -629,13 +567,17 @@ class TDF {
                     if (tdfReaderConfig.ignoreKasAllowlist) {
                         logger.warn("Ignoring KasAllowlist for url {}", realAddress);
                     } else if (tdfReaderConfig.kasAllowlist == null || tdfReaderConfig.kasAllowlist.isEmpty()) {
-                        logger.error("KasAllowlist: No KAS allowlist provided and no KeyAccessServerRegistry available, {} is not allowed", realAddress);
-                        throw new SDK.KasAllowlistException("No KAS allowlist provided and no KeyAccessServerRegistry available");
+                        logger.error(
+                                "KasAllowlist: No KAS allowlist provided and no KeyAccessServerRegistry available, {} is not allowed",
+                                realAddress);
+                        throw new SDK.KasAllowlistException(
+                                "No KAS allowlist provided and no KeyAccessServerRegistry available");
                     } else if (!tdfReaderConfig.kasAllowlist.contains(realAddress)) {
                         logger.error("KasAllowlist: kas url {} is not allowed", realAddress);
-                        throw new SDK.KasAllowlistException("KasAllowlist: kas url "+realAddress+" is not allowed");
+                        throw new SDK.KasAllowlistException("KasAllowlist: kas url " + realAddress + " is not allowed");
                     }
-                    unwrappedKey = services.kas().unwrap(keyAccess, manifest.encryptionInformation.policy, tdfReaderConfig.sessionKeyType);
+                    unwrappedKey = services.kas().unwrap(keyAccess, manifest.encryptionInformation.policy,
+                            tdfReaderConfig.sessionKeyType);
                 } catch (Exception e) {
                     skippedSplits.put(ss, e);
                     continue;
@@ -728,7 +670,8 @@ class TDF {
         int encryptedSegSize = manifest.encryptionInformation.integrityInformation.encryptedSegmentSizeDefault;
 
         if (segmentSize != encryptedSegSize - (kGcmIvSize + kAesBlockSize)) {
-            throw new IllegalStateException("segment size mismatch. encrypted segment size differs from plaintext segment size. the TDF is invalid");
+            throw new IllegalStateException(
+                    "segment size mismatch. encrypted segment size differs from plaintext segment size. the TDF is invalid");
         }
 
         var aggregateHashByteArrayBytes = aggregateHash.toByteArray();

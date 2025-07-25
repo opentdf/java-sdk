@@ -1,5 +1,8 @@
 package io.opentdf.platform.sdk;
 
+import io.opentdf.platform.policy.Algorithm;
+import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
+
 import javax.annotation.Nonnull;
 
 import static io.opentdf.platform.sdk.NanoTDFType.ECCurve.SECP256R1;
@@ -44,6 +47,42 @@ public enum KeyType {
             }
         }
         throw new IllegalArgumentException("No enum constant for key type: " + keyType);
+    }
+
+    public static KeyType fromAlgorithm(Algorithm algorithm) {
+        if (algorithm == null) {
+            throw new IllegalArgumentException("Algorithm cannot be null");
+        }
+        switch (algorithm) {
+            case ALGORITHM_RSA_2048:
+                return KeyType.RSA2048Key;
+            case ALGORITHM_EC_P256:
+                return KeyType.EC256Key;
+            case ALGORITHM_EC_P384:
+                return KeyType.EC384Key;
+            case ALGORITHM_EC_P521:
+                return KeyType.EC521Key;
+            default:
+                throw new IllegalArgumentException("Unsupported algorithm: " + algorithm);
+        }
+    }
+
+    public static KeyType fromPublicKeyAlgorithm(KasPublicKeyAlgEnum algorithm) {
+        if (algorithm == null) {
+            throw new IllegalArgumentException("Algorithm cannot be null");
+        }
+        switch (algorithm) {
+            case KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048:
+                return KeyType.RSA2048Key;
+            case KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1:
+                return KeyType.EC256Key;
+            case KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP384R1:
+                return KeyType.EC384Key;
+            case KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP521R1:
+                return KeyType.EC521Key;
+            default:
+                throw new IllegalArgumentException("Unsupported algorithm: " + algorithm);
+        }
     }
 
     public boolean isEc() {

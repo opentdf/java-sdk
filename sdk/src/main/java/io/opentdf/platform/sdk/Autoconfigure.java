@@ -1,12 +1,12 @@
 package io.opentdf.platform.sdk;
 
 import com.connectrpc.ResponseMessageKt;
+import io.opentdf.platform.policy.Algorithm;
 import io.opentdf.platform.policy.Attribute;
 import io.opentdf.platform.policy.AttributeRuleTypeEnum;
 import io.opentdf.platform.policy.AttributeValueSelector;
-import io.opentdf.platform.policy.KasPublicKey;
-import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
 import io.opentdf.platform.policy.KeyAccessServer;
+import io.opentdf.platform.policy.SimpleKasKey;
 import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.policy.attributes.AttributesServiceClientInterface;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
@@ -14,6 +14,7 @@ import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
@@ -27,6 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.function.Supplier;
@@ -55,45 +57,80 @@ class RuleType {
  */
 public class Autoconfigure {
 
-    public static Logger logger = LoggerFactory.getLogger(Autoconfigure.class);
+    private static Logger logger = LoggerFactory.getLogger(Autoconfigure.class);
 
-    public static class KeySplitStep {
-        public String kas;
-        public String splitID;
+    private Autoconfigure() {
+        // Prevent instantiation, this class is a utility class that is only used statically
+    }
 
-        public KeySplitStep(String kas, String splitId) {
-            this.kas = kas;
-            this.splitID = splitId;
-        }
+    static class KeySplitTemplate {
+        final String kas;
+        final String splitID;
+        final String kid;
+        final KeyType keyType;
 
         @Override
         public String toString() {
-            return "KeySplitStep{kas=" + this.kas + ", splitID=" + this.splitID + "}";
+            return "KeySplitTemplate{" +
+                    "kas='" + kas + '\'' +
+                    ", splitID='" + splitID + '\'' +
+                    ", kid='" + kid + '\'' +
+                    ", keyType=" + keyType +
+                    '}';
         }
 
         @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (obj == null || !(obj instanceof KeySplitStep)) {
-                return false;
-            }
-            KeySplitStep ss = (KeySplitStep) obj;
-            if ((this.kas.equals(ss.kas)) && (this.splitID.equals(ss.splitID))) {
-                return true;
-            }
-            return false;
+        public boolean equals(Object o) {
+            if (o == null || getClass() != o.getClass()) return false;
+            KeySplitTemplate that = (KeySplitTemplate) o;
+            return Objects.equals(kas, that.kas) && Objects.equals(splitID, that.splitID) && Objects.equals(kid, that.kid) && keyType == that.keyType;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(kas, splitID, kid, keyType);
+        }
+
+        public KeySplitTemplate(String kas, String splitID, String kid, KeyType keyType) {
+            this.kas = kas;
+            this.splitID = splitID;
+            this.kid = kid;
+            this.keyType = keyType;
+        }
+    }
+
+    public static class KeySplitStep {
+        final String kas;
+        final String splitID;
+
+        KeySplitStep(String kas, String splitId) {
+            this.kas = Objects.requireNonNull(kas);
+            this.splitID = Objects.requireNonNull(splitId);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (o == null || getClass() != o.getClass()) return false;
+            KeySplitStep that = (KeySplitStep) o;
+            return Objects.equals(kas, that.kas) && Objects.equals(splitID, that.splitID);
         }
 
         @Override
         public int hashCode() {
             return Objects.hash(kas, splitID);
         }
+
+        @Override
+        public String toString() {
+            return "KeySplitStep{" +
+                    "kas='" + kas + '\'' +
+                    ", splitID='" + splitID + '\'' +
+                    '}';
+        }
     }
 
     // Utility class for an attribute name FQN.
-    public static class AttributeNameFQN {
+    static class AttributeNameFQN {
         private final String url;
         private final String key;
 
@@ -156,7 +193,7 @@ public class Autoconfigure {
     }
 
     // Utility class for an attribute value FQN.
-    public static class AttributeValueFQN {
+    static class AttributeValueFQN {
         private final String url;
         private final String key;
 
@@ -203,11 +240,11 @@ public class Autoconfigure {
             return Objects.hash(key);
         }
 
-        public String getKey() {
+        String getKey() {
             return key;
         }
 
-        public String authority() {
+        String authority() {
             Pattern pattern = Pattern.compile("^(https?://[\\w./-]+)/attr/\\S*/value/\\S*$");
             Matcher matcher = pattern.matcher(url);
             if (!matcher.find()) {
@@ -216,7 +253,7 @@ public class Autoconfigure {
             return matcher.group(1);
         }
 
-        public AttributeNameFQN prefix() throws AutoConfigureException {
+        AttributeNameFQN prefix() throws AutoConfigureException {
             Pattern pattern = Pattern.compile("^(https?://[\\w./-]+/attr/\\S*)/value/\\S*$");
             Matcher matcher = pattern.matcher(url);
             if (!matcher.find()) {
@@ -225,7 +262,7 @@ public class Autoconfigure {
             return new AttributeNameFQN(matcher.group(1));
         }
 
-        public String value() {
+        String value() {
             Pattern pattern = Pattern.compile("^https?://[\\w./-]+/attr/\\S*/value/(\\S*)$");
             Matcher matcher = pattern.matcher(url);
             if (!matcher.find()) {
@@ -238,7 +275,7 @@ public class Autoconfigure {
             }
         }
 
-        public String name() {
+        String name() {
             Pattern pattern = Pattern.compile("^https?://[\\w./-]+/attr/(\\S*)/value/\\S*$");
             Matcher matcher = pattern.matcher(url);
             if (!matcher.find()) {
@@ -246,13 +283,13 @@ public class Autoconfigure {
             }
             try {
                 return URLDecoder.decode(matcher.group(1), StandardCharsets.UTF_8.name());
-            } catch (UnsupportedEncodingException | IllegalArgumentException e) {
-                throw new RuntimeException("invalid attributeInstance", e);
+            }  catch (UnsupportedEncodingException | IllegalArgumentException e) {
+                throw new RuntimeException("illegal attribute instance", e);
             }
         }
     }
 
-    public static class KeyAccessGrant {
+    static class KeyAccessGrant {
         public Attribute attr;
         public List<String> kases;
 
@@ -266,40 +303,104 @@ public class Autoconfigure {
     static class Granter {
         private final List<AttributeValueFQN> policy;
         private final Map<String, KeyAccessGrant> grants = new HashMap<>();
+        private final Map<String, List<Config.KASInfo>> mappedKeys = new HashMap<>();
+        private boolean hasGrants = false;
+        private boolean hasMappedKeys = false;
 
-        public Granter(List<AttributeValueFQN> policy) {
+        Granter(List<AttributeValueFQN> policy) {
             this.policy = policy;
         }
 
-        public Map<String, KeyAccessGrant> getGrants() {
-            return new HashMap<String, KeyAccessGrant>(grants);
+        Map<String, KeyAccessGrant> getGrants() {
+            return new HashMap<>(grants);
         }
 
-        public List<AttributeValueFQN> getPolicy() {
+        List<AttributeValueFQN> getPolicy() {
             return policy;
         }
 
-        public void addGrant(AttributeValueFQN fqn, String kas, Attribute attr) {
-            grants.computeIfAbsent(fqn.key, k -> new KeyAccessGrant(attr, new ArrayList<>())).kases.add(kas);
-        }
+        boolean addAllGrants(AttributeValueFQN fqn, List<KeyAccessServer> granted, List<SimpleKasKey> mapped, Attribute attr) {
+            boolean foundMappedKey = false;
+            for (var mappedKey: mapped) {
+                foundMappedKey = true;
+                mappedKeys.computeIfAbsent(fqn.key, k -> new ArrayList<>()).add(Config.KASInfo.fromSimpleKasKey(mappedKey));
+                grants.computeIfAbsent(fqn.key, k -> new KeyAccessGrant(attr, new ArrayList<>())).kases.add(mappedKey.getKasUri());
+            }
 
-        public void addAllGrants(AttributeValueFQN fqn, List<KeyAccessServer> gs, Attribute attr) {
-            if (gs.isEmpty()) {
-                grants.putIfAbsent(fqn.key, new KeyAccessGrant(attr, new ArrayList<>()));
-            } else {
-                for (KeyAccessServer g : gs) {
-                    if (g != null) {
-                        addGrant(fqn, g.getUri(), attr);
+            if (foundMappedKey) {
+                hasMappedKeys = true;
+                return true;
+            }
+
+            boolean foundGrantedKey = false;
+            for (var grantedKey: granted) {
+                foundGrantedKey = true;
+                grants.computeIfAbsent(fqn.key, k -> new KeyAccessGrant(attr, new ArrayList<>())).kases.add(grantedKey.getUri());
+                if (!grantedKey.getKasKeysList().isEmpty()) {
+                    for (var kas : grantedKey.getKasKeysList()) {
+                        mappedKeys.computeIfAbsent(fqn.key, k -> new ArrayList<>()).add(Config.KASInfo.fromSimpleKasKey(kas));
                     }
+                    continue;
+                }
+                var cachedGrantKeys = grantedKey.getPublicKey().getCached().getKeysList();
+
+                if (logger.isDebugEnabled()) {
+                    logger.debug("found {} keys cached in policy service", cachedGrantKeys.size());
+                }
+
+                for (var cachedGrantKey: cachedGrantKeys) {
+                    var mappedKey = new Config.KASInfo();
+                    mappedKey.URL = grantedKey.getUri();
+                    mappedKey.KID = cachedGrantKey.getKid();
+                    mappedKey.Algorithm = KeyType.fromPublicKeyAlgorithm(cachedGrantKey.getAlg()).toString();
+                    mappedKey.PublicKey = cachedGrantKey.getPem();
+                    mappedKey.Default = false;
+                    mappedKeys.computeIfAbsent(fqn.key, k -> new ArrayList<>()).add(mappedKey);
                 }
             }
+
+            if (!grants.containsKey(fqn.key)) {
+                grants.put(fqn.key, new KeyAccessGrant(attr, new ArrayList<>()));
+            }
+
+            if (foundGrantedKey) {
+                hasGrants = true;
+            }
+            return foundGrantedKey;
         }
 
-        public KeyAccessGrant byAttribute(AttributeValueFQN fqn) {
+        KeyAccessGrant byAttribute(AttributeValueFQN fqn) {
             return grants.get(fqn.key);
         }
 
-        public List<KeySplitStep> plan(List<String> defaultKas, Supplier<String> genSplitID)
+        List<KeySplitTemplate> getSplits(List<String> defaultKases, Supplier<String> genSplitID, Supplier<Optional<SimpleKasKey>> baseKeySupplier) throws AutoConfigureException {
+            if (hasMappedKeys) {
+                logger.debug("generating plan from mapped keys");
+                return planFromAttributes(genSplitID);
+            }
+            if (hasGrants) {
+                logger.debug("generating plan from grants");
+                return planUsingGrants(genSplitID);
+            }
+
+            var baseKey = baseKeySupplier.get();
+            if (baseKey.isPresent()) {
+                var key = baseKey.get();
+                String kas = key.getKasUri();
+                String splitID = "";
+                String kid = key.getPublicKey().getKid();
+                Algorithm algorithm = key.getPublicKey().getAlgorithm();
+                return Collections.singletonList(new KeySplitTemplate(kas, splitID, kid, KeyType.fromAlgorithm(algorithm)));
+            }
+
+            logger.warn("no grants or mapped keys found, generating plan from default KASes. this is deprecated");
+            // this is a little bit weird because we don't take into account the KIDs here. This is the way
+            // that it works in the go SDK but it seems a bit odd
+            return generatePlanFromDefaultKases(defaultKases, genSplitID);
+        }
+
+        @Nonnull
+        List<KeySplitTemplate> planUsingGrants(Supplier<String> genSplitID)
                 throws AutoConfigureException {
             AttributeBooleanExpression b = constructAttributeBoolean();
             BooleanKeyExpression k = insertKeysForAttribute(b);
@@ -310,28 +411,58 @@ public class Autoconfigure {
             k = k.reduce();
             int l = k.size();
             if (l == 0) {
-                // default behavior: split key across all default KAS
-                if (defaultKas.isEmpty()) {
-                    throw new AutoConfigureException("no default KAS specified; required for grantless plans");
-                } else if (defaultKas.size() == 1) {
-                    return Collections.singletonList(new KeySplitStep(defaultKas.get(0), ""));
-                } else {
-                    List<KeySplitStep> result = new ArrayList<>();
-                    for (String kas : defaultKas) {
-                        result.add(new KeySplitStep(kas, genSplitID.get()));
-                    }
-                    return result;
-                }
+                throw new AutoConfigureException("generated an empty plan");
             }
 
-            List<KeySplitStep> steps = new ArrayList<>();
+            List<KeySplitTemplate> steps = new ArrayList<>();
             for (KeyClause v : k.values) {
                 String splitID = (l > 1) ? genSplitID.get() : "";
                 for (PublicKeyInfo o : v.values) {
-                    steps.add(new KeySplitStep(o.kas, splitID));
+                    // grants only have KAS URLs, no KIDs or algorithms
+                    steps.add(new KeySplitTemplate(o.kas, splitID, null, null));
                 }
             }
             return steps;
+        }
+
+        @Nonnull
+        List<KeySplitTemplate> planFromAttributes(Supplier<String> genSplitID)
+                throws AutoConfigureException {
+            AttributeBooleanExpression b = constructAttributeBoolean();
+            BooleanKeyExpression k = assignKeysTo(b);
+            if (k == null) {
+                throw new AutoConfigureException("Error assigning keys to attribute");
+            }
+
+            k = k.reduce();
+            int l = k.size();
+            if (l == 0) {
+                return Collections.emptyList();
+            }
+
+            List<KeySplitTemplate> steps = new ArrayList<>();
+            for (KeyClause v : k.values) {
+                String splitID = (l > 1) ? genSplitID.get() : "";
+                for (PublicKeyInfo o : v.values) {
+                    KeyType keyType = o.algorithm != null ? KeyType.fromString(o.algorithm) : null;
+                    steps.add(new KeySplitTemplate(o.kas, splitID, o.kid, keyType));
+                }
+            }
+            return steps;
+        }
+
+        static List<KeySplitTemplate> generatePlanFromDefaultKases(List<String> defaultKas, Supplier<String> genSplitID) {
+            if (defaultKas.isEmpty()) {
+                throw new AutoConfigureException("no default KAS specified; required for grantless plans");
+            } else if (defaultKas.size() == 1) {
+                return Collections.singletonList(new KeySplitTemplate(defaultKas.get(0), "", null, null));
+            } else {
+                List<KeySplitTemplate> result = new ArrayList<>();
+                for (String kas : defaultKas) {
+                    result.add(new KeySplitTemplate(kas, genSplitID.get(), null, null));
+                }
+                return result;
+            }
         }
 
         BooleanKeyExpression insertKeysForAttribute(AttributeBooleanExpression e) throws AutoConfigureException {
@@ -361,13 +492,53 @@ public class Autoconfigure {
                     logger.warn("Unknown attribute rule type: " + clause);
                 }
 
-                KeyClause kc = new KeyClause(op, kcv);
-                kcs.add(kc);
+                kcs.add(new KeyClause(op, kcv));
             }
 
             return new BooleanKeyExpression(kcs);
         }
 
+        BooleanKeyExpression assignKeysTo(AttributeBooleanExpression e) {
+            var keyClauses = new ArrayList<KeyClause>();
+            for (var clause : e.must) {
+                ArrayList<PublicKeyInfo> keys = new ArrayList<>();
+                if (clause.values.isEmpty()) {
+                    logger.warn("No values found for attribute {}", clause.def.getFqn());
+                    continue;
+                }
+                for (var value : clause.values) {
+                    var mapped = mappedKeys.get(value.key);
+                    if (mapped == null) {
+                        logger.warn("No keys found for attribute value {}", value);
+                        continue;
+                    }
+                    for (var kasInfo : mapped) {
+                        if (kasInfo.URL == null || kasInfo.URL.isEmpty()) {
+                            logger.warn("No KAS URL found for attribute value {}", value);
+                            continue;
+                        }
+                        keys.add(new PublicKeyInfo(kasInfo.URL, kasInfo.KID, kasInfo.Algorithm));
+                    }
+                }
+
+                String op = ruleToOperator(clause.def.getRule());
+                if (op.equals(RuleType.UNSPECIFIED)) {
+                    logger.warn("Unknown attribute rule type {}", op);
+                }
+
+                keyClauses.add(new KeyClause(op, keys));
+            }
+
+            return new BooleanKeyExpression(keyClauses);
+        }
+
+        /**
+         * Constructs an AttributeBooleanExpression from the policy, splitting each attribute
+         * into its own clause. Each clause contains the attribute definition and a list of
+         * values.
+         * @return
+         * @throws AutoConfigureException
+         */
         AttributeBooleanExpression constructAttributeBoolean() throws AutoConfigureException {
             Map<String, SingleAttributeClause> prefixes = new HashMap<>();
             List<String> sortedPrefixes = new ArrayList<>();
@@ -378,7 +549,7 @@ public class Autoconfigure {
                     clause.values.add(aP);
                 } else if (byAttribute(aP) != null) {
                     var x = new SingleAttributeClause(byAttribute(aP).attr,
-                            new ArrayList<AttributeValueFQN>(Arrays.asList(aP)));
+                            new ArrayList<>(Arrays.asList(aP)));
                     prefixes.put(a.getKey(), x);
                     sortedPrefixes.add(a.getKey());
                 }
@@ -389,39 +560,6 @@ public class Autoconfigure {
                     .collect(Collectors.toList());
 
             return new AttributeBooleanExpression(must);
-        }
-
-        static class AttributeMapping {
-
-            private Map<AttributeNameFQN, Attribute> dict;
-
-            public AttributeMapping() {
-                this.dict = new HashMap<>();
-            }
-
-            public void put(Attribute ad) throws AutoConfigureException {
-                if (this.dict == null) {
-                    this.dict = new HashMap<>();
-                }
-
-                AttributeNameFQN prefix = new AttributeNameFQN(ad.getFqn());
-
-                if (this.dict.containsKey(prefix)) {
-                    throw new AutoConfigureException("Attribute prefix already found: [" + prefix.toString() + "]");
-                }
-
-                this.dict.put(prefix, ad);
-            }
-
-            public Attribute get(AttributeNameFQN prefix) throws AutoConfigureException {
-                Attribute ad = this.dict.get(prefix);
-                if (ad == null) {
-                    throw new AutoConfigureException("Unknown attribute type: [" + prefix.toString() + "], not in ["
-                            + this.dict.keySet().toString() + "]");
-                }
-                return ad;
-            }
-
         }
 
         static class SingleAttributeClause {
@@ -435,9 +573,9 @@ public class Autoconfigure {
             }
         }
 
-        class AttributeBooleanExpression {
+        static class AttributeBooleanExpression {
 
-            private List<SingleAttributeClause> must;
+            private final List<SingleAttributeClause> must;
 
             public AttributeBooleanExpression(List<SingleAttributeClause> must) {
                 this.must = must;
@@ -475,28 +613,65 @@ public class Autoconfigure {
                 }
                 return sb.toString();
             }
-
         }
 
-        public class PublicKeyInfo {
-            private String kas;
+        static class PublicKeyInfo implements Comparable<PublicKeyInfo> {
+            final String kas;
+            final String kid;
+            final String algorithm;
 
-            public PublicKeyInfo(String kas) {
-                this.kas = kas;
+            PublicKeyInfo(String kas) {
+                this(kas, null, null);
             }
 
-            public String getKas() {
+            PublicKeyInfo(String kas, String kid, String algorithm) {
+                this.kas = Objects.requireNonNull(kas);
+                this.kid = kid;
+                this.algorithm = algorithm;
+            }
+
+            String getKas() {
                 return kas;
             }
 
-            public void setKas(String kas) {
-                this.kas = kas;
+            @Override
+            public boolean equals(Object o) {
+                if (o == null || getClass() != o.getClass()) return false;
+                PublicKeyInfo that = (PublicKeyInfo) o;
+                return Objects.equals(kas, that.kas) && Objects.equals(kid, that.kid) && Objects.equals(algorithm, that.algorithm);
+            }
+
+            @Override
+            public int hashCode() {
+                return Objects.hash(kas, kid, algorithm);
+            }
+
+            @Override
+            public int compareTo(PublicKeyInfo o) {
+                if (this.kas.compareTo(o.kas) != 0) {
+                    return this.kas.compareTo(o.kas);
+                }
+                if ((this.kid == null) != (o.kid == null)) {
+                    return this.kid == null ? -1 : 1;
+                }
+                if (this.kid != null) {
+                    if (this.kid.compareTo(o.kid) != 0) {
+                        return this.kid.compareTo(o.kid);
+                    }
+                }
+                if ((this.algorithm == null) != (o.algorithm == null)) {
+                    return this.algorithm == null ? -1 : 1;
+                }
+                if (this.algorithm != null) {
+                    return this.algorithm.compareTo(o.algorithm);
+                }
+                return 0;
             }
         }
 
-        public class KeyClause {
-            private String operator;
-            private List<PublicKeyInfo> values;
+        static class KeyClause {
+            private final String operator;
+            private final List<PublicKeyInfo> values;
 
             public KeyClause(String operator, List<PublicKeyInfo> values) {
                 this.operator = operator;
@@ -531,8 +706,8 @@ public class Autoconfigure {
             }
         }
 
-        public class BooleanKeyExpression {
-            private List<KeyClause> values;
+        static class BooleanKeyExpression {
+            private final List<KeyClause> values;
 
             public BooleanKeyExpression(List<KeyClause> values) {
                 this.values = values;
@@ -572,7 +747,7 @@ public class Autoconfigure {
                                 continue;
                             }
                             Disjunction terms = new Disjunction();
-                            terms.add(k.getKas());
+                            terms.add(k);
                             if (!within(conjunction, terms)) {
                                 conjunction.add(terms);
                             }
@@ -584,25 +759,22 @@ public class Autoconfigure {
                 }
 
                 List<KeyClause> newValues = new ArrayList<>();
-                for (List<String> d : conjunction) {
+                for (List<PublicKeyInfo> d : conjunction) {
                     List<PublicKeyInfo> pki = new ArrayList<>();
-                    for (String k : d) {
-                        pki.add(new PublicKeyInfo(k));
-                    }
+                    pki.addAll(d);
                     newValues.add(new KeyClause(RuleType.ANY_OF, pki));
                 }
                 return new BooleanKeyExpression(newValues);
             }
 
             public Disjunction sortedNoDupes(List<PublicKeyInfo> l) {
-                Set<String> set = new HashSet<>();
+                Set<PublicKeyInfo> set = new HashSet<>();
                 Disjunction list = new Disjunction();
 
                 for (PublicKeyInfo e : l) {
-                    String kas = e.getKas();
-                    if (!kas.equals(RuleType.EMPTY_TERM) && !set.contains(kas)) {
-                        set.add(kas);
-                        list.add(kas);
+                    if (!Objects.equals(e.getKas(), RuleType.EMPTY_TERM) && !set.contains(e)) {
+                        set.add(e);
+                        list.add(e);
                     }
                 }
 
@@ -612,7 +784,7 @@ public class Autoconfigure {
 
         }
 
-        class Disjunction extends ArrayList<String> {
+        static class Disjunction extends ArrayList<PublicKeyInfo> {
 
             public boolean less(Disjunction r) {
                 int m = Math.min(this.size(), r.size());
@@ -683,7 +855,7 @@ public class Autoconfigure {
     // Given a policy (list of data attributes or tags),
     // get a set of grants from attribute values to KASes.
     // Unlike `NewGranterFromService`, this works offline.
-    public static Granter newGranterFromAttributes(Value... attrValues) throws AutoConfigureException {
+    static Granter newGranterFromAttributes(KASKeyCache keyCache, Value... attrValues) throws AutoConfigureException {
         var attrsAndValues = Arrays.stream(attrValues).map(v -> {
             if (!v.hasAttribute()) {
                 throw new AutoConfigureException("tried to use an attribute that is not initialized");
@@ -694,11 +866,11 @@ public class Autoconfigure {
                     .build();
         }).collect(Collectors.toList());
 
-        return getGranter(null, attrsAndValues);
+        return getGranter(keyCache, attrsAndValues);
     }
 
     // Gets a list of directory of KAS grants for a list of attribute FQNs
-    public static Granter newGranterFromService(AttributesServiceClientInterface as, KASKeyCache keyCache, AttributeValueFQN... fqns) throws AutoConfigureException {
+    static Granter newGranterFromService(AttributesServiceClientInterface as, KASKeyCache keyCache, AttributeValueFQN... fqns) throws AutoConfigureException {
         GetAttributeValuesByFqnsRequest request = GetAttributeValuesByFqnsRequest.newBuilder()
                 .addAllFqns(Arrays.stream(fqns).map(AttributeValueFQN::toString).collect(Collectors.toList()))
                 .setWithValue(AttributeValueSelector.newBuilder().setWithKeyAccessGrants(true).build())
@@ -711,82 +883,57 @@ public class Autoconfigure {
         return getGranter(keyCache, new ArrayList<>(av.getFqnAttributeValuesMap().values()));
     }
 
-    private static List<KeyAccessServer> getGrants(GetAttributeValuesByFqnsResponse.AttributeAndValue attributeAndValue) {
-        var val = attributeAndValue.getValue();
-        var attribute = attributeAndValue.getAttribute();
 
-        if (!val.getGrantsList().isEmpty()) {
-            if (logger.isDebugEnabled()) {
-                logger.debug("adding grants from attribute value [{}]: {}", val.getFqn(), val.getGrantsList().stream().map(KeyAccessServer::getUri).collect(Collectors.toList()));
-            }
-            return val.getGrantsList();
-        } else if (!attribute.getGrantsList().isEmpty()) {
-            var attributeGrants = attribute.getGrantsList();
-            if (logger.isDebugEnabled()) {
-                logger.debug("adding grants from attribute [{}]: {}", attribute.getFqn(), attributeGrants.stream().map(KeyAccessServer::getId).collect(Collectors.toList()));
-            }
-            return attributeGrants;
-        } else if (!attribute.getNamespace().getGrantsList().isEmpty()) {
-            var nsGrants = attribute.getNamespace().getGrantsList();
-            if (logger.isDebugEnabled()) {
-                logger.debug("adding grants from namespace [{}]: [{}]", attribute.getNamespace().getName(), nsGrants.stream().map(KeyAccessServer::getId).collect(Collectors.toList()));
-            }
-            return nsGrants;
-        } else {
-            // this is needed to mark the fact that we have an empty
-            if (logger.isDebugEnabled()) {
-                logger.debug("didn't find any grants on value, attribute, or namespace for attribute value [{}]", val.getFqn());
-            }
-            return Collections.emptyList();
+    static Autoconfigure.Granter createGranter(SDK.Services services, Config.TDFConfig tdfConfig) {
+        Autoconfigure.Granter granter = new Autoconfigure.Granter(new ArrayList<>());
+        if (tdfConfig.attributeValues != null && !tdfConfig.attributeValues.isEmpty()) {
+            granter = Autoconfigure.newGranterFromAttributes(services.kas().getKeyCache(), tdfConfig.attributeValues.toArray(new Value[0]));
+        } else if (tdfConfig.attributes != null && !tdfConfig.attributes.isEmpty()) {
+            granter = Autoconfigure.newGranterFromService(services.attributes(), services.kas().getKeyCache(),
+                    tdfConfig.attributes.toArray(new Autoconfigure.AttributeValueFQN[0]));
         }
-
+        return granter;
     }
 
     private static Granter getGranter(@Nullable KASKeyCache keyCache, List<GetAttributeValuesByFqnsResponse.AttributeAndValue> values) {
-        Granter grants = new Granter(values.stream().map(GetAttributeValuesByFqnsResponse.AttributeAndValue::getValue).map(Value::getFqn).map(AttributeValueFQN::new).collect(Collectors.toList()));
+        List<AttributeValueFQN> attributeValues = values.stream()
+                .map(GetAttributeValuesByFqnsResponse.AttributeAndValue::getValue)
+                .map(Value::getFqn)
+                .map(AttributeValueFQN::new)
+                .collect(Collectors.toList());
 
+        Granter grants = new Granter(attributeValues);
         for (var attributeAndValue: values) {
-            var attributeGrants = getGrants(attributeAndValue);
             String fqnstr = attributeAndValue.getValue().getFqn();
             AttributeValueFQN fqn = new AttributeValueFQN(fqnstr);
-            grants.addAllGrants(fqn, attributeGrants, attributeAndValue.getAttribute());
-            if (keyCache != null) {
-                storeKeysToCache(attributeGrants, keyCache);
+
+            var value = attributeAndValue.getValue();
+            var attribute = attributeAndValue.getAttribute();
+            var namespace = attribute.getNamespace();
+
+            if (grants.addAllGrants(fqn, value.getGrantsList(), value.getKasKeysList(), attribute)) {
+                storeKeysToCache(value.getGrantsList(), value.getKasKeysList(), keyCache);
+                continue;
+            }
+            if (grants.addAllGrants(fqn, attribute.getGrantsList(), attribute.getKasKeysList(), attribute)) {
+                storeKeysToCache(attribute.getGrantsList(), attribute.getKasKeysList(), keyCache);
+                continue;
+            }
+            if (grants.addAllGrants(fqn, namespace.getGrantsList(), namespace.getKasKeysList(), attribute)) {
+                storeKeysToCache(namespace.getGrantsList(), namespace.getKasKeysList(), keyCache);
             }
         }
 
         return grants;
     }
 
-
-    static void storeKeysToCache(List<KeyAccessServer> kases, KASKeyCache keyCache) {
-        for (KeyAccessServer kas : kases) {
-            List<KasPublicKey> keys = kas.getPublicKey().getCached().getKeysList();
-            if (keys.isEmpty()) {
-                logger.debug("No cached key in policy service for KAS: " + kas.getUri());
-                continue;
-            }
-            for (KasPublicKey ki : keys) {
-                Config.KASInfo kasInfo = new Config.KASInfo();
-                kasInfo.URL = kas.getUri();
-                kasInfo.KID = ki.getKid();
-                kasInfo.Algorithm = algProto2String(ki.getAlg());
-                kasInfo.PublicKey = ki.getPem();
-                keyCache.store(kasInfo);
-            }
+    static void storeKeysToCache(List<KeyAccessServer> kases, List<SimpleKasKey> kasKeys, KASKeyCache keyCache) {
+        if (keyCache == null) {
+            return;
         }
-    }
-
-    private static String algProto2String(KasPublicKeyAlgEnum e) {
-        switch (e) {
-            case KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1:
-                return "ec:secp256r1";
-            case KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048:
-                return "rsa:2048";
-            case KAS_PUBLIC_KEY_ALG_ENUM_UNSPECIFIED:
-            default:
-                return "";
+        for (var kas : kases) {
+            Config.KASInfo.fromKeyAccessServer(kas).forEach(keyCache::store);
         }
+        kasKeys.stream().map(Config.KASInfo::fromSimpleKasKey).forEach(keyCache::store);
     }
-
 }

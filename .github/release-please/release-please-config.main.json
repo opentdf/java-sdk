@@ -13,6 +13,10 @@
     {
       "type": "generic",
       "path": "cmdline/src/main/java/io/opentdf/platform/Command.java"
+    },
+    {
+      "type": "generic",
+      "path": "sdk/src/main/java/io/opentdf/platform/sdk/Version.java"
     }
   ]
 }
