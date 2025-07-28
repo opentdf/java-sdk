@@ -163,11 +163,6 @@ class NanoTDF {
         Header header = new Header();
         ECCMode mode;
         if (nanoTDFConfig.eccMode.getCurve() != keyPair.getCurve()) {
-            if (logger.isWarnEnabled()) {
-                logger.warn("ECC mode provided in NanoTDFConfig differs from mode in key. config = [{}], key = [{}]",
-                        nanoTDFConfig.eccMode.getCurve(),
-                        keyPair.getCurve());
-            }
             mode = new ECCMode(nanoTDFConfig.eccMode.getECCModeAsByte());
             mode.setEllipticCurve(keyPair.getCurve());
         } else {
