@@ -113,7 +113,7 @@ public class NanoTDFTest {
                 throw new SDKException("error creating SHA-256 message digest", e);
             }
             byte[] hashOfSalt = digest.digest(NanoTDF.MAGIC_NUMBER_AND_VERSION);
-            byte[] key = ECKeyPair.calculateSHA256HKDF(hashOfSalt, symmetricKey);
+            byte[] key = ECKeyPair.calculateHKDF(hashOfSalt, symmetricKey);
             return key;
         }
 

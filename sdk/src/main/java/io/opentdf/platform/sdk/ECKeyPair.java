@@ -235,7 +235,11 @@ public class ECKeyPair {
         }
     }
 
-    public static byte[] calculateSHA256HKDF(byte[] salt, byte[] secret) {
+    /**
+     * Returns a HKDF key derived from the provided salt and secret
+     * that is 32 bytes (256 bits) long.
+     */
+    public static byte[] calculateHKDF(byte[] salt, byte[] secret) {
         byte[] key = new byte[SHA256_BYTES];
         HKDFParameters params = new HKDFParameters(secret, salt, null);
 

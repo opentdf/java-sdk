@@ -213,7 +213,7 @@ class KASClient implements SDK.KAS {
             var publicKey = ECKeyPair.publicKeyFromPem(kasEphemeralPublicKey);
             byte[] symKey = ECKeyPair.computeECDHKey(publicKey, ecKeyPair.getPrivateKey());
 
-            var sessionKey = ECKeyPair.calculateSHA256HKDF(GLOBAL_KEY_SALT, symKey);
+            var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symKey);
 
             AesGcm gcm = new AesGcm(sessionKey);
             AesGcm.Encrypted encrypted = new AesGcm.Encrypted(wrappedKey);
@@ -278,7 +278,7 @@ class KASClient implements SDK.KAS {
             throw new SDKException("error creating SHA-256 message digest", e);
         }
         byte[] hashOfSalt = digest.digest(NanoTDF.MAGIC_NUMBER_AND_VERSION);
-        byte[] key = ECKeyPair.calculateSHA256HKDF(hashOfSalt, symmetricKey);
+        byte[] key = ECKeyPair.calculateHKDF(hashOfSalt, symmetricKey);
 
         AesGcm gcm = new AesGcm(key);
         AesGcm.Encrypted encrypted = new AesGcm.Encrypted(wrappedKey);
