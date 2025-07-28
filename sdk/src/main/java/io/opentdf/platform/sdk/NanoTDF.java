@@ -67,15 +67,13 @@ class NanoTDF {
     }
 
     private static Optional<Config.KASInfo> getBaseKey(WellKnownServiceClientInterface wellKnownService) {
-        var key = Planner.fetchBaseKey(wellKnownService);
-        key.ifPresent(k -> {
-            if (!KeyType.fromAlgorithm(k.getPublicKey().getAlgorithm()).isEc()) {
-                throw new SDKException(String.format("base key is not an EC key, cannot create NanoTDF using a key of type %s",
-                        k.getPublicKey().getAlgorithm()));
-            }
-        });
-
-        return key.map(Config.KASInfo::fromSimpleKasKey);
+return Planner.fetchBaseKey(wellKnownService).map(k -> {
+    if (!KeyType.fromAlgorithm(k.getPublicKey().getAlgorithm()).isEc()) {
+        throw new SDKException(String.format("base key is not an EC key, cannot create NanoTDF using a key of type %s",
+                k.getPublicKey().getAlgorithm()));
+    }
+    return Config.KASInfo.fromSimpleKasKey(k);
+});
     }
 
     private Optional<Config.KASInfo> getKasInfo(Config.NanoTDFConfig nanoTDFConfig) {
