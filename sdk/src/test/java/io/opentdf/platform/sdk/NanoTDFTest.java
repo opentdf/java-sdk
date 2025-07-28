@@ -59,7 +59,7 @@ public class NanoTDFTest {
             "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgB3YtAvS7lctHlPsq\n" +
             "bZI8OX1B9W1c4GAIxzwKzD6iPkqhRANCAAT81rBH8XtEl9f+h3I4s+OX7kJ7UGtB\n" +
             "n8wEIh6sd7bofOUFJulrsdAdnH09hVqYdPD36IkJjd2bxTCngBva56Gc\n" +
-            "-----END PRIVATE KEY-----" ;
+            "-----END PRIVATE KEY-----";
 
     private static final String KID = "r1";
     private static final String BASE_KID = "basekid";
