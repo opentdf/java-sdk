@@ -95,12 +95,10 @@ class NanoTDF {
         }
 
         Gson gson = new GsonBuilder().create();
-        Optional<Config.KASInfo> maybeKas = getKasInfo(nanoTDFConfig).or(() -> NanoTDF.getBaseKey(services.wellknown()));
-        if (maybeKas.isEmpty()) {
-            throw new SDKException("no KAS info provided and couldn't get base key, cannot create NanoTDF");
-        }
+        Config.KASInfo kasInfo = getKasInfo(nanoTDFConfig)
+                .or(() -> NanoTDF.getBaseKey(services.wellknown()))
+                .orElseThrow(() -> new SDKException("no KAS info provided and couldn't get base key, cannot create NanoTDF"));
 
-        Config.KASInfo kasInfo = maybeKas.get();
         String url = kasInfo.URL;
         if (kasInfo.PublicKey == null || kasInfo.PublicKey.isEmpty()) {
             logger.info("no public key provided for KAS at {}, retrieving", url);
