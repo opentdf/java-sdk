@@ -76,7 +76,7 @@ public class NanoTDFTest {
     
     protected static SDK.KAS kas = new SDK.KAS() {
         @Override
-        public void close() throws Exception {
+        public void close() {
         }
 
         @Override
@@ -91,7 +91,7 @@ public class NanoTDFTest {
             var k2 = kasInfo.clone();
             if (Objects.equals(kasInfo.KID, BASE_KID)) {
                 assertThat(kasInfo.URL).isEqualTo("https://api.kaswithbasekey.example.com");
-                assertThat(kasInfo.Algorithm).isEqualTo("ec:secp384r1");
+                assertThat(kasInfo.Algorithm).isEqualTo("ec:secp256r1");
                 k2.PublicKey = BASE_PUBLIC_KEY;
                 return k2;
             }
