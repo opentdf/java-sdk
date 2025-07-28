@@ -83,13 +83,7 @@ class NanoTDF {
             logger.debug("no kas info provided in NanoTDFConfig");
             return Optional.empty();
         }
-        Config.KASInfo kasInfo = nanoTDFConfig.kasInfoList.get(0);
-        String url = kasInfo.URL;
-        if (kasInfo.PublicKey == null || kasInfo.PublicKey.isEmpty()) {
-            logger.info("no public key provided for KAS at {}, retrieving", url);
-            kasInfo = services.kas().getECPublicKey(kasInfo, nanoTDFConfig.eccMode.getCurve());
-        }
-        return Optional.of(kasInfo);
+        return Optional.of(nanoTDFConfig.kasInfoList.get(0));
     }
 
     private Config.HeaderInfo getHeaderInfo(Config.NanoTDFConfig nanoTDFConfig) throws InvalidNanoTDFConfig, UnsupportedNanoTDFFeature {
@@ -167,10 +161,17 @@ class NanoTDF {
         // Create header
         byte[] compressedPubKey = keyPair.compressECPublickey();
         Header header = new Header();
-        ECCMode mode = new ECCMode();
-        mode.setEllipticCurve(keyPair.getCurve());
-        if (logger.isWarnEnabled() && !nanoTDFConfig.eccMode.equals(mode)) {
-            logger.warn("ECC mode provided in NanoTDFConfig: {}, ECC mode from key: {}", nanoTDFConfig.eccMode.getCurve(), mode.getCurve());
+        ECCMode mode;
+        if (nanoTDFConfig.eccMode.getCurve() != keyPair.getCurve()) {
+            if (logger.isWarnEnabled()) {
+                logger.warn("ECC mode provided in NanoTDFConfig differs from mode in key. config = [{}], key = [{}]",
+                        nanoTDFConfig.eccMode.getCurve(),
+                        keyPair.getCurve());
+            }
+            mode = new ECCMode(nanoTDFConfig.eccMode.getECCModeAsByte());
+            mode.setEllipticCurve(keyPair.getCurve());
+        } else {
+            mode = nanoTDFConfig.eccMode;
         }
         header.setECCMode(mode);
         header.setPayloadConfig(nanoTDFConfig.config);
