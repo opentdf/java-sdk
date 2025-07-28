@@ -91,6 +91,7 @@ public class NanoTDFTest {
             if (kasInfo.Algorithm != null && !"ec:secp256r1".equals(kasInfo.Algorithm)) {
                 throw new IllegalArgumentException("Unexpected algorithm: " + kasInfo);
             }
+            var k2 = kasInfo.clone();
             k2.KID = KID;
             k2.PublicKey = kasPublicKey;
             k2.Algorithm = "ec:secp256r1";
