@@ -88,16 +88,10 @@ public class NanoTDFTest {
 
         @Override
         public KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
-            var k2 = kasInfo.clone();
-            if (Objects.equals(kasInfo.KID, BASE_KID)) {
-                assertThat(kasInfo.URL).isEqualTo("https://api.kaswithbasekey.example.com");
-                assertThat(kasInfo.Algorithm).isEqualTo("ec:secp256r1");
-                k2.PublicKey = BASE_PUBLIC_KEY;
-                return k2;
-            }
             if (kasInfo.Algorithm != null && !"ec:secp256r1".equals(kasInfo.Algorithm)) {
                 throw new IllegalArgumentException("Unexpected algorithm: " + kasInfo);
             }
+            var k2 = kasInfo.clone();
             k2.KID = KID;
             k2.PublicKey = kasPublicKey;
             k2.Algorithm = "ec:secp256r1";
