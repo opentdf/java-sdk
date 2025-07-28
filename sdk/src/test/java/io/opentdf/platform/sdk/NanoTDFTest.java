@@ -241,7 +241,7 @@ public class NanoTDFTest {
         String out = new String(plainTextStream.toByteArray(), StandardCharsets.UTF_8);
         assertThat(out).isEqualTo(plainText);
         // KAS KID
-assertThat(new Header(ByteBuffer.wrap(nanoTDFBytes)).getKasLocator().getIdentifierString()).isEqualTo(BASE_KID);
+        assertThat(new Header(ByteBuffer.wrap(nanoTDFBytes)).getKasLocator().getIdentifierString()).isEqualTo(BASE_KID);
     }
 
     @Test
