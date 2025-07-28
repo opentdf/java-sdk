@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.Base64;
 
 import static io.opentdf.platform.sdk.NanoTDFType.ECCurve.SECP256R1;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -117,6 +118,19 @@ public class ECKeyPairTest {
         byte[] key = ECKeyPair.calculateHKDF(ECKeys.salt.getBytes(StandardCharsets.UTF_8), symmetricKey);
         System.out.println(Arrays.toString(key));
         System.out.println(key.length);
+
+        assertThat(key.length).isEqualTo(32); // SHA-256 produces a 32-byte key
+    }
+
+    @Test
+    void createSymmetricKeysWithOtherCurves() {
+        ECKeyPair pubPair = new ECKeyPair(NanoTDFType.ECCurve.SECP384R1, ECKeyPair.ECAlgorithm.ECDH);
+        ECKeyPair keyPair = new ECKeyPair(NanoTDFType.ECCurve.SECP384R1, ECKeyPair.ECAlgorithm.ECDH);
+
+        byte[] sharedSecret = ECKeyPair.computeECDHKey(pubPair.getPublicKey(), keyPair.getPrivateKey());
+        byte[] encryptionKey = ECKeyPair.calculateHKDF(ECKeys.salt.getBytes(StandardCharsets.UTF_8), sharedSecret);
+
+        assertThat(encryptionKey).hasSize(32); // SHA-256 produces a 32-byte key
     }
 
     @Test
