@@ -187,10 +187,10 @@ return Planner.fetchBaseKey(wellKnownService).map(k -> {
             logger.info("no curve specified in KASInfo, using the curve from config [{}]", nanoTDFConfig.eccMode.getCurve());
             ecCurve = nanoTDFConfig.eccMode.getCurve();
         } else {
-            ecCurve = specifiedCurve.get();
-            if (ecCurve != nanoTDFConfig.eccMode.getCurve()) {
-                logger.warn("ECCurve in NanoTDFConfig [{}] does not match the curve in KASInfo, using KASInfo curve [{}]", nanoTDFConfig.eccMode.getCurve(), ecCurve);
+            if (specifiedCurve.get() != nanoTDFConfig.eccMode.getCurve()) {
+                logger.warn("ECCurve in NanoTDFConfig [{}] does not match the curve in KASInfo, using KASInfo curve [{}]", nanoTDFConfig.eccMode.getCurve(), specifiedCurve.get());
             }
+            ecCurve = specifiedCurve.get();
         }
         return ecCurve;
     }
