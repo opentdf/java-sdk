@@ -65,6 +65,7 @@ public class SDKBuilder {
     private Boolean usePlainText;
     private SSLFactory sslFactory;
     private AuthorizationGrant authzGrant;
+    private ProtocolType protocolType = ProtocolType.CONNECT;
 
     private static final Logger logger = LoggerFactory.getLogger(SDKBuilder.class);
 
@@ -157,6 +158,18 @@ public class SDKBuilder {
      */
     public SDKBuilder useInsecurePlaintextConnection(Boolean usePlainText) {
         this.usePlainText = usePlainText;
+        return this;
+    }
+
+    /**
+     * Set the network protocol to use for communication with platform services.
+     * 
+     * @param protocolType the protocol type to use (CONNECT, GRPC, or GRPC_WEB)
+     * @return this builder instance for method chaining
+     * @see ProtocolType for available protocol options
+     */
+    public SDKBuilder protocol(ProtocolType protocolType) {
+        this.protocolType = protocolType;
         return this;
     }
 
@@ -329,7 +342,7 @@ public class SDKBuilder {
         var protocolClientConfig = new ProtocolClientConfig(
                 endpoint,
                 new GoogleJavaProtobufStrategy(),
-                NetworkProtocol.GRPC,
+                protocolType.getNetworkProtocol(),
                 null,
                 GETConfiguration.Enabled.INSTANCE,
                 authInterceptor == null ? Collections.emptyList() : List.of(ignoredConfig -> authInterceptor)

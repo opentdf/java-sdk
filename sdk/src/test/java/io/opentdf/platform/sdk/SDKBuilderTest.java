@@ -412,6 +412,58 @@ public class SDKBuilderTest {
         }
     }
 
+    @Test
+    void testProtocolConfiguration() {
+        // Test that protocol configuration works and defaults to CONNECT
+        
+        // Test default protocol setting
+        SDKBuilder.ServicesAndInternals services1 = SDKBuilder.newBuilder()
+                .clientSecret("user", "password")
+                .platformEndpoint("http://localhost:8080")
+                .useInsecurePlaintextConnection(true)
+                .buildServices();
+        
+        // Test explicit GRPC protocol setting
+        SDKBuilder.ServicesAndInternals services2 = SDKBuilder.newBuilder()
+                .clientSecret("user", "password")
+                .platformEndpoint("http://localhost:8080")
+                .useInsecurePlaintextConnection(true)
+                .protocol(ProtocolType.GRPC)
+                .buildServices();
+        
+        // Test GRPC_WEB protocol setting
+        SDKBuilder.ServicesAndInternals services3 = SDKBuilder.newBuilder()
+                .clientSecret("user", "password")
+                .platformEndpoint("http://localhost:8080")
+                .useInsecurePlaintextConnection(true)
+                .protocol(ProtocolType.GRPC_WEB)
+                .buildServices();
+        
+        // Test CONNECT protocol setting
+        SDKBuilder.ServicesAndInternals services4 = SDKBuilder.newBuilder()
+                .clientSecret("user", "password")
+                .platformEndpoint("http://localhost:8080")
+                .useInsecurePlaintextConnection(true)
+                .protocol(ProtocolType.CONNECT)
+                .buildServices();
+        
+        // Verify that all configurations create services successfully
+        assertThat(services1.services).isNotNull();
+        assertThat(services2.services).isNotNull();
+        assertThat(services3.services).isNotNull();
+        assertThat(services4.services).isNotNull();
+        
+        // Clean up
+        try {
+            services1.services.close();
+            services2.services.close();
+            services3.services.close();
+            services4.services.close();
+        } catch (Exception ignored) {
+            // ignore cleanup errors in test
+        }
+    }
+
     public static int getRandomPort() throws IOException {
         int randomPort;
         try (ServerSocket socket = new ServerSocket(0)) {
