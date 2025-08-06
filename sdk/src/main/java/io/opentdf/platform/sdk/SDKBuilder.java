@@ -166,9 +166,13 @@ public class SDKBuilder {
      * 
      * @param protocolType the protocol type to use (CONNECT, GRPC, or GRPC_WEB)
      * @return this builder instance for method chaining
+     * @throws IllegalArgumentException if protocolType is null
      * @see ProtocolType for available protocol options
      */
     public SDKBuilder protocol(ProtocolType protocolType) {
+        if (protocolType == null) {
+            throw new IllegalArgumentException("ProtocolType cannot be null");
+        }
         this.protocolType = protocolType;
         return this;
     }
@@ -244,6 +248,13 @@ public class SDKBuilder {
     }
 
     ServicesAndInternals buildServices() {
+        // Validate configuration compatibility
+        if (Boolean.TRUE.equals(usePlainText) && protocolType == ProtocolType.GRPC_WEB) {
+            throw new SDKException("gRPC-Web protocol is not compatible with useInsecurePlaintextConnection(true). " +
+                    "gRPC-Web is designed for web browsers and typically operates over HTTP/1.1, " +
+                    "while plaintext connections force HTTP/2 prior knowledge.");
+        }
+        
         RSAKey dpopKey;
         try {
             dpopKey = new RSAKeyGenerator(2048)
@@ -356,7 +367,8 @@ public class SDKBuilder {
         // have the same protocols
         var httpClient = new OkHttpClient.Builder();
         if (usePlainText) {
-            // we can only connect using HTTP/2 without any negotiation when using plain test
+            // For plaintext connections, we need HTTP/2 prior knowledge because gRPC servers
+            // expect HTTP/2, and Connect protocol can communicate with gRPC servers over HTTP/2
             httpClient.protocols(List.of(Protocol.H2_PRIOR_KNOWLEDGE));
         }
         if (sslFactory != null) {
