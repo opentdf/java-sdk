@@ -45,7 +45,7 @@ public class KASClientTest {
     BiFunction<OkHttpClient, String, ProtocolClient> aclientFactory = (OkHttpClient client, String endpoint) -> {
         return new ProtocolClient(
                 new ConnectOkHttpClient(httpClient),
-                new ProtocolClientConfig(endpoint, new GoogleJavaProtobufStrategy(), NetworkProtocol.GRPC, null, GETConfiguration.Enabled.INSTANCE)
+                new ProtocolClientConfig(endpoint, new GoogleJavaProtobufStrategy(), ProtocolType.GRPC.getNetworkProtocol(), null, GETConfiguration.Enabled.INSTANCE)
         );
     };
 
