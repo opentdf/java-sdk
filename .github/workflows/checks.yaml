@@ -167,7 +167,7 @@ jobs:
             --client-secret=secret \
             --platform-endpoint=http://localhost:8080 \
             -h\
-            encryptnano --kas-url=http://localhost:8080 --attr https://example.com/attr/attr1/value/value1 -f data -m 'here is some metadata' > nano.ntdf
+            encryptnano --kas-url=http://localhost:8080 --attr https://example.com/attr/attr1/value/value1 --policy-type encrypted -f data -m 'here is some metadata' > nano.ntdf
 
           java -jar target/cmdline.jar \
             --client-id=opentdf-sdk \
@@ -175,6 +175,30 @@ jobs:
             --platform-endpoint=http://localhost:8080 \
             -h\
             decryptnano -f nano.ntdf > decrypted
+          
+          if ! diff -q data decrypted; then
+            printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
+            exit 1
+          fi
+        working-directory: cmdline
+
+      - name: Encrypt/Decrypt NanoTDF with plain text policy type
+        run: |
+          echo 'here is some data to encrypt' > data
+
+          java -jar target/cmdline.jar \
+            --client-id=opentdf-sdk \
+            --client-secret=secret \
+            --platform-endpoint=http://localhost:8080 \
+            -h\
+            encryptnano --kas-url=http://localhost:8080 --attr https://example.com/attr/attr1/value/value1 --policy-type plaintext -f data -m 'here is some metadata' > nanopt.ntdf
+
+          java -jar target/cmdline.jar \
+            --client-id=opentdf-sdk \
+            --client-secret=secret \
+            --platform-endpoint=http://localhost:8080 \
+            -h\
+            decryptnano -f nanopt.ntdf > decrypted
           
           if ! diff -q data decrypted; then
             printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
