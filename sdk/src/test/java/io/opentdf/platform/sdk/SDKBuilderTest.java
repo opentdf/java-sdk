@@ -249,7 +249,8 @@ public class SDKBuilderTest {
             SDKBuilder servicesBuilder = SDKBuilder
                     .newBuilder()
                     .clientSecret("client-id", "client-secret")
-                    .platformEndpoint("http" + (useSSLPlatform ? "s" : "") + "://localhost:" + platformServicesServer.getPort());
+                    .platformEndpoint("http" + (useSSLPlatform ? "s" : "") + "://localhost:" + platformServicesServer.getPort())
+                    .protocol(ProtocolType.GRPC); // Use gRPC protocol for test servers
 
             if (!useSSLPlatform) {
                 servicesBuilder = servicesBuilder.useInsecurePlaintextConnection(true);
@@ -396,6 +397,7 @@ public class SDKBuilderTest {
                     .clientSecret("user", "password")
                     .platformEndpoint("http://localhost:" + platformServices.getPort())
                     .useInsecurePlaintextConnection(true)
+                    .protocol(ProtocolType.GRPC) // Use gRPC protocol for test server
                     .build();
             assertThat(sdk.getAuthInterceptor()).isEmpty();
 
@@ -410,6 +412,32 @@ public class SDKBuilderTest {
         } finally {
             platformServices.shutdownNow();
         }
+    }
+
+    @Test
+    void testProtocolConfiguration() {
+        // Test protocol setter and getter functionality
+        SDKBuilder builder = SDKBuilder.newBuilder();
+        
+        // Test setting different protocol types
+        builder.protocol(ProtocolType.GRPC);
+        builder.protocol(ProtocolType.GRPC_WEB);
+        builder.protocol(ProtocolType.CONNECT);
+        
+        // Test null validation
+        assertThrows(IllegalArgumentException.class, () -> {
+            builder.protocol(null);
+        });
+        
+        // Test invalid configuration validation
+        assertThrows(SDKException.class, () -> {
+            SDKBuilder.newBuilder()
+                    .clientSecret("user", "password")
+                    .platformEndpoint("http://localhost:8080")
+                    .useInsecurePlaintextConnection(true)
+                    .protocol(ProtocolType.GRPC_WEB)
+                    .buildServices();
+        });
     }
 
     public static int getRandomPort() throws IOException {
