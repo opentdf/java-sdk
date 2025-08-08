@@ -8,6 +8,7 @@ import io.opentdf.platform.sdk.AutoConfigureException;
 import io.opentdf.platform.sdk.Config;
 import io.opentdf.platform.sdk.KeyType;
 import io.opentdf.platform.sdk.Config.AssertionVerificationKeys;
+import io.opentdf.platform.sdk.NanoTDFType;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
 import nl.altindag.ssl.SSLFactory;
@@ -328,6 +329,7 @@ class Command {
             @Option(names = { "-f", "--file" }, defaultValue = Option.NULL_VALUE) Optional<File> file,
             @Option(names = { "-k", "--kas-url" }, required = true) List<String> kas,
             @Option(names = { "-m", "--metadata" }, defaultValue = Option.NULL_VALUE) Optional<String> metadata,
+            @Option(names = { "--policy-type" }, defaultValue = Option.NULL_VALUE, description = "how to embed the policy, either plaintext or encrypted") Optional<String> policyType,
             @Option(names = { "-a", "--attr" }, defaultValue = Option.NULL_VALUE) Optional<String> attributes)
             throws Exception {
 
@@ -342,6 +344,19 @@ class Command {
         configs.add(Config.withNanoKasInformation(kasInfos));
         attributes.ifPresent(attr -> {
             configs.add(Config.witDataAttributes(attr.split(",")));
+        });
+        policyType.ifPresent(mode -> {
+            switch (mode) {
+                case "":
+                case "encrypted":
+                    configs.add(Config.withPolicyType(NanoTDFType.PolicyType.EMBEDDED_POLICY_ENCRYPTED));
+                    break;
+                case "plaintext":
+                    configs.add(Config.withPolicyType(NanoTDFType.PolicyType.EMBEDDED_POLICY_PLAIN_TEXT));
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unknown policy type: " + mode);
+            }
         });
 
         var nanoTDFConfig = Config.newNanoTDFConfig(configs.toArray(Consumer[]::new));
