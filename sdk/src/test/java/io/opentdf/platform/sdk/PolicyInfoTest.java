@@ -69,7 +69,7 @@ class PolicyInfoTest {
     }
 
     @Test
-    void testReadingDEREncodedSignature() throws IOException {
+    void testReadingSignatureWithComponentSizes() {
         var curve = NanoTDFType.ECCurve.SECP384R1;
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         buffer.put((byte)2);
