@@ -177,6 +177,15 @@ public class SDK implements AutoCloseable {
     }
 
     /**
+     *  {@link MalformedTDFException} indicates that the TDF is malformed in some way
+     */
+    public static class MalformedTDFException extends SDKException {
+        public MalformedTDFException(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    /**
      * {@link SplitKeyException} is thrown when the SDK encounters an error related to
      * the inability to reconstruct a split key during decryption.
      */

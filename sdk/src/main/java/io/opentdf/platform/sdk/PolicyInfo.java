@@ -3,8 +3,8 @@ package io.opentdf.platform.sdk;
 import java.nio.ByteBuffer;
 
 public class PolicyInfo {
+    private static final int DEFAULT_BINDING_SIZE = 8;
     private NanoTDFType.PolicyType type;
-    private boolean hasECDSABinding;
     private byte[] body;
     private byte[] binding;
 
@@ -13,7 +13,6 @@ public class PolicyInfo {
 
     public PolicyInfo(ByteBuffer buffer, ECCMode eccMode) {
         this.type = NanoTDFType.PolicyType.values()[buffer.get()];
-        this.hasECDSABinding = eccMode.isECDSABindingEnabled();
 
         if (this.type == NanoTDFType.PolicyType.REMOTE_POLICY) {
 
@@ -45,13 +44,39 @@ public class PolicyInfo {
             }
         }
 
-        int bindingBytesSize = 8; // GMAC length
-        if (this.hasECDSABinding) { // ECDSA - The size of binding depends on the curve.
-            bindingBytesSize = ECCMode.getECDSASignatureStructSize(eccMode.getCurve());
+        this.binding = readBinding(buffer, eccMode);
+    }
+
+    static byte[] readBinding(ByteBuffer buffer, ECCMode eccMode) {
+        byte[] binding;
+        if (eccMode.isECDSABindingEnabled()) { // ECDSA - The size of binding depends on the curve.
+            int rSize = getSize(buffer.get(), eccMode.getCurve());
+            // don't bother to validate since we can only create an array of size 1024 bytes
+            byte[] rBytes = new byte[rSize];
+            buffer.get(rBytes);
+            int sSize = getSize(buffer.get(), eccMode.getCurve());
+            byte[] sBytes = new byte[sSize];
+            buffer.get(sBytes);
+            int bindingByteSize = eccMode.getCurve().getKeySize();
+            binding = new byte[2 * bindingByteSize];
+            System.arraycopy(rBytes, 0,  binding, bindingByteSize - rSize, rSize);
+            System.arraycopy(sBytes, 0, binding, bindingByteSize + bindingByteSize - sSize, sSize);
+        } else {
+            binding = new byte[DEFAULT_BINDING_SIZE];
+            buffer.get(binding);
         }
 
-        this.binding = new byte[bindingBytesSize];
-        buffer.get(this.binding);
+        return binding;
+    }
+
+    private static int getSize(byte size, NanoTDFType.ECCurve curve) {
+        int elementSize = Byte.toUnsignedInt(size);
+        if (elementSize > curve.getKeySize()) {
+            throw new SDK.MalformedTDFException(
+                    String.format("Invalid ECDSA binding size. Expected signature components to be at most %d bytes but got (%d) bytes for curve %s.",
+                            curve.getKeySize(), elementSize, curve.getCurveName()));
+        }
+        return elementSize;
     }
 
     public int getTotalSize() {
@@ -64,7 +89,6 @@ public class PolicyInfo {
             if (type == NanoTDFType.PolicyType.EMBEDDED_POLICY_PLAIN_TEXT ||
                     type == NanoTDFType.PolicyType.EMBEDDED_POLICY_ENCRYPTED) {
 
-                int policySize = body.length;
                 totalSize = (1 + Short.BYTES + body.length + binding.length);
             } else {
                 throw new RuntimeException("Embedded policy with key access is not supported.");
