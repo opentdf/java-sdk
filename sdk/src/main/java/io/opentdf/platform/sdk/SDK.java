@@ -166,7 +166,7 @@ public class SDK implements AutoCloseable {
      * to get the {@link Manifest} from a TDF.
      * @param manifest The {@link Manifest} containing the policy.
      * @return The decoded {@link PolicyObject}.
-     * @throws SDKException if there is an error during decoding.
+     * @throws {@link SDKException} if there is an error during decoding.
      */
     public static PolicyObject decodePolicyObject(Manifest manifest) throws SDKException {
         return Manifest.decodePolicyObject(manifest);
@@ -177,7 +177,7 @@ public class SDK implements AutoCloseable {
     }
 
     /**
-     *  {@link MalformedTDFException} indicates that the TDF is malformed in some way
+     *  Indicates that the TDF is malformed in some way
      */
     public static class MalformedTDFException extends SDKException {
         public MalformedTDFException(String errorMessage) {
