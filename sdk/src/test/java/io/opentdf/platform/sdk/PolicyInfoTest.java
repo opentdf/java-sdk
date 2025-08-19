@@ -69,8 +69,9 @@ class PolicyInfoTest {
 
 
     BigInteger getRandomBigInteger(Random rand, int byteLength) {
-        return new BigInteger(1+rand.nextInt(byteLength-1), rand);
+        return new BigInteger((1+rand.nextInt(byteLength-1))*8, rand);
     }
+
     @Test
     void testReadingSignatureWithComponentSizes() {
         var rand = new Random();
@@ -96,6 +97,47 @@ class PolicyInfoTest {
             assertThat(signature).containsExactly(originalSig);
             // make sure we read all bytes so that reading continues after us in the TDF
             assertThat(buffer.position()).isEqualTo(buffer.capacity());
+        }
+    }
+
+    @Test
+    void testParsingTooBigSignatureComponents() {
+        {
+            var rand = new Random();
+            var curve = NanoTDFType.ECCurve.SECP256R1;
+            var rBytes = new BigInteger((curve.getKeySize() + 1) * 8, rand).toByteArray();
+            var sBytes = getRandomBigInteger(rand, curve.getKeySize()).toByteArray();
+            var buffer = ByteBuffer.allocate(rBytes.length + sBytes.length + 2);
+            buffer.put((byte) rBytes.length);
+            buffer.put(rBytes);
+            buffer.put((byte) sBytes.length);
+            buffer.put(sBytes);
+
+            buffer.flip();
+
+            ECCMode eccMode = new ECCMode();
+            eccMode.setECDSABinding(true);
+            eccMode.setEllipticCurve(curve);
+            assertThrows(SDK.MalformedTDFException.class, () -> PolicyInfo.readBinding(buffer, eccMode));
+        }
+
+        {
+            var rand = new Random();
+            var curve = NanoTDFType.ECCurve.SECP256R1;
+            var rBytes = getRandomBigInteger(rand, curve.getKeySize()).toByteArray();
+            var sBytes = new BigInteger((curve.getKeySize() + 1) * 8, rand).toByteArray();
+            var buffer = ByteBuffer.allocate(rBytes.length + sBytes.length + 2);
+            buffer.put((byte) rBytes.length);
+            buffer.put(rBytes);
+            buffer.put((byte) sBytes.length);
+            buffer.put(sBytes);
+
+            buffer.flip();
+
+            ECCMode eccMode = new ECCMode();
+            eccMode.setECDSABinding(true);
+            eccMode.setEllipticCurve(curve);
+            assertThrows(SDK.MalformedTDFException.class, () -> PolicyInfo.readBinding(buffer, eccMode));
         }
     }
 }
