@@ -1,5 +1,6 @@
 package io.opentdf.platform.sdk;
 
+import org.assertj.core.api.AbstractIterableAssert;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -66,25 +67,19 @@ class PolicyInfoTest {
         assertArrayEquals(binding, policyInfo.getPolicyBinding());
     }
 
+
+    BigInteger getRandomBigInteger(Random rand, int bitLength) {
+        var numBytesForKey = (bitLength + 7) / 8; // Round up to the nearest byte
+        return new BigInteger(rand.nextInt(numBytesForKey), rand);
+    }
     @Test
     void testReadingSignatureWithComponentSizes() {
         var rand = new Random();
+        var curve = NanoTDFType.ECCurve.SECP256R1;
         for (var i = 0; i < 100; i++) {
-            var curve = NanoTDFType.ECCurve.SECP384R1;
-            ByteBuffer buffer = ByteBuffer.allocate(1024);
-            var big = 1 + rand.nextInt(Integer.MAX_VALUE - 1);
-            var small = 1 + rand.nextInt(Integer.MAX_VALUE >>> 10 - 1);
-            int r;
-            int s;
-            if (rand.nextBoolean()) {
-                r = big;
-                s = small;
-            } else {
-                r = small;
-                s = big;
-            }
-            var rBytes = BigInteger.valueOf(r).toByteArray();
-            var sBytes = BigInteger.valueOf(s).toByteArray();
+            var rBytes = getRandomBigInteger(rand, curve.getKeySize()).toByteArray();
+            var sBytes = getRandomBigInteger(rand, curve.getKeySize()) .toByteArray();
+            var buffer = ByteBuffer.allocate(rBytes.length + sBytes.length + 2);
             buffer.put((byte)rBytes.length);
             buffer.put(rBytes);
             buffer.put((byte) sBytes.length);
@@ -100,6 +95,8 @@ class PolicyInfoTest {
 
             byte[] signature = PolicyInfo.readBinding(buffer, eccMode);
             assertThat(signature).containsExactly(originalSig);
+            // make sure we read all bytes so that reading continues after us in the TDF
+            assertThat(buffer.position()).isEqualTo(buffer.capacity());
         }
     }
 }
