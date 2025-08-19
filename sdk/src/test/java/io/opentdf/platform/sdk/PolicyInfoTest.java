@@ -3,7 +3,6 @@ package io.opentdf.platform.sdk;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -68,7 +67,7 @@ class PolicyInfoTest {
     }
 
     @Test
-    void testReadingEncodedSignature() throws IOException {
+    void testReadingSignatureWithComponentSizes() {
         var rand = new Random();
         for (var i = 0; i < 100; i++) {
             var curve = NanoTDFType.ECCurve.SECP384R1;
