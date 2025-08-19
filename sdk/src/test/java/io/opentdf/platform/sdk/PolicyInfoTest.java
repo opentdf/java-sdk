@@ -68,9 +68,8 @@ class PolicyInfoTest {
     }
 
 
-    BigInteger getRandomBigInteger(Random rand, int bitLength) {
-        var numBytesForKey = (bitLength + 7) / 8; // Round up to the nearest byte
-        return new BigInteger(rand.nextInt(numBytesForKey), rand);
+    BigInteger getRandomBigInteger(Random rand, int byteLength) {
+        return new BigInteger(1+rand.nextInt(byteLength-1), rand);
     }
     @Test
     void testReadingSignatureWithComponentSizes() {
