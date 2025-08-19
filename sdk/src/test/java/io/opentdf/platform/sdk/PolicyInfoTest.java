@@ -1,14 +1,13 @@
 package io.opentdf.platform.sdk;
 
-import org.bouncycastle.asn1.ASN1Integer;
-import org.bouncycastle.asn1.DERBitString;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Random;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
@@ -69,32 +68,39 @@ class PolicyInfoTest {
     }
 
     @Test
-    void testReadingDEREncodedSignature() throws IOException {
-        var curve = NanoTDFType.ECCurve.SECP384R1;
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        buffer.put((byte)2);
-        buffer.put(new BigInteger("200", 10).toByteArray());
-        buffer.put((byte)3);
-        buffer.put(new BigInteger("65536", 10).toByteArray());
+    void testReadingEncodedSignature() throws IOException {
+        var rand = new Random();
+        for (var i = 0; i < 100; i++) {
+            var curve = NanoTDFType.ECCurve.SECP384R1;
+            ByteBuffer buffer = ByteBuffer.allocate(1024);
+            var big = 1 + rand.nextInt(Integer.MAX_VALUE - 1);
+            var small = 1 + rand.nextInt(Integer.MAX_VALUE >>> 10 - 1);
+            int r;
+            int s;
+            if (rand.nextBoolean()) {
+                r = big;
+                s = small;
+            } else {
+                r = small;
+                s = big;
+            }
+            var rBytes = BigInteger.valueOf(r).toByteArray();
+            var sBytes = BigInteger.valueOf(s).toByteArray();
+            buffer.put((byte)rBytes.length);
+            buffer.put(rBytes);
+            buffer.put((byte) sBytes.length);
+            buffer.put(sBytes);
 
+            var originalSig = Arrays.copyOf(buffer.array(), buffer.position());
 
-        ECCMode eccMode = new ECCMode();
-        eccMode.setECDSABinding(true);
-        eccMode.setEllipticCurve(curve);
+            buffer.flip();
 
-        buffer.flip();
+            ECCMode eccMode = new ECCMode();
+            eccMode.setECDSABinding(true);
+            eccMode.setEllipticCurve(curve);
 
-        byte[] signature = PolicyInfo.readBinding(buffer, eccMode);
-        assertThat(signature).hasSize(2 * curve.getKeySize());
-
-        var rBytes = new byte[curve.getKeySize()];
-        System.arraycopy(signature, 0, rBytes, 0, rBytes.length);
-        var r = new BigInteger(1, rBytes);
-        assertThat(r).isEqualTo(new BigInteger("200", 10));
-
-        var sBytes = new byte[curve.getKeySize()];
-        System.arraycopy(signature, curve.getKeySize(), sBytes, 0, curve.getKeySize());
-        var s = new BigInteger(1, sBytes);
-        assertThat(s).isEqualTo(new BigInteger("65536", 10));
+            byte[] signature = PolicyInfo.readBinding(buffer, eccMode);
+            assertThat(signature).containsExactly(originalSig);
+        }
     }
 }

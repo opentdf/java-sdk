@@ -57,10 +57,11 @@ public class PolicyInfo {
             int sSize = getSize(buffer.get(), eccMode.getCurve());
             byte[] sBytes = new byte[sSize];
             buffer.get(sBytes);
-            int bindingByteSize = eccMode.getCurve().getKeySize();
-            binding = new byte[2 * bindingByteSize];
-            System.arraycopy(rBytes, 0,  binding, bindingByteSize - rSize, rSize);
-            System.arraycopy(sBytes, 0, binding, bindingByteSize + bindingByteSize - sSize, sSize);
+            binding = new byte[rSize + sSize + 2];
+            System.arraycopy(new byte[]{(byte) rSize}, 0, binding, 0, 1);
+            System.arraycopy(rBytes, 0, binding, 1, rSize);
+            System.arraycopy(new byte[]{(byte) sSize}, 0, binding, 1 + rSize, 1);
+            System.arraycopy(sBytes, 0, binding, 2 + rSize, sSize);
         } else {
             binding = new byte[DEFAULT_BINDING_SIZE];
             buffer.get(binding);
