@@ -1,6 +1,5 @@
 package io.opentdf.platform.sdk;
 
-import org.assertj.core.api.AbstractIterableAssert;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

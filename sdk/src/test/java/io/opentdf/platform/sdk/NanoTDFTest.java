@@ -11,7 +11,6 @@ import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.Config.NanoTDFReaderConfig;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
