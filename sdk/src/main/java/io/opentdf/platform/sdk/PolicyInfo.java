@@ -51,7 +51,6 @@ public class PolicyInfo {
         byte[] binding;
         if (eccMode.isECDSABindingEnabled()) { // ECDSA - The size of binding depends on the curve.
             int rSize = getSize(buffer.get(), eccMode.getCurve());
-            // don't bother to validate since we can only create an array of size 1024 bytes
             byte[] rBytes = new byte[rSize];
             buffer.get(rBytes);
             int sSize = getSize(buffer.get(), eccMode.getCurve());
@@ -72,10 +71,11 @@ public class PolicyInfo {
 
     private static int getSize(byte size, NanoTDFType.ECCurve curve) {
         int elementSize = Byte.toUnsignedInt(size);
-        if (elementSize > curve.getKeySize()) {
+        int bytesNeededForCurve = (curve.getKeySize() + 7) / 8; // Round up to the nearest byte
+        if (elementSize > bytesNeededForCurve) {
             throw new SDK.MalformedTDFException(
                     String.format("Invalid ECDSA binding size. Expected signature components to be at most %d bytes but got (%d) bytes for curve %s.",
-                            curve.getKeySize(), elementSize, curve.getCurveName()));
+                            bytesNeededForCurve, elementSize, curve.getCurveName()));
         }
         return elementSize;
     }
