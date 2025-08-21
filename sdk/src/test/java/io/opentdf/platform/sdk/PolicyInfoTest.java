@@ -2,6 +2,13 @@ package io.opentdf.platform.sdk;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Random;
+
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 
 class PolicyInfoTest {
@@ -57,5 +64,79 @@ class PolicyInfoTest {
         byte[] binding = new byte[]{1, 2, 3};
         policyInfo.setPolicyBinding(binding);
         assertArrayEquals(binding, policyInfo.getPolicyBinding());
+    }
+
+
+    BigInteger getRandomBigInteger(Random rand, int byteLength) {
+        return new BigInteger((1+rand.nextInt(byteLength-1))*8, rand);
+    }
+
+    @Test
+    void testReadingSignatureWithComponentSizes() {
+        var rand = new Random();
+        var curve = NanoTDFType.ECCurve.SECP256R1;
+        for (var i = 0; i < 100; i++) {
+            var rBytes = getRandomBigInteger(rand, curve.getKeySize()).toByteArray();
+            var sBytes = getRandomBigInteger(rand, curve.getKeySize()) .toByteArray();
+            var buffer = ByteBuffer.allocate(rBytes.length + sBytes.length + 2);
+            buffer.put((byte)rBytes.length);
+            buffer.put(rBytes);
+            buffer.put((byte) sBytes.length);
+            buffer.put(sBytes);
+
+            var originalSig = Arrays.copyOf(buffer.array(), buffer.position());
+
+            buffer.flip();
+
+            ECCMode eccMode = new ECCMode();
+            eccMode.setECDSABinding(true);
+            eccMode.setEllipticCurve(curve);
+
+            byte[] signature = PolicyInfo.readBinding(buffer, eccMode);
+            assertThat(signature).containsExactly(originalSig);
+            // make sure we read all bytes so that reading continues after us in the TDF
+            assertThat(buffer.position()).isEqualTo(buffer.capacity());
+        }
+    }
+
+    @Test
+    void testParsingTooBigSignatureComponents() {
+        {
+            var rand = new Random();
+            var curve = NanoTDFType.ECCurve.SECP256R1;
+            var rBytes = new BigInteger((curve.getKeySize() + 1) * 8, rand).toByteArray();
+            var sBytes = getRandomBigInteger(rand, curve.getKeySize()).toByteArray();
+            var buffer = ByteBuffer.allocate(rBytes.length + sBytes.length + 2);
+            buffer.put((byte) rBytes.length);
+            buffer.put(rBytes);
+            buffer.put((byte) sBytes.length);
+            buffer.put(sBytes);
+
+            buffer.flip();
+
+            ECCMode eccMode = new ECCMode();
+            eccMode.setECDSABinding(true);
+            eccMode.setEllipticCurve(curve);
+            assertThrows(SDK.MalformedTDFException.class, () -> PolicyInfo.readBinding(buffer, eccMode));
+        }
+
+        {
+            var rand = new Random();
+            var curve = NanoTDFType.ECCurve.SECP256R1;
+            var rBytes = getRandomBigInteger(rand, curve.getKeySize()).toByteArray();
+            var sBytes = new BigInteger((curve.getKeySize() + 1) * 8, rand).toByteArray();
+            var buffer = ByteBuffer.allocate(rBytes.length + sBytes.length + 2);
+            buffer.put((byte) rBytes.length);
+            buffer.put(rBytes);
+            buffer.put((byte) sBytes.length);
+            buffer.put(sBytes);
+
+            buffer.flip();
+
+            ECCMode eccMode = new ECCMode();
+            eccMode.setECDSABinding(true);
+            eccMode.setEllipticCurve(curve);
+            assertThrows(SDK.MalformedTDFException.class, () -> PolicyInfo.readBinding(buffer, eccMode));
+        }
     }
 }
