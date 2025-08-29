@@ -4,6 +4,8 @@ import io.opentdf.platform.authorization.Entity;
 import io.opentdf.platform.authorization.EntityEntitlements;
 import io.opentdf.platform.authorization.GetEntitlementsRequest;
 import io.opentdf.platform.authorization.GetEntitlementsResponse;
+import io.opentdf.platform.authorization.v2.EntityIdentifier;
+import io.opentdf.platform.entity.EntityChain;
 import io.opentdf.platform.sdk.*;
 
 import java.util.Collections;
@@ -31,5 +33,6 @@ public class GetEntitlements {
         List<EntityEntitlements> entitlements = resp.getEntitlementsList();
 
         System.out.println(entitlements.get(0).getAttributeValueFqnsList());
+
     }
 }

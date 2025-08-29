@@ -4,7 +4,6 @@ import com.connectrpc.Interceptor;
 
 import com.connectrpc.impl.ProtocolClient;
 import io.opentdf.platform.authorization.AuthorizationServiceClientInterface;
-import io.opentdf.platform.authorization.v2.AuthorizationServiceClientInterface;
 import io.opentdf.platform.policy.attributes.AttributesServiceClientInterface;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClientInterface;
 import io.opentdf.platform.policy.namespaces.NamespaceServiceClientInterface;
@@ -75,7 +74,7 @@ public class SDK implements AutoCloseable {
 
         AuthorizationServiceClientInterface authorization();
 
-        io.opentdf.platform.authorization.v2.AuthorizationServiceClient authorizationV2();
+        io.opentdf.platform.authorization.v2.AuthorizationServiceClientInterface authorizationV2();
 
         KeyAccessServerRegistryServiceClientInterface kasRegistry();
 
