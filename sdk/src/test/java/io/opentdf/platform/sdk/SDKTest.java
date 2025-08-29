@@ -31,6 +31,15 @@ class SDKTest {
     }
 
     @Test
+    void testAuthorizationServiceClientV2() {
+        var platformServicesClient = mock(ProtocolClient.class);
+        io.opentdf.platform.authorization.v2.AuthorizationServiceClientInterface authSvcV2 = mock(io.opentdf.platform.authorization.v2.AuthorizationServiceClientInterface.class);
+        var fakeServiceBuilder = new FakeServicesBuilder().setAuthorizationServiceV2(authSvcV2).build();
+        var sdk = new SDK(fakeServiceBuilder, null, null, platformServicesClient, null);
+        assertThat(sdk.getServices().authorizationV2()).isSameAs(fakeServiceBuilder.authorizationV2());
+    }
+
+    @Test
     void testExaminingInvalidFile() {
         var chan = new SeekableByteChannel() {
             @Override
