@@ -10,6 +10,7 @@ import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClientInterfac
 
 public class FakeServicesBuilder {
     private AuthorizationServiceClientInterface authorizationService;
+    private io.opentdf.platform.authorization.v2.AuthorizationServiceClientInterface authorizationServiceV2;
     private AttributesServiceClientInterface attributesService;
     private NamespaceServiceClientInterface namespaceService;
     private SubjectMappingServiceClientInterface subjectMappingService;
@@ -20,6 +21,11 @@ public class FakeServicesBuilder {
 
     public FakeServicesBuilder setAuthorizationService(AuthorizationServiceClientInterface authorizationService) {
         this.authorizationService = authorizationService;
+        return this;
+    }
+
+    public FakeServicesBuilder setAuthorizationServiceV2(io.opentdf.platform.authorization.v2.AuthorizationServiceClientInterface authorizationServiceV2) {
+        this.authorizationServiceV2 = authorizationServiceV2;
         return this;
     }
 
@@ -59,7 +65,7 @@ public class FakeServicesBuilder {
     }
 
     public FakeServices build() {
-        return new FakeServices(authorizationService, attributesService, namespaceService, subjectMappingService,
+        return new FakeServices(authorizationService, authorizationServiceV2, attributesService, namespaceService, subjectMappingService,
                 resourceMappingService, keyAccessServerRegistryServiceFutureStub, wellKnownServiceClient, kas);
     }
 }

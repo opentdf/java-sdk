@@ -74,6 +74,8 @@ public class SDK implements AutoCloseable {
 
         AuthorizationServiceClientInterface authorization();
 
+        io.opentdf.platform.authorization.v2.AuthorizationServiceClientInterface authorizationV2();
+
         KeyAccessServerRegistryServiceClientInterface kasRegistry();
 
         WellKnownServiceClientInterface wellknown();

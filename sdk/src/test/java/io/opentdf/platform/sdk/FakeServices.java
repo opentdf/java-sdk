@@ -13,6 +13,7 @@ import java.util.Objects;
 public class FakeServices implements SDK.Services {
 
     private final AuthorizationServiceClientInterface authorizationService;
+    private final io.opentdf.platform.authorization.v2.AuthorizationServiceClientInterface authorizationServiceV2;
     private final AttributesServiceClientInterface attributesService;
     private final NamespaceServiceClientInterface namespaceService;
     private final SubjectMappingServiceClientInterface subjectMappingService;
@@ -23,6 +24,7 @@ public class FakeServices implements SDK.Services {
 
     public FakeServices(
             AuthorizationServiceClientInterface authorizationService,
+            io.opentdf.platform.authorization.v2.AuthorizationServiceClientInterface authorizationServiceV2,
             AttributesServiceClientInterface attributesService,
             NamespaceServiceClientInterface namespaceService,
             SubjectMappingServiceClientInterface subjectMappingService,
@@ -31,6 +33,7 @@ public class FakeServices implements SDK.Services {
             WellKnownServiceClientInterface wellKnownServiceClient,
             SDK.KAS kas) {
         this.authorizationService = authorizationService;
+        this.authorizationServiceV2 = authorizationServiceV2;
         this.attributesService = attributesService;
         this.namespaceService = namespaceService;
         this.subjectMappingService = subjectMappingService;
@@ -38,6 +41,11 @@ public class FakeServices implements SDK.Services {
         this.keyAccessServerRegistryServiceFutureStub = keyAccessServerRegistryServiceFutureStub;
         this.wellKnownService = wellKnownServiceClient;
         this.kas = kas;
+    }
+
+    @Override
+    public io.opentdf.platform.authorization.v2.AuthorizationServiceClientInterface authorizationV2() {
+        return Objects.requireNonNull(authorizationServiceV2);
     }
 
     @Override

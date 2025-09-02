@@ -268,6 +268,9 @@ public class SDKBuilderTest {
             services = servicesAndComponents.services;
 
             assertThat(services).isNotNull();
+            io.opentdf.platform.authorization.v2.AuthorizationServiceClientInterface authorizationServiceClientInterface
+             = services.authorizationV2();
+            assertThat(authorizationServiceClientInterface).isNotNull();
 
             httpServer.enqueue(new MockResponse()
                     .setBody("{\"access_token\": \"hereisthetoken\", \"token_type\": \"Bearer\"}")

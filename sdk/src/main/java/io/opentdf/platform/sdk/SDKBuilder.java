@@ -275,6 +275,7 @@ public class SDKBuilder {
         var subjectMappingService = new SubjectMappingServiceClient(client);
         var resourceMappingService = new ResourceMappingServiceClient(client);
         var authorizationService = new AuthorizationServiceClient(client);
+        var authorizationServiceV2 = new io.opentdf.platform.authorization.v2.AuthorizationServiceClient(client);
         var kasRegistryService = new KeyAccessServerRegistryServiceClient(client);
         var wellKnownService = new WellKnownServiceClient(client);
 
@@ -309,6 +310,11 @@ public class SDKBuilder {
             @Override
             public AuthorizationServiceClient authorization() {
                 return authorizationService;
+            }
+
+            @Override
+            public io.opentdf.platform.authorization.v2.AuthorizationServiceClient authorizationV2() {
+                return authorizationServiceV2;
             }
 
             @Override
