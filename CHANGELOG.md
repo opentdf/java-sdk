@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.10.0](https://github.com/opentdf/java-sdk/compare/v0.9.0...v0.10.0) (2025-09-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sdk:** add base key and support for key grants in ZTDF ([#271](https://github.com/opentdf/java-sdk/issues/271))
+
+### Features
+
+* ability to set connect-rpc protocol ([#285](https://github.com/opentdf/java-sdk/issues/285)) ([47041c5](https://github.com/opentdf/java-sdk/commit/47041c56036bdcfe172dfc4817de5aec868a78e5))
+* add system metadata assertion ([#270](https://github.com/opentdf/java-sdk/issues/270)) ([d235f13](https://github.com/opentdf/java-sdk/commit/d235f13ae8e20add618ebe30e18d0b485b7ed58f))
+* expose AuthorizationService v2 ([#287](https://github.com/opentdf/java-sdk/issues/287)) ([d1fd106](https://github.com/opentdf/java-sdk/commit/d1fd1063a42b8dd1dfa5dfe157c4dcc4b3d20ae8))
+* introduce the base key for nano flows ([#273](https://github.com/opentdf/java-sdk/issues/273)) ([d337704](https://github.com/opentdf/java-sdk/commit/d337704fa9ac63864a9bc896a837f19b15cf3c0c))
+* **sdk:** add base key and support for key grants in ZTDF ([#271](https://github.com/opentdf/java-sdk/issues/271)) ([c3b79db](https://github.com/opentdf/java-sdk/commit/c3b79dbd8786fdcbd18beff76b8cdf26c38b24da))
+
+
+### Bug Fixes
+
+* **ci:** Update codeql.yaml to run on all pull requests ([#283](https://github.com/opentdf/java-sdk/issues/283)) ([9e318bb](https://github.com/opentdf/java-sdk/commit/9e318bb80a38a657f35735616c493744aeb68f62))
+* create AES-256 keys of the correct length with all curves ([#282](https://github.com/opentdf/java-sdk/issues/282)) ([95c20b3](https://github.com/opentdf/java-sdk/commit/95c20b3af31bd4e6c58a570d1d760747ce3e3d3f))
+* **sdk:** add methods to examine Manifest and Policy ([#278](https://github.com/opentdf/java-sdk/issues/278)) ([03d5d41](https://github.com/opentdf/java-sdk/commit/03d5d410d093348507e3fc68f0f8bff8445db0a9))
+* **sdk:** parse the component sizes ([#286](https://github.com/opentdf/java-sdk/issues/286)) ([3b1bb69](https://github.com/opentdf/java-sdk/commit/3b1bb69ca4761c29fe086caf655421f4b0a3c252))
+
 ## [0.9.0](https://github.com/opentdf/java-sdk/compare/v0.8.1...v0.9.0) (2025-07-14)
 
 
