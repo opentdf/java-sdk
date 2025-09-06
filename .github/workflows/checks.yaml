@@ -113,7 +113,7 @@ jobs:
         id: run-platform
         uses: opentdf/platform/test/start-up-with-containers@main
         with:
-          platform-ref: main
+          platform-ref: chore/update-protovalidate
         
       - name: Get grpcurl
         run: go install github.com/fullstorydev/grpcurl/cmd/grpcurl@v1.8.9
@@ -339,7 +339,7 @@ jobs:
     with:
       focus-sdk: java
       java-ref: ${{ github.ref }} latest
-      platform-ref: main lts
+      platform-ref: chore/update-protovalidate
   
   ci:
     needs:
