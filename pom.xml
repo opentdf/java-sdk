@@ -16,7 +16,7 @@
         <log4j.version>2.20.0</log4j.version>
         <grpc.version>1.68.0</grpc.version>
         <protobuf.version>4.29.2</protobuf.version>
-        <sslcontext.version>8.3.5</sslcontext.version>
+        <ayza.version>10.0.0</ayza.version>
         <!-- JaCoCo Properties -->
         <jacoco.version>0.8.13</jacoco.version>
         <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
@@ -78,8 +78,8 @@
             </dependency>
             <dependency>
                 <groupId>io.github.hakky54</groupId>
-                <artifactId>sslcontext-kickstart-for-pem</artifactId>
-                <version>${sslcontext.version}</version>
+                <artifactId>ayza-for-pem</artifactId>
+                <version>${ayza.version}</version>
                 <exclusions>
                     <exclusion>
                         <groupId>org.slf4j</groupId>
@@ -89,8 +89,8 @@
             </dependency>
             <dependency>
                 <groupId>io.github.hakky54</groupId>
-                <artifactId>sslcontext-kickstart</artifactId>
-                <version>${sslcontext.version}</version>
+                <artifactId>ayza</artifactId>
+                <version>${ayza.version}</version>
                 <exclusions>
                     <exclusion>
                         <groupId>org.slf4j</groupId>
@@ -100,8 +100,8 @@
             </dependency>
             <dependency>
                 <groupId>io.github.hakky54</groupId>
-                <artifactId>sslcontext-kickstart-for-netty</artifactId>
-                <version>${sslcontext.version}</version>
+                <artifactId>ayza-for-netty</artifactId>
+                <version>${ayza.version}</version>
                 <exclusions>
                     <exclusion>
                         <groupId>org.slf4j</groupId>
