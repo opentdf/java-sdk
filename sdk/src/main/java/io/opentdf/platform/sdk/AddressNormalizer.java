@@ -22,11 +22,20 @@ class AddressNormalizer {
 
         final String scheme = usePlaintext ? "http" : "https";
         if (uri.getHost() == null) {
-            // if there is no host then we are likely dealing with a host and port
-            try {
-                uri = new URI(scheme, null, uri.getScheme(), Integer.parseInt(uri.getSchemeSpecificPart()), null, null, null);
-            } catch (URISyntaxException e) {
-                throw new SDKException("error trying to create URL for host and port[" + urlString + "]", e);
+            // if there is no host and no scheme, then we assume the input is a hostname with no port or scheme
+            if (uri.getScheme() == null) {
+                try {
+                    uri = new URI(scheme, null, uri.getSchemeSpecificPart(), -1, null, null, null);
+                } catch (URISyntaxException e) {
+                    throw new SDKException("error trying to create URL for hostname [" + urlString + "]", e);
+                }
+            } else {
+                // otherwise, we have a scheme but no host, so we assume the scheme is actually the host and the SSP is the port
+                try {
+                    uri = new URI(scheme, null, uri.getScheme(), Integer.parseInt(uri.getSchemeSpecificPart()), null, null, null);
+                } catch (URISyntaxException | NumberFormatException e) {
+                    throw new SDKException("error trying to create URL for host and port[" + urlString + "]", e);
+                }
             }
         }
         final int port;
