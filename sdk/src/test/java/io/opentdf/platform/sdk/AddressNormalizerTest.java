@@ -14,6 +14,7 @@ class AddressNormalizerTest {
         // default to https if no scheme is provided
         assertThat(normalizeAddress("example.org:1234", false)).isEqualTo("https://example.org:1234");
         assertThat(normalizeAddress("ftp://example.org", false)).isEqualTo("https://example.org:443");
+        assertThat(normalizeAddress("keycloak.vm", false)).isEqualTo("https://keycloak.vm:443");
     }
 
     @Test
@@ -23,5 +24,6 @@ class AddressNormalizerTest {
         // default to http if no scheme is provided
         assertThat(normalizeAddress("example.org:1234", true)).isEqualTo("http://example.org:1234");
         assertThat(normalizeAddress("sftp://example.org", true)).isEqualTo("http://example.org:80");
+        assertThat(normalizeAddress("keycloak.vm", true)).isEqualTo("http://keycloak.vm:80");
     }
 }
