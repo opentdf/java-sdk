@@ -22,7 +22,7 @@ class AddressNormalizer {
 
         final String scheme = usePlaintext ? "http" : "https";
         if (uri.getHost() == null) {
-            // if there is no host and no scheme, then we assume the input is a bare hostname
+            // if there is no host and no scheme, then we assume the input is a hostname with no port or scheme
             if (uri.getScheme() == null) {
                 try {
                     uri = new URI(scheme, null, uri.getSchemeSpecificPart(), -1, null, null, null);
