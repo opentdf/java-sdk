@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import static io.opentdf.platform.sdk.AddressNormalizer.normalizeAddress;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class AddressNormalizerTest {
 
