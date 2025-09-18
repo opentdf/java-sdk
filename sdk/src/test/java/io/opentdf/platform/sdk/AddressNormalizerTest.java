@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import static io.opentdf.platform.sdk.AddressNormalizer.normalizeAddress;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.junit.Assert.assertThrows;
 
 class AddressNormalizerTest {
 
@@ -25,5 +26,14 @@ class AddressNormalizerTest {
         assertThat(normalizeAddress("example.org:1234", true)).isEqualTo("http://example.org:1234");
         assertThat(normalizeAddress("sftp://example.org", true)).isEqualTo("http://example.org:80");
         assertThat(normalizeAddress("keycloak.vm", true)).isEqualTo("http://keycloak.vm:80");
+    }
+
+    @Test
+    void testAddressNormalizationWithInvalidPort() {
+        var thrown = assertThrows(SDKException.class, () -> normalizeAddress("example.org:notaport", true));
+        assertThat(thrown.getMessage()).contains("example.org:notaport");
+
+        thrown = assertThrows(SDKException.class, () -> normalizeAddress("http://example.org:notaport", true));
+        assertThat(thrown.getMessage()).contains("http://example.org:notaport");
     }
 }

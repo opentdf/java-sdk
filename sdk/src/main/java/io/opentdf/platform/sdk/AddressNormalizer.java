@@ -33,7 +33,7 @@ class AddressNormalizer {
                 // otherwise, we have a scheme but no host, so we assume the scheme is actually the host and the SSP is the port
                 try {
                     uri = new URI(scheme, null, uri.getScheme(), Integer.parseInt(uri.getSchemeSpecificPart()), null, null, null);
-                } catch (URISyntaxException e) {
+                } catch (URISyntaxException | NumberFormatException e) {
                     throw new SDKException("error trying to create URL for host and port[" + urlString + "]", e);
                 }
             }
