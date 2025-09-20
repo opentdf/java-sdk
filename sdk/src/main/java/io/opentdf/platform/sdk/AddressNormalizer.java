@@ -16,7 +16,7 @@ class AddressNormalizer {
 
     static String normalizeAddress(String urlString, boolean usePlaintext) {
         final String scheme = usePlaintext ? "http" : "https";
-        URI uri = getUri(urlString);
+        URI uri = getInitialUri(urlString);
 
         if (uri.getHost() == null) {
             // if there is no host and no scheme, then we assume the input is a hostname with no port or scheme
@@ -51,7 +51,10 @@ class AddressNormalizer {
         }
     }
 
-    private static URI getUri(String urlString) {
+    // tries to parse a URI that is possibly missing a scheme by first trying the input directly, and then
+    // trying again with a fake scheme if the first attempt fails. this is needed because URIs without a schema
+    // whose hostnames are not valid schemas will fail to parse
+    private static URI getInitialUri(String urlString) {
         URISyntaxException initialThrown = null;
         try {
             return new URI(urlString);
