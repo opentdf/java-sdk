@@ -6,6 +6,8 @@ import org.slf4j.LoggerFactory;
 import java.net.URI;
 import java.net.URISyntaxException;
 
+import static java.lang.String.format;
+
 class AddressNormalizer {
     private static final Logger logger = LoggerFactory.getLogger(AddressNormalizer.class);
 
@@ -13,14 +15,9 @@ class AddressNormalizer {
     }
 
     static String normalizeAddress(String urlString, boolean usePlaintext) {
-        URI uri;
-        try {
-            uri = new URI(urlString);
-        } catch (URISyntaxException e) {
-            throw new SDKException("error trying to parse URL [" + urlString + "]", e);
-        }
-
         final String scheme = usePlaintext ? "http" : "https";
+        URI uri = getUri(urlString);
+
         if (uri.getHost() == null) {
             // if there is no host and no scheme, then we assume the input is a hostname with no port or scheme
             if (uri.getScheme() == null) {
@@ -51,6 +48,23 @@ class AddressNormalizer {
             return returnUrl;
         } catch (URISyntaxException e) {
             throw new SDKException("error creating KAS address", e);
+        }
+    }
+
+    private static URI getUri(String urlString) {
+        URISyntaxException initialThrown = null;
+        try {
+            return new URI(urlString);
+        } catch (URISyntaxException e) {
+            // this can happen if there is no schema and the hostname is not a valid scheme, like if we havea
+            // an IP adddress
+            initialThrown = e;
+        }
+
+        try {
+            return new URI(format("fake://%s", urlString));
+        } catch (URISyntaxException e) {
+            throw new SDKException("error parsing url [" + urlString + "]", initialThrown);
         }
     }
 }
