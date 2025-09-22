@@ -67,6 +67,7 @@ class AddressNormalizer {
         try {
             return new URI(format("fake://%s", urlString));
         } catch (URISyntaxException e) {
+            initialThrown.addSuppressed(e);
             throw new SDKException("error parsing url [" + urlString + "]", initialThrown);
         }
     }
