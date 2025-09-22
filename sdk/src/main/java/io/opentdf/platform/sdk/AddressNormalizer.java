@@ -15,9 +15,9 @@ class AddressNormalizer {
     }
 
     static String normalizeAddress(String urlString, boolean usePlaintext) {
-        final String scheme = usePlaintext ? "http" : "https";
         URI uri = getInitialUri(urlString);
 
+        final String scheme = usePlaintext ? "http" : "https";
         if (uri.getHost() == null) {
             // if there is no host and no scheme, then we assume the input is a hostname with no port or scheme
             if (uri.getScheme() == null) {

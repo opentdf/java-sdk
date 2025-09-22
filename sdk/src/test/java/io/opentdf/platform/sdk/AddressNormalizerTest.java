@@ -3,6 +3,8 @@ package io.opentdf.platform.sdk;
 
 import org.junit.jupiter.api.Test;
 
+import java.net.URISyntaxException;
+
 import static io.opentdf.platform.sdk.AddressNormalizer.normalizeAddress;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -39,5 +41,11 @@ class AddressNormalizerTest {
 
         thrown = assertThrows(SDKException.class, () -> normalizeAddress("http://example.org:notaport", true));
         assertThat(thrown.getMessage()).contains("http://example.org:notaport");
+    }
+
+    @Test
+    void testInsaneAddressThrowsException() {
+        var thrown = assertThrows(SDKException.class, () -> normalizeAddress("1://&()&{$!//1//1", true));
+        assertThat(thrown.getCause()).isInstanceOf(URISyntaxException.class);
     }
 }
