@@ -28,6 +28,7 @@ import java.time.Instant;
  * timeouts and creating OIDC calls. It is thread-safe.
  */
 class TokenSource {
+    private final DefaultDPoPProofFactory dpopProofFactory;
     private Instant tokenExpiryTime;
     private AccessToken token;
     private final ClientAuthentication clientAuth;
@@ -51,6 +52,11 @@ class TokenSource {
         this.tokenEndpointURI = tokenEndpointURI;
         this.sslFactory = sslFactory;
         this.authzGrant = authzGrant;
+        try {
+            this.dpopProofFactory = new DefaultDPoPProofFactory(rsaKey, JWSAlgorithm.RS256);
+        } catch (JOSEException e) {
+            throw new SDKException("Error creating DPoP proof factory", e);
+        }
     }
 
     class AuthHeaders {
@@ -74,22 +80,28 @@ class TokenSource {
     public AuthHeaders getAuthHeaders(URL url, String method) {
         // Get the access token
         AccessToken t = getToken();
-
         // Build the DPoP proof for each request
-        String dpopProof;
-        try {
-            DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(rsaKey, JWSAlgorithm.RS256);
-            SignedJWT proof = dpopFactory.createDPoPJWT(method, url.toURI(), t);
-            dpopProof = proof.serialize();
-        } catch (URISyntaxException e) {
-            throw new SDKException("Invalid URI syntax for DPoP proof creation", e);
-        } catch (JOSEException e) {
-            throw new SDKException("Error creating DPoP proof", e);
-        }
+        String dpopProof = getDPoPProof(url, method, dpopProofFactory, t);
 
         return new AuthHeaders(
                 "DPoP " + t.getValue(),
                 dpopProof);
+    }
+
+    // package-private for testing
+    static String getDPoPProof(URL url, String method, DPoPProofFactory dpopFactory, AccessToken t) {
+        URI onlyPath;
+        try {
+             onlyPath = new URI(url.getPath());
+        } catch (URISyntaxException e) {
+            throw new SDKException("cannot create URL containing only path", e);
+        }
+        try {
+            SignedJWT proof = dpopFactory.createDPoPJWT(method, onlyPath, t);
+            return proof.serialize();
+        } catch (JOSEException e) {
+            throw new SDKException("Error creating DPoP proof", e);
+        }
     }
 
     /**
