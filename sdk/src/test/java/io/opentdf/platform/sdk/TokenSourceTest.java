@@ -23,7 +23,7 @@ class TokenSourceTest {
         var fakeToken = new BearerAccessToken("this is a fake token");
         var keypair = CryptoUtils.generateRSAKeypair();
         var dpopKey = new RSAKey.Builder((RSAPublicKey) keypair.getPublic()).privateKey(keypair.getPrivate()).build();
-        var dpopProofFactory = new DefaultDPoPProofFactory(dpopKey, JWSAlgorithm.RS256) ;
+        var dpopProofFactory = new DefaultDPoPProofFactory(dpopKey, JWSAlgorithm.RS256);
 
         var dpop = TokenSource.getDPoPProof(new URI("http://example.org/path/to/the/resource").toURL(), "POST", dpopProofFactory, fakeToken);
 
