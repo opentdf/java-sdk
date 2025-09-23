@@ -90,16 +90,11 @@ class TokenSource {
 
     // package-private for testing
     static String getDPoPProof(URL url, String method, DPoPProofFactory dpopFactory, AccessToken t) {
-        URI onlyPath;
         try {
-             onlyPath = new URI(url.getPath());
-        } catch (URISyntaxException e) {
-            throw new SDKException("cannot create URL containing only path", e);
-        }
-        try {
+            URI onlyPath = new URI(url.getPath());
             SignedJWT proof = dpopFactory.createDPoPJWT(method, onlyPath, t);
             return proof.serialize();
-        } catch (JOSEException e) {
+        } catch (JOSEException | URISyntaxException e) {
             throw new SDKException("Error creating DPoP proof", e);
         }
     }
