@@ -873,7 +873,6 @@ public class Autoconfigure {
     static Granter newGranterFromService(AttributesServiceClientInterface as, KASKeyCache keyCache, AttributeValueFQN... fqns) throws AutoConfigureException {
         GetAttributeValuesByFqnsRequest request = GetAttributeValuesByFqnsRequest.newBuilder()
                 .addAllFqns(Arrays.stream(fqns).map(AttributeValueFQN::toString).collect(Collectors.toList()))
-                .setWithValue(AttributeValueSelector.newBuilder().setWithKeyAccessGrants(true).build())
                 .build();
 
         GetAttributeValuesByFqnsResponse av = ResponseMessageKt.getOrThrow(
