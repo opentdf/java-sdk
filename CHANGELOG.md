@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.10.1](https://github.com/opentdf/java-sdk/compare/v0.10.0...v0.10.1) (2025-10-09)
+
+
+### Bug Fixes
+
+* parse hostnames with no ports correctly ([#292](https://github.com/opentdf/java-sdk/issues/292)) ([3da5f51](https://github.com/opentdf/java-sdk/commit/3da5f511a950da4f468f63f62fe52617410fca48))
+* **sdk:** remove reserved and unused proto field ([#299](https://github.com/opentdf/java-sdk/issues/299)) ([50b0302](https://github.com/opentdf/java-sdk/commit/50b0302a8d85b45cc81f465292636330a512c74b))
+* we can't parse things like `192.168.1.1:4000` ([#294](https://github.com/opentdf/java-sdk/issues/294)) ([dc3142d](https://github.com/opentdf/java-sdk/commit/dc3142da71198e16688912152ac5ce866faec060))
+
 ## [0.10.0](https://github.com/opentdf/java-sdk/compare/v0.9.0...v0.10.0) (2025-09-02)
 
 
