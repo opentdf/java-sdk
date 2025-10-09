@@ -6,6 +6,8 @@ import org.slf4j.LoggerFactory;
 import java.net.URI;
 import java.net.URISyntaxException;
 
+import static java.lang.String.format;
+
 class AddressNormalizer {
     private static final Logger logger = LoggerFactory.getLogger(AddressNormalizer.class);
 
@@ -13,12 +15,7 @@ class AddressNormalizer {
     }
 
     static String normalizeAddress(String urlString, boolean usePlaintext) {
-        URI uri;
-        try {
-            uri = new URI(urlString);
-        } catch (URISyntaxException e) {
-            throw new SDKException("error trying to parse URL [" + urlString + "]", e);
-        }
+        URI uri = getInitialUri(urlString);
 
         final String scheme = usePlaintext ? "http" : "https";
         if (uri.getHost() == null) {
@@ -51,6 +48,27 @@ class AddressNormalizer {
             return returnUrl;
         } catch (URISyntaxException e) {
             throw new SDKException("error creating KAS address", e);
+        }
+    }
+
+    // tries to parse a URI that is possibly missing a scheme by first trying the input directly, and then
+    // trying again with a fake scheme if the first attempt fails. this is needed because URIs without a schema
+    // whose hostnames are not valid schemas will fail to parse
+    private static URI getInitialUri(String urlString) {
+        URISyntaxException initialThrown = null;
+        try {
+            return new URI(urlString);
+        } catch (URISyntaxException e) {
+            // this can happen if there is no schema and the hostname is not a valid scheme, like if we havea
+            // an IP adddress
+            initialThrown = e;
+        }
+
+        try {
+            return new URI(format("fake://%s", urlString));
+        } catch (URISyntaxException e) {
+            initialThrown.addSuppressed(e);
+            throw new SDKException("error parsing url [" + urlString + "]", initialThrown);
         }
     }
 }
