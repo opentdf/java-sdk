@@ -4,7 +4,6 @@ import com.connectrpc.ResponseMessageKt;
 import io.opentdf.platform.policy.Algorithm;
 import io.opentdf.platform.policy.Attribute;
 import io.opentdf.platform.policy.AttributeRuleTypeEnum;
-import io.opentdf.platform.policy.AttributeValueSelector;
 import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.SimpleKasKey;
 import io.opentdf.platform.policy.Value;
@@ -873,7 +872,6 @@ public class Autoconfigure {
     static Granter newGranterFromService(AttributesServiceClientInterface as, KASKeyCache keyCache, AttributeValueFQN... fqns) throws AutoConfigureException {
         GetAttributeValuesByFqnsRequest request = GetAttributeValuesByFqnsRequest.newBuilder()
                 .addAllFqns(Arrays.stream(fqns).map(AttributeValueFQN::toString).collect(Collectors.toList()))
-                .setWithValue(AttributeValueSelector.newBuilder().setWithKeyAccessGrants(true).build())
                 .build();
 
         GetAttributeValuesByFqnsResponse av = ResponseMessageKt.getOrThrow(
