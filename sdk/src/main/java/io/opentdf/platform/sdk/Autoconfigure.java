@@ -4,7 +4,6 @@ import com.connectrpc.ResponseMessageKt;
 import io.opentdf.platform.policy.Algorithm;
 import io.opentdf.platform.policy.Attribute;
 import io.opentdf.platform.policy.AttributeRuleTypeEnum;
-import io.opentdf.platform.policy.AttributeValueSelector;
 import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.SimpleKasKey;
 import io.opentdf.platform.policy.Value;
