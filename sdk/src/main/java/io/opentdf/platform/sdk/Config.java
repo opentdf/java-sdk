@@ -322,7 +322,7 @@ public class Config {
         return (TDFConfig config) -> {
             var legacyTDF = version.compareTo(new Version("4.3.0")) < 0;
             config.renderVersionInfoInManifest = !legacyTDF;
-            config.hexEncodeRootAndSegmentHashes = legacyTDF;
+            config.hexEncodeRootAndSegmentHashes = !legacyTDF;
         };
     }
 
