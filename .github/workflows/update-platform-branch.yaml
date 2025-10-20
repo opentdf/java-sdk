@@ -84,19 +84,21 @@ jobs:
           git checkout update-platform-branch
 
       - name: Update platform.branch in pom.xml files
+        id: update-platform-branch
         run: |
           find . -name "pom.xml" -exec sed -i.bak "s|<platform.branch>.*</platform.branch>|<platform.branch>${LATEST_TAG}</platform.branch>|g" {} \;
           CHANGED_FILES=$(find . -name "pom.xml" -exec diff -u {} {}.bak \;)
           if [ -z "$CHANGED_FILES" ]; then
             echo "No changes detected in pom.xml files." | tee -a $GITHUB_STEP_SUMMARY
             find . -name "pom.xml.bak" -delete
+            echo "no_updates=true" >> $GITHUB_OUTPUT
             exit 0
           fi
           echo "The following pom.xml files were updated: $CHANGED_FILES"
           find . -name "pom.xml.bak" -delete
 
       - name: Create new branch
-        if: steps.check-pr.outputs.EXISTING_PR == ''
+        if: steps.check-pr.outputs.EXISTING_PR == '' && steps.update-platform-branch.outputs.no_updates != 'true'
         run: |
           git checkout -b update-platform-branch
           git add .
@@ -104,14 +106,14 @@ jobs:
           git push origin update-platform-branch
 
       - name: Update existing PR
-        if: steps.check-pr.outputs.EXISTING_PR != ''
+        if: steps.check-pr.outputs.EXISTING_PR != '' && steps.update-platform-branch.outputs.no_updates != 'true'
         run: |
           git add .
           git commit --amend --no-edit
           git push origin update-platform-branch --force
 
       - name: Create New PR
-        if: steps.check-pr.outputs.EXISTING_PR == ''
+        if: steps.check-pr.outputs.EXISTING_PR == '' && steps.update-platform-branch.outputs.no_updates != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
