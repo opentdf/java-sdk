@@ -18,8 +18,8 @@ on:
     inputs:
       tag:
         description: "The new tag or branch to update the platform.branch property to use for targeting the RPC protocol buffers."
-        # required: true
-        # default: "protocol/go/v0.3.0"
+        required: true
+        default: "protocol/go/v0.3.0"
 
 jobs:
   update-platform-branch:
