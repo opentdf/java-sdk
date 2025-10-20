@@ -90,7 +90,7 @@ jobs:
           if [ -z "$CHANGED_FILES" ]; then
             echo "No changes detected in pom.xml files." | tee -a $GITHUB_STEP_SUMMARY
             find . -name "pom.xml.bak" -delete
-            exit 1
+            exit 0
           fi
           echo "The following pom.xml files were updated: $CHANGED_FILES"
           find . -name "pom.xml.bak" -delete
