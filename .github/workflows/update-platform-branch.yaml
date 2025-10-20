@@ -35,6 +35,14 @@ jobs:
         with:
           persist-credentials: true
 
+      - name: Set up GitHub CLI as Actions bot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh auth setup-git
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Fetch latest semver tag for protocol/go
         id: fetch-latest-tag
         run: |
