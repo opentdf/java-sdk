@@ -115,10 +115,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          RELEASE_NOTES=$(gh release view protocol/go/$LATEST_TAG --repo opentdf/platform --json body --jq '.body')
           cat <<EOF > pr_body.txt
           This PR updates the platform.branch property in all pom.xml files to the new tag or branch: $LATEST_TAG.
 
-          See the release: https://github.com/opentdf/platform/releases/tag/$LATEST_TAG
+          See the release: https://github.com/opentdf/platform/releases/tag/protocol%2Fgo%2F$LATEST_TAG
 
           Release Notes:
           $RELEASE_NOTES
