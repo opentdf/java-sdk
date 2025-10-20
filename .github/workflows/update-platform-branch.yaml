@@ -99,6 +99,7 @@ jobs:
         if: steps.check-pr.outputs.EXISTING_PR == ''
         run: |
           git checkout -b update-platform-branch
+          git pull || true
           git add .
           git commit -m "fix(sdk): Updates to proto version $LATEST_TAG"
           git push origin update-platform-branch
