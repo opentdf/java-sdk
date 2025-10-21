@@ -129,7 +129,7 @@ jobs:
               SHA=""
             fi
 
-            gh api --method PUT /repos/{{ github.repository }}/contents/$file \
+            gh api --method PUT /repos/${{ github.repository }}/contents/$file \
               --field message="$MESSAGE" \
               --field content="$CONTENT" \
               --field encoding="base64" \
