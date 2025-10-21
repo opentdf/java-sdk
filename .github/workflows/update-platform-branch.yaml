@@ -119,8 +119,7 @@ jobs:
             echo "Committing file: $file"
 
             CONTENT=$(base64 -i $file)
-            FILENAME=$(basename $file)
-            MESSAGE="Update $FILENAME to match platform tag $LATEST_TAG"
+            MESSAGE="Update $file to match platform tag $LATEST_TAG"
 
             SHA=$( git rev-parse $BRANCH_NAME:$file 2>/dev/null | grep -E '^[0-9a-f]{40}$' || echo "" )
             if [ -z "$SHA" ]; then
