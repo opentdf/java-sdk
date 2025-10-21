@@ -20,6 +20,8 @@ on:
         description: "The new tag or branch to update the platform.branch property to use for targeting the RPC protocol buffers."
         required: true
         default: "protocol/go/v0.3.0"
+  pull_request:
+
 
 jobs:
   update-platform-branch:
@@ -34,6 +36,14 @@ jobs:
         uses: actions/checkout@v3
         with:
           persist-credentials: true
+
+      - name: Set up GitHub CLI as Actions bot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh auth setup-git
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Fetch latest semver tag for protocol/go
         id: fetch-latest-tag
@@ -55,11 +65,13 @@ jobs:
           CURRENT_TAG=$(grep -oP '<platform.branch>\K.*(?=</platform.branch>)' pom.xml | head -n1)
           if [ "$CURRENT_TAG" = "$LATEST_TAG" ]; then
             echo "Platform branch is already up-to-date."
-            exit 1
+            echo "no_updates=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           echo "CURRENT_TAG=$CURRENT_TAG" >> "$GITHUB_ENV"
 
       - name: Check for existing PR
+        if: steps.check-update.outputs.no_updates != 'true'
         id: check-pr
         run: |
           EXISTING_PR=$(gh pr list --head update-platform-branch --json number --jq '.[0].number')
@@ -70,51 +82,82 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check out existing PR
-        if: steps.check-pr.outputs.EXISTING_PR != ''
+        if: steps.check-pr.outputs.EXISTING_PR != '' && steps.check-update.outputs.no_updates != 'true'
         run: |
           git fetch origin update-platform-branch:update-platform-branch
           git checkout update-platform-branch
 
       - name: Update platform.branch in pom.xml files
+        if: steps.check-update.outputs.no_updates != 'true'
+        id: update-platform-branch
         run: |
           find . -name "pom.xml" -exec sed -i.bak "s|<platform.branch>.*</platform.branch>|<platform.branch>${LATEST_TAG}</platform.branch>|g" {} \;
           CHANGED_FILES=$(find . -name "pom.xml" -exec diff -u {} {}.bak \;)
           if [ -z "$CHANGED_FILES" ]; then
             echo "No changes detected in pom.xml files." | tee -a $GITHUB_STEP_SUMMARY
             find . -name "pom.xml.bak" -delete
-            exit 1
+            exit 0
           fi
+          # otherwise output that changes were made
+          echo "changes=true" >> $GITHUB_OUTPUT
           echo "The following pom.xml files were updated: $CHANGED_FILES"
           find . -name "pom.xml.bak" -delete
 
       - name: Create new branch
-        if: steps.check-pr.outputs.EXISTING_PR == ''
+        if: steps.check-pr.outputs.EXISTING_PR == '' && steps.update-platform-branch.outputs.changes == 'true'
         run: |
-          git checkout -b update-platform-branch
-          git add .
-          git commit -m "fix(sdk): Updates to proto version $LATEST_TAG"
-          git push origin update-platform-branch
+          git checkout -b $BRANCH_NAME
+          git push origin $BRANCH_NAME
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH_NAME: update-platform-branch
 
-      - name: Update existing PR
-        if: steps.check-pr.outputs.EXISTING_PR != ''
+      - name: Update files
+        if: steps.update-platform-branch.outputs.changes == 'true'
         run: |
-          git add .
-          git commit --amend --no-edit
-          git push origin update-platform-branch --force
+          echo "Committing changes..."
+          FILES_CHANGED=$(git status --porcelain | awk '{print $2}')
+          for file in $FILES_CHANGED; do
+            echo "Committing file: $file"
+
+            CONTENT=$(base64 -i $file)
+            FILENAME=$(basename $file)
+            MESSAGE="Update $FILENAME to match platform tag $LATEST_TAG"
+
+            SHA=$( git rev-parse $BRANCH_NAME:$file 2>/dev/null | grep -E '^[0-9a-f]{40}$' || echo "" )
+            if [ -z "$SHA" ]; then
+              SHA=""
+            fi
+
+            gh api --method PUT /repos/${{ github.repository }}/contents/$file \
+              --field message="$MESSAGE" \
+              --field content="$CONTENT" \
+              --field encoding="base64" \
+              --field branch="$BRANCH_NAME" \
+              --field sha="$SHA"
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH_NAME: update-platform-branch
 
       - name: Create New PR
-        if: steps.check-pr.outputs.EXISTING_PR == ''
-        uses: peter-evans/create-pull-request@v7.0.8
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "fix(sdk): Updates to proto version $LATEST_TAG"
-          branch: update-platform-branch
-          title: "fix(sdk): Updates to proto version $LATEST_TAG"
-          body: |
-            This PR updates the platform.branch property in all pom.xml files to the new tag or branch: $LATEST_TAG.
+        if: steps.check-pr.outputs.EXISTING_PR == '' && steps.update-platform-branch.outputs.changes == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH_NAME: update-platform-branch
+        run: |
+          RELEASE_NOTES=$(gh release view protocol/go/$LATEST_TAG --repo opentdf/platform --json body --jq '.body')
+          cat <<EOF > pr_body.txt
+          This PR updates the platform.branch property in all pom.xml files to the new tag or branch: $LATEST_TAG.
 
-            See the release: https://github.com/opentdf/platform/releases/tag/$LATEST_TAG
+          See the release: https://github.com/opentdf/platform/releases/tag/protocol%2Fgo%2F$LATEST_TAG
 
-            Release Notes:
-            $RELEASE_NOTES
-          labels: "automated-update"
+          Release Notes:
+          $RELEASE_NOTES
+          EOF
+          gh pr create \
+            --title "fix(sdk): Updates to proto version $LATEST_TAG" \
+            --body-file pr_body.txt \
+            --head $BRANCH_NAME \
+            --base main
+
