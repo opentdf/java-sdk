@@ -113,7 +113,6 @@ jobs:
           BRANCH_NAME: update-platform-branch
 
       - name: Update files
-        working-directory: ./web-sdk
         if: steps.update-platform-branch.outputs.changes == 'true'
         run: |
           echo "Committing changes..."
@@ -130,7 +129,7 @@ jobs:
               SHA=""
             fi
 
-            gh api --method PUT /repos/opentdf/web-sdk/contents/$file \
+            gh api --method PUT /repos/{{ github.repository }}/contents/$file \
               --field message="$MESSAGE" \
               --field content="$CONTENT" \
               --field encoding="base64" \
