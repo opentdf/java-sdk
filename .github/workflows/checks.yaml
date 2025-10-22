@@ -114,14 +114,14 @@ jobs:
         uses: opentdf/platform/test/start-up-with-containers@main
         with:
           platform-ref: main
-        
+
       - name: Get grpcurl
         run: go install github.com/fullstorydev/grpcurl/cmd/grpcurl@v1.8.9
       - name: Make sure that the platform is up
         run: |
           grpcurl -plaintext localhost:8080 list && \
           grpcurl -plaintext localhost:8080 kas.AccessService/PublicKey
-      
+
       - name: Validate the SDK through the command line interface
         run: |
           printf 'here is some data to encrypt' > data
@@ -175,7 +175,7 @@ jobs:
             --platform-endpoint=http://localhost:8080 \
             -h\
             decryptnano -f nano.ntdf > decrypted
-          
+
           if ! diff -q data decrypted; then
             printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
             exit 1
@@ -199,7 +199,7 @@ jobs:
             --platform-endpoint=http://localhost:8080 \
             -h\
             decryptnano -f nanopt.ntdf > decrypted
-          
+
           if ! diff -q data decrypted; then
             printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
             exit 1
@@ -226,7 +226,7 @@ jobs:
             --platform-endpoint=http://localhost:8080 \
             -h\
             decrypt -f test.tdf > decrypted
-          
+
           if ! diff -q data decrypted; then
             printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
             exit 1
@@ -257,7 +257,7 @@ jobs:
             --platform-endpoint=http://localhost:8080 \
             -h\
             decrypt --with-assertion-verification-keys="$SIGNED_ASSERTION_VERIFICATON_HS256" -f test.tdf > decrypted
-          
+
           if ! diff -q data decrypted; then
             printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
             exit 1
@@ -278,7 +278,7 @@ jobs:
             --platform-endpoint=http://localhost:8080 \
             -h\
             decrypt --with-assertion-verification-keys "$SIGNED_ASSERTION_VERIFICATON_RS256" -f test.tdf > decrypted
-          
+
           if ! diff -q data decrypted; then
             printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
             exit 1
@@ -334,13 +334,15 @@ jobs:
     permissions:
       contents: read
       packages: read
+      checks: write
+      pull-requests: write
     needs: platform-integration
     uses: opentdf/tests/.github/workflows/xtest.yml@main
     with:
       focus-sdk: java
       java-ref: ${{ github.ref }} latest
       platform-ref: main lts
-  
+
   ci:
     needs:
       - platform-integration
