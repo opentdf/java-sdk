@@ -14,7 +14,6 @@ on:
       - checks_requested
 permissions:
   contents: read
-
 jobs:
   pr:
     name: Validate PR title
