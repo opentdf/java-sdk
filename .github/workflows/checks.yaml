@@ -12,7 +12,6 @@ on:
       - main
     types:
       - checks_requested
-
 permissions:
   contents: read
 
