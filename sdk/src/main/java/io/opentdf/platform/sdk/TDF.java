@@ -504,6 +504,47 @@ class TDF {
             }
         }
 
+        for (var assertionConfig : tdfConfig.assertionConfigList) {
+            var assertion = new Manifest.Assertion();
+            assertion.id = assertionConfig.id;
+            assertion.type = assertionConfig.type.toString();
+            assertion.scope = assertionConfig.scope.toString();
+            assertion.statement = assertionConfig.statement;
+            assertion.appliesToState = assertionConfig.appliesToState.toString();
+
+            var assertionHashAsHex = assertion.hash();
+            byte[] assertionHash;
+            if (tdfConfig.hexEncodeRootAndSegmentHashes) {
+                assertionHash = assertionHashAsHex.getBytes(StandardCharsets.UTF_8);
+            } else {
+                try {
+                    assertionHash = Hex.decodeHex(assertionHashAsHex);
+                } catch (DecoderException e) {
+                    throw new SDKException("error decoding assertion hash", e);
+                }
+            }
+            byte[] completeHash = new byte[aggregateHash.size() + assertionHash.length];
+            System.arraycopy(aggregateHash.toByteArray(), 0, completeHash, 0, aggregateHash.size());
+            System.arraycopy(assertionHash, 0, completeHash, aggregateHash.size(), assertionHash.length);
+
+            var encodedHash = Base64.getEncoder().encodeToString(completeHash);
+
+            var assertionSigningKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256,
+                    tdfObject.aesGcm.getKey());
+            if (assertionConfig.signingKey != null && assertionConfig.signingKey.isDefined()) {
+                assertionSigningKey = assertionConfig.signingKey;
+            }
+            var hashValues = new Manifest.Assertion.HashValues(
+                    assertionHashAsHex,
+                    encodedHash);
+            try {
+                assertion.sign(hashValues, assertionSigningKey);
+            } catch (KeyLengthException e) {
+                throw new SDKException("error signing assertion hash", e);
+            }
+            signedAssertions.add(assertion);
+        }
+
         for (var binder : tdfConfig.binders) {
             try {
                 var assertion = binder.bind(tdfObject.manifest, aggregateHash.toByteArray());
