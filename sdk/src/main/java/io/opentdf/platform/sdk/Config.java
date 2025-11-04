@@ -93,7 +93,7 @@ public class Config {
                 kasInfo.Algorithm = KeyType.fromPublicKeyAlgorithm(ki.getAlg()).toString();
                 kasInfo.PublicKey = ki.getPem();
                 return Stream.of(kasInfo);
-            }).collect(Collectors.toList());
+            }).collect(Collectors.toCollection(ArrayList::new));
         }
 
         public static KASInfo fromSimpleKasKey(SimpleKasKey ki) {
@@ -132,6 +132,8 @@ public class Config {
         KeyType sessionKeyType;
         Set<String> kasAllowlist;
         boolean ignoreKasAllowlist;
+        Map<String, AssertionValidator> validators = new HashMap<>();
+        VerificationMode verificationMode = VerificationMode.FAIL_FAST;
     }
 
     @SafeVarargs
@@ -174,6 +176,14 @@ public class Config {
         return (TDFReaderConfig config) -> config.ignoreKasAllowlist = ignore;
     }
 
+    public static Consumer<TDFReaderConfig> withAssertionValidator(String schema, AssertionValidator validator) {
+        return (TDFReaderConfig config) -> config.validators.put(schema, validator);
+    }
+
+    public static Consumer<TDFReaderConfig> withVerificationMode(VerificationMode mode) {
+        return (TDFReaderConfig config) -> config.verificationMode = mode;
+    }
+
 
     public static class TDFConfig {
         public Boolean autoconfigure;
@@ -195,6 +205,7 @@ public class Config {
         public boolean hexEncodeRootAndSegmentHashes;
         public boolean renderVersionInfoInManifest;
         public boolean systemMetadataAssertion;
+        public List<AssertionBinder> binders = new ArrayList<>();
 
         public TDFConfig() {
             this.autoconfigure = true;
@@ -291,6 +302,10 @@ public class Config {
         return (TDFConfig config) -> {
             Collections.addAll(config.assertionConfigList, assertionList);
         };
+    }
+
+    public static Consumer<TDFConfig> withAssertionBinder(AssertionBinder binder) {
+        return (TDFConfig config) -> config.binders.add(binder);
     }
 
     public static Consumer<TDFConfig> withMetaData(String metaData) {
