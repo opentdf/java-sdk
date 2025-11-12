@@ -205,7 +205,7 @@ public class Config {
         public boolean hexEncodeRootAndSegmentHashes;
         public boolean renderVersionInfoInManifest;
         public boolean systemMetadataAssertion;
-        public List<AssertionBinder> binders = new ArrayList<>();
+        public Map<String, AssertionBinder> binders = new HashMap<>();
 
         public TDFConfig() {
             this.autoconfigure = true;
@@ -304,8 +304,8 @@ public class Config {
         };
     }
 
-    public static Consumer<TDFConfig> withAssertionBinder(AssertionBinder binder) {
-        return (TDFConfig config) -> config.binders.add(binder);
+    public static Consumer<TDFConfig> withAssertionBinder(String schema, AssertionBinder binder) {
+        return (TDFConfig config) -> config.binders.put(schema, binder);
     }
 
     public static Consumer<TDFConfig> withMetaData(String metaData) {

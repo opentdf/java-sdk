@@ -505,6 +505,8 @@ class TDF {
         }
 
         for (var assertionConfig : tdfConfig.assertionConfigList) {
+
+
             var assertion = new Manifest.Assertion();
             assertion.id = assertionConfig.id;
             assertion.type = assertionConfig.type.toString();
@@ -538,20 +540,18 @@ class TDF {
                     assertionHashAsHex,
                     encodedHash);
             try {
-                assertion.sign(hashValues, assertionSigningKey);
+                if (tdfConfig.binders.containsKey(assertionConfig.statement.schema)) {
+                    var binder = tdfConfig.binders.get(assertionConfig.statement.schema);
+                    binder.bind(tdfObject.manifest, completeHash);
+                    signedAssertions.add(assertion);
+                } else {
+                    assertion.sign(hashValues, assertionSigningKey);
+                }
+
             } catch (KeyLengthException e) {
                 throw new SDKException("error signing assertion hash", e);
             }
             signedAssertions.add(assertion);
-        }
-
-        for (var binder : tdfConfig.binders) {
-            try {
-                var assertion = binder.bind(tdfObject.manifest, aggregateHash.toByteArray());
-                signedAssertions.add(assertion);
-            } catch (SDK.AssertionException e) {
-                throw new SDKException("error binding assertion", e);
-            }
         }
 
         tdfObject.manifest.assertions = signedAssertions;
@@ -735,7 +735,7 @@ class TDF {
                 break;
             }
 
-            AssertionValidator validator = tdfReaderConfig.validators.get(assertion.type);
+            AssertionValidator validator = tdfReaderConfig.validators.get(assertion.statement.schema);
 
             if (validator != null) {
                 try {
