@@ -18,6 +18,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>11</maven.compiler.release>
     <platform.branch>protocol/go/v0.3.0</platform.branch>
+    <exec.cleanupDaemonThreads>false</exec.cleanupDaemonThreads>
   </properties>
 
   <dependencyManagement>
@@ -121,9 +122,92 @@
           <groupId>org.codehaus.mojo</groupId>
           <artifactId>exec-maven-plugin</artifactId>
           <version>3.0.0</version>
-          <configuration>
-              <mainClass>io.opentdf.platform.App</mainClass>
-          </configuration>
+          <executions>
+              <execution>
+                  <id>CreateAttribute</id>
+                  <configuration>
+                      <mainClass>io.opentdf.platform.CreateAttribute</mainClass>
+                  </configuration>
+              </execution>
+              <execution>
+                  <id>CreateNamespace</id>
+                  <configuration>
+                      <mainClass>io.opentdf.platform.CreateNamespace</mainClass>
+                  </configuration>
+              </execution>
+              <execution>
+                  <id>CreateSubjectConditionSet</id>
+                  <configuration>
+                      <mainClass>io.opentdf.platform.CreateSubjectConditionSet</mainClass>
+                  </configuration>
+              </execution>
+              <execution>
+                  <id>CreateSubjectMapping</id>
+                  <configuration>
+                      <mainClass>io.opentdf.platform.CreateSubjectMapping</mainClass>
+                  </configuration>
+              </execution>
+              <execution>
+                  <id>DecryptCollectionExample</id>
+                  <configuration>
+                      <mainClass>io.opentdf.platform.DecryptCollectionExample</mainClass>
+                  </configuration>
+              </execution>
+              <execution>
+                  <id>DecryptExample</id>
+                  <configuration>
+                      <mainClass>io.opentdf.platform.DecryptExample</mainClass>
+                  </configuration>
+              </execution>
+              <execution>
+                  <id>EncryptCollectionExample</id>
+                  <configuration>
+                      <mainClass>io.opentdf.platform.EncryptCollectionExample</mainClass>
+                  </configuration>
+              </execution>
+              <execution>
+                  <id>EncryptExample</id>
+                  <configuration>
+                      <mainClass>io.opentdf.platform.EncryptExample</mainClass>
+                  </configuration>
+              </execution>
+              <execution>
+                  <id>GetDecisions</id>
+                  <configuration>
+                      <mainClass>io.opentdf.platform.GetDecisions</mainClass>
+                  </configuration>
+              </execution>
+              <execution>
+                  <id>GetEntitlements</id>
+                  <configuration>
+                      <mainClass>io.opentdf.platform.GetEntitlements</mainClass>
+                  </configuration>
+              </execution>
+              <execution>
+                  <id>GetManifestInformation</id>
+                  <configuration>
+                      <mainClass>io.opentdf.platform.GetManifestInformation</mainClass>
+                  </configuration>
+              </execution>
+              <execution>
+                  <id>ListAttributes</id>
+                  <configuration>
+                      <mainClass>io.opentdf.platform.ListAttributes</mainClass>
+                  </configuration>
+              </execution>
+              <execution>
+                  <id>ListNamespaces</id>
+                  <configuration>
+                      <mainClass>io.opentdf.platform.ListNamespaces</mainClass>
+                  </configuration>
+              </execution>
+              <execution>
+                  <id>ListSubjectMappings</id>
+                  <configuration>
+                      <mainClass>io.opentdf.platform.ListSubjectMappings</mainClass>
+                  </configuration>
+              </execution>
+          </executions>
       </plugin>
     </plugins>
     <!-- </pluginManagement> -->
