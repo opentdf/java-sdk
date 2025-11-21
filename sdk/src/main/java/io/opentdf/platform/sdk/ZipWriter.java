@@ -40,14 +40,14 @@ public class ZipWriter {
 
         var nameBytes = name.getBytes(StandardCharsets.UTF_8);
         LocalFileHeader localFileHeader = new LocalFileHeader();
-        localFileHeader.lastModifiedTime = (int) fileTime;
-        localFileHeader.lastModifiedDate = (int) fileDate;
-        localFileHeader.filenameLength = (short) nameBytes.length;
-        localFileHeader.crc32 = 0;
-        localFileHeader.generalPurposeBitFlag = (1 << 3) | (1 << 11); // we are using the data descriptor and we are using UTF-8
-        localFileHeader.compressedSize = ZIP_64_MAGIC_VAL;
-        localFileHeader.uncompressedSize = ZIP_64_MAGIC_VAL;
-        localFileHeader.extraFieldLength = 0;
+        localFileHeader.setLastModifiedTime((int) fileTime);
+        localFileHeader.setLastModifiedDate((int) fileDate);
+        localFileHeader.setFilenameLength((short) nameBytes.length);
+        localFileHeader.setCrc32(0);
+        localFileHeader.setGeneralPurposeBitFlag((1 << 3) | (1 << 11)); // we are using the data descriptor and we are using UTF-8
+        localFileHeader.setCompressedSize(ZIP_64_MAGIC_VAL);
+        localFileHeader.setUncompressedSize(ZIP_64_MAGIC_VAL);
+        localFileHeader.setExtraFieldLength((short) 0);
 
         localFileHeader.write(out, nameBytes);
 
@@ -75,20 +75,20 @@ public class ZipWriter {
 
                 // Write Zip64 data descriptor
                 Zip64DataDescriptor dataDescriptor = new Zip64DataDescriptor();
-                dataDescriptor.crc32 = crcValue;
-                dataDescriptor.compressedSize = fileSize;
-                dataDescriptor.uncompressedSize = fileSize;
+                dataDescriptor.setCrc32(crcValue);
+                dataDescriptor.setCompressedSize(fileSize);
+                dataDescriptor.setUncompressedSize(fileSize);
                 dataDescriptor.write(out);
 
                 var fileInfo = new FileInfo();
-                fileInfo.offset = startPosition;
-                fileInfo.flag = (short) localFileHeader.generalPurposeBitFlag;
-                fileInfo.size = fileSize;
-                fileInfo.crc = crcValue;
-                fileInfo.filename = name;
-                fileInfo.fileTime = (short) fileTime;
-                fileInfo.fileDate = (short) fileDate;
-                fileInfo.isZip64 = true;
+                fileInfo.setOffset(startPosition);
+                fileInfo.setFlag((short) localFileHeader.generalPurposeBitFlag);
+                fileInfo.setSize(fileSize);
+                fileInfo.setCrc(crcValue);
+                fileInfo.setFilename(name);
+                fileInfo.setFileTime((short) fileTime);
+                fileInfo.setFileDate((short) fileDate);
+                fileInfo.setIsZip64(true);
 
                 fileInfos.add(fileInfo);
             }
@@ -158,14 +158,14 @@ public class ZipWriter {
 
         var nameBytes = name.getBytes(StandardCharsets.UTF_8);
         LocalFileHeader localFileHeader = new LocalFileHeader();
-        localFileHeader.lastModifiedTime = (int) fileTime;
-        localFileHeader.lastModifiedDate = (int) fileDate;
-        localFileHeader.filenameLength = (short) nameBytes.length;
-        localFileHeader.generalPurposeBitFlag = 0;
-        localFileHeader.crc32 = (int) crcValue;
-        localFileHeader.compressedSize = data.length;
-        localFileHeader.uncompressedSize = data.length;
-        localFileHeader.extraFieldLength = 0;
+        localFileHeader.setLastModifiedTime((int) fileTime);
+        localFileHeader.setLastModifiedDate((int) fileDate);
+        localFileHeader.setFilenameLength((short) nameBytes.length);
+        localFileHeader.setGeneralPurposeBitFlag(0);
+        localFileHeader.setCrc32((int) crcValue);
+        localFileHeader.setCompressedSize(data.length);
+        localFileHeader.setUncompressedSize(data.length);
+        localFileHeader.setExtraFieldLength((short) 0);
 
         localFileHeader.write(out, name.getBytes(StandardCharsets.UTF_8));
 
@@ -218,8 +218,7 @@ public class ZipWriter {
 
     private void writeZip64EndOfCentralDirectoryLocator(long startOfEndOfCD, OutputStream out) throws IOException {
         Zip64EndOfCDRecordLocator zip64EndOfCDRecordLocator = new Zip64EndOfCDRecordLocator();
-        zip64EndOfCDRecordLocator.CDOffset = startOfEndOfCD;
-
+        zip64EndOfCDRecordLocator.setCDOffset(startOfEndOfCD);
         zip64EndOfCDRecordLocator.write(out);
     }
 
@@ -260,18 +259,87 @@ public class ZipWriter {
     }
 
     private static class LocalFileHeader {
-        final int signature = 0x04034b50;
-        final int version = ZIP_VERSION;
-        int generalPurposeBitFlag;
-        final int compressionMethod = 0;
-        int lastModifiedTime;
-        int lastModifiedDate;
-        int crc32;
-        int compressedSize;
-        int uncompressedSize;
+        private static final int signature = 0x04034b50;
+        private static final int version = ZIP_VERSION;
+        private int generalPurposeBitFlag;
+        private static final int compressionMethod = 0;
+        private int lastModifiedTime;
+        private int lastModifiedDate;
+        private int crc32;
+        private int compressedSize;
+        private int uncompressedSize;
 
-        short filenameLength;
-        short extraFieldLength = 0;
+        private short filenameLength;
+        private short extraFieldLength = 0;
+
+        public void setGeneralPurposeBitFlag(int generalPurposeBitFlag) {
+            this.generalPurposeBitFlag = generalPurposeBitFlag;
+        }
+
+        public int getGeneralPurposeBitFlag() {
+            return generalPurposeBitFlag;
+        }
+
+        public short getFilenameLength() {
+            return filenameLength;
+        }
+
+        public void setFilenameLength(short filenameLength) {
+            this.filenameLength = filenameLength;
+        }
+
+        public short getExtraFieldLength() {
+            return extraFieldLength;
+        }
+
+        public void setExtraFieldLength(short extraFieldLength) {
+            this.extraFieldLength = extraFieldLength;
+        }
+
+        public void setLastModifiedTime(int lastModifiedTime) {
+            this.lastModifiedTime = lastModifiedTime;
+        }
+
+        public int getLastModifiedTime() {
+            return lastModifiedTime;
+        }
+
+        public void setLastModifiedDate(int lastModifiedDate) {
+            this.lastModifiedDate = lastModifiedDate;
+        }
+
+        public int getLastModifiedDate() {
+            return lastModifiedDate;
+        }
+
+        public void setCrc32(int crc32) {
+            this.crc32 = crc32;
+        }
+
+        public int getCrc32() {
+            return crc32;
+        }
+
+        public int getCompressionMethod() {
+            return compressionMethod;
+        }
+
+        public void setCompressedSize(int compressedSize) {
+            this.compressedSize = compressedSize;
+        }
+
+        public int getCompressedSize() {
+            return compressedSize;
+        }
+
+        public void setUncompressedSize(int uncompressedSize) {
+            this.uncompressedSize = uncompressedSize;
+        }
+
+        public int getUncompressedSize() {
+            return uncompressedSize;
+        }
+
 
         void write(OutputStream out, byte[] filename) throws IOException {
             ByteBuffer buffer = ByteBuffer.allocate(30 + filename.length);
@@ -295,10 +363,38 @@ public class ZipWriter {
     }
 
     private static class Zip64DataDescriptor {
-        final int signature = 0x08074b50;
-        long crc32;
-        long compressedSize;
-        long uncompressedSize;
+        private final int signature = 0x08074b50;
+        private long crc32;
+        private long compressedSize;
+        private long uncompressedSize;
+
+        public int getSignature() {
+            return signature;
+        }
+
+        public long getCrc32() {
+            return crc32;
+        }
+
+        public void setCrc32(long crc32) {
+            this.crc32 = crc32;
+        }
+
+        public long getCompressedSize() {
+            return compressedSize;
+        }
+
+        public void setCompressedSize(long compressedSize) {
+            this.compressedSize = compressedSize;
+        }
+
+        public long getUncompressedSize() {
+            return uncompressedSize;
+        }
+
+        public void setUncompressedSize(long uncompressedSize) {
+            this.uncompressedSize = uncompressedSize;
+        }
 
         void write(OutputStream out) throws IOException {
             ByteBuffer buffer = ByteBuffer.allocate(ZIP_64_DATA_DESCRIPTOR_SIZE);
@@ -314,23 +410,127 @@ public class ZipWriter {
     }
 
     private static class CDFileHeader {
-        final int signature = 0x02014b50;
-        final short versionCreated = ZIP_VERSION;
-        final short versionNeeded = ZIP_VERSION;
-        int generalPurposeBitFlag;
-        final int compressionMethod = 0;
-        int lastModifiedTime;
-        int lastModifiedDate;
-        int crc32;
-        int compressedSize;
-        int uncompressedSize;
-        short filenameLength;
-        short extraFieldLength;
-        final short fileCommentLength = 0;
-        final short diskNumberStart = 0;
-        final short internalFileAttributes = 0;
-        final int externalFileAttributes = 0;
-        int localHeaderOffset;
+        private final int signature = 0x02014b50;
+        private final short versionCreated = ZIP_VERSION;
+        private final short versionNeeded = ZIP_VERSION;
+        private int generalPurposeBitFlag;
+        private final int compressionMethod = 0;
+        private int lastModifiedTime;
+        private int lastModifiedDate;
+        private int crc32;
+        private int compressedSize;
+        private int uncompressedSize;
+        private short filenameLength;
+        private short extraFieldLength;
+        private final short fileCommentLength = 0;
+        private final short diskNumberStart = 0;
+        private final short internalFileAttributes = 0;
+        private final int externalFileAttributes = 0;
+        private int localHeaderOffset;
+
+        public int getSignature() {
+            return signature;
+        }
+
+        public short getVersionCreated() {
+            return versionCreated;
+        }
+
+        public short getVersionNeeded() {
+            return versionNeeded;
+        }
+
+        public int getGeneralPurposeBitFlag() {
+            return generalPurposeBitFlag;
+        }
+
+        public void setGeneralPurposeBitFlag(int generalPurposeBitFlag) {
+            this.generalPurposeBitFlag = generalPurposeBitFlag;
+        }
+
+        public int getCompressionMethod() {
+            return compressionMethod;
+        }
+
+        public int getLastModifiedTime() {
+            return lastModifiedTime;
+        }
+
+        public void setLastModifiedTime(int lastModifiedTime) {
+            this.lastModifiedTime = lastModifiedTime;
+        }
+
+        public int getLastModifiedDate() {
+            return lastModifiedDate;
+        }
+
+        public void setLastModifiedDate(int lastModifiedDate) {
+            this.lastModifiedDate = lastModifiedDate;
+        }
+
+        public int getCrc32() {
+            return crc32;
+        }
+
+        public void setCrc32(int crc32) {
+            this.crc32 = crc32;
+        }
+
+        public int getCompressedSize() {
+            return compressedSize;
+        }
+
+        public void setCompressedSize(int compressedSize) {
+            this.compressedSize = compressedSize;
+        }
+
+        public int getUncompressedSize() {
+            return uncompressedSize;
+        }
+
+        public void setUncompressedSize(int uncompressedSize) {
+            this.uncompressedSize = uncompressedSize;
+        }
+
+        public short getFilenameLength() {
+            return filenameLength;
+        }
+
+        public void setFilenameLength(short filenameLength) {
+            this.filenameLength = filenameLength;
+        }
+
+        public short getExtraFieldLength() {
+            return extraFieldLength;
+        }
+
+        public void setExtraFieldLength(short extraFieldLength) {
+            this.extraFieldLength = extraFieldLength;
+        }
+
+        public short getFileCommentLength() {
+            return fileCommentLength;
+        }
+
+        public short getDiskNumberStart() {
+            return diskNumberStart;
+        }
+
+        public short getInternalFileAttributes() {
+            return internalFileAttributes;
+        }
+
+        public int getExternalFileAttributes() {
+            return externalFileAttributes;
+        }
+
+        public int getLocalHeaderOffset() {
+            return localHeaderOffset;
+        }
+
+        public void setLocalHeaderOffset(int localHeaderOffset) {
+            this.localHeaderOffset = localHeaderOffset;
+        }
 
         void write(OutputStream out, byte[] filename) throws IOException {
             ByteBuffer buffer = ByteBuffer.allocate(46 + filename.length);
@@ -360,11 +560,43 @@ public class ZipWriter {
     }
 
     private static class Zip64GlobalExtendedInfoExtraField {
-        final short signature = 0x0001;
-        final short size = ZIP_64_GLOBAL_EXTENDED_INFO_EXTRA_FIELD_SIZE - 4;
-        long originalSize;
-        long compressedSize;
-        long localFileHeaderOffset;
+        private final short signature = 0x0001;
+        private final short size = ZIP_64_GLOBAL_EXTENDED_INFO_EXTRA_FIELD_SIZE - 4;
+        private long originalSize;
+        private long compressedSize;
+        private long localFileHeaderOffset;
+
+        public long getLocalFileHeaderOffset() {
+            return localFileHeaderOffset;
+        }
+
+        public void setLocalFileHeaderOffset(long localFileHeaderOffset) {
+            this.localFileHeaderOffset = localFileHeaderOffset;
+        }
+
+        public long getCompressedSize() {
+            return compressedSize;
+        }
+
+        public void setCompressedSize(long compressedSize) {
+            this.compressedSize = compressedSize;
+        }
+
+        public long getOriginalSize() {
+            return originalSize;
+        }
+
+        public void setOriginalSize(long originalSize) {
+            this.originalSize = originalSize;
+        }
+
+        public short getSize() {
+            return size;
+        }
+
+        public short getSignature() {
+            return signature;
+        }
 
         void write(OutputStream out) throws IOException {
             var buffer = ByteBuffer.allocate(ZIP_64_GLOBAL_EXTENDED_INFO_EXTRA_FIELD_SIZE);
@@ -381,14 +613,62 @@ public class ZipWriter {
     }
 
     private static class EndOfCDRecord {
-        final int signature = 0x06054b50;
-        final short diskNumber = 0;
-        final short startDiskNumber = 0;
-        short numberOfCDRecordEntries;
-        short totalCDRecordEntries;
-        int sizeOfCentralDirectory;
-        int centralDirectoryOffset;
-        final short commentLength = 0;
+        private final int signature = 0x06054b50;
+        private final short diskNumber = 0;
+        private final short startDiskNumber = 0;
+        private short numberOfCDRecordEntries;
+        private short totalCDRecordEntries;
+        private int sizeOfCentralDirectory;
+        private int centralDirectoryOffset;
+        private final short commentLength = 0;
+
+        public int getSignature() {
+            return signature;
+        }
+
+        public short getDiskNumber() {
+            return diskNumber;
+        }
+
+        public short getStartDiskNumber() {
+            return startDiskNumber;
+        }
+
+        public short getNumberOfCDRecordEntries() {
+            return numberOfCDRecordEntries;
+        }
+
+        public void setNumberOfCDRecordEntries(short numberOfCDRecordEntries) {
+            this.numberOfCDRecordEntries = numberOfCDRecordEntries;
+        }
+
+        public short getTotalCDRecordEntries() {
+            return totalCDRecordEntries;
+        }
+
+        public void setTotalCDRecordEntries(short totalCDRecordEntries) {
+            this.totalCDRecordEntries = totalCDRecordEntries;
+        }
+
+        public int getSizeOfCentralDirectory() {
+            return sizeOfCentralDirectory;
+        }
+
+        public void setSizeOfCentralDirectory(int sizeOfCentralDirectory) {
+            this.sizeOfCentralDirectory = sizeOfCentralDirectory;
+        }
+
+        public int getCentralDirectoryOffset() {
+            return centralDirectoryOffset;
+        }
+
+        public void setCentralDirectoryOffset(int centralDirectoryOffset) {
+            this.centralDirectoryOffset = centralDirectoryOffset;
+        }
+
+        public short getCommentLength() {
+            return commentLength;
+        }
 
         void write(OutputStream out) throws IOException {
             ByteBuffer buffer = ByteBuffer.allocate(22);
@@ -408,16 +688,72 @@ public class ZipWriter {
     }
 
     private static class Zip64EndOfCDRecord {
-        final int signature = 0x06064b50;
-        final long recordSize = ZIP_64_END_OF_CD_RECORD_SIZE - 12;
-        final short versionMadeBy = ZIP_VERSION;
-        final short versionToExtract = ZIP_VERSION;
-        final int diskNumber = 0;
-        final int startDiskNumber = 0;
-        long numberOfCDRecordEntries;
-        long totalCDRecordEntries;
-        long centralDirectorySize;
-        long startingDiskCentralDirectoryOffset;
+        private final int signature = 0x06064b50;
+        private final long recordSize = ZIP_64_END_OF_CD_RECORD_SIZE - 12;
+        private final short versionMadeBy = ZIP_VERSION;
+        private final short versionToExtract = ZIP_VERSION;
+        private final int diskNumber = 0;
+        private final int startDiskNumber = 0;
+        private long numberOfCDRecordEntries;
+        private long totalCDRecordEntries;
+        private long centralDirectorySize;
+        private long startingDiskCentralDirectoryOffset;
+
+        public int getSignature() {
+            return signature;
+        }
+
+        public long getRecordSize() {
+            return recordSize;
+        }
+
+        public short getVersionMadeBy() {
+            return versionMadeBy;
+        }
+
+        public short getVersionToExtract() {
+            return versionToExtract;
+        }
+
+        public int getDiskNumber() {
+            return diskNumber;
+        }
+
+        public int getStartDiskNumber() {
+            return startDiskNumber;
+        }
+
+        public long getNumberOfCDRecordEntries() {
+            return numberOfCDRecordEntries;
+        }
+
+        public void setNumberOfCDRecordEntries(long numberOfCDRecordEntries) {
+            this.numberOfCDRecordEntries = numberOfCDRecordEntries;
+        }
+
+        public long getTotalCDRecordEntries() {
+            return totalCDRecordEntries;
+        }
+
+        public void setTotalCDRecordEntries(long totalCDRecordEntries) {
+            this.totalCDRecordEntries = totalCDRecordEntries;
+        }
+
+        public long getCentralDirectorySize() {
+            return centralDirectorySize;
+        }
+
+        public void setCentralDirectorySize(long centralDirectorySize) {
+            this.centralDirectorySize = centralDirectorySize;
+        }
+
+        public long getStartingDiskCentralDirectoryOffset() {
+            return startingDiskCentralDirectoryOffset;
+        }
+
+        public void setStartingDiskCentralDirectoryOffset(long startingDiskCentralDirectoryOffset) {
+            this.startingDiskCentralDirectoryOffset = startingDiskCentralDirectoryOffset;
+        }
 
         void write(OutputStream out) throws IOException {
             ByteBuffer buffer = ByteBuffer.allocate(56);
@@ -439,10 +775,18 @@ public class ZipWriter {
 
 
     private static class Zip64EndOfCDRecordLocator {
-        final int signature = 0x07064b50;
-        final int CDStartDiskNumber = 0;
-        long CDOffset;
-        final int numberOfDisks = 1;
+        private static final int signature = 0x07064b50;
+        private static final int CDStartDiskNumber = 0;
+        private long CDOffset;
+        private static final int numberOfDisks = 1;
+
+        long getCDOffset() {
+            return CDOffset;
+        }
+
+        void setCDOffset(long CDOffset) {
+            this.CDOffset = CDOffset;
+        }
 
         void write(OutputStream out) throws IOException {
             ByteBuffer buffer = ByteBuffer.allocate(20);
@@ -457,13 +801,77 @@ public class ZipWriter {
     }
 
     private static class FileInfo {
-        long crc;
-        long size;
-        long offset;
-        String filename;
-        short fileTime;
-        short fileDate;
-        short flag;
-        boolean isZip64;
+        private long crc;
+        private long size;
+        private long offset;
+        private String filename;
+        private short fileTime;
+        private short fileDate;
+        private short flag;
+        private boolean isZip64;
+
+        long getCrc() {
+            return crc;
+        }
+
+        void setCrc(long crc) {
+            this.crc = crc;
+        }
+
+        long getSize() {
+            return size;
+        }
+
+        public void setSize(long size) {
+            this.size = size;
+        }
+
+        public long getOffset() {
+            return offset;
+        }
+
+        public void setOffset(long offset) {
+            this.offset = offset;
+        }
+
+        public String getFilename() {
+            return filename;
+        }
+
+        public void setFilename(String filename) {
+            this.filename = filename;
+        }
+
+        public short getFileTime() {
+            return fileTime;
+        }
+
+        public void setFileTime(short fileTime) {
+            this.fileTime = fileTime;
+        }
+
+        public short getFileDate() {
+            return fileDate;
+        }
+
+        public void setFileDate(short fileDate) {
+            this.fileDate = fileDate;
+        }
+
+        public short getFlag() {
+            return flag;
+        }
+
+        public void setFlag(short flag) {
+            this.flag = flag;
+        }
+
+        public boolean isZip64() {
+            return isZip64;
+        }
+
+        public void setIsZip64(boolean zip64) {
+            isZip64 = zip64;
+        }
     }
 }

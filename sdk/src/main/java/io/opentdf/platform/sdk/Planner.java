@@ -46,16 +46,16 @@ public class Planner {
 
     Map<String, List<Config.KASInfo>> getSplits() {
         List<Autoconfigure.KeySplitTemplate> splitPlan;
-        if (tdfConfig.autoconfigure) {
-            if (tdfConfig.splitPlan != null && !tdfConfig.splitPlan.isEmpty()) {
+        if (tdfConfig.getAutoconfigure()) {
+            if (tdfConfig.getSplitPlan() != null && !tdfConfig.getSplitPlan().isEmpty()) {
                 throw new IllegalArgumentException("cannot use autoconfigure with a split plan provided in the TDFConfig");
             }
             splitPlan = getAutoconfigurePlan(services, tdfConfig);
-        } else if (tdfConfig.splitPlan == null || tdfConfig.splitPlan.isEmpty()) {
-            splitPlan = generatePlanFromProvidedKases(tdfConfig.kasInfoList);
+        } else if (tdfConfig.getSplitPlan() == null || tdfConfig.getSplitPlan().isEmpty()) {
+            splitPlan = generatePlanFromProvidedKases(tdfConfig.getKasInfoList());
         } else {
-            splitPlan = tdfConfig.splitPlan.stream()
-                    .map(k -> new Autoconfigure.KeySplitTemplate(k.kas, k.splitID, null, null))
+            splitPlan = tdfConfig.getSplitPlan().stream()
+                    .map(k -> new Autoconfigure.KeySplitTemplate(k.getKas(), k.getSplitID(), null, null))
                     .collect(Collectors.toList());
         }
 
@@ -74,12 +74,12 @@ public class Planner {
     List<Autoconfigure.KeySplitTemplate> generatePlanFromProvidedKases(List<Config.KASInfo> kases) {
         if (kases.size() == 1) {
             var kasInfo = kases.get(0);
-            return Collections.singletonList(new Autoconfigure.KeySplitTemplate(kasInfo.URL, "", kasInfo.KID, null));
+            return Collections.singletonList(new Autoconfigure.KeySplitTemplate(kasInfo.getURL(), "", kasInfo.getKID(), null));
         }
         List<Autoconfigure.KeySplitTemplate> splitPlan = new ArrayList<>();
         for (var kasInfo : kases) {
-            var keyType = kasInfo.Algorithm == null ? null : KeyType.fromString(kasInfo.Algorithm);
-            splitPlan.add(new Autoconfigure.KeySplitTemplate(kasInfo.URL, getUUID(), kasInfo.KID, keyType));
+            var keyType = kasInfo.getAlgorithm() == null ? null : KeyType.fromString(kasInfo.getAlgorithm());
+            splitPlan.add(new Autoconfigure.KeySplitTemplate(kasInfo.getURL(), getUUID(), kasInfo.getKID(), keyType));
         }
         return splitPlan;
     }
@@ -133,15 +133,15 @@ public class Planner {
 
     private static class BaseKey {
         @SerializedName("kas_url")
-        String kasUrl;
+        private String kasUrl;
 
         @SerializedName("public_key")
-        Key publicKey;
+        private Key publicKey;
 
         private static class Key {
-            String kid;
-            String pem;
-            Algorithm algorithm;
+            private String kid;
+            private String pem;
+            private Algorithm algorithm;
         }
     }
 
@@ -149,27 +149,27 @@ public class Planner {
         Map<String, List<Config.KASInfo>> conjunction = new HashMap<>();
         var latestKASInfo = new HashMap<String, Config.KASInfo>();
         // Seed anything passed in manually
-        for (Config.KASInfo kasInfo : tdfConfig.kasInfoList) {
-            if (kasInfo.PublicKey != null && !kasInfo.PublicKey.isEmpty()) {
-                latestKASInfo.put(kasInfo.URL, kasInfo);
+        for (Config.KASInfo kasInfo : tdfConfig.getKasInfoList()) {
+            if (kasInfo.getPublicKey() != null && !kasInfo.getPublicKey().isEmpty()) {
+                latestKASInfo.put(kasInfo.getURL(), kasInfo);
             }
         }
 
         for (var splitInfo: splitPlan) {
             // Public key was passed in with kasInfoList
             // TODO First look up in attribute information / add to split plan?
-            Config.KASInfo ki = latestKASInfo.get(splitInfo.kas);
-            if (ki == null || ki.PublicKey == null || ki.PublicKey.isBlank() || (splitInfo.kid != null && !splitInfo.kid.equals(ki.KID))) {
-                logger.info("no public key provided for KAS at {}, retrieving", splitInfo.kas);
+            Config.KASInfo ki = latestKASInfo.get(splitInfo.getKas());
+            if (ki == null || ki.getPublicKey() == null || ki.getPublicKey().isBlank() || (splitInfo.getKid() != null && !splitInfo.getKid().equals(ki.getKID()))) {
+                logger.info("no public key provided for KAS at {}, retrieving", splitInfo.getKas());
                 var getKI = new Config.KASInfo();
-                getKI.URL = splitInfo.kas;
-                getKI.Algorithm = splitInfo.keyType == null
-                        ? (tdfConfig.wrappingKeyType == null ? null : tdfConfig.wrappingKeyType.toString())
-                        : splitInfo.keyType.toString();
+                getKI.setURL(splitInfo.getKas());
+                getKI.setAlgorithm(splitInfo.getKeyType() == null
+                        ? (tdfConfig.getWrappingKeyType() == null ? null : tdfConfig.getWrappingKeyType().toString())
+                        : splitInfo.getKeyType().toString());
                 ki = services.kas().getPublicKey(getKI);
-                latestKASInfo.put(splitInfo.kas, ki);
+                latestKASInfo.put(splitInfo.getKas(), ki);
             }
-            conjunction.computeIfAbsent(splitInfo.splitID, s -> new ArrayList<>()).add(ki);
+            conjunction.computeIfAbsent(splitInfo.getSplitID(), s -> new ArrayList<>()).add(ki);
         }
         return conjunction;
     }
@@ -178,11 +178,11 @@ public class Planner {
         List<String> allk = new ArrayList<>();
         List<String> defk = new ArrayList<>();
 
-        for (Config.KASInfo kasInfo : config.kasInfoList) {
-            if (kasInfo.Default != null && kasInfo.Default) {
-                defk.add(kasInfo.URL);
+        for (Config.KASInfo kasInfo : config.getKasInfoList()) {
+            if (kasInfo.getDefault() != null && kasInfo.getDefault()) {
+                defk.add(kasInfo.getURL());
             } else if (defk.isEmpty()) {
-                allk.add(kasInfo.URL);
+                allk.add(kasInfo.getURL());
             }
         }
         return defk.isEmpty() ? allk : defk;

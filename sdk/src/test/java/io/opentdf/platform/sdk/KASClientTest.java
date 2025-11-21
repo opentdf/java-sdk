@@ -70,8 +70,8 @@ public class KASClientTest {
                     .build();
             try (var kas = new KASClient(httpClient, aclientFactory, dpopKey, true)) {
                 Config.KASInfo kasInfo = new Config.KASInfo();
-                kasInfo.URL = "http://localhost:" + rewrapServer.getPort();
-                assertThat(kas.getPublicKey(kasInfo).PublicKey).isEqualTo("тај је клуц");
+                kasInfo.setURL("http://localhost:" + rewrapServer.getPort());
+                assertThat(kas.getPublicKey(kasInfo).getPublicKey()).isEqualTo("тај је клуц");
             }
         } finally {
             if (rewrapServer != null) {
@@ -100,8 +100,8 @@ public class KASClientTest {
                     .build();
             try (var kas = new KASClient(httpClient, aclientFactory, dpopKey, true)) {
                 Config.KASInfo kasInfo = new Config.KASInfo();
-                kasInfo.URL = "http://localhost:" + server.getPort();
-                assertThat(kas.getPublicKey(kasInfo).KID).isEqualTo("r1");
+                kasInfo.setURL("http://localhost:" + server.getPort());
+                assertThat(kas.getPublicKey(kasInfo).getKID()).isEqualTo("r1");
             } catch (Exception e) {
                 throw e;
             }
@@ -149,8 +149,8 @@ public class KASClientTest {
                 var req = gson.fromJson(requestBodyJson, KASClient.RewrapRequestBody.class);
 
                 var decryptedKey = new AsymDecryption(serverKeypair.getPrivate())
-                        .decrypt(Base64.getDecoder().decode(req.keyAccess.wrappedKey));
-                var encryptedKey = new AsymEncryption(req.clientPublicKey).encrypt(decryptedKey);
+                        .decrypt(Base64.getDecoder().decode(req.getKeyAccess().wrappedKey));
+                var encryptedKey = new AsymEncryption(req.getClientPublicKey()).encrypt(decryptedKey);
 
                 responseObserver.onNext(
                         RewrapResponse.newBuilder().setEntityWrappedKey(ByteString.copyFrom(encryptedKey)).build());

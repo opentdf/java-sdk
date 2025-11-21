@@ -82,19 +82,19 @@ public class NanoTDFTest {
         @Override
         public Config.KASInfo getPublicKey(Config.KASInfo kasInfo) {
             Config.KASInfo returnKI = new Config.KASInfo();
-            returnKI.PublicKey = kasPublicKey;
+            returnKI.setPublicKey(kasPublicKey);
             return returnKI;
         }
 
         @Override
         public KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
-            if (kasInfo.Algorithm != null && !"ec:secp256r1".equals(kasInfo.Algorithm)) {
+            if (kasInfo.getAlgorithm() != null && !"ec:secp256r1".equals(kasInfo.getAlgorithm())) {
                 throw new IllegalArgumentException("Unexpected algorithm: " + kasInfo);
             }
             var k2 = kasInfo.clone();
-            k2.KID = KID;
-            k2.PublicKey = kasPublicKey;
-            k2.Algorithm = "ec:secp256r1";
+            k2.setKID(KID);
+            k2.setPublicKey(kasPublicKey);
+            k2.setAlgorithm("ec:secp256r1");
             return k2;
         }
 
@@ -168,9 +168,9 @@ public class NanoTDFTest {
     void encryptionAndDecryptionWithValidKey() throws Exception {
         var kasInfos = new ArrayList<>();
         var kasInfo = new Config.KASInfo();
-        kasInfo.URL = "https://api.example.com/kas";
-        kasInfo.PublicKey = null;
-        kasInfo.KID = KID;
+        kasInfo.setURL("https://api.example.com/kas");
+        kasInfo.setPublicKey(null);
+        kasInfo.setKID(KID);
         kasInfos.add(kasInfo);
 
         Config.NanoTDFConfig config = Config.newNanoTDFConfig(
@@ -248,8 +248,8 @@ public class NanoTDFTest {
     void testWithDifferentConfigAndKeyValues() throws Exception {
         var kasInfos = new ArrayList<>();
         var kasInfo = new Config.KASInfo();
-        kasInfo.URL = "https://api.example.com/kas";
-        kasInfo.PublicKey = null;
+        kasInfo.setURL("https://api.example.com/kas");
+        kasInfo.setPublicKey(null);
         kasInfos.add(kasInfo);
         var config = Config.newNanoTDFConfig(
                 Config.withNanoKasInformation(kasInfos.toArray(new Config.KASInfo[0])),
@@ -264,8 +264,8 @@ public class NanoTDFTest {
         if (writerConfig == null) {
             var kasInfos = new ArrayList<>();
             var kasInfo = new Config.KASInfo();
-            kasInfo.URL = kasUrl;
-            kasInfo.PublicKey = null;
+            kasInfo.setURL(kasUrl);
+            kasInfo.setPublicKey(null);
             kasInfos.add(kasInfo);
             config = Config.newNanoTDFConfig(
                     Config.withNanoKasInformation(kasInfos.toArray(new Config.KASInfo[0])),
@@ -342,9 +342,9 @@ public class NanoTDFTest {
     void collection() throws Exception {
         var kasInfos = new ArrayList<>();
         var kasInfo = new Config.KASInfo();
-        kasInfo.URL = "https://api.example.com/kas";
-        kasInfo.PublicKey = null;
-        kasInfo.KID = KID;
+        kasInfo.setURL("https://api.example.com/kas");
+        kasInfo.setPublicKey(null);
+        kasInfo.setKID(KID);
         kasInfos.add(kasInfo);
 
         Config.NanoTDFConfig config = Config.newNanoTDFConfig(
@@ -359,7 +359,7 @@ public class NanoTDFTest {
         NanoTDF nanoTDF = new NanoTDF(new FakeServicesBuilder().setKas(kas).build());
         ByteBuffer header = getHeaderBuffer(byteBuffer,nanoTDF, config);
         for (int i = 0; i < Config.MAX_COLLECTION_ITERATION - 10; i++) {
-            config.collectionConfig.getHeaderInfo();
+            config.getCollectionConfig().getHeaderInfo();
 
         }
         for (int i = 1; i < 10; i++) {
@@ -379,10 +379,10 @@ public class NanoTDFTest {
 
         var kasInfos = new ArrayList<Config.KASInfo>();
         var kasInfo = new Config.KASInfo();
-        kasInfo.URL = sampleKasUrl;
-        kasInfo.PublicKey = kasPublicKey;
-        kasInfo.KID = KID;
-        kasInfo.Algorithm = "ec:secp256r1";
+        kasInfo.setURL(sampleKasUrl);
+        kasInfo.setPublicKey(kasPublicKey);
+        kasInfo.setKID(KID);
+        kasInfo.setAlgorithm("ec:secp256r1");
         kasInfos.add(kasInfo);
 
         Config.NanoTDFConfig config = Config.newNanoTDFConfig(

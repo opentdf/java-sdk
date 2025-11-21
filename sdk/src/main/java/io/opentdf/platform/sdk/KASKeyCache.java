@@ -50,7 +50,7 @@ public class KASKeyCache {
 
     public void store(Config.KASInfo kasInfo) {
         log.debug("storing kasInfo into the cache {}", kasInfo);
-        KASKeyRequest cacheKey = new KASKeyRequest(kasInfo.URL, kasInfo.Algorithm, kasInfo.KID);
+        KASKeyRequest cacheKey = new KASKeyRequest(kasInfo.getURL(), kasInfo.getAlgorithm(), kasInfo.getKID());
         cache.put(cacheKey, new TimeStampedKASInfo(kasInfo, LocalDateTime.now()));
     }
 }

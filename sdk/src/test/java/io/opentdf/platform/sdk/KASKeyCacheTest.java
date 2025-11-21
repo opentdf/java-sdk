@@ -18,15 +18,15 @@ class KASKeyCacheTest {
     void setUp() {
         kasKeyCache = new KASKeyCache();
         kasInfo1 = new Config.KASInfo();
-        kasInfo1.Algorithm = "rsa:2048";
-        kasInfo1.URL = "https://example.com/kas1";
-        kasInfo1.KID = "kid1";
-        kasInfo1.PublicKey = "publicKey1";
+        kasInfo1.setAlgorithm("rsa:2048");
+        kasInfo1.setURL("https://example.com/kas1");
+        kasInfo1.setKID("kid1");
+        kasInfo1.setPublicKey("publicKey1");
         kasInfo2 = new Config.KASInfo();
-        kasInfo2.URL = "https://example.com/kas2";
-        kasInfo2.Algorithm = "ec:secp256r1";
-        kasInfo2.KID = "kid2";
-        kasInfo2.PublicKey = "publicKey2";
+        kasInfo2.setURL("https://example.com/kas2");
+        kasInfo2.setAlgorithm("ec:secp256r1");
+        kasInfo2.setKID("kid2");
+        kasInfo2.setPublicKey("publicKey2");
     }
 
     @Test
@@ -39,10 +39,10 @@ class KASKeyCacheTest {
 
         // Ensure the item was correctly retrieved
         assertNotNull(result);
-        assertEquals("https://example.com/kas1", result.URL);
-        assertEquals("rsa:2048", result.Algorithm);
-        assertEquals("kid1", result.KID);
-        assertEquals("publicKey1", result.PublicKey);
+        assertEquals("https://example.com/kas1", result.getURL());
+        assertEquals("rsa:2048", result.getAlgorithm());
+        assertEquals("kid1", result.getKID());
+        assertEquals("publicKey1", result.getPublicKey());
     }
 
     @Test
@@ -68,7 +68,7 @@ class KASKeyCacheTest {
         kasKeyCache.store(kasInfo1);
 
         // Attempt to retrieve the item with a different KID
-        Config.KASInfo result = kasKeyCache.get(kasInfo1.URL, kasInfo1.Algorithm, kasInfo1.KID + "different");
+        Config.KASInfo result = kasKeyCache.get(kasInfo1.getURL(), kasInfo1.getAlgorithm(), kasInfo1.getKID() + "different");
 
         // Ensure the item was not retrieved (it should have expired)
         assertNull(result);
@@ -78,9 +78,9 @@ class KASKeyCacheTest {
     void testStoreAndGet_WithNullAlgorithm() {
         // Store an item in the cache with a null algorithm
         kasInfo1 = new Config.KASInfo();
-        kasInfo1.URL = "https://example.com/kas1";
-        kasInfo1.KID = "kid1";
-        kasInfo1.PublicKey = "publicKey1";
+        kasInfo1.setURL("https://example.com/kas1");
+        kasInfo1.setKID("kid1");
+        kasInfo1.setPublicKey("publicKey1");
         kasKeyCache.store(kasInfo1);
 
         // Retrieve the item with a null algorithm
@@ -88,10 +88,10 @@ class KASKeyCacheTest {
 
         // Ensure the item was correctly retrieved
         assertNotNull(result);
-        assertEquals("https://example.com/kas1", result.URL);
-        assertNull(result.Algorithm);
-        assertEquals("kid1", result.KID);
-        assertEquals("publicKey1", result.PublicKey);
+        assertEquals("https://example.com/kas1", result.getURL());
+        assertNull(result.getAlgorithm());
+        assertEquals("kid1", result.getKID());
+        assertEquals("publicKey1", result.getPublicKey());
     }
 
     @Test
@@ -120,12 +120,12 @@ class KASKeyCacheTest {
         Config.KASInfo result2 = kasKeyCache.get("https://example.com/kas2", "ec:secp256r1", "kid2");
 
         assertNotNull(result1);
-        assertEquals("https://example.com/kas1", result1.URL);
-        assertEquals("rsa:2048", result1.Algorithm);
+        assertEquals("https://example.com/kas1", result1.getURL());
+        assertEquals("rsa:2048", result1.getAlgorithm());
 
         assertNotNull(result2);
-        assertEquals("https://example.com/kas2", result2.URL);
-        assertEquals("ec:secp256r1", result2.Algorithm);
+        assertEquals("https://example.com/kas2", result2.getURL());
+        assertEquals("ec:secp256r1", result2.getAlgorithm());
     }
 
     @Test

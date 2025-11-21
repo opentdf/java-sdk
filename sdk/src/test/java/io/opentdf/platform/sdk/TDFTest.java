@@ -57,16 +57,16 @@ public class TDFTest {
                         // handle platform url
                         int index;
                         // if the kasinfo url contains the platform url, remove it
-                        if (kasInfo.URL.startsWith(platformUrl)) {
-                                index = Integer.parseInt(kasInfo.URL
+                        if (kasInfo.getURL().startsWith(platformUrl)) {
+                                index = Integer.parseInt(kasInfo.getURL()
                                                 .replaceFirst("^" + Pattern.quote(platformUrl) + "/kas", ""));
                         } else {
-                                index = Integer.parseInt(kasInfo.URL.replaceFirst("^https://example.com/kas", ""));
+                                index = Integer.parseInt(kasInfo.getURL().replaceFirst("^https://example.com/kas", ""));
                         }
                         var kiCopy = new Config.KASInfo();
-                        kiCopy.KID = "r1";
-                        kiCopy.PublicKey = CryptoUtils.getPublicKeyPEM(keypairs.get(index).getPublic());
-                        kiCopy.URL = kasInfo.URL;
+                        kiCopy.setKID("r1");
+                        kiCopy.setPublicKey(CryptoUtils.getPublicKeyPEM(keypairs.get(index).getPublic()));
+                        kiCopy.setURL(kasInfo.getURL());
                         return kiCopy;
                 }
 
@@ -138,11 +138,11 @@ public class TDFTest {
                 List<KeyAccessServer> kasRegEntries = new ArrayList<>();
                 for (Config.KASInfo kasInfo : getRSAKASInfos()) {
                         kasRegEntries.add(KeyAccessServer.newBuilder()
-                                        .setUri(kasInfo.URL).build());
+                                        .setUri(kasInfo.getURL()).build());
                 }
                 for (Config.KASInfo kasInfo : getECKASInfos()) {
                         kasRegEntries.add(KeyAccessServer.newBuilder()
-                                        .setUri(kasInfo.URL).build());
+                                        .setUri(kasInfo.getURL()).build());
                 }
                 ListKeyAccessServersResponse mockResponse = ListKeyAccessServersResponse.newBuilder()
                                 .addAllKeyAccessServers(kasRegEntries)
@@ -194,9 +194,9 @@ public class TDFTest {
                 assertion1.signingKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, key);
 
                 var assertionVerificationKeys = new Config.AssertionVerificationKeys();
-                assertionVerificationKeys.defaultKey = new AssertionConfig.AssertionKey(
-                                AssertionConfig.AssertionKeyAlg.HS256,
-                                key);
+                assertionVerificationKeys.setDefaultKey(new AssertionConfig.AssertionKey(
+                        AssertionConfig.AssertionKeyAlg.HS256,
+                        key));
 
                 List<TDFConfigPair> tdfConfigPairs = List.of(
                                 new TDFConfigPair(
@@ -286,7 +286,7 @@ public class TDFTest {
                                 keypair.getPrivate());
 
                 var rsaKasInfo = new Config.KASInfo();
-                rsaKasInfo.URL = "https://example.com/kas" + 0;
+                rsaKasInfo.setURL("https://example.com/kas" + 0);
 
                 Config.TDFConfig config = Config.newTDFConfig(
                                 Config.withAutoconfigure(false),
@@ -304,7 +304,7 @@ public class TDFTest {
                 tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
 
                 var assertionVerificationKeys = new Config.AssertionVerificationKeys();
-                assertionVerificationKeys.keys.put(assertion1Id,
+                assertionVerificationKeys.getKeys().put(assertion1Id,
                                 new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256,
                                                 keypair.getPublic()));
 
@@ -351,7 +351,7 @@ public class TDFTest {
                 tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
 
                 var assertionVerificationKeys = new Config.AssertionVerificationKeys();
-                assertionVerificationKeys.keys.put(assertion1Id,
+                assertionVerificationKeys.getKeys().put(assertion1Id,
                                 new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256,
                                                 keypair.getPublic()));
 
@@ -401,7 +401,7 @@ public class TDFTest {
                 assertionConfig2.statement.value = "{\"uuid\":\"f74efb60-4a9a-11ef-a6f1-8ee1a61c148a\",\"body\":{\"dataAttributes\":null,\"dissem\":null}}";
 
                 var rsaKasInfo = new Config.KASInfo();
-                rsaKasInfo.URL = "https://example.com/kas" + 0;
+                rsaKasInfo.setURL("https://example.com/kas" + 0);
 
                 Config.TDFConfig config = Config.newTDFConfig(
                                 Config.withAutoconfigure(false),
@@ -469,7 +469,7 @@ public class TDFTest {
                                 key);
 
                 var rsaKasInfo = new Config.KASInfo();
-                rsaKasInfo.URL = "https://example.com/kas" + 0;
+                rsaKasInfo.setURL("https://example.com/kas" + 0);
 
                 Config.TDFConfig config = Config.newTDFConfig(
                                 Config.withAutoconfigure(false),
@@ -488,9 +488,9 @@ public class TDFTest {
                 byte[] notkey = new byte[32];
                 secureRandom.nextBytes(notkey);
                 var assertionVerificationKeys = new Config.AssertionVerificationKeys();
-                assertionVerificationKeys.defaultKey = new AssertionConfig.AssertionKey(
-                                AssertionConfig.AssertionKeyAlg.HS256,
-                                notkey);
+                assertionVerificationKeys.setDefaultKey(new AssertionConfig.AssertionKey(
+                        AssertionConfig.AssertionKeyAlg.HS256,
+                        notkey));
                 Config.TDFReaderConfig readerConfig = Config.newTDFReaderConfig(
                                 Config.withAssertionVerificationKeys(assertionVerificationKeys));
 
@@ -745,7 +745,7 @@ public class TDFTest {
                                 });
 
                 var rsaKasInfo = new Config.KASInfo();
-                rsaKasInfo.URL = "https://example.com/kas" + Integer.toString(0);
+                rsaKasInfo.setURL("https://example.com/kas" + Integer.toString(0));
 
                 Config.TDFConfig config = Config.newTDFConfig(
                                 Config.withAutoconfigure(false),
@@ -790,7 +790,7 @@ public class TDFTest {
 
                 // use the platform url as kas url, should succeed
                 var platformKasInfo = new Config.KASInfo();
-                platformKasInfo.URL = platformUrl + "/kas" + Integer.toString(0);
+                platformKasInfo.setURL(platformUrl + "/kas" + Integer.toString(0));
                 config = Config.newTDFConfig(
                                 Config.withAutoconfigure(false),
                                 Config.withKasInformation(platformKasInfo));
@@ -817,8 +817,8 @@ public class TDFTest {
                 for (int i = 0; i < keypairs.size(); i++) {
                         if (filter.test(i)) {
                                 var kasInfo = new Config.KASInfo();
-                                kasInfo.URL = "https://example.com/kas" + Integer.toString(i);
-                                kasInfo.PublicKey = null;
+                                kasInfo.setURL("https://example.com/kas" + Integer.toString(i));
+                                kasInfo.setPublicKey(null);
                                 kasInfos.add(kasInfo);
                         }
                 }

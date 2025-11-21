@@ -38,7 +38,7 @@ public class Fuzzing {
         byte[] fuzzBytes = data.consumeRemainingAsBytes();
         byte[] key = new byte[32];      // use consistent zero key for performance and so fuzz can relate to seed
         var assertionVerificationKeys = new Config.AssertionVerificationKeys();
-        assertionVerificationKeys.defaultKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, key);
+        assertionVerificationKeys.setDefaultKey(new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, key));
         Config.TDFReaderConfig readerConfig = Config.newTDFReaderConfig(
                 Config.withAssertionVerificationKeys(assertionVerificationKeys));
         TDF tdf = new TDF(new FakeServicesBuilder().setKas(TDFTest.kas).build());

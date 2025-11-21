@@ -40,11 +40,60 @@ public class Config {
     }
 
     public static class KASInfo implements Cloneable {
-        public String URL;
-        public String PublicKey;
-        public String KID;
-        public Boolean Default;
-        public String Algorithm;
+        private String URL;
+        private String PublicKey;
+        private String KID;
+        private Boolean Default;
+        private String Algorithm;
+
+        public KASInfo() {}
+
+        public KASInfo(String URL, String publicKey, String KID, String algorithm) {
+            this.URL = URL;
+            PublicKey = publicKey;
+            this.KID = KID;
+            Algorithm = algorithm;
+        }
+
+        public String getURL() {
+            return URL;
+        }
+
+        public void setURL(String URL) {
+            this.URL = URL;
+        }
+
+        public String getPublicKey() {
+            return PublicKey;
+        }
+
+        public void setPublicKey(String publicKey) {
+            PublicKey = publicKey;
+        }
+
+        public String getKID() {
+            return KID;
+        }
+
+        public void setKID(String KID) {
+            this.KID = KID;
+        }
+
+        public Boolean getDefault() {
+            return Default;
+        }
+
+        public void setDefault(Boolean aDefault) {
+            Default = aDefault;
+        }
+
+        public String getAlgorithm() {
+            return Algorithm;
+        }
+
+        public void setAlgorithm(String algorithm) {
+            Algorithm = algorithm;
+        }
 
         @Override
         public KASInfo clone() {
@@ -108,8 +157,24 @@ public class Config {
     }
 
     public static class AssertionVerificationKeys {
-        public AssertionConfig.AssertionKey defaultKey;
-        public Map<String, AssertionConfig.AssertionKey> keys = new HashMap<>();
+        private AssertionConfig.AssertionKey defaultKey;
+        private Map<String, AssertionConfig.AssertionKey> keys = new HashMap<>();
+
+        public Map<String, AssertionConfig.AssertionKey> getKeys() {
+            return keys;
+        }
+
+        public void setKeys(Map<String, AssertionConfig.AssertionKey> keys) {
+            this.keys = keys;
+        }
+
+        public AssertionConfig.AssertionKey getDefaultKey() {
+            return defaultKey;
+        }
+
+        public void setDefaultKey(AssertionConfig.AssertionKey defaultKey) {
+            this.defaultKey = defaultKey;
+        }
 
         Boolean isEmpty() {
             return this.defaultKey == null && this.keys.isEmpty();
@@ -127,11 +192,51 @@ public class Config {
 
     public static class TDFReaderConfig {
         // Optional Map of Assertion Verification Keys
-        AssertionVerificationKeys assertionVerificationKeys = new AssertionVerificationKeys();
-        boolean disableAssertionVerification;
-        KeyType sessionKeyType;
-        Set<String> kasAllowlist;
-        boolean ignoreKasAllowlist;
+        private AssertionVerificationKeys assertionVerificationKeys = new AssertionVerificationKeys();
+        private boolean disableAssertionVerification;
+        private KeyType sessionKeyType;
+        private Set<String> kasAllowlist;
+        private boolean ignoreKasAllowlist;
+
+        public void setAssertionVerificationKeys(AssertionVerificationKeys assertionVerificationKeys) {
+            this.assertionVerificationKeys = assertionVerificationKeys;
+        }
+
+        public void setDisableAssertionVerification(boolean disableAssertionVerification) {
+            this.disableAssertionVerification = disableAssertionVerification;
+        }
+
+        public void setSessionKeyType(KeyType sessionKeyType) {
+            this.sessionKeyType = sessionKeyType;
+        }
+
+        public void setKasAllowlist(Set<String> kasAllowlist) {
+            this.kasAllowlist = kasAllowlist;
+        }
+
+        public void setIgnoreKasAllowlist(boolean ignoreKasAllowlist) {
+            this.ignoreKasAllowlist = ignoreKasAllowlist;
+        }
+
+        public AssertionVerificationKeys getAssertionVerificationKeys() {
+            return assertionVerificationKeys;
+        }
+
+        public boolean isDisableAssertionVerification() {
+            return disableAssertionVerification;
+        }
+
+        public KeyType getSessionKeyType() {
+            return sessionKeyType;
+        }
+
+        public Set<String> getKasAllowlist() {
+            return kasAllowlist;
+        }
+
+        public boolean isIgnoreKasAllowlist() {
+            return ignoreKasAllowlist;
+        }
     }
 
     @SafeVarargs
@@ -176,25 +281,177 @@ public class Config {
 
 
     public static class TDFConfig {
-        public Boolean autoconfigure;
-        public int defaultSegmentSize;
-        public boolean enableEncryption;
-        public TDFFormat tdfFormat;
-        public String tdfPublicKey;
-        public String tdfPrivateKey;
-        public String metaData;
-        public IntegrityAlgorithm integrityAlgorithm;
-        public IntegrityAlgorithm segmentIntegrityAlgorithm;
-        public List<Autoconfigure.AttributeValueFQN> attributes;
-        public List<Value> attributeValues;
-        public List<KASInfo> kasInfoList;
-        public List<io.opentdf.platform.sdk.AssertionConfig> assertionConfigList;
-        public String mimeType;
-        public List<Autoconfigure.KeySplitStep> splitPlan;
-        public KeyType wrappingKeyType;
-        public boolean hexEncodeRootAndSegmentHashes;
-        public boolean renderVersionInfoInManifest;
-        public boolean systemMetadataAssertion;
+        private Boolean autoconfigure;
+        private int defaultSegmentSize;
+        private boolean enableEncryption;
+        private TDFFormat tdfFormat;
+        private String tdfPublicKey;
+        private String tdfPrivateKey;
+        private String metaData;
+        private IntegrityAlgorithm integrityAlgorithm;
+        private IntegrityAlgorithm segmentIntegrityAlgorithm;
+        private List<Autoconfigure.AttributeValueFQN> attributes;
+        private List<Value> attributeValues;
+        private List<KASInfo> kasInfoList;
+        private List<io.opentdf.platform.sdk.AssertionConfig> assertionConfigList;
+        private String mimeType;
+        private List<Autoconfigure.KeySplitStep> splitPlan;
+        private KeyType wrappingKeyType;
+        private boolean hexEncodeRootAndSegmentHashes;
+        private boolean renderVersionInfoInManifest;
+        private boolean systemMetadataAssertion;
+
+        public Boolean getAutoconfigure() {
+            return autoconfigure;
+        }
+
+        public void setAutoconfigure(Boolean autoconfigure) {
+            this.autoconfigure = autoconfigure;
+        }
+
+        public int getDefaultSegmentSize() {
+            return defaultSegmentSize;
+        }
+
+        public void setDefaultSegmentSize(int defaultSegmentSize) {
+            this.defaultSegmentSize = defaultSegmentSize;
+        }
+
+        public boolean isEnableEncryption() {
+            return enableEncryption;
+        }
+
+        public void setEnableEncryption(boolean enableEncryption) {
+            this.enableEncryption = enableEncryption;
+        }
+
+        public TDFFormat getTdfFormat() {
+            return tdfFormat;
+        }
+
+        public void setTdfFormat(TDFFormat tdfFormat) {
+            this.tdfFormat = tdfFormat;
+        }
+
+        public String getTdfPublicKey() {
+            return tdfPublicKey;
+        }
+
+        public void setTdfPublicKey(String tdfPublicKey) {
+            this.tdfPublicKey = tdfPublicKey;
+        }
+
+        public String getTdfPrivateKey() {
+            return tdfPrivateKey;
+        }
+
+        public void setTdfPrivateKey(String tdfPrivateKey) {
+            this.tdfPrivateKey = tdfPrivateKey;
+        }
+
+        public String getMetaData() {
+            return metaData;
+        }
+
+        public void setMetaData(String metaData) {
+            this.metaData = metaData;
+        }
+
+        public IntegrityAlgorithm getIntegrityAlgorithm() {
+            return integrityAlgorithm;
+        }
+
+        public void setIntegrityAlgorithm(IntegrityAlgorithm integrityAlgorithm) {
+            this.integrityAlgorithm = integrityAlgorithm;
+        }
+
+        public IntegrityAlgorithm getSegmentIntegrityAlgorithm() {
+            return segmentIntegrityAlgorithm;
+        }
+
+        public void setSegmentIntegrityAlgorithm(IntegrityAlgorithm segmentIntegrityAlgorithm) {
+            this.segmentIntegrityAlgorithm = segmentIntegrityAlgorithm;
+        }
+
+        public List<AttributeValueFQN> getAttributes() {
+            return attributes;
+        }
+
+        public void setAttributes(List<AttributeValueFQN> attributes) {
+            this.attributes = attributes;
+        }
+
+        public List<Value> getAttributeValues() {
+            return attributeValues;
+        }
+
+        public void setAttributeValues(List<Value> attributeValues) {
+            this.attributeValues = attributeValues;
+        }
+
+        public List<KASInfo> getKasInfoList() {
+            return kasInfoList;
+        }
+
+        public void setKasInfoList(List<KASInfo> kasInfoList) {
+            this.kasInfoList = kasInfoList;
+        }
+
+        public List<AssertionConfig> getAssertionConfigList() {
+            return assertionConfigList;
+        }
+
+        public void setAssertionConfigList(List<AssertionConfig> assertionConfigList) {
+            this.assertionConfigList = assertionConfigList;
+        }
+
+        public String getMimeType() {
+            return mimeType;
+        }
+
+        public void setMimeType(String mimeType) {
+            this.mimeType = mimeType;
+        }
+
+        public List<Autoconfigure.KeySplitStep> getSplitPlan() {
+            return splitPlan;
+        }
+
+        public void setSplitPlan(List<Autoconfigure.KeySplitStep> splitPlan) {
+            this.splitPlan = splitPlan;
+        }
+
+        public KeyType getWrappingKeyType() {
+            return wrappingKeyType;
+        }
+
+        public void setWrappingKeyType(KeyType wrappingKeyType) {
+            this.wrappingKeyType = wrappingKeyType;
+        }
+
+        public boolean isHexEncodeRootAndSegmentHashes() {
+            return hexEncodeRootAndSegmentHashes;
+        }
+
+        public void setHexEncodeRootAndSegmentHashes(boolean hexEncodeRootAndSegmentHashes) {
+            this.hexEncodeRootAndSegmentHashes = hexEncodeRootAndSegmentHashes;
+        }
+
+        public boolean getRenderVersionInfoInManifest() {
+            return renderVersionInfoInManifest;
+        }
+
+        public void setRenderVersionInfoInManifest(boolean renderVersionInfoInManifest) {
+            this.renderVersionInfoInManifest = renderVersionInfoInManifest;
+        }
+
+        public boolean isSystemMetadataAssertion() {
+            return systemMetadataAssertion;
+        }
+
+        public void setSystemMetadataAssertion(boolean systemMetadataAssertion) {
+            this.systemMetadataAssertion = systemMetadataAssertion;
+        }
 
         public TDFConfig() {
             this.autoconfigure = true;
@@ -343,13 +600,43 @@ public class Config {
     }
 
     public static class NanoTDFConfig {
-        public ECCMode eccMode;
-        public NanoTDFType.Cipher cipher;
-        public SymmetricAndPayloadConfig config;
-        public List<String> attributes;
-        public List<KASInfo> kasInfoList;
-        public CollectionConfig collectionConfig;
-        public NanoTDFType.PolicyType policyType;
+        private ECCMode eccMode;
+        private NanoTDFType.Cipher cipher;
+        private SymmetricAndPayloadConfig config;
+        private List<String> attributes;
+        private List<KASInfo> kasInfoList;
+        private CollectionConfig collectionConfig;
+        private NanoTDFType.PolicyType policyType;
+
+        public ECCMode getEccMode() {
+            return eccMode;
+        }
+
+        public NanoTDFType.Cipher getCipher() {
+            return cipher;
+        }
+
+        public SymmetricAndPayloadConfig getConfig() {
+            return config;
+        }
+
+        public List<String> getAttributes() {
+            return attributes;
+        }
+
+        public List<KASInfo> getKasInfoList() {
+            return kasInfoList;
+        }
+
+        public CollectionConfig getCollectionConfig() {
+            return collectionConfig;
+        }
+
+        public NanoTDFType.PolicyType getPolicyType() {
+            return policyType;
+        }
+
+
 
         public NanoTDFConfig() {
             this.eccMode = new ECCMode();
@@ -424,8 +711,24 @@ public class Config {
     }
 
     public static class NanoTDFReaderConfig {
-        Set<String> kasAllowlist;
-        boolean ignoreKasAllowlist;
+        private Set<String> kasAllowlist;
+        private boolean ignoreKasAllowlist;
+
+        public void setKasAllowlist(Set<String> kasAllowlist) {
+            this.kasAllowlist = kasAllowlist;
+        }
+
+        public void setIgnoreKasAllowlist(boolean ignoreKasAllowlist) {
+            this.ignoreKasAllowlist = ignoreKasAllowlist;
+        }
+
+        public Set<String> getKasAllowlist() {
+            return kasAllowlist;
+        }
+
+        public boolean isIgnoreKasAllowlist() {
+            return ignoreKasAllowlist;
+        }
     }
 
     public static NanoTDFReaderConfig newNanoTDFReaderConfig(Consumer<NanoTDFReaderConfig>... options) {
@@ -482,8 +785,12 @@ public class Config {
     public static class CollectionConfig {
         private int iterationCounter;
         private HeaderInfo headerInfo;
-        public final boolean useCollection;
+        private final boolean useCollection;
         private Boolean updatedHeaderInfo;
+
+        public boolean getUseCollection() {
+            return useCollection;
+        }
 
 
         public CollectionConfig(boolean useCollection) {

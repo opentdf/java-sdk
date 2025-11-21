@@ -79,31 +79,31 @@ class PlannerTest {
     @Test
     void generatePlanFromProvidedKases() {
         var kas1 = new Config.KASInfo();
-        kas1.URL = "https://kas1.example.com";
-        kas1.KID = "kid1";
+        kas1.setURL("https://kas1.example.com");
+        kas1.setKID("kid1");
 
         var kas2 = new Config.KASInfo();
-        kas2.URL = "https://kas2.example.com";
-        kas2.KID = "kid2";
-        kas2.Algorithm = "ec:secp256r1";
+        kas2.setURL("https://kas2.example.com");
+        kas2.setKID("kid2");
+        kas2.setAlgorithm("ec:secp256r1");
 
         var tdfConfig = new Config.TDFConfig();
-        tdfConfig.kasInfoList.add(kas1);
-        tdfConfig.kasInfoList.add(kas2);
+        tdfConfig.getKasInfoList().add(kas1);
+        tdfConfig.getKasInfoList().add(kas2);
 
         var planner = new Planner(tdfConfig, new FakeServicesBuilder().build(), (ignore1, ignored2) -> { throw new IllegalArgumentException("no granter needed"); });
-        List<Autoconfigure.KeySplitTemplate> splitPlan = planner.generatePlanFromProvidedKases(tdfConfig.kasInfoList);
+        List<Autoconfigure.KeySplitTemplate> splitPlan = planner.generatePlanFromProvidedKases(tdfConfig.getKasInfoList());
 
         assertThat(splitPlan).asList().hasSize(2);
-        assertThat(splitPlan.get(0).kas).isEqualTo("https://kas1.example.com");
-        assertThat(splitPlan.get(0).kid).isEqualTo("kid1");
-        assertThat(splitPlan.get(0).keyType).isNull();
+        assertThat(splitPlan.get(0).getKas()).isEqualTo("https://kas1.example.com");
+        assertThat(splitPlan.get(0).getKid()).isEqualTo("kid1");
+        assertThat(splitPlan.get(0).getKeyType()).isNull();
 
-        assertThat(splitPlan.get(1).kas).isEqualTo("https://kas2.example.com");
-        assertThat(splitPlan.get(1).kid).isEqualTo("kid2");
-        assertThat(splitPlan.get(1).keyType).isEqualTo(KeyType.EC256Key);
+        assertThat(splitPlan.get(1).getKas()).isEqualTo("https://kas2.example.com");
+        assertThat(splitPlan.get(1).getKid()).isEqualTo("kid2");
+        assertThat(splitPlan.get(1).getKeyType()).isEqualTo(KeyType.EC256Key);
 
-        assertThat(splitPlan.get(0).splitID).isNotEqualTo(splitPlan.get(1).splitID);
+        assertThat(splitPlan.get(0).getSplitID()).isNotEqualTo(splitPlan.get(1).getSplitID());
     }
 
     @Test
@@ -112,36 +112,30 @@ class PlannerTest {
         Mockito.when(kas.getPublicKey(Mockito.any())).thenAnswer(invocation -> {
                 Config.KASInfo kasInfo = invocation.getArgument(0, Config.KASInfo.class);
                 var ret = new Config.KASInfo();
-                ret.URL = kasInfo.URL;
-                if (Objects.equals(kasInfo.URL, "https://kas1.example.com")) {
-                    ret.PublicKey = "pem1";
-                    ret.Algorithm = "rsa:2048";
-                    ret.KID = "kid1";
-                } else if (Objects.equals(kasInfo.URL, "https://kas2.example.com")) {
-                    ret.PublicKey = "pem2";
-                    ret.Algorithm = "ec:secp256r1";
-                    ret.KID = "kid2";
-                } else if (Objects.equals(kasInfo.URL, "https://kas3.example.com")) {
-                    ret.PublicKey = "pem3";
-                    ret.Algorithm = "ec:secp384r1";
-                    ret.KID = "kid3";
-                    assertThat(kasInfo.Algorithm).isEqualTo("ec:secp384r1");
+                ret.setURL(kasInfo.getURL());
+                if (Objects.equals(kasInfo.getURL(), "https://kas1.example.com")) {
+                    ret.setPublicKey("pem1");
+                    ret.setAlgorithm("rsa:2048");
+                    ret.setKID("kid1");
+                } else if (Objects.equals(kasInfo.getURL(), "https://kas2.example.com")) {
+                    ret.setPublicKey("pem2");
+                    ret.setAlgorithm("ec:secp256r1");
+                    ret.setKID("kid2");
+                } else if (Objects.equals(kasInfo.getURL(), "https://kas3.example.com")) {
+                    ret.setPublicKey("pem3");
+                    ret.setAlgorithm("ec:secp384r1");
+                    ret.setKID("kid3");
+                    assertThat(kasInfo.getAlgorithm()).isEqualTo("ec:secp384r1");
                 } else {
-                    throw new IllegalArgumentException("Unexpected KAS URL: " + kasInfo.URL);
+                    throw new IllegalArgumentException("Unexpected KAS URL: " + kasInfo.getURL());
                 }
                 return ret;
         });
         var tdfConfig = new Config.TDFConfig();
-        tdfConfig.autoconfigure = true;
-        tdfConfig.wrappingKeyType = KeyType.RSA2048Key;
-        tdfConfig.kasInfoList = List.of(
-                new Config.KASInfo() {{
-                    URL = "https://kas4.example.com";
-                    KID = "kid4";
-                    Algorithm = "ec:secp384r1";
-                    PublicKey = "pem4";
-                }}
-        );
+        tdfConfig.setAutoconfigure(true);
+        tdfConfig.setWrappingKeyType(KeyType.RSA2048Key);
+        tdfConfig.setKasInfoList(List.of(new Config.KASInfo("https://kas4.example.com", "pem4", "kid4", "ec:secp384r1")));
+
         var planner = new Planner(tdfConfig, new FakeServicesBuilder().setKas(kas).build(), (ignore1, ignored2) ->  { throw new IllegalArgumentException("no granter needed"); });
         var plan = List.of(
                 new Autoconfigure.KeySplitTemplate("https://kas1.example.com", "split1", null, null),
@@ -152,42 +146,42 @@ class PlannerTest {
         Map<String, List<Config.KASInfo>> filledInPlan = planner.resolveKeys(plan);
         assertThat(filledInPlan.keySet().stream().collect(Collectors.toList())).asList().containsExactlyInAnyOrder("split1", "split2");
         assertThat(filledInPlan.get("split1")).asList().hasSize(2);
-        var kasInfo1 = filledInPlan.get("split1").stream().filter(k -> "kid1".equals(k.KID)).findFirst().get();
-        assertThat(kasInfo1.URL).isEqualTo("https://kas1.example.com");
-        assertThat(kasInfo1.Algorithm).isEqualTo("rsa:2048");
-        assertThat(kasInfo1.PublicKey).isEqualTo("pem1");
-        var kasInfo4 = filledInPlan.get("split1").stream().filter(k -> "kid4".equals(k.KID)).findFirst().get();
-        assertThat(kasInfo4.URL).isEqualTo("https://kas4.example.com");
-        assertThat(kasInfo4.Algorithm).isEqualTo("ec:secp384r1");
-        assertThat(kasInfo4.PublicKey).isEqualTo("pem4");
+        var kasInfo1 = filledInPlan.get("split1").stream().filter(k -> "kid1".equals(k.getKID())).findFirst().get();
+        assertThat(kasInfo1.getURL()).isEqualTo("https://kas1.example.com");
+        assertThat(kasInfo1.getAlgorithm()).isEqualTo("rsa:2048");
+        assertThat(kasInfo1.getPublicKey()).isEqualTo("pem1");
+        var kasInfo4 = filledInPlan.get("split1").stream().filter(k -> "kid4".equals(k.getKID())).findFirst().get();
+        assertThat(kasInfo4.getURL()).isEqualTo("https://kas4.example.com");
+        assertThat(kasInfo4.getAlgorithm()).isEqualTo("ec:secp384r1");
+        assertThat(kasInfo4.getPublicKey()).isEqualTo("pem4");
 
         assertThat(filledInPlan.get("split2")).asList().hasSize(2);
-        var kasInfo2 = filledInPlan.get("split2").stream().filter(kasInfo -> "kid2".equals(kasInfo.KID)).findFirst().get();
-        assertThat(kasInfo2.URL).isEqualTo("https://kas2.example.com");
-        assertThat(kasInfo2.Algorithm).isEqualTo("ec:secp256r1");
-        assertThat(kasInfo2.PublicKey).isEqualTo("pem2");
-        var kasInfo3 = filledInPlan.get("split2").stream().filter(kasInfo -> "kid3".equals(kasInfo.KID)).findFirst().get();
-        assertThat(kasInfo3.URL).isEqualTo("https://kas3.example.com");
-        assertThat(kasInfo3.Algorithm).isEqualTo("ec:secp384r1");
-        assertThat(kasInfo3.PublicKey).isEqualTo("pem3");
+        var kasInfo2 = filledInPlan.get("split2").stream().filter(kasInfo -> "kid2".equals(kasInfo.getKID())).findFirst().get();
+        assertThat(kasInfo2.getURL()).isEqualTo("https://kas2.example.com");
+        assertThat(kasInfo2.getAlgorithm()).isEqualTo("ec:secp256r1");
+        assertThat(kasInfo2.getPublicKey()).isEqualTo("pem2");
+        var kasInfo3 = filledInPlan.get("split2").stream().filter(kasInfo -> "kid3".equals(kasInfo.getKID())).findFirst().get();
+        assertThat(kasInfo3.getURL()).isEqualTo("https://kas3.example.com");
+        assertThat(kasInfo3.getAlgorithm()).isEqualTo("ec:secp384r1");
+        assertThat(kasInfo3.getPublicKey()).isEqualTo("pem3");
     }
 
     @Test
     void returnsOnlyDefaultKasesIfPresent() {
         var kas1 = new Config.KASInfo();
-        kas1.URL = "https://kas1.example.com";
-        kas1.Default = true;
+        kas1.setURL("https://kas1.example.com");
+        kas1.setDefault(true);
 
         var kas2 = new Config.KASInfo();
-        kas2.URL = "https://kas2.example.com";
-        kas2.Default = false;
+        kas2.setURL("https://kas2.example.com");
+        kas2.setDefault(false);
 
         var kas3 = new Config.KASInfo();
-        kas3.URL = "https://kas3.example.com";
-        kas3.Default = true;
+        kas3.setURL("https://kas3.example.com");
+        kas3.setDefault(true);
 
         var config = new Config.TDFConfig();
-        config.kasInfoList.addAll(List.of(kas1, kas2, kas3));
+        config.getKasInfoList().addAll(List.of(kas1, kas2, kas3));
 
         List<String> result = Planner.defaultKases(config);
 
@@ -197,15 +191,15 @@ class PlannerTest {
     @Test
     void returnsAllKasesIfNoDefault() {
         var kas1 = new Config.KASInfo();
-        kas1.URL = "https://kas1.example.com";
-        kas1.Default = false;
+        kas1.setURL("https://kas1.example.com");
+        kas1.setDefault(false);
 
         var kas2 = new Config.KASInfo();
-        kas2.URL = "https://kas2.example.com";
-        kas2.Default = null; // not set
+        kas2.setURL("https://kas2.example.com");
+        kas2.setDefault(null); // not set
 
         var config = new Config.TDFConfig();
-        config.kasInfoList.addAll(List.of(kas1, kas2));
+        config.getKasInfoList().addAll(List.of(kas1, kas2));
 
         List<String> result = Planner.defaultKases(config);
         Assertions.assertThat(result).containsExactlyInAnyOrder("https://kas1.example.com", "https://kas2.example.com");
@@ -224,39 +218,39 @@ class PlannerTest {
         Mockito.when(kas.getPublicKey(Mockito.any())).thenAnswer(invocation -> {
             Config.KASInfo kasInfo = invocation.getArgument(0, Config.KASInfo.class);
             var ret = new Config.KASInfo();
-            ret.URL = kasInfo.URL;
-            if (Objects.equals(kasInfo.URL, "https://kas1.example.com")) {
-                ret.PublicKey = "pem1";
-                ret.Algorithm = "rsa:2048";
-                ret.KID = "kid1";
-            } else if (Objects.equals(kasInfo.URL, "https://kas2.example.com")) {
-                ret.PublicKey = "pem2";
-                ret.Algorithm = "ec:secp256r1";
-                ret.KID = "kid2";
+            ret.setURL(kasInfo.getURL());
+            if (Objects.equals(kasInfo.getURL(), "https://kas1.example.com")) {
+                ret.setPublicKey("pem1");
+                ret.setAlgorithm("rsa:2048");
+                ret.setKID("kid1");
+            } else if (Objects.equals(kasInfo.getURL(), "https://kas2.example.com")) {
+                ret.setPublicKey("pem2");
+                ret.setAlgorithm("ec:secp256r1");
+                ret.setKID("kid2");
             } else {
-                throw new IllegalArgumentException("Unexpected KAS URL: " + kasInfo.URL);
+                throw new IllegalArgumentException("Unexpected KAS URL: " + kasInfo.getURL());
             }
             return ret;
         });
         // Arrange
         var kas1 = new Config.KASInfo();
-        kas1.URL = "https://kas1.example.com";
-        kas1.KID = "kid1";
-        kas1.Algorithm = "rsa:2048";
+        kas1.setURL("https://kas1.example.com");
+        kas1.setKID("kid1");
+        kas1.setAlgorithm("rsa:2048");
 
         var kas2 = new Config.KASInfo();
-        kas2.URL = "https://kas2.example.com";
-        kas2.KID = "kid2";
-        kas2.Algorithm = "ec:secp256";
+        kas2.setURL("https://kas2.example.com");
+        kas2.setKID("kid2");
+        kas2.setAlgorithm("ec:secp256");
 
-        var splitStep1 = new Autoconfigure.KeySplitStep(kas1.URL, "split1");
-        var splitStep2 = new Autoconfigure.KeySplitStep(kas2.URL, "split2");
+        var splitStep1 = new Autoconfigure.KeySplitStep(kas1.getURL(), "split1");
+        var splitStep2 = new Autoconfigure.KeySplitStep(kas2.getURL(), "split2");
 
         var tdfConfig = new Config.TDFConfig();
-        tdfConfig.autoconfigure = false;
-        tdfConfig.kasInfoList.add(kas1);
-        tdfConfig.kasInfoList.add(kas2);
-        tdfConfig.splitPlan = List.of(splitStep1, splitStep2);
+        tdfConfig.setAutoconfigure(false);
+        tdfConfig.getKasInfoList().add(kas1);
+        tdfConfig.getKasInfoList().add(kas2);
+        tdfConfig.setSplitPlan(List.of(splitStep1, splitStep2));
 
         var planner = new Planner(tdfConfig, new FakeServicesBuilder().setKas(kas).build(), (ignore1, ignored2) -> { throw new IllegalArgumentException("no granter needed"); });
 

@@ -165,7 +165,7 @@ class Command {
         var sdk = buildSDK();
         var kasInfos = kas.stream().map(k -> {
             var ki = new Config.KASInfo();
-            ki.URL = k;
+            ki.setURL(k);
             return ki;
         }).toArray(Config.KASInfo[]::new);
 
@@ -274,7 +274,7 @@ class Command {
                             }
                         }
 
-                        for (Map.Entry<String, AssertionConfig.AssertionKey> entry : assertionVerificationKeys.keys
+                        for (Map.Entry<String, AssertionConfig.AssertionKey> entry : assertionVerificationKeys.getKeys()
                                 .entrySet()) {
                             try {
                                 Object correctedKey = correctKeyType(entry.getValue().alg, entry.getValue().key, true);
@@ -336,7 +336,7 @@ class Command {
         var sdk = buildSDK();
         var kasInfos = kas.stream().map(k -> {
             var ki = new Config.KASInfo();
-            ki.URL = k;
+            ki.setURL(k);
             return ki;
         }).toArray(Config.KASInfo[]::new);
 
