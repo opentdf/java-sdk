@@ -35,7 +35,7 @@ public class TDFE2ETest {
                 .build();
 
         var kasInfo = new Config.KASInfo();
-        kasInfo.URL = "localhost:8080";
+        kasInfo.setURL("localhost:8080");
 
         List<TDFConfigPair> tdfConfigPairs = List.of(
                 new TDFConfigPair(
@@ -75,7 +75,7 @@ public class TDFE2ETest {
                 .services;
 
         var kasInfo = new Config.KASInfo();
-        kasInfo.URL = "http://localhost:8080";
+        kasInfo.setURL("http://localhost:8080");
 
         for (NanoTDFType.PolicyType policyType : List.of(
                 NanoTDFType.PolicyType.EMBEDDED_POLICY_PLAIN_TEXT,

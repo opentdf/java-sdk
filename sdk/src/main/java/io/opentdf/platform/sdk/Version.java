@@ -20,7 +20,7 @@ class Version implements Comparable<Version> {
     private final String prereleaseAndMetadata;
     private static final Logger log = LoggerFactory.getLogger(Version.class);
 
-    Pattern SEMVER_PATTERN = Pattern.compile(
+    private static final Pattern SEMVER_PATTERN = Pattern.compile(
             "^(?<major>0|[1-9]\\d*)\\.(?<minor>0|[1-9]\\d*)\\.(?<patch>0|[1-9]\\d*)(?<prereleaseAndMetadata>\\D.*)?$");
 
     @Override

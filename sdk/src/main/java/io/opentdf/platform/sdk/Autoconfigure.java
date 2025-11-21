@@ -63,10 +63,26 @@ public class Autoconfigure {
     }
 
     static class KeySplitTemplate {
-        final String kas;
-        final String splitID;
-        final String kid;
-        final KeyType keyType;
+        private final String kas;
+        private final String splitID;
+        private final String kid;
+        private final KeyType keyType;
+
+        public String getKas() {
+            return kas;
+        }
+
+        public String getSplitID() {
+            return splitID;
+        }
+
+        public String getKid() {
+            return kid;
+        }
+
+        public KeyType getKeyType() {
+            return keyType;
+        }
 
         @Override
         public String toString() {
@@ -99,8 +115,16 @@ public class Autoconfigure {
     }
 
     public static class KeySplitStep {
-        final String kas;
-        final String splitID;
+        private final String kas;
+        private final String splitID;
+
+        public String getKas() {
+            return kas;
+        }
+
+        public String getSplitID() {
+            return splitID;
+        }
 
         KeySplitStep(String kas, String splitId) {
             this.kas = Objects.requireNonNull(kas);
@@ -289,8 +313,16 @@ public class Autoconfigure {
     }
 
     static class KeyAccessGrant {
-        public Attribute attr;
-        public List<String> kases;
+        private Attribute attr;
+        private List<String> kases;
+
+        public Attribute getAttr() {
+            return attr;
+        }
+
+        public List<String> getKases() {
+            return kases;
+        }
 
         public KeyAccessGrant(Attribute attr, List<String> kases) {
             this.attr = attr;
@@ -349,11 +381,11 @@ public class Autoconfigure {
 
                 for (var cachedGrantKey: cachedGrantKeys) {
                     var mappedKey = new Config.KASInfo();
-                    mappedKey.URL = grantedKey.getUri();
-                    mappedKey.KID = cachedGrantKey.getKid();
-                    mappedKey.Algorithm = KeyType.fromPublicKeyAlgorithm(cachedGrantKey.getAlg()).toString();
-                    mappedKey.PublicKey = cachedGrantKey.getPem();
-                    mappedKey.Default = false;
+                    mappedKey.setURL(grantedKey.getUri());
+                    mappedKey.setKID(cachedGrantKey.getKid());
+                    mappedKey.setAlgorithm(KeyType.fromPublicKeyAlgorithm(cachedGrantKey.getAlg()).toString());
+                    mappedKey.setPublicKey(cachedGrantKey.getPem());
+                    mappedKey.setDefault(false);
                     mappedKeys.computeIfAbsent(fqn.key, k -> new ArrayList<>()).add(mappedKey);
                 }
             }
@@ -512,11 +544,11 @@ public class Autoconfigure {
                         continue;
                     }
                     for (var kasInfo : mapped) {
-                        if (kasInfo.URL == null || kasInfo.URL.isEmpty()) {
+                        if (kasInfo.getURL() == null || kasInfo.getURL().isEmpty()) {
                             logger.warn("No KAS URL found for attribute value {}", value);
                             continue;
                         }
-                        keys.add(new PublicKeyInfo(kasInfo.URL, kasInfo.KID, kasInfo.Algorithm));
+                        keys.add(new PublicKeyInfo(kasInfo.getURL(), kasInfo.getKID(), kasInfo.getAlgorithm()));
                     }
                 }
 
@@ -615,9 +647,17 @@ public class Autoconfigure {
         }
 
         static class PublicKeyInfo implements Comparable<PublicKeyInfo> {
-            final String kas;
-            final String kid;
-            final String algorithm;
+            private final String kas;
+            private final String kid;
+            private final String algorithm;
+
+            public String getKas() {
+                return kas;
+            }
+
+            public String getKid() { return kid; }
+
+            public String getAlgorithm() { return algorithm; }
 
             PublicKeyInfo(String kas) {
                 this(kas, null, null);
@@ -627,10 +667,6 @@ public class Autoconfigure {
                 this.kas = Objects.requireNonNull(kas);
                 this.kid = kid;
                 this.algorithm = algorithm;
-            }
-
-            String getKas() {
-                return kas;
             }
 
             @Override
@@ -884,11 +920,11 @@ public class Autoconfigure {
 
     static Autoconfigure.Granter createGranter(SDK.Services services, Config.TDFConfig tdfConfig) {
         Autoconfigure.Granter granter = new Autoconfigure.Granter(new ArrayList<>());
-        if (tdfConfig.attributeValues != null && !tdfConfig.attributeValues.isEmpty()) {
-            granter = Autoconfigure.newGranterFromAttributes(services.kas().getKeyCache(), tdfConfig.attributeValues.toArray(new Value[0]));
-        } else if (tdfConfig.attributes != null && !tdfConfig.attributes.isEmpty()) {
+        if (tdfConfig.getAttributeValues() != null && !tdfConfig.getAttributeValues().isEmpty()) {
+            granter = Autoconfigure.newGranterFromAttributes(services.kas().getKeyCache(), tdfConfig.getAttributeValues().toArray(new Value[0]));
+        } else if (tdfConfig.getAttributes() != null && !tdfConfig.getAttributes().isEmpty()) {
             granter = Autoconfigure.newGranterFromService(services.attributes(), services.kas().getKeyCache(),
-                    tdfConfig.attributes.toArray(new Autoconfigure.AttributeValueFQN[0]));
+                    tdfConfig.getAttributes().toArray(new Autoconfigure.AttributeValueFQN[0]));
         }
         return granter;
     }

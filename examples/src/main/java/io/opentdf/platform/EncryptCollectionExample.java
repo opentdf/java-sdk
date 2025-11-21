@@ -21,7 +21,7 @@ public class EncryptCollectionExample {
                 .build();
 
         var kasInfo = new Config.KASInfo();
-        kasInfo.URL = "http://localhost:8080/kas";
+        kasInfo.setURL("http://localhost:8080/kas");
 
         var tdfConfig = Config.newNanoTDFConfig(
                 Config.withNanoKasInformation(kasInfo),

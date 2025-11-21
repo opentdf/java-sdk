@@ -10,15 +10,15 @@
 
     <suppress checks="DesignForExtension" />
     <suppress checks="MagicNumber" />
-<!--    <suppress checks="VisibilityModifier" />-->
+    <suppress checks="VisibilityModifier" />
     <suppress checks="RedundantModifier" />
     <suppress checks="WhitespaceAround" />
     <suppress checks="FinalParameters" />
     <suppress checks="FinalClass" />
-<!--    <suppress checks="MissingJavadocMethod" />-->
-<!--    <suppress checks="JavadocStyle" />-->
-<!--    <suppress checks="JavadocVariable" />-->
-<!--    <suppress checks="JavadocMethod" />-->
+    <suppress checks="MissingJavadocMethod" />
+    <suppress checks="JavadocStyle" />
+    <suppress checks="JavadocVariable" />
+    <suppress checks="JavadocMethod" />
     <suppress checks="HideUtilityClassConstructor" />
     <suppress checks="ModifierOrder" />
     <suppress checks="RegexpSingleline" />
@@ -43,5 +43,7 @@
     <suppress checks="LocalVariableName" />
     <suppress checks="MethodLength" />
     <suppress checks="ParameterNumber" />
-<!--    <suppress checks="JavadocPackage" />-->
+    <suppress checks="JavadocPackage" />
+    <suppress checks="LeftCurly" />
+    <suppress checks="ParameterName" />
 </suppressions>

@@ -76,7 +76,7 @@ class KASClient implements SDK.KAS {
         log.debug("retrieving public key with kasinfo = [{}]", kasInfo);
 
         var req = PublicKeyRequest.newBuilder().setAlgorithm(curve.getPlatformCurveName()).build();
-        var r = getStub(kasInfo.URL).publicKeyBlocking(req, Collections.emptyMap()).execute();
+        var r = getStub(kasInfo.getURL()).publicKeyBlocking(req, Collections.emptyMap()).execute();
         PublicKeyResponse res;
         try {
             res = ResponseMessageKt.getOrThrow(r);
@@ -84,23 +84,23 @@ class KASClient implements SDK.KAS {
             throw new SDKException("error getting public key", e);
         }
         var k2 = kasInfo.clone();
-        k2.KID = res.getKid();
-        k2.PublicKey = res.getPublicKey();
+        k2.setKID(res.getKid());
+        k2.setPublicKey(res.getPublicKey());
         return k2;
     }
 
     @Override
     public Config.KASInfo getPublicKey(Config.KASInfo kasInfo) {
-        Config.KASInfo cachedValue = this.kasKeyCache.get(kasInfo.URL, kasInfo.Algorithm, kasInfo.KID);
+        Config.KASInfo cachedValue = this.kasKeyCache.get(kasInfo.getURL(), kasInfo.getAlgorithm(), kasInfo.getKID());
         if (cachedValue != null) {
             return cachedValue;
         }
 
-        PublicKeyRequest request = (kasInfo.Algorithm == null || kasInfo.Algorithm.isEmpty())
+        PublicKeyRequest request = (kasInfo.getAlgorithm() == null || kasInfo.getAlgorithm().isEmpty())
                 ? PublicKeyRequest.getDefaultInstance()
-                : PublicKeyRequest.newBuilder().setAlgorithm(kasInfo.Algorithm).build();
+                : PublicKeyRequest.newBuilder().setAlgorithm(kasInfo.getAlgorithm()).build();
 
-        var req = getStub(kasInfo.URL).publicKeyBlocking(request, Collections.emptyMap()).execute();
+        var req = getStub(kasInfo.getURL()).publicKeyBlocking(request, Collections.emptyMap()).execute();
         PublicKeyResponse resp;
         try {
             resp = RequestHelper.getOrThrow(req);
@@ -109,10 +109,10 @@ class KASClient implements SDK.KAS {
         }
 
         var kiCopy = new Config.KASInfo();
-        kiCopy.KID = resp.getKid();
-        kiCopy.PublicKey = resp.getPublicKey();
-        kiCopy.URL = kasInfo.URL;
-        kiCopy.Algorithm = kasInfo.Algorithm;
+        kiCopy.setKID(resp.getKid());
+        kiCopy.setPublicKey(resp.getPublicKey());
+        kiCopy.setURL(kasInfo.getURL());
+        kiCopy.setAlgorithm(kasInfo.getAlgorithm());
 
         this.kasKeyCache.store(kiCopy);
         return kiCopy;
@@ -130,22 +130,81 @@ class KASClient implements SDK.KAS {
     }
 
     static class RewrapRequestBody {
-        String policy;
-        String clientPublicKey;
-        Manifest.KeyAccess keyAccess;
+        private String policy;
+        private String clientPublicKey;
+        private Manifest.KeyAccess keyAccess;
+
+        public String getPolicy() {
+            return policy;
+        }
+
+        public String getClientPublicKey() {
+            return clientPublicKey;
+        }
+
+        public Manifest.KeyAccess getKeyAccess() {
+            return keyAccess;
+        }
+
+        RewrapRequestBody(String policy, String clientPublicKey, Manifest.KeyAccess keyAccess) {
+            this.policy = policy;
+            this.clientPublicKey = clientPublicKey;
+            this.keyAccess = keyAccess;
+        }
     }
 
     static class NanoTDFKeyAccess {
-        String header;
-        String type;
-        String url;
-        String protocol;
+        private String header;
+        private String type;
+        private String url;
+        private String protocol;
+
+        public String getHeader() {
+            return header;
+        }
+
+        public String getType() {
+            return type;
+        }
+
+        public String getUrl() {
+            return url;
+        }
+
+        public String getProtocol() {
+            return protocol;
+        }
+
+        public NanoTDFKeyAccess(String header, String type, String url, String protocol) {
+            this.header = header;
+            this.type = type;
+            this.url = url;
+            this.protocol = protocol;
+        }
     }
 
     static class NanoTDFRewrapRequestBody {
-        String algorithm;
-        String clientPublicKey;
-        NanoTDFKeyAccess keyAccess;
+        private String algorithm;
+        private String clientPublicKey;
+        private NanoTDFKeyAccess keyAccess;
+
+        public String getAlgorithm() {
+            return algorithm;
+        }
+
+        public String getClientPublicKey() {
+            return clientPublicKey;
+        }
+
+        public NanoTDFKeyAccess getKeyAccess() {
+            return keyAccess;
+        }
+
+        public NanoTDFRewrapRequestBody(String algorithm, String clientPublicKey, NanoTDFKeyAccess keyAccess) {
+            this.algorithm = algorithm;
+            this.clientPublicKey = clientPublicKey;
+            this.keyAccess = keyAccess;
+        }
     }
 
     private static final Gson gson = new Gson();
@@ -166,10 +225,7 @@ class KASClient implements SDK.KAS {
             }
         }
 
-        RewrapRequestBody body = new RewrapRequestBody();
-        body.policy = policy;
-        body.clientPublicKey = clientPublicKey;
-        body.keyAccess = keyAccess;
+        RewrapRequestBody body = new RewrapRequestBody(policy, clientPublicKey, keyAccess);
 
         var requestBody = gson.toJson(body);
         var claims = new JWTClaimsSet.Builder()
@@ -226,16 +282,9 @@ class KASClient implements SDK.KAS {
     public byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL) {
         ECKeyPair keyPair = new ECKeyPair(curve, ECKeyPair.ECAlgorithm.ECDH);
 
-        NanoTDFKeyAccess keyAccess = new NanoTDFKeyAccess();
-        keyAccess.header = header;
-        keyAccess.type = "remote";
-        keyAccess.url = kasURL;
-        keyAccess.protocol = "kas";
+        NanoTDFKeyAccess keyAccess = new NanoTDFKeyAccess(header, "remote", kasURL, "kas");
 
-        NanoTDFRewrapRequestBody body = new NanoTDFRewrapRequestBody();
-        body.algorithm = format("ec:%s", curve.getCurveName());
-        body.clientPublicKey = keyPair.publicKeyInPEMFormat();
-        body.keyAccess = keyAccess;
+        NanoTDFRewrapRequestBody body = new NanoTDFRewrapRequestBody(format("ec:%s", curve.getCurveName()), keyPair.publicKeyInPEMFormat(), keyAccess);
 
         var requestBody = gson.toJson(body);
         var claims = new JWTClaimsSet.Builder()
