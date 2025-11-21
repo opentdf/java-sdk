@@ -14,7 +14,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>11</maven.compiler.release>
         <log4j.version>2.20.0</log4j.version>
-        <grpc.version>1.68.0</grpc.version>
+        <grpc.version>1.75.0</grpc.version>
         <protobuf.version>4.29.2</protobuf.version>
         <bouncycastle.version>1.82</bouncycastle.version>
         <ayza.version>10.0.0</ayza.version>
@@ -119,12 +119,12 @@
             <dependency>
                 <groupId>com.google.errorprone</groupId>
                 <artifactId>error_prone_annotations</artifactId>
-                <version>2.28.0</version>
+                <version>2.30.0</version>
             </dependency>
             <dependency>
                 <groupId>com.google.guava</groupId>
                 <artifactId>guava</artifactId>
-                <version>33.2.1-android</version>
+                <version>33.3.1-android</version>
             </dependency>
             <dependency>
                 <groupId>com.google.protobuf</groupId>
