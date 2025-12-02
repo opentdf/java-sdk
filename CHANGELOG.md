@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.11.0](https://github.com/opentdf/java-sdk/compare/v0.10.0...v0.11.0) (2025-11-20)
+
+
+### Features
+
+* **ci:** DSPX-1716 Updating permission for bundled tests ([#306](https://github.com/opentdf/java-sdk/issues/306)) ([87ff3e6](https://github.com/opentdf/java-sdk/commit/87ff3e6f24e7cfedbb5aab7f6d0d0bfb1a798888))
+
+
+### Bug Fixes
+
+* **ci:** Fix the workflow that updates the proto version ([#301](https://github.com/opentdf/java-sdk/issues/301)) ([9bd9ce5](https://github.com/opentdf/java-sdk/commit/9bd9ce5eeaf3c4fe0f683d16bb65974c09fe1068))
+* **main:** make examples runnable ([#311](https://github.com/opentdf/java-sdk/issues/311)) ([5ede7dd](https://github.com/opentdf/java-sdk/commit/5ede7dd5555bb60db94fdab875b9a318c6075412))
+* parse hostnames with no ports correctly ([#292](https://github.com/opentdf/java-sdk/issues/292)) ([3da5f51](https://github.com/opentdf/java-sdk/commit/3da5f511a950da4f468f63f62fe52617410fca48))
+* **sdk:** remove reserved and unused proto field ([#299](https://github.com/opentdf/java-sdk/issues/299)) ([50b0302](https://github.com/opentdf/java-sdk/commit/50b0302a8d85b45cc81f465292636330a512c74b))
+* we can't parse things like `192.168.1.1:4000` ([#294](https://github.com/opentdf/java-sdk/issues/294)) ([dc3142d](https://github.com/opentdf/java-sdk/commit/dc3142da71198e16688912152ac5ce866faec060))
+
 ## [0.10.0](https://github.com/opentdf/java-sdk/compare/v0.9.0...v0.10.0) (2025-09-02)
 
 
