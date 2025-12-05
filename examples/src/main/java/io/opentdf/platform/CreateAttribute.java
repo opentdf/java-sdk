@@ -1,37 +1,74 @@
 package io.opentdf.platform;
+
 import com.connectrpc.ResponseMessageKt;
-import io.opentdf.platform.policy.Attribute;
 import io.opentdf.platform.policy.AttributeRuleTypeEnum;
+import io.opentdf.platform.policy.Namespace;
 import io.opentdf.platform.policy.attributes.CreateAttributeRequest;
 import io.opentdf.platform.policy.attributes.CreateAttributeResponse;
+import io.opentdf.platform.policy.namespaces.GetNamespaceRequest;
 import io.opentdf.platform.sdk.*;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.Collections;
-import java.util.concurrent.ExecutionException;
 
 import java.util.Arrays;
 
 public class CreateAttribute {
-    public static void main(String[] args) {
 
-        String clientId = "opentdf";
-        String clientSecret = "secret";
-        String platformEndpoint = "localhost:8080";
+  private static final Logger logger = LogManager.getLogger(CreateAttribute.class);
 
-        SDKBuilder builder = new SDKBuilder();
-        SDK sdk = builder.platformEndpoint(platformEndpoint)
-                .clientSecret(clientId, clientSecret).useInsecurePlaintextConnection(true)
-                .build();
+  public static void main(String[] args) {
 
-        CreateAttributeRequest request = CreateAttributeRequest.newBuilder()
-        .setNamespaceId("877990d1-609b-42ab-a273-4253b8b321eb")
-        .setName("test")
-        .setRule(AttributeRuleTypeEnum.forNumber(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ALL_OF_VALUE))
-        .addAllValues(Arrays.asList("test1", "test2")).build();
+    String clientId = "opentdf";
+    String clientSecret = "secret";
+    String platformEndpoint = "localhost:8080";
 
-        CreateAttributeResponse resp = ResponseMessageKt.getOrThrow(sdk.getServices().attributes().createAttributeBlocking(request, Collections.emptyMap()).execute());
+    SDKBuilder builder = new SDKBuilder();
+    SDK sdk =
+        builder
+            .platformEndpoint(platformEndpoint)
+            .clientSecret(clientId, clientSecret)
+            .useInsecurePlaintextConnection(true)
+            .build();
 
-        Attribute attribute = resp.getAttribute();
+    Namespace namespace;
+    String namespaceName = "mynamespace.com";
 
+    try {
+      namespace =
+          ResponseMessageKt.getOrThrow(
+                  sdk.getServices()
+                      .namespaces()
+                      .getNamespaceBlocking(
+                          GetNamespaceRequest.newBuilder()
+                              .setFqn("https://" + namespaceName)
+                              .build(),
+                          Collections.emptyMap())
+                      .execute())
+              .getNamespace();
+    } catch (Exception e) {
+      logger.error("Namespace '{}' not found", namespaceName);
+      throw e;
     }
+
+    CreateAttributeRequest request =
+        CreateAttributeRequest.newBuilder()
+            .setNamespaceId(namespace.getId())
+            .setName("test")
+            .setRule(
+                AttributeRuleTypeEnum.forNumber(
+                    AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ALL_OF_VALUE))
+            .addAllValues(Arrays.asList("test1", "test2"))
+            .build();
+
+    CreateAttributeResponse resp =
+        ResponseMessageKt.getOrThrow(
+            sdk.getServices()
+                .attributes()
+                .createAttributeBlocking(request, Collections.emptyMap())
+                .execute());
+
+    logger.info("Successfully created attribute with ID: {}", resp.getAttribute().getId());
+  }
 }

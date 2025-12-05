@@ -1,34 +1,49 @@
 package io.opentdf.platform;
+
 import com.connectrpc.ResponseMessageKt;
 import io.opentdf.platform.policy.SubjectMapping;
 import io.opentdf.platform.policy.subjectmapping.ListSubjectMappingsRequest;
 import io.opentdf.platform.policy.subjectmapping.ListSubjectMappingsResponse;
 import io.opentdf.platform.sdk.*;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.Collections;
-import java.util.concurrent.ExecutionException;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class ListSubjectMappings {
-    public static void main(String[] args) {
+  private static final Logger logger = LogManager.getLogger(ListSubjectMappings.class);
 
-        String clientId = "opentdf";
-        String clientSecret = "secret";
-        String platformEndpoint = "localhost:8080";
+  public static void main(String[] args) throws Exception {
 
-        SDKBuilder builder = new SDKBuilder();
-        SDK sdk = builder.platformEndpoint(platformEndpoint)
-                .clientSecret(clientId, clientSecret).useInsecurePlaintextConnection(true)
-                .build();
-    
-        ListSubjectMappingsRequest request = ListSubjectMappingsRequest.newBuilder().build();
+    String clientId = "opentdf";
+    String clientSecret = "secret";
+    String platformEndpoint = "localhost:8080";
 
-        ListSubjectMappingsResponse resp = ResponseMessageKt.getOrThrow(sdk.getServices().subjectMappings().listSubjectMappingsBlocking(request, Collections.emptyMap()).execute());
+    SDKBuilder builder = new SDKBuilder();
+    SDK sdk =
+        builder
+            .platformEndpoint(platformEndpoint)
+            .clientSecret(clientId, clientSecret)
+            .useInsecurePlaintextConnection(true)
+            .build();
 
-        List<SubjectMapping> sms = resp.getSubjectMappingsList();
+    ListSubjectMappingsRequest listSubjectMappingsRequest =
+        ListSubjectMappingsRequest.newBuilder().build();
 
-        System.out.println(sms.size());
-        System.out.println(sms.get(0).getId());
-    }
+    ListSubjectMappingsResponse listSubjectMappingsResponse =
+        ResponseMessageKt.getOrThrow(
+            sdk.getServices()
+                .subjectMappings()
+                .listSubjectMappingsBlocking(listSubjectMappingsRequest, Collections.emptyMap())
+                .execute());
+
+    List<SubjectMapping> subjectMappings = listSubjectMappingsResponse.getSubjectMappingsList();
+
+    logger.info(
+        "Successfully retrieved subject mappings {}",
+        subjectMappings.stream().map(SubjectMapping::getId).collect(Collectors.joining(", ")));
+  }
 }
