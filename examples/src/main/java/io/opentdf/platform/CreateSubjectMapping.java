@@ -71,9 +71,9 @@ public class CreateSubjectMapping {
       String attributeFqn = namespace.getFqn() + "/attr/" + attributeName;
 
       try {
-        logger.info("Attempting to retrieve attribute '{}'", attributeFqn);
         GetAttributeRequest getAttributeRequest =
             GetAttributeRequest.newBuilder().setFqn(attributeFqn).build();
+
         attribute =
             ResponseMessageKt.getOrThrow(
                     sdk.getServices()
@@ -81,9 +81,10 @@ public class CreateSubjectMapping {
                         .getAttributeBlocking(getAttributeRequest, Collections.emptyMap())
                         .execute())
                 .getAttribute();
+
         logger.info("Found existing attribute with ID: {}", attribute.getId());
+
       } catch (Exception e) {
-        logger.info("Attribute '{}' not found, creating it...", attributeFqn);
         CreateAttributeRequest attributeRequest =
             CreateAttributeRequest.newBuilder()
                 .setNamespaceId(namespace.getId())
@@ -93,19 +94,19 @@ public class CreateSubjectMapping {
                         AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ALL_OF_VALUE))
                 .addAllValues(Arrays.asList("test1", "test2"))
                 .build();
+
         CreateAttributeResponse attributeResponse =
             ResponseMessageKt.getOrThrow(
                 sdk.getServices()
                     .attributes()
                     .createAttributeBlocking(attributeRequest, Collections.emptyMap())
                     .execute());
+
         attribute = attributeResponse.getAttribute();
+
         logger.info("Successfully created attribute with ID: {}", attribute.getId());
       }
-      logger.info("Using attribute with FQN: {}", attribute.getFqn());
 
-      logger.info("Creating subject condition set...");
-      // Create Subject Condition Set
       CreateSubjectConditionSetRequest subjectConditionSetRequest =
           CreateSubjectConditionSetRequest.newBuilder()
               .setSubjectConditionSet(
@@ -124,6 +125,7 @@ public class CreateSubjectMapping {
                                                       .SUBJECT_MAPPING_OPERATOR_ENUM_IN)
                                               .addSubjectExternalValues("myvalue")))))
               .build();
+
       CreateSubjectConditionSetResponse subjectConditionSetResponse =
           ResponseMessageKt.getOrThrow(
               sdk.getServices()
@@ -131,19 +133,17 @@ public class CreateSubjectMapping {
                   .createSubjectConditionSetBlocking(
                       subjectConditionSetRequest, Collections.emptyMap())
                   .execute());
+
       SubjectConditionSet subjectConditionSet =
           subjectConditionSetResponse.getSubjectConditionSet();
-      logger.info(
-          "Successfully created subject condition set with ID: {}", subjectConditionSet.getId());
 
-      logger.info("Creating subject mapping...");
-      // Create Subject Mapping
       CreateSubjectMappingRequest request =
           CreateSubjectMappingRequest.newBuilder()
               .setAttributeValueId(attribute.getValues(0).getId())
               .addActions(Action.newBuilder().setName("read"))
               .setExistingSubjectConditionSetId(subjectConditionSet.getId())
               .build();
+
       CreateSubjectMappingResponse resp =
           ResponseMessageKt.getOrThrow(
               sdk.getServices()

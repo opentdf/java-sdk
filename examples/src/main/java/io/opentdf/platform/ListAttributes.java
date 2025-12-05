@@ -23,27 +23,31 @@ public class ListAttributes {
     String platformEndpoint = "localhost:8080";
 
     SDKBuilder builder = new SDKBuilder();
-    SDK sdk =
+
+    try (SDK sdk =
         builder
             .platformEndpoint(platformEndpoint)
             .clientSecret(clientId, clientSecret)
             .useInsecurePlaintextConnection(true)
-            .build();
+            .build()) {
 
-    ListAttributesRequest request =
-        ListAttributesRequest.newBuilder().setNamespace("mynamespace.com").build();
+      ListAttributesRequest request =
+          ListAttributesRequest.newBuilder().setNamespace("mynamespace.com").build();
 
-    ListAttributesResponse resp =
-        ResponseMessageKt.getOrThrow(
-            sdk.getServices()
-                .attributes()
-                .listAttributesBlocking(request, Collections.emptyMap())
-                .execute());
+      ListAttributesResponse listAttributesResponse =
+          ResponseMessageKt.getOrThrow(
+              sdk.getServices()
+                  .attributes()
+                  .listAttributesBlocking(request, Collections.emptyMap())
+                  .execute());
 
-    List<Attribute> attributes = resp.getAttributesList();
+      List<Attribute> attributes = listAttributesResponse.getAttributesList();
 
-    logger.info(
-        "Successfully retrieved attributes {}",
-        attributes.stream().map(Attribute::getFqn).collect(Collectors.joining(", ")));
+      logger.info(
+          "Successfully retrieved attributes {}",
+          attributes.stream().map(Attribute::getFqn).collect(Collectors.joining(", ")));
+    } catch (Exception e) {
+      logger.fatal("Failed to list attributes", e);
+    }
   }
 }

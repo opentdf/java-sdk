@@ -27,43 +27,47 @@ public class CreateSubjectConditionSet {
     String platformEndpoint = "localhost:8080";
 
     SDKBuilder builder = new SDKBuilder();
-    SDK sdk =
+
+    try (SDK sdk =
         builder
             .platformEndpoint(platformEndpoint)
             .clientSecret(clientId, clientSecret)
             .useInsecurePlaintextConnection(true)
-            .build();
+            .build()) {
 
-    SubjectSet.Builder subjectSetBuilder =
-        SubjectSet.newBuilder()
-            .addConditionGroups(
-                ConditionGroup.newBuilder()
-                    .setBooleanOperator(ConditionBooleanTypeEnum.CONDITION_BOOLEAN_TYPE_ENUM_AND)
-                    .addConditions(
-                        Condition.newBuilder()
-                            .setSubjectExternalSelectorValue(".myfield")
-                            .setOperator(
-                                SubjectMappingOperatorEnum.SUBJECT_MAPPING_OPERATOR_ENUM_IN)
-                            .addSubjectExternalValues("myvalue")));
+      SubjectSet.Builder subjectSetBuilder =
+          SubjectSet.newBuilder()
+              .addConditionGroups(
+                  ConditionGroup.newBuilder()
+                      .setBooleanOperator(ConditionBooleanTypeEnum.CONDITION_BOOLEAN_TYPE_ENUM_AND)
+                      .addConditions(
+                          Condition.newBuilder()
+                              .setSubjectExternalSelectorValue(".myfield")
+                              .setOperator(
+                                  SubjectMappingOperatorEnum.SUBJECT_MAPPING_OPERATOR_ENUM_IN)
+                              .addSubjectExternalValues("myvalue")));
 
-    CreateSubjectConditionSetRequest createSubjectConditionSetRequest =
-        CreateSubjectConditionSetRequest.newBuilder()
-            .setSubjectConditionSet(
-                SubjectConditionSetCreate.newBuilder().addSubjectSets(subjectSetBuilder))
-            .build();
+      CreateSubjectConditionSetRequest createSubjectConditionSetRequest =
+          CreateSubjectConditionSetRequest.newBuilder()
+              .setSubjectConditionSet(
+                  SubjectConditionSetCreate.newBuilder().addSubjectSets(subjectSetBuilder))
+              .build();
 
-    CreateSubjectConditionSetResponse createSubjectConditionSetResponse =
-        ResponseMessageKt.getOrThrow(
-            sdk.getServices()
-                .subjectMappings()
-                .createSubjectConditionSetBlocking(
-                    createSubjectConditionSetRequest, Collections.emptyMap())
-                .execute());
+      CreateSubjectConditionSetResponse createSubjectConditionSetResponse =
+          ResponseMessageKt.getOrThrow(
+              sdk.getServices()
+                  .subjectMappings()
+                  .createSubjectConditionSetBlocking(
+                      createSubjectConditionSetRequest, Collections.emptyMap())
+                  .execute());
+      SubjectConditionSet subjectConditionSet =
+          createSubjectConditionSetResponse.getSubjectConditionSet();
 
-    SubjectConditionSet subjectConditionSet =
-        createSubjectConditionSetResponse.getSubjectConditionSet();
+      logger.info(
+          "Successfully created subject condition set with ID: {}", subjectConditionSet.getId());
 
-    logger.info(
-        "Successfully created subject condition set with ID: {}", subjectConditionSet.getId());
+    } catch (Exception e) {
+      logger.fatal("Failed to create subject condition set", e);
+    }
   }
 }

@@ -23,28 +23,33 @@ public class GetEntitlements {
     String platformEndpoint = "localhost:8080";
 
     SDKBuilder builder = new SDKBuilder();
-    SDK sdk =
+
+    try (SDK sdk =
         builder
             .platformEndpoint(platformEndpoint)
             .clientSecret(clientId, clientSecret)
             .useInsecurePlaintextConnection(true)
-            .build();
+            .build()) {
 
-    GetEntitlementsRequest request =
-        GetEntitlementsRequest.newBuilder()
-            .addEntities(Entity.newBuilder().setId("entity-1").setClientId("opentdf"))
-            .build();
+      GetEntitlementsRequest request =
+          GetEntitlementsRequest.newBuilder()
+              .addEntities(Entity.newBuilder().setId("entity-1").setClientId("opentdf"))
+              .build();
 
-    GetEntitlementsResponse resp =
-        ResponseMessageKt.getOrThrow(
-            sdk.getServices()
-                .authorization()
-                .getEntitlementsBlocking(request, Collections.emptyMap())
-                .execute());
+      GetEntitlementsResponse getEntitlementsResponse =
+          ResponseMessageKt.getOrThrow(
+              sdk.getServices()
+                  .authorization()
+                  .getEntitlementsBlocking(request, Collections.emptyMap())
+                  .execute());
 
-    List<EntityEntitlements> entitlements = resp.getEntitlementsList();
+      List<EntityEntitlements> entitlements = getEntitlementsResponse.getEntitlementsList();
 
-    logger.info(
-        "Successfully retrieved entitlements {}", entitlements.get(0).getAttributeValueFqnsList());
+      logger.info(
+          "Successfully retrieved entitlements {}",
+          entitlements.get(0).getAttributeValueFqnsList());
+    } catch (Exception e) {
+      logger.fatal("Failed to get entitlements", e);
+    }
   }
 }

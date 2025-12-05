@@ -28,41 +28,45 @@ public class GetDecisions {
     String platformEndpoint = "localhost:8080";
 
     SDKBuilder builder = new SDKBuilder();
-    SDK sdk =
+
+    try (SDK sdk =
         builder
             .platformEndpoint(platformEndpoint)
             .clientSecret(clientId, clientSecret)
             .useInsecurePlaintextConnection(true)
-            .build();
+            .build()) {
 
-    GetDecisionsRequest request =
-        GetDecisionsRequest.newBuilder()
-            .addDecisionRequests(
-                DecisionRequest.newBuilder()
-                    .addEntityChains(
-                        EntityChain.newBuilder()
-                            .setId("ec1")
-                            .addEntities(
-                                Entity.newBuilder().setId("entity-1").setClientId("opentdf")))
-                    .addActions(
-                        Action.newBuilder()
-                            .setStandard(Action.StandardAction.STANDARD_ACTION_DECRYPT))
-                    .addResourceAttributes(
-                        ResourceAttribute.newBuilder()
-                            .setResourceAttributesId("resource-attribute-1")
-                            .addAttributeValueFqns(
-                                "https://mynamespace.com/attr/test/value/test1")))
-            .build();
+      GetDecisionsRequest request =
+          GetDecisionsRequest.newBuilder()
+              .addDecisionRequests(
+                  DecisionRequest.newBuilder()
+                      .addEntityChains(
+                          EntityChain.newBuilder()
+                              .setId("ec1")
+                              .addEntities(
+                                  Entity.newBuilder().setId("entity-1").setClientId("opentdf")))
+                      .addActions(
+                          Action.newBuilder()
+                              .setStandard(Action.StandardAction.STANDARD_ACTION_DECRYPT))
+                      .addResourceAttributes(
+                          ResourceAttribute.newBuilder()
+                              .setResourceAttributesId("resource-attribute-1")
+                              .addAttributeValueFqns(
+                                  "https://mynamespace.com/attr/test/value/test1")))
+              .build();
 
-    GetDecisionsResponse resp =
-        ResponseMessageKt.getOrThrow(
-            sdk.getServices()
-                .authorization()
-                .getDecisionsBlocking(request, Collections.emptyMap())
-                .execute());
+      GetDecisionsResponse getDecisionsResponse =
+          ResponseMessageKt.getOrThrow(
+              sdk.getServices()
+                  .authorization()
+                  .getDecisionsBlocking(request, Collections.emptyMap())
+                  .execute());
 
-    List<DecisionResponse> decisions = resp.getDecisionResponsesList();
+      List<DecisionResponse> decisions = getDecisionsResponse.getDecisionResponsesList();
 
-    logger.info("Successfully retrieved decision {}", decisions.get(0).getDecision());
+      logger.info("Successfully retrieved decision {}", decisions.get(0).getDecision());
+    } catch (Exception e) {
+      logger.fatal("Failed to get decisions", e);
+    }
   }
 }

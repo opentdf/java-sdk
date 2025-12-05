@@ -23,27 +23,31 @@ public class ListSubjectMappings {
     String platformEndpoint = "localhost:8080";
 
     SDKBuilder builder = new SDKBuilder();
-    SDK sdk =
+
+    try (SDK sdk =
         builder
             .platformEndpoint(platformEndpoint)
             .clientSecret(clientId, clientSecret)
             .useInsecurePlaintextConnection(true)
-            .build();
+            .build()) {
 
-    ListSubjectMappingsRequest listSubjectMappingsRequest =
-        ListSubjectMappingsRequest.newBuilder().build();
+      ListSubjectMappingsRequest listSubjectMappingsRequest =
+          ListSubjectMappingsRequest.newBuilder().build();
 
-    ListSubjectMappingsResponse listSubjectMappingsResponse =
-        ResponseMessageKt.getOrThrow(
-            sdk.getServices()
-                .subjectMappings()
-                .listSubjectMappingsBlocking(listSubjectMappingsRequest, Collections.emptyMap())
-                .execute());
+      ListSubjectMappingsResponse listSubjectMappingsResponse =
+          ResponseMessageKt.getOrThrow(
+              sdk.getServices()
+                  .subjectMappings()
+                  .listSubjectMappingsBlocking(listSubjectMappingsRequest, Collections.emptyMap())
+                  .execute());
 
-    List<SubjectMapping> subjectMappings = listSubjectMappingsResponse.getSubjectMappingsList();
+      List<SubjectMapping> subjectMappings = listSubjectMappingsResponse.getSubjectMappingsList();
 
-    logger.info(
-        "Successfully retrieved subject mappings {}",
-        subjectMappings.stream().map(SubjectMapping::getId).collect(Collectors.joining(", ")));
+      logger.info(
+          "Successfully retrieved subject mappings {}",
+          subjectMappings.stream().map(SubjectMapping::getId).collect(Collectors.joining(", ")));
+    } catch (Exception e) {
+      logger.fatal("Failed to list subject mappings", e);
+    }
   }
 }

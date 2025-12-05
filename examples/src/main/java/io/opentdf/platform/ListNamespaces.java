@@ -22,26 +22,30 @@ public class ListNamespaces {
     String platformEndpoint = "localhost:8080";
 
     SDKBuilder builder = new SDKBuilder();
-    SDK sdk =
+
+    try (SDK sdk =
         builder
             .platformEndpoint(platformEndpoint)
             .clientSecret(clientId, clientSecret)
             .useInsecurePlaintextConnection(true)
-            .build();
+            .build()) {
 
-    ListNamespacesRequest request = ListNamespacesRequest.newBuilder().build();
+      ListNamespacesRequest request = ListNamespacesRequest.newBuilder().build();
 
-    ListNamespacesResponse resp =
-        ResponseMessageKt.getOrThrow(
-            sdk.getServices()
-                .namespaces()
-                .listNamespacesBlocking(request, Collections.emptyMap())
-                .execute());
+      ListNamespacesResponse listNamespacesResponse =
+          ResponseMessageKt.getOrThrow(
+              sdk.getServices()
+                  .namespaces()
+                  .listNamespacesBlocking(request, Collections.emptyMap())
+                  .execute());
 
-    List<Namespace> namespaces = resp.getNamespacesList();
+      List<Namespace> namespaces = listNamespacesResponse.getNamespacesList();
 
-    logger.info(
-        "Successfully retrieved namespaces {}",
-        namespaces.stream().map(Namespace::getFqn).collect(Collectors.joining(", ")));
+      logger.info(
+          "Successfully retrieved namespaces {}",
+          namespaces.stream().map(Namespace::getFqn).collect(Collectors.joining(", ")));
+    } catch (Exception e) {
+      logger.fatal("Failed to list namespaces", e);
+    }
   }
 }

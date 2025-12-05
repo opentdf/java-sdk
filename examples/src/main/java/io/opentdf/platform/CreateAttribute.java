@@ -25,50 +25,56 @@ public class CreateAttribute {
     String platformEndpoint = "localhost:8080";
 
     SDKBuilder builder = new SDKBuilder();
-    SDK sdk =
+
+    try (SDK sdk =
         builder
             .platformEndpoint(platformEndpoint)
             .clientSecret(clientId, clientSecret)
             .useInsecurePlaintextConnection(true)
-            .build();
+            .build()) {
 
-    Namespace namespace;
-    String namespaceName = "mynamespace.com";
+      Namespace namespace;
+      String namespaceName = "mynamespace.com";
 
-    try {
-      namespace =
+      try {
+        namespace =
+            ResponseMessageKt.getOrThrow(
+                    sdk.getServices()
+                        .namespaces()
+                        .getNamespaceBlocking(
+                            GetNamespaceRequest.newBuilder()
+                                .setFqn("https://" + namespaceName)
+                                .build(),
+                            Collections.emptyMap())
+                        .execute())
+                .getNamespace();
+      } catch (Exception e) {
+        logger.error("Namespace '{}' not found", namespaceName);
+        throw e;
+      }
+
+      CreateAttributeRequest createAttributeRequest =
+          CreateAttributeRequest.newBuilder()
+              .setNamespaceId(namespace.getId())
+              .setName("test")
+              .setRule(
+                  AttributeRuleTypeEnum.forNumber(
+                      AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ALL_OF_VALUE))
+              .addAllValues(Arrays.asList("test1", "test2"))
+              .build();
+
+      CreateAttributeResponse createAttributeResponse =
           ResponseMessageKt.getOrThrow(
-                  sdk.getServices()
-                      .namespaces()
-                      .getNamespaceBlocking(
-                          GetNamespaceRequest.newBuilder()
-                              .setFqn("https://" + namespaceName)
-                              .build(),
-                          Collections.emptyMap())
-                      .execute())
-              .getNamespace();
+              sdk.getServices()
+                  .attributes()
+                  .createAttributeBlocking(createAttributeRequest, Collections.emptyMap())
+                  .execute());
+
+      logger.info(
+          "Successfully created attribute with ID: {}",
+          createAttributeResponse.getAttribute().getId());
     } catch (Exception e) {
-      logger.error("Namespace '{}' not found", namespaceName);
-      throw e;
+      logger.fatal("Failed to create attribute", e);
     }
-
-    CreateAttributeRequest request =
-        CreateAttributeRequest.newBuilder()
-            .setNamespaceId(namespace.getId())
-            .setName("test")
-            .setRule(
-                AttributeRuleTypeEnum.forNumber(
-                    AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ALL_OF_VALUE))
-            .addAllValues(Arrays.asList("test1", "test2"))
-            .build();
-
-    CreateAttributeResponse resp =
-        ResponseMessageKt.getOrThrow(
-            sdk.getServices()
-                .attributes()
-                .createAttributeBlocking(request, Collections.emptyMap())
-                .execute());
-
-    logger.info("Successfully created attribute with ID: {}", resp.getAttribute().getId());
   }
 }
