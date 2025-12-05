@@ -132,6 +132,22 @@ public class Config {
         KeyType sessionKeyType;
         Set<String> kasAllowlist;
         boolean ignoreKasAllowlist;
+        private AssertionVerificationMode assertionVerificationMode = AssertionVerificationMode.FAIL_FAST;
+        private final AssertionRegistry assertionRegistry = new AssertionRegistry();
+
+        public AssertionVerificationMode getAssertionVerificationMode() {
+            return assertionVerificationMode;
+        }
+
+        public void setAssertionVerificationMode(AssertionVerificationMode assertionVerificationMode) {
+            this.assertionVerificationMode = assertionVerificationMode;
+        }
+
+        public AssertionRegistry getAssertionRegistry() {
+            return assertionRegistry;
+        }
+
+
     }
 
     @SafeVarargs
@@ -148,7 +164,18 @@ public class Config {
 
     public static Consumer<TDFReaderConfig> withAssertionVerificationKeys(
             AssertionVerificationKeys assertionVerificationKeys) {
-        return (TDFReaderConfig config) -> config.assertionVerificationKeys = assertionVerificationKeys;
+        return (TDFReaderConfig config) -> {
+            config.assertionVerificationKeys = assertionVerificationKeys;
+
+            // ONLY register wildcard validator if assertion verification is enabled
+            // This maintains backward compatibility with the disableAssertionVerification flag
+            if (!config.disableAssertionVerification) {
+                // Register a wildcard KeyAssertionValidator that handles any schema
+                // when verification keys are provided
+                KeyAssertionValidator keyAssertionValidator = new KeyAssertionValidator(assertionVerificationKeys);
+                config.getAssertionRegistry().registerValidator(keyAssertionValidator);
+            }
+        };
     }
 
     public static Consumer<TDFReaderConfig> withDisableAssertionVerification(boolean disable) {
@@ -195,6 +222,7 @@ public class Config {
         public boolean hexEncodeRootAndSegmentHashes;
         public boolean renderVersionInfoInManifest;
         public boolean systemMetadataAssertion;
+        private AssertionRegistry assertionRegistry;
 
         public TDFConfig() {
             this.autoconfigure = true;
@@ -212,6 +240,11 @@ public class Config {
             this.hexEncodeRootAndSegmentHashes = false;
             this.renderVersionInfoInManifest = true;
             this.systemMetadataAssertion = false;
+            this.assertionRegistry = new AssertionRegistry();
+        }
+
+        public AssertionRegistry getAssertionRegistry() {
+            return assertionRegistry;
         }
     }
 
@@ -289,7 +322,13 @@ public class Config {
 
     public static Consumer<TDFConfig> withAssertionConfig(io.opentdf.platform.sdk.AssertionConfig... assertionList) {
         return (TDFConfig config) -> {
+            // add to assertionConfigList for backward compatibility
             Collections.addAll(config.assertionConfigList, assertionList);
+            // register a binder for each assertionConfig
+            for (AssertionConfig assertionConfig : assertionList) {
+                ConfigBasedAssertionBinder binder = new ConfigBasedAssertionBinder(assertionConfig);
+                config.getAssertionRegistry().registerBinder(binder);
+            }
         };
     }
 

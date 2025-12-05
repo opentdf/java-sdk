@@ -3,6 +3,7 @@ package io.opentdf.platform.sdk;
 import com.connectrpc.Interceptor;
 
 import com.connectrpc.impl.ProtocolClient;
+import com.nimbusds.jose.JOSEException;
 import io.opentdf.platform.authorization.AuthorizationServiceClientInterface;
 import io.opentdf.platform.policy.attributes.AttributesServiceClientInterface;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClientInterface;
@@ -17,6 +18,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
+import java.text.ParseException;
 import java.util.Optional;
 
 /**
