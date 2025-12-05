@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
 public class ListSubjectMappings {
   private static final Logger logger = LogManager.getLogger(ListSubjectMappings.class);
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
 
     String clientId = "opentdf";
     String clientSecret = "secret";
