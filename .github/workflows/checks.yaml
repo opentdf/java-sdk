@@ -42,11 +42,12 @@ jobs:
             revert
           # Scopes include:
           #   - ci: anything related to ci
-          #   - cmdline: changes to @opentdf/ctl
+          #   - cmdline: changes to cmdline
           #   - docs: anything related solely to documentation
           #   - main: bot generated commits
-          #   - sdk: changes to @opentdf/sdk (was lib)
+          #   - sdk: changes to sdk
           #   - tests: test only changes
+          #   - examples: examples only changes
           scopes: |
             ci
             cmdline
@@ -54,6 +55,7 @@ jobs:
             main
             sdk
             tests
+            examples
 
   mavenverify:
     runs-on: ubuntu-latest
