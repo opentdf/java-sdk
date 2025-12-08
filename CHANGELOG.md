@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/opentdf/java-sdk/compare/v0.11.0...v0.11.1) (2025-12-08)
+
+
+### Bug Fixes
+
+* **examples:** improve logging and setup logic in examples ([#316](https://github.com/opentdf/java-sdk/issues/316)) ([2e5660c](https://github.com/opentdf/java-sdk/commit/2e5660c50b7c5fd80ad4137c1f17a1e1f4470588))
+
 ## [0.11.0](https://github.com/opentdf/java-sdk/compare/v0.10.0...v0.11.0) (2025-11-20)
 
 
