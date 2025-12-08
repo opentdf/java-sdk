@@ -34,7 +34,7 @@ public class CreateSubjectMapping {
     String clientId = "opentdf";
     String clientSecret = "secret";
     String platformEndpoint = "localhost:8080";
-    String namespaceName = "mynamespace.com";
+    String namespaceName = "opentdf.io";
     String attributeName = "test-attribute";
 
     SDKBuilder builder = new SDKBuilder();

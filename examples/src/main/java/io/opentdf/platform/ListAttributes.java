@@ -21,6 +21,7 @@ public class ListAttributes {
     String clientId = "opentdf";
     String clientSecret = "secret";
     String platformEndpoint = "localhost:8080";
+    String namespaceName = "opentdf.io";
 
     SDKBuilder builder = new SDKBuilder();
 
@@ -32,7 +33,7 @@ public class ListAttributes {
             .build()) {
 
       ListAttributesRequest request =
-          ListAttributesRequest.newBuilder().setNamespace("mynamespace.com").build();
+          ListAttributesRequest.newBuilder().setNamespace(namespaceName).build();
 
       ListAttributesResponse listAttributesResponse =
           ResponseMessageKt.getOrThrow(

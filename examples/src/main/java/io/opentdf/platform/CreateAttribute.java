@@ -24,7 +24,7 @@ public class CreateAttribute {
     String clientId = "opentdf";
     String clientSecret = "secret";
     String platformEndpoint = "localhost:8080";
-    String namespaceName = "mynamespace.com";
+    String namespaceName = "opentdf.io";
 
     SDKBuilder builder = new SDKBuilder();
 
@@ -50,7 +50,7 @@ public class CreateAttribute {
       CreateAttributeRequest createAttributeRequest =
           CreateAttributeRequest.newBuilder()
               .setNamespaceId(namespace.getId())
-              .setName("test")
+              .setName("test-attribute")
               .setRule(
                   AttributeRuleTypeEnum.forNumber(
                       AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ALL_OF_VALUE))

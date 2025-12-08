@@ -19,7 +19,7 @@ public class CreateNamespace {
     String clientId = "opentdf";
     String clientSecret = "secret";
     String platformEndpoint = "localhost:8080";
-    String namespaceName = "mynamespace.com";
+    String namespaceName = "opentdf.io";
 
     SDKBuilder builder = new SDKBuilder();
 

@@ -27,6 +27,7 @@ public class GetDecisions {
     String clientId = "opentdf";
     String clientSecret = "secret";
     String platformEndpoint = "localhost:8080";
+    String namespaceName = "opentdf.io";
 
     SDKBuilder builder = new SDKBuilder();
 
@@ -46,14 +47,12 @@ public class GetDecisions {
                               .setId("ec1")
                               .addEntities(
                                   Entity.newBuilder().setId("entity-1").setClientId("opentdf")))
-                      .addActions(
-                          Action.newBuilder()
-                              .setStandard(Action.StandardAction.STANDARD_ACTION_DECRYPT))
+                      .addActions(Action.newBuilder().setName("read"))
                       .addResourceAttributes(
                           ResourceAttribute.newBuilder()
                               .setResourceAttributesId("resource-attribute-1")
                               .addAttributeValueFqns(
-                                  "https://mynamespace.com/attr/test/value/test1")))
+                                  "https://" + namespaceName + "/attr/test/value/test1")))
               .build();
 
       GetDecisionsResponse getDecisionsResponse =
