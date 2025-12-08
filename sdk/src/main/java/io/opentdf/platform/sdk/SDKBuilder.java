@@ -177,7 +177,7 @@ public class SDKBuilder {
         return this;
     }
 
-    private Interceptor getAuthInterceptor(RSAKey rsaKey) {
+    private Interceptor getAuthInterceptor(RSAKey rsaKey, OkHttpClient httpClient) {
         if (platformEndpoint == null) {
             throw new SDKException("cannot build an SDK without specifying the platform endpoint");
         }
@@ -191,7 +191,6 @@ public class SDKBuilder {
         // we don't add the auth listener to this channel since it is only used to call
         // the well known endpoint
         GetWellKnownConfigurationResponse config;
-        var httpClient = getHttpClient();
         ProtocolClient bootstrapClient = getUnauthenticatedProtocolClient(platformEndpoint, httpClient) ;
         var stub = new WellKnownServiceClient(bootstrapClient);
         try {
@@ -266,9 +265,9 @@ public class SDKBuilder {
         }
 
         this.platformEndpoint = AddressNormalizer.normalizeAddress(this.platformEndpoint, this.usePlainText);
-        var authInterceptor = getAuthInterceptor(dpopKey);
-        var kasClient = getKASClient(dpopKey, authInterceptor);
         var httpClient = getHttpClient();
+        var authInterceptor = getAuthInterceptor(dpopKey, httpClient);
+        var kasClient = getKASClient(dpopKey, authInterceptor, httpClient);
         var client = getProtocolClient(platformEndpoint, httpClient, authInterceptor);
         var attributeService = new AttributesServiceClient(client);
         var namespaceService = new NamespaceServiceClient(client);
@@ -341,9 +340,9 @@ public class SDKBuilder {
     }
 
     @Nonnull
-    private KASClient getKASClient(RSAKey dpopKey, Interceptor interceptor) {
+    private KASClient getKASClient(RSAKey dpopKey, Interceptor interceptor, OkHttpClient httpClient) {
         BiFunction<OkHttpClient, String, ProtocolClient> protocolClientFactory = (OkHttpClient client, String address) -> getProtocolClient(address, client, interceptor);
-        return new KASClient(getHttpClient(), protocolClientFactory, dpopKey, usePlainText);
+        return new KASClient(httpClient, protocolClientFactory, dpopKey, usePlainText);
     }
 
     public SDK build() {
