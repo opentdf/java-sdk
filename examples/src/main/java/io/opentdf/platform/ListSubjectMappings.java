@@ -44,10 +44,10 @@ public class ListSubjectMappings {
       List<SubjectMapping> subjectMappings = listSubjectMappingsResponse.getSubjectMappingsList();
 
       logger.info(
-          "Successfully retrieved subject mappings {}",
+          "Successfully retrieved subject mappings: [{}]",
           subjectMappings.stream().map(SubjectMapping::getId).collect(Collectors.joining(", ")));
     } catch (Exception e) {
-      logger.fatal("Failed to list subject mappings", e);
+      logger.error("Failed to list subject mappings", e);
     }
   }
 }

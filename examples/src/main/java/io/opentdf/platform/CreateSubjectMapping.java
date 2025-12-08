@@ -3,7 +3,6 @@ package io.opentdf.platform;
 import com.connectrpc.ResponseMessageKt;
 import io.opentdf.platform.policy.Action;
 import io.opentdf.platform.policy.Attribute;
-import io.opentdf.platform.policy.AttributeRuleTypeEnum;
 import io.opentdf.platform.policy.Condition;
 import io.opentdf.platform.policy.ConditionBooleanTypeEnum;
 import io.opentdf.platform.policy.ConditionGroup;
@@ -12,8 +11,6 @@ import io.opentdf.platform.policy.SubjectConditionSet;
 import io.opentdf.platform.policy.SubjectMapping;
 import io.opentdf.platform.policy.SubjectMappingOperatorEnum;
 import io.opentdf.platform.policy.SubjectSet;
-import io.opentdf.platform.policy.attributes.CreateAttributeRequest;
-import io.opentdf.platform.policy.attributes.CreateAttributeResponse;
 import io.opentdf.platform.policy.attributes.GetAttributeRequest;
 import io.opentdf.platform.policy.namespaces.GetNamespaceRequest;
 import io.opentdf.platform.policy.subjectmapping.CreateSubjectConditionSetRequest;
@@ -26,8 +23,8 @@ import io.opentdf.platform.sdk.SDKBuilder;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.Arrays;
 import java.util.Collections;
+import java.util.Objects;
 
 public class CreateSubjectMapping {
 
@@ -37,6 +34,8 @@ public class CreateSubjectMapping {
     String clientId = "opentdf";
     String clientSecret = "secret";
     String platformEndpoint = "localhost:8080";
+    String namespaceName = "mynamespace.com";
+    String attributeName = "test-attribute";
 
     SDKBuilder builder = new SDKBuilder();
     try (SDK sdk =
@@ -47,7 +46,6 @@ public class CreateSubjectMapping {
             .build()) {
 
       Namespace namespace;
-      String namespaceName = "mynamespace.com";
 
       try {
         namespace =
@@ -62,12 +60,15 @@ public class CreateSubjectMapping {
                         .execute())
                 .getNamespace();
       } catch (Exception e) {
-        logger.error("Namespace '{}' not found", namespaceName);
-        throw e;
+        if (Objects.equals(e.getMessage(), "resource not found")) {
+          logger.error("Namespace '{}' not found", namespaceName, e);
+        } else {
+          logger.error("Failed to retrieve namespace '{}'", namespaceName, e);
+        }
+        return;
       }
 
       Attribute attribute;
-      String attributeName = "test-attribute";
       String attributeFqn = namespace.getFqn() + "/attr/" + attributeName;
 
       try {
@@ -82,29 +83,13 @@ public class CreateSubjectMapping {
                         .execute())
                 .getAttribute();
 
-        logger.info("Found existing attribute with ID: {}", attribute.getId());
-
       } catch (Exception e) {
-        CreateAttributeRequest attributeRequest =
-            CreateAttributeRequest.newBuilder()
-                .setNamespaceId(namespace.getId())
-                .setName(attributeName)
-                .setRule(
-                    AttributeRuleTypeEnum.forNumber(
-                        AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ALL_OF_VALUE))
-                .addAllValues(Arrays.asList("test1", "test2"))
-                .build();
-
-        CreateAttributeResponse attributeResponse =
-            ResponseMessageKt.getOrThrow(
-                sdk.getServices()
-                    .attributes()
-                    .createAttributeBlocking(attributeRequest, Collections.emptyMap())
-                    .execute());
-
-        attribute = attributeResponse.getAttribute();
-
-        logger.info("Successfully created attribute with ID: {}", attribute.getId());
+        if (Objects.equals(e.getMessage(), "resource not found")) {
+          logger.error("Attribute '{}' not found", attributeFqn, e);
+        } else {
+          logger.error("Failed to retrieve attribute '{}'", attributeFqn, e);
+        }
+        return;
       }
 
       CreateSubjectConditionSetRequest subjectConditionSetRequest =
@@ -155,7 +140,7 @@ public class CreateSubjectMapping {
 
       logger.info("Successfully created subject mapping with ID: {}", subjectMapping.getId());
     } catch (Exception e) {
-      logger.fatal("Failed to create subject mapping", e);
+      logger.error("Failed to create subject mapping", e);
     }
   }
 }

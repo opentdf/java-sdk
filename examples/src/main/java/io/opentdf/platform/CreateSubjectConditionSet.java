@@ -60,6 +60,7 @@ public class CreateSubjectConditionSet {
                   .createSubjectConditionSetBlocking(
                       createSubjectConditionSetRequest, Collections.emptyMap())
                   .execute());
+
       SubjectConditionSet subjectConditionSet =
           createSubjectConditionSetResponse.getSubjectConditionSet();
 
@@ -67,7 +68,7 @@ public class CreateSubjectConditionSet {
           "Successfully created subject condition set with ID: {}", subjectConditionSet.getId());
 
     } catch (Exception e) {
-      logger.fatal("Failed to create subject condition set", e);
+      logger.error("Failed to create subject condition set", e);
     }
   }
 }

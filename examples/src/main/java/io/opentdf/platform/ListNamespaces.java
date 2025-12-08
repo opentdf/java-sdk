@@ -42,10 +42,10 @@ public class ListNamespaces {
       List<Namespace> namespaces = listNamespacesResponse.getNamespacesList();
 
       logger.info(
-          "Successfully retrieved namespaces {}",
+          "Successfully retrieved namespaces: [{}]",
           namespaces.stream().map(Namespace::getFqn).collect(Collectors.joining(", ")));
     } catch (Exception e) {
-      logger.fatal("Failed to list namespaces", e);
+      logger.error("Failed to list namespaces", e);
     }
   }
 }

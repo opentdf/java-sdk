@@ -13,6 +13,7 @@ import org.apache.logging.log4j.Logger;
 import java.util.Collections;
 
 import java.util.Arrays;
+import java.util.Objects;
 
 public class CreateAttribute {
 
@@ -23,6 +24,7 @@ public class CreateAttribute {
     String clientId = "opentdf";
     String clientSecret = "secret";
     String platformEndpoint = "localhost:8080";
+    String namespaceName = "mynamespace.com";
 
     SDKBuilder builder = new SDKBuilder();
 
@@ -33,25 +35,17 @@ public class CreateAttribute {
             .useInsecurePlaintextConnection(true)
             .build()) {
 
-      Namespace namespace;
-      String namespaceName = "mynamespace.com";
-
-      try {
-        namespace =
-            ResponseMessageKt.getOrThrow(
-                    sdk.getServices()
-                        .namespaces()
-                        .getNamespaceBlocking(
-                            GetNamespaceRequest.newBuilder()
-                                .setFqn("https://" + namespaceName)
-                                .build(),
-                            Collections.emptyMap())
-                        .execute())
-                .getNamespace();
-      } catch (Exception e) {
-        logger.error("Namespace '{}' not found", namespaceName);
-        throw e;
-      }
+      Namespace namespace =
+          ResponseMessageKt.getOrThrow(
+                  sdk.getServices()
+                      .namespaces()
+                      .getNamespaceBlocking(
+                          GetNamespaceRequest.newBuilder()
+                              .setFqn("https://" + namespaceName)
+                              .build(),
+                          Collections.emptyMap())
+                      .execute())
+              .getNamespace();
 
       CreateAttributeRequest createAttributeRequest =
           CreateAttributeRequest.newBuilder()
@@ -74,7 +68,13 @@ public class CreateAttribute {
           "Successfully created attribute with ID: {}",
           createAttributeResponse.getAttribute().getId());
     } catch (Exception e) {
-      logger.fatal("Failed to create attribute", e);
+      if (Objects.equals(e.getMessage(), "resource not found")) {
+        logger.error("Namespace '{}' not found", namespaceName, e);
+      } else if (Objects.equals(e.getMessage(), "resource unique field violation")) {
+        logger.error("Attribute already exists", e);
+      } else {
+        logger.error("Failed to create attribute", e);
+      }
     }
   }
 }

@@ -44,10 +44,10 @@ public class ListAttributes {
       List<Attribute> attributes = listAttributesResponse.getAttributesList();
 
       logger.info(
-          "Successfully retrieved attributes {}",
+          "Successfully retrieved attributes: [{}]",
           attributes.stream().map(Attribute::getFqn).collect(Collectors.joining(", ")));
     } catch (Exception e) {
-      logger.fatal("Failed to list attributes", e);
+      logger.error("Failed to list attributes", e);
     }
   }
 }

@@ -12,6 +12,7 @@ import org.apache.logging.log4j.Logger;
 import java.util.Collections;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class GetEntitlements {
   private static final Logger logger = LogManager.getLogger(GetEntitlements.class);
@@ -46,10 +47,13 @@ public class GetEntitlements {
       List<EntityEntitlements> entitlements = getEntitlementsResponse.getEntitlementsList();
 
       logger.info(
-          "Successfully retrieved entitlements {}",
-          entitlements.get(0).getAttributeValueFqnsList());
+          "Successfully retrieved entitlements: [{}]",
+          entitlements.stream()
+              .map(EntityEntitlements::getAttributeValueFqnsList)
+              .map(List::toString)
+              .collect(Collectors.joining(", ")));
     } catch (Exception e) {
-      logger.fatal("Failed to get entitlements", e);
+      logger.error("Failed to get entitlements", e);
     }
   }
 }

@@ -8,6 +8,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.Collections;
+import java.util.Objects;
 
 public class CreateNamespace {
 
@@ -18,6 +19,7 @@ public class CreateNamespace {
     String clientId = "opentdf";
     String clientSecret = "secret";
     String platformEndpoint = "localhost:8080";
+    String namespaceName = "mynamespace.com";
 
     SDKBuilder builder = new SDKBuilder();
 
@@ -29,7 +31,7 @@ public class CreateNamespace {
             .build()) {
 
       CreateNamespaceRequest createNamespaceRequest =
-          CreateNamespaceRequest.newBuilder().setName("mynamespace.com").build();
+          CreateNamespaceRequest.newBuilder().setName(namespaceName).build();
 
       CreateNamespaceResponse createNamespaceResponse =
           ResponseMessageKt.getOrThrow(
@@ -43,7 +45,11 @@ public class CreateNamespace {
           createNamespaceResponse.getNamespace().getId());
 
     } catch (Exception e) {
-      logger.fatal("Failed to create namespace", e);
+      if (Objects.equals(e.getMessage(), "resource unique field violation")) {
+        logger.error("Namespace '{}' already exists", namespaceName, e);
+      } else {
+        logger.error("Failed to create namespace", e);
+      }
     }
   }
 }
