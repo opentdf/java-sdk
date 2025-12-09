@@ -125,8 +125,7 @@ class KASClient implements SDK.KAS {
 
     @Override
     public synchronized void close() {
-        this.httpClient.dispatcher().cancelAll();
-        this.httpClient.connectionPool().evictAll();
+        // KASClient is no longer responsible for closing the shared http client as it is closed by SDKBuilder
     }
 
     static class RewrapRequestBody {
