@@ -53,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 
 /**
@@ -283,6 +284,14 @@ public class SDKBuilder {
             public void close() {
                 kasClient.close();
                 httpClient.dispatcher().executorService().shutdown();
+                try {
+                    if (!httpClient.dispatcher().executorService().awaitTermination(60, TimeUnit.SECONDS)) { // Wait for 60 seconds
+                        httpClient.dispatcher().executorService().shutdownNow(); // Force shutdown if tasks don't complete
+                    }
+                } catch (InterruptedException e) {
+                    httpClient.dispatcher().executorService().shutdownNow();
+                    Thread.currentThread().interrupt(); // Preserve interrupt status
+                }
                 httpClient.connectionPool().evictAll();
             }
 
