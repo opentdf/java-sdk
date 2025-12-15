@@ -350,11 +350,6 @@ public class TDFTest {
                                                 .setKeyAccessServerRegistryService(kasRegistryService).build());
                 tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
 
-                var assertionVerificationKeys = new Config.AssertionVerificationKeys();
-                assertionVerificationKeys.keys.put(assertion1Id,
-                                new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256,
-                                                keypair.getPublic()));
-
                 var unwrappedData = new ByteArrayOutputStream();
                 var dataToUnwrap = new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray());
                 var emptyConfig = Config.newTDFReaderConfig();

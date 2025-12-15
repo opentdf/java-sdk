@@ -23,9 +23,11 @@ import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import io.opentdf.platform.sdk.SDK.AssertionException;
+import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
 import org.erdtman.jcs.JsonCanonicalizer;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
@@ -34,10 +36,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 
 /**
  * The Manifest class represents a detailed structure encapsulating various
@@ -49,6 +48,7 @@ public class Manifest {
 
     private static final String kAssertionHash = "assertionHash";
     private static final String kAssertionSignature = "assertionSig";
+    private static final String kAssertionSchema = "assertionSchema";
 
     private static final Gson gson = new GsonBuilder()
             .registerTypeAdapter(AssertionConfig.Statement.class, new AssertionValueAdapter())
@@ -324,10 +324,12 @@ public class Manifest {
         static public class HashValues {
             private final String assertionHash;
             private final String signature;
+            private final String schema;
 
-            public HashValues(String assertionHash, String signature) {
+            public HashValues(String assertionHash, String signature, String schema) {
                 this.assertionHash = assertionHash;
                 this.signature = signature;
+                this.schema = schema;
             }
 
             public String getAssertionHash() {
@@ -336,6 +338,10 @@ public class Manifest {
 
             public String getSignature() {
                 return signature;
+            }
+
+            public String getSchema() {
+                return schema;
             }
         }
 
@@ -357,6 +363,14 @@ public class Manifest {
         }
 
         public String hash() throws IOException {
+            return Hex.encodeHexString(this.hashAsBytes());
+        }
+
+        public String hashAsHexEncodedString() throws IOException {
+            return Hex.encodeHexString(this.hashAsBytes());
+        }
+
+        public byte[] hashAsBytes() throws IOException {
             MessageDigest digest;
             try {
                 digest = MessageDigest.getInstance("SHA-256");
@@ -366,13 +380,18 @@ public class Manifest {
 
             var assertionAsJson = gson.toJson(this);
             JsonCanonicalizer jc = new JsonCanonicalizer(assertionAsJson);
-            return Hex.encodeHexString(digest.digest(jc.getEncodedUTF8()));
+            return digest.digest(jc.getEncodedUTF8());
         }
 
         // Sign the assertion with the given hash and signature using the key.
         // It returns an error if the signing fails.
         // The assertion binding is updated with the method and the signature.
         public void sign(final HashValues hashValues, final AssertionConfig.AssertionKey assertionKey)
+                throws KeyLengthException {
+            sign(hashValues, assertionKey, Optional.empty());
+        }
+
+        public void sign(final HashValues hashValues, final AssertionConfig.AssertionKey assertionKey, final Optional<Map<String, Object>> protectedHeaders)
                 throws KeyLengthException {
             // Build JWT claims
             final JWTClaimsSet claims = new JWTClaimsSet.Builder()
@@ -381,7 +400,7 @@ public class Manifest {
                     .build();
 
             // Prepare for signing
-            SignedJWT signedJWT = createSignedJWT(claims, assertionKey);
+            SignedJWT signedJWT = createSignedJWT(claims, assertionKey, protectedHeaders);
 
             try {
                 // Sign the JWT
@@ -418,25 +437,49 @@ public class Manifest {
             JWTClaimsSet claimsSet = signedJWT.getJWTClaimsSet();
             String assertionHash = claimsSet.getStringClaim(kAssertionHash);
             String signature = claimsSet.getStringClaim(kAssertionSignature);
+            String schema = claimsSet.getStringClaim(kAssertionSchema);
 
-            return new Assertion.HashValues(assertionHash, signature);
+            return new Assertion.HashValues(assertionHash, signature, schema);
         }
 
-        private SignedJWT createSignedJWT(final JWTClaimsSet claims, final AssertionConfig.AssertionKey assertionKey)
+        public static Manifest.Assertion.HashValues calculateAssertionHashValues(ByteArrayOutputStream aggregateHash, Manifest.Assertion assertion, boolean hexEncodeRootAndSegmentHashes) throws IOException {
+            var hashOfAssertionAsHex = assertion.hash();
+            byte[] assertionHash;
+            if (hexEncodeRootAndSegmentHashes) {
+                assertionHash = hashOfAssertionAsHex.getBytes(StandardCharsets.UTF_8);
+            } else {
+                try {
+                    assertionHash = Hex.decodeHex(hashOfAssertionAsHex);
+                } catch (DecoderException e) {
+                    throw new SDKException("error decoding assertion hash", e);
+                }
+            }
+            byte[] completeHash = new byte[aggregateHash.size() + assertionHash.length];
+            System.arraycopy(aggregateHash.toByteArray(), 0, completeHash, 0, aggregateHash.size());
+            System.arraycopy(assertionHash, 0, completeHash, aggregateHash.size(), assertionHash.length);
+
+            var encodedHash = Base64.getEncoder().encodeToString(completeHash);
+
+            return new Manifest.Assertion.HashValues(hashOfAssertionAsHex, encodedHash, null);
+        }
+
+        private SignedJWT createSignedJWT(final JWTClaimsSet claims, final AssertionConfig.AssertionKey assertionKey, final Optional<Map<String, Object>> protectedHeaders)
                 throws SDKException {
-            final JWSHeader jwsHeader;
+            final JWSHeader.Builder jwsHeaderBuilder;
             switch (assertionKey.alg) {
                 case RS256:
-                    jwsHeader = new JWSHeader.Builder(JWSAlgorithm.RS256).build();
+                    jwsHeaderBuilder = new JWSHeader.Builder(JWSAlgorithm.RS256);
                     break;
                 case HS256:
-                    jwsHeader = new JWSHeader.Builder(JWSAlgorithm.HS256).build();
+                    jwsHeaderBuilder = new JWSHeader.Builder(JWSAlgorithm.HS256);
                     break;
                 default:
                     throw new SDKException("Unknown assertion key algorithm, error signing assertion");
             }
 
-            return new SignedJWT(jwsHeader, claims);
+            protectedHeaders.ifPresent(headers -> headers.forEach(jwsHeaderBuilder::customParam));
+
+            return new SignedJWT(jwsHeaderBuilder.build(), claims);
         }
 
         private JWSSigner createSigner(final AssertionConfig.AssertionKey assertionKey)
@@ -465,6 +508,36 @@ public class Manifest {
                     return new MACVerifier((byte[]) assertionKey.key);
                 default:
                     throw new SDKException("Unknown verify key, unable to verify assertion signature");
+            }
+        }
+
+        // VerifyAssertionSignatureFormat validates that the assertion signature matches the expected format.
+        // This is the standard format used across all SDKs: base64(aggregateHash + assertionHash).
+        //
+        // This function is a convenience helper that:
+        //  1. Computes the aggregate hash from manifest segments
+        //  2. Determines the encoding format (hex vs raw bytes) from the TDF version
+        //  3. Computes the expected signature using the standard format
+        //  4. Compares it against the verified signature from the JWT
+        //
+        // Parameters:
+        //   - verifiedSignature: The signature claim extracted from the verified JWT
+        //   - assertion: The assertion
+        //   - manifest: The TDF manifest containing segments and version info
+        //
+        // Throws an exception if the signature format is invalid (tampering detected)
+        //
+        // This function is used by custom AssertionValidator implementations to verify
+        // assertion signatures after JWT verification.
+        public static void verifyAssertionSignatureFormat(String verifiedSignature, Assertion assertion, Manifest manifest) throws IOException {
+            ByteArrayOutputStream aggregateHash = Manifest.computeAggregateHash(manifest.encryptionInformation.integrityInformation.segments, manifest.payload.isEncrypted);
+
+            boolean useHex = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
+
+            HashValues hashValues = Assertion.calculateAssertionHashValues(aggregateHash, assertion, useHex);
+
+            if (!hashValues.signature.equals(verifiedSignature)) {
+                throw  new AssertionException("failed integrity check on assertion signature", assertion.id);
             }
         }
     }
@@ -544,5 +617,55 @@ public class Manifest {
         var policyJson = new String(policyBytes, StandardCharsets.UTF_8);
 
         return gson.fromJson(policyJson, PolicyObject.class);
+    }
+
+    public static ByteArrayOutputStream computeAggregateHash(List<Manifest.Segment> segments, boolean isEncrypted) throws IOException {
+        ByteArrayOutputStream aggregateHash = new ByteArrayOutputStream();
+        for (Manifest.Segment segment : segments) {
+            if (isEncrypted) {
+                byte[] decodedHash = Base64.getDecoder().decode(segment.hash);
+                aggregateHash.write(decodedHash);
+            } else {
+                aggregateHash.write(segment.hash.getBytes());
+            }
+        }
+        return aggregateHash;
+    }
+
+    public ByteArrayOutputStream computeAggregateHash() {
+        ByteArrayOutputStream aggregateHash = new ByteArrayOutputStream();
+        for (Manifest.Segment segment : this.encryptionInformation.integrityInformation.segments) {
+            byte[] decodedHash = Base64.getDecoder().decode(segment.hash);
+            try {
+                aggregateHash.write(decodedHash);
+            } catch (IOException e) {
+                throw new SDKException("failed to decode segment hash");
+            }
+        }
+        return aggregateHash;
+    }
+
+    public Assertion.HashValues computeAssertionSignature(String assertionHash) {
+        ByteArrayOutputStream aggregateHash = this.computeAggregateHash();
+
+        // use hex if this.tdfVersion is null or empty
+        boolean useHex = this.tdfVersion == null || this.tdfVersion.isEmpty();
+
+        byte[] hashToUse;
+        if (useHex) {
+            hashToUse = assertionHash.getBytes(StandardCharsets.UTF_8);
+        } else {
+            try {
+                hashToUse = Hex.decodeHex(assertionHash);
+            } catch (DecoderException e) {
+                throw new SDKException("error decoding assertion hash", e);
+            }
+        }
+        byte[] completeHash = new byte[aggregateHash.size() + hashToUse.length];
+        System.arraycopy(aggregateHash.toByteArray(), 0, completeHash, 0, aggregateHash.size());
+        System.arraycopy(hashToUse, 0, completeHash, aggregateHash.size(), hashToUse.length);
+
+        String signature = Base64.getEncoder().encodeToString(completeHash);
+        return new Manifest.Assertion.HashValues(assertionHash, signature, null);
     }
 }

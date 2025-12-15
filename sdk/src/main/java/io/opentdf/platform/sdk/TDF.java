@@ -371,8 +371,8 @@ class TDF {
 
         // Add System Metadata Assertion if configured
         if (tdfConfig.systemMetadataAssertion) {
-            AssertionConfig systemAssertion = AssertionConfig.getSystemMetadataAssertionConfig(TDF_SPEC_VERSION);
-            tdfConfig.assertionConfigList.add(systemAssertion);
+            SystemMetadataAssertionBinder systemAssertionBinder = new SystemMetadataAssertionBinder();
+            tdfConfig.getAssertionRegistry().registerBinder(systemAssertionBinder);
         }
 
         TDFObject tdfObject = new TDFObject();
@@ -458,50 +458,41 @@ class TDF {
         tdfObject.manifest.payload.url = TDFWriter.TDF_PAYLOAD_FILE_NAME;
         tdfObject.manifest.payload.isEncrypted = true;
 
-        List<Manifest.Assertion> signedAssertions = new ArrayList<>(tdfConfig.assertionConfigList.size());
+        AssertionConfig.AssertionKey dekKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256,
+                tdfObject.payloadKey);
 
-        for (var assertionConfig : tdfConfig.assertionConfigList) {
-            var assertion = new Manifest.Assertion();
-            assertion.id = assertionConfig.id;
-            assertion.type = assertionConfig.type.toString();
-            assertion.scope = assertionConfig.scope.toString();
-            assertion.statement = assertionConfig.statement;
-            assertion.appliesToState = assertionConfig.appliesToState.toString();
+        for (AssertionBinder binder : tdfConfig.getAssertionRegistry().getBinders()) {
+            Manifest.Assertion assertion = binder.bind(tdfObject.manifest);
+            if (assertion.binding == null) {
 
-            var assertionHashAsHex = assertion.hash();
-            byte[] assertionHash;
-            if (tdfConfig.hexEncodeRootAndSegmentHashes) {
-                assertionHash = assertionHashAsHex.getBytes(StandardCharsets.UTF_8);
-            } else {
+                boolean useHex = tdfObject.manifest.tdfVersion == null || tdfObject.manifest.tdfVersion.isEmpty();
+
+                var assertionHashAsHex = assertion.hashAsHexEncodedString();
+                byte[] assertionHashBytes;
+                if (useHex) {
+                    assertionHashBytes = assertionHashAsHex.getBytes(StandardCharsets.UTF_8);
+                } else {
+                    try {
+                        assertionHashBytes = Hex.decodeHex(assertionHashAsHex);
+                    } catch (DecoderException e) {
+                        throw new SDKException("error decoding assertion hash", e);
+                    }
+                }
+                byte[] completeHash = new byte[aggregateHash.size() + assertionHashBytes.length];
+                System.arraycopy(aggregateHash.toByteArray(), 0, completeHash, 0, aggregateHash.size());
+                System.arraycopy(assertionHashBytes, 0, completeHash, aggregateHash.size(), assertionHashBytes.length);
+
+                var encodedHash = Base64.getEncoder().encodeToString(completeHash);
+                var hashValues = new Manifest.Assertion.HashValues(assertionHashAsHex, encodedHash, null);
                 try {
-                    assertionHash = Hex.decodeHex(assertionHashAsHex);
-                } catch (DecoderException e) {
-                    throw new SDKException("error decoding assertion hash", e);
+                    assertion.sign(hashValues, dekKey);
+                } catch (KeyLengthException e) {
+                    throw new SDKException("error signing assertion hash", e);
                 }
             }
-            byte[] completeHash = new byte[aggregateHash.size() + assertionHash.length];
-            System.arraycopy(aggregateHash.toByteArray(), 0, completeHash, 0, aggregateHash.size());
-            System.arraycopy(assertionHash, 0, completeHash, aggregateHash.size(), assertionHash.length);
-
-            var encodedHash = Base64.getEncoder().encodeToString(completeHash);
-
-            var assertionSigningKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256,
-                    tdfObject.aesGcm.getKey());
-            if (assertionConfig.signingKey != null && assertionConfig.signingKey.isDefined()) {
-                assertionSigningKey = assertionConfig.signingKey;
-            }
-            var hashValues = new Manifest.Assertion.HashValues(
-                    assertionHashAsHex,
-                    encodedHash);
-            try {
-                assertion.sign(hashValues, assertionSigningKey);
-            } catch (KeyLengthException e) {
-                throw new SDKException("error signing assertion hash", e);
-            }
-            signedAssertions.add(assertion);
+            tdfObject.manifest.assertions.add(assertion);
         }
 
-        tdfObject.manifest.assertions = signedAssertions;
         String manifestAsStr = gson.toJson(tdfObject.manifest);
 
         tdfWriter.appendManifest(manifestAsStr);
@@ -509,7 +500,6 @@ class TDF {
 
         return tdfObject;
     }
-
 
     Reader loadTDF(SeekableByteChannel tdf, String platformUrl) throws SDKException, IOException {
         return loadTDF(tdf, Config.newTDFReaderConfig(), platformUrl);
@@ -628,15 +618,7 @@ class TDF {
         String rootAlgorithm = manifest.encryptionInformation.integrityInformation.rootSignature.algorithm;
         String rootSignature = manifest.encryptionInformation.integrityInformation.rootSignature.signature;
 
-        ByteArrayOutputStream aggregateHash = new ByteArrayOutputStream();
-        for (Manifest.Segment segment : manifest.encryptionInformation.integrityInformation.segments) {
-            if (manifest.payload.isEncrypted) {
-                byte[] decodedHash = Base64.getDecoder().decode(segment.hash);
-                aggregateHash.write(decodedHash);
-            } else {
-                aggregateHash.write(segment.hash.getBytes());
-            }
-        }
+        ByteArrayOutputStream aggregateHash = Manifest.computeAggregateHash(manifest.encryptionInformation.integrityInformation.segments, manifest.payload.isEncrypted);
 
         String rootSigValue;
         boolean isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
@@ -675,52 +657,78 @@ class TDF {
         }
 
         var aggregateHashByteArrayBytes = aggregateHash.toByteArray();
-        // Validate assertions
+
+        if(tdfReaderConfig.disableAssertionVerification) {
+            // skip all assertion verification
+            return new Reader(tdfReader, manifest, payloadKey, unencryptedMetadata);
+        }
+
+        // Propagate verification mode to all registered validators
+        // This ensures validators respect the configured verification mode
+        for (AssertionValidator validator : tdfReaderConfig.getAssertionRegistry().getValidators().values()){
+            validator.setVerificationMode(tdfReaderConfig.getAssertionVerificationMode());
+        }
+
+        // Register system metadata assertion validator
+        SystemMetadataAssertionValidator systemMetadataAssertionValidator = new SystemMetadataAssertionValidator(payloadKey);
+        systemMetadataAssertionValidator.setVerificationMode(tdfReaderConfig.getAssertionVerificationMode());
+        tdfReaderConfig.getAssertionRegistry().registerValidator(systemMetadataAssertionValidator);
+
+        // Create DEK-based validator for fallback verification (not registered with wildcard)
+        // This will be used as a last resort for unknown assertions that might be DEK-signed
+        AssertionConfig.AssertionKey dekKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, payloadKey);
+        DEKAssertionValidator dekValidator = new DEKAssertionValidator(dekKey);
+        dekValidator.setVerificationMode(tdfReaderConfig.getAssertionVerificationMode());
+
+        // Validate assertions based on configured verification mode
         for (var assertion : manifest.assertions) {
-            // Skip assertion verification if disabled
-            if (tdfReaderConfig.disableAssertionVerification) {
-                break;
+            // SECURITY: Assertions without cryptographic bindings cannot be verified and must fail
+            // This prevents unsigned assertions from being tampered with
+            // Unsigned assertions represent a security risk and should not be accepted
+            if (assertion.binding.signature == null || assertion.binding.signature.isEmpty()) {
+                throw new SDK.AssertionException("assertion has no cryptographic binding - unsigned assertions are not allowed", assertion.id);
             }
 
-            // Set default to HS256
-            var assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, payloadKey);
-            Config.AssertionVerificationKeys assertionVerificationKeys = tdfReaderConfig.assertionVerificationKeys;
-            if (!assertionVerificationKeys.isEmpty()) {
-                var keyForAssertion = assertionVerificationKeys.getKey(assertion.id);
-                if (keyForAssertion != null) {
-                    assertionKey = keyForAssertion;
-                }
-            }
+            AssertionValidator validator = null;
+            boolean dekVerified = false; // Flag to track if DEK validator successfully verified
 
-            Manifest.Assertion.HashValues hashValues;
-            try {
-                hashValues = assertion.verify(assertionKey);
-            } catch (ParseException | JOSEException e) {
-                throw new SDKException("error validating assertion hash", e);
-            }
-            var hashOfAssertionAsHex = assertion.hash();
-
-            if (!Objects.equals(hashOfAssertionAsHex, hashValues.getAssertionHash())) {
-                throw new SDK.AssertionException("assertion hash mismatch", assertion.id);
-            }
-
-            byte[] hashOfAssertion;
-            if (isLegacyTdf) {
-                hashOfAssertion = hashOfAssertionAsHex.getBytes(StandardCharsets.UTF_8);
-            } else {
+            if (assertion.statement.schema != null && tdfReaderConfig.getAssertionRegistry().getValidators().containsKey(assertion.statement.schema)) {
+                validator = tdfReaderConfig.getAssertionRegistry().getValidators().get(assertion.statement.schema);
+            } else if (tdfReaderConfig.assertionVerificationKeys.isEmpty()) {
+                // No schema-specific validator found, and no explicit verification keys provided
+                // Try DEK-based verification as a fallback (for assertions signed with DEK during encryption)
                 try {
-                    hashOfAssertion = Hex.decodeHex(hashOfAssertionAsHex);
-                } catch (DecoderException e) {
-                    throw new SDKException("error decoding assertion hash", e);
+                    dekValidator.verify(assertion, manifest);
+                    dekVerified = true; // DEK verification succeeded
+                    validator = dekValidator; // Assign dekValidator as the effective validator
+                } catch (SDKException e) {
+                    if (e.getMessage().equals("Unable to verify assertion signature")) {
+                        // JWT signature verification failed with DEK - assertion not signed with DEK
+                        // Treat as unknown assertion (forward compatibility)
+                        validator = null;
+                    } else {
+                        // DEK verification failed for other reason (hash mismatch, binding mismatch, etc.)
+                        // This indicates tampering of a DEK-signed assertion - FAIL immediately
+                        throw e;
+                    }
                 }
             }
-            var signature = new byte[aggregateHashByteArrayBytes.length + hashOfAssertion.length];
-            System.arraycopy(aggregateHashByteArrayBytes, 0, signature, 0, aggregateHashByteArrayBytes.length);
-            System.arraycopy(hashOfAssertion, 0, signature, aggregateHashByteArrayBytes.length, hashOfAssertion.length);
-            var encodeSignature = Base64.getEncoder().encodeToString(signature);
 
-            if (!Objects.equals(encodeSignature, hashValues.getSignature())) {
-                throw new SDK.AssertionException("failed integrity check on assertion signature", assertion.id);
+            if (validator == null){
+                switch (tdfReaderConfig.getAssertionVerificationMode()) {
+                    case STRICT:
+                        throw new SDK.AssertionException("unknown assertion type in strict mode", assertion.id);
+                    case PERMISSIVE:
+                    case FAIL_FAST:
+                        continue;
+                }
+            } else {
+                // If it was already DEK verified, no need to call verify again.
+                // Otherwise, call verify for the schema-specific validator.
+                if (!dekVerified) {
+                    validator.verify(assertion, manifest);
+                }
+                validator.validate(assertion, tdfReader);
             }
         }
 
