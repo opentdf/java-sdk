@@ -39,7 +39,7 @@ public class EncryptExample {
                 .build();
 
         var kasInfo = new Config.KASInfo();
-        kasInfo.URL = "http://localhost:8080/kas";
+        kasInfo.setURL("http://localhost:8080/kas");
 
         var wrappingKeyType = KeyType.fromString(keyEncapsulationAlgorithm.toLowerCase());
         var tdfConfig = Config.newTDFConfig(Config.withKasInformation(kasInfo),

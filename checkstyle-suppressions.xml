@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+
+<!DOCTYPE suppressions PUBLIC
+        "-//Checkstyle//DTD SuppressionFilter Configuration 1.2//EN"
+        "https://checkstyle.org/dtds/suppressions_1_2.dtd">
+
+<suppressions>
+    <!-- <suppress checks="FileLength" -->
+    <!-- files="DefaultBeanContext.java|BeanDefinitionWriter.java|DefaultHttpClient.java"/> -->
+
+    <suppress checks="DesignForExtension" />
+    <suppress checks="MagicNumber" />
+    <suppress checks="VisibilityModifier" />
+    <suppress checks="RedundantModifier" />
+    <suppress checks="WhitespaceAround" />
+    <suppress checks="FinalParameters" />
+    <suppress checks="FinalClass" />
+    <suppress checks="MissingJavadocMethod" />
+    <suppress checks="JavadocStyle" />
+    <suppress checks="JavadocVariable" />
+    <suppress checks="JavadocMethod" />
+    <suppress checks="HideUtilityClassConstructor" />
+    <suppress checks="ModifierOrder" />
+    <suppress checks="RegexpSingleline" />
+    <suppress checks="LineLength" />
+    <suppress checks="HiddenField" />
+    <suppress checks="NewlineAtEndOfFile" />
+    <suppress checks="ConstantName" />
+    <suppress checks="NoWhitespaceAfter" />
+    <suppress checks="OperatorWrap" />
+    <suppress checks="AvoidStarImport" />
+    <suppress checks="NeedBraces" />
+    <suppress checks="MemberName" />
+    <suppress checks="InnerAssignment" />
+    <suppress checks="MultipleVariableDeclarations" />
+    <suppress checks="NoWhitespaceBefore" />
+    <suppress checks="WhitespaceAfter" />
+    <suppress checks="MethodName" />
+    <suppress checks="MissingSwitchDefault" />
+    <suppress checks="EmptyForIteratorPad" />
+    <suppress checks="ParenPad" />
+    <suppress checks="UnusedImports" />
+    <suppress checks="LocalVariableName" />
+    <suppress checks="MethodLength" />
+    <suppress checks="ParameterNumber" />
+    <suppress checks="JavadocPackage" />
+    <suppress checks="LeftCurly" />
+    <suppress checks="ParameterName" />
+</suppressions>

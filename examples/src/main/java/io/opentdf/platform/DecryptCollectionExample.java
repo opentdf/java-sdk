@@ -20,7 +20,7 @@ public class DecryptCollectionExample {
                 .build();
 
         var kasInfo = new Config.KASInfo();
-        kasInfo.URL = "http://localhost:8080/kas";
+        kasInfo.setURL("http://localhost:8080/kas");
 
 
         // Convert String to InputStream

@@ -77,16 +77,16 @@ class NanoTDF {
     }
 
     private Optional<Config.KASInfo> getKasInfo(Config.NanoTDFConfig nanoTDFConfig) {
-        if (nanoTDFConfig.kasInfoList.isEmpty()) {
+        if (nanoTDFConfig.getKasInfoList().isEmpty()) {
             logger.debug("no kas info provided in NanoTDFConfig");
             return Optional.empty();
         }
-        return Optional.of(nanoTDFConfig.kasInfoList.get(0));
+        return Optional.of(nanoTDFConfig.getKasInfoList().get(0));
     }
 
     private Config.HeaderInfo getHeaderInfo(Config.NanoTDFConfig nanoTDFConfig) throws InvalidNanoTDFConfig, UnsupportedNanoTDFFeature {
-        if (nanoTDFConfig.collectionConfig.useCollection) {
-            Config.HeaderInfo headerInfo = nanoTDFConfig.collectionConfig.getHeaderInfo();
+        if (nanoTDFConfig.getCollectionConfig().getUseCollection()) {
+            Config.HeaderInfo headerInfo = nanoTDFConfig.getCollectionConfig().getHeaderInfo();
             if (headerInfo != null) {
                 return headerInfo;
             }
@@ -97,21 +97,21 @@ class NanoTDF {
                 .or(() -> NanoTDF.getBaseKey(services.wellknown()))
                 .orElseThrow(() -> new SDKException("no KAS info provided and couldn't get base key, cannot create NanoTDF"));
 
-        String url = kasInfo.URL;
-        if (kasInfo.PublicKey == null || kasInfo.PublicKey.isEmpty()) {
+        String url = kasInfo.getURL();
+        if (kasInfo.getPublicKey() == null || kasInfo.getPublicKey().isEmpty()) {
             logger.info("no public key provided for KAS at {}, retrieving", url);
-            kasInfo = services.kas().getECPublicKey(kasInfo, nanoTDFConfig.eccMode.getCurve());
+            kasInfo = services.kas().getECPublicKey(kasInfo, nanoTDFConfig.getEccMode().getCurve());
         }
 
         // Kas url resource locator
-        ResourceLocator kasURL = new ResourceLocator(kasInfo.URL, kasInfo.KID);
+        ResourceLocator kasURL = new ResourceLocator(kasInfo.getURL(), kasInfo.getKID());
         assert kasURL.getIdentifier() != null : "Identifier in ResourceLocator cannot be null";
 
         NanoTDFType.ECCurve ecCurve = getEcCurve(nanoTDFConfig, kasInfo);
         ECKeyPair keyPair = new ECKeyPair(ecCurve, ECKeyPair.ECAlgorithm.ECDSA);
 
         // Generate symmetric key
-        ECPublicKey kasPublicKey = ECKeyPair.publicKeyFromPem(kasInfo.PublicKey);
+        ECPublicKey kasPublicKey = ECKeyPair.publicKeyFromPem(kasInfo.getPublicKey());
         byte[] symmetricKey = ECKeyPair.computeECDHKey(kasPublicKey, keyPair.getPrivateKey());
 
         // Generate HKDF key
@@ -125,7 +125,7 @@ class NanoTDF {
         byte[] key = ECKeyPair.calculateHKDF(hashOfSalt, symmetricKey);
 
         // Encrypt policy
-        PolicyObject policyObject = createPolicyObject(nanoTDFConfig.attributes);
+        PolicyObject policyObject = createPolicyObject(nanoTDFConfig.getAttributes());
         String policyObjectAsStr = gson.toJson(policyObject);
 
         logger.debug("createNanoTDF policy object - {}", policyObjectAsStr);
@@ -134,19 +134,19 @@ class NanoTDF {
         final byte[] policyBody;
         PolicyInfo policyInfo = new PolicyInfo();
         AesGcm gcm = new AesGcm(key);
-        if (nanoTDFConfig.policyType == NanoTDFType.PolicyType.EMBEDDED_POLICY_PLAIN_TEXT) {
+        if (nanoTDFConfig.getPolicyType() == NanoTDFType.PolicyType.EMBEDDED_POLICY_PLAIN_TEXT) {
             policyBody = policyObjectAsStr.getBytes(StandardCharsets.UTF_8);
             policyInfo.setEmbeddedPlainTextPolicy(policyBody);
         } else {
             byte[] policyObjectAsBytes = policyObjectAsStr.getBytes(StandardCharsets.UTF_8);
-            int authTagSize = SymmetricAndPayloadConfig.sizeOfAuthTagForCipher(nanoTDFConfig.config.getCipherType());
+            int authTagSize = SymmetricAndPayloadConfig.sizeOfAuthTagForCipher(nanoTDFConfig.getConfig().getCipherType());
             byte[] encryptedPolicy = gcm.encrypt(kEmptyIV, authTagSize, policyObjectAsBytes, 0, policyObjectAsBytes.length);
             policyBody = Arrays.copyOfRange(encryptedPolicy, kEmptyIV.length, encryptedPolicy.length);
             policyInfo.setEmbeddedEncryptedTextPolicy(policyBody);
         }
 
         // Set policy binding (GMAC)
-        if (nanoTDFConfig.eccMode.isECDSABindingEnabled()) {
+        if (nanoTDFConfig.getEccMode().isECDSABindingEnabled()) {
             throw new UnsupportedNanoTDFFeature("ECDSA policy binding is not support");
         } else {
             byte[] hash = digest.digest(policyBody);
@@ -158,21 +158,21 @@ class NanoTDF {
         byte[] compressedPubKey = keyPair.compressECPublickey();
         Header header = new Header();
         ECCMode mode;
-        if (nanoTDFConfig.eccMode.getCurve() != keyPair.getCurve()) {
-            mode = new ECCMode(nanoTDFConfig.eccMode.getECCModeAsByte());
+        if (nanoTDFConfig.getEccMode().getCurve() != keyPair.getCurve()) {
+            mode = new ECCMode(nanoTDFConfig.getEccMode().getECCModeAsByte());
             mode.setEllipticCurve(keyPair.getCurve());
         } else {
-            mode = nanoTDFConfig.eccMode;
+            mode = nanoTDFConfig.getEccMode();
         }
         header.setECCMode(mode);
-        header.setPayloadConfig(nanoTDFConfig.config);
+        header.setPayloadConfig(nanoTDFConfig.getConfig());
         header.setEphemeralKey(compressedPubKey);
         header.setKasLocator(kasURL);
         header.setPolicyInfo(policyInfo);
 
         Config.HeaderInfo headerInfo = new Config.HeaderInfo(header, gcm, 0);
-        if (nanoTDFConfig.collectionConfig.useCollection) {
-            nanoTDFConfig.collectionConfig.updateHeaderInfo(headerInfo);
+        if (nanoTDFConfig.getCollectionConfig().getUseCollection()) {
+            nanoTDFConfig.getCollectionConfig().updateHeaderInfo(headerInfo);
         }
 
         return headerInfo;
@@ -181,14 +181,14 @@ class NanoTDF {
     private static NanoTDFType.ECCurve getEcCurve(Config.NanoTDFConfig nanoTDFConfig, Config.KASInfo kasInfo) {
         // it might be better to pull the curve from the OIDC in the PEM but it looks like we
         // are just taking the Algorithm as correct
-        Optional<NanoTDFType.ECCurve> specifiedCurve = NanoTDFType.ECCurve.fromAlgorithm(kasInfo.Algorithm);
+        Optional<NanoTDFType.ECCurve> specifiedCurve = NanoTDFType.ECCurve.fromAlgorithm(kasInfo.getAlgorithm());
         NanoTDFType.ECCurve ecCurve;
         if (specifiedCurve.isEmpty()) {
-            logger.info("no curve specified in KASInfo, using the curve from config [{}]", nanoTDFConfig.eccMode.getCurve());
-            ecCurve = nanoTDFConfig.eccMode.getCurve();
+            logger.info("no curve specified in KASInfo, using the curve from config [{}]", nanoTDFConfig.getEccMode().getCurve());
+            ecCurve = nanoTDFConfig.getEccMode().getCurve();
         } else {
-            if (specifiedCurve.get() != nanoTDFConfig.eccMode.getCurve()) {
-                logger.warn("ECCurve in NanoTDFConfig [{}] does not match the curve in KASInfo, using KASInfo curve [{}]", nanoTDFConfig.eccMode.getCurve(), specifiedCurve.get());
+            if (specifiedCurve.get() != nanoTDFConfig.getEccMode().getCurve()) {
+                logger.warn("ECCurve in NanoTDFConfig [{}] does not match the curve in KASInfo, using KASInfo curve [{}]", nanoTDFConfig.getEccMode().getCurve(), specifiedCurve.get());
             }
             ecCurve = specifiedCurve.get();
         }
@@ -205,8 +205,8 @@ class NanoTDF {
         }
 
         // check the policy type, support only embedded policy
-        if (nanoTDFConfig.policyType != NanoTDFType.PolicyType.EMBEDDED_POLICY_PLAIN_TEXT &&
-                nanoTDFConfig.policyType != NanoTDFType.PolicyType.EMBEDDED_POLICY_ENCRYPTED) {
+        if (nanoTDFConfig.getPolicyType() != NanoTDFType.PolicyType.EMBEDDED_POLICY_PLAIN_TEXT &&
+                nanoTDFConfig.getPolicyType() != NanoTDFType.PolicyType.EMBEDDED_POLICY_ENCRYPTED) {
             throw new UnsupportedNanoTDFFeature("unsupported policy type");
         }
 
@@ -224,10 +224,10 @@ class NanoTDF {
         nanoTDFSize += headerSize;
         logger.debug("createNanoTDF header length {}", headerSize);
 
-        int authTagSize = SymmetricAndPayloadConfig.sizeOfAuthTagForCipher(nanoTDFConfig.config.getCipherType());
+        int authTagSize = SymmetricAndPayloadConfig.sizeOfAuthTagForCipher(nanoTDFConfig.getConfig().getCipherType());
         // Encrypt the data
         byte[] actualIV = new byte[kIvPadding + kNanoTDFIvSize];
-        if (nanoTDFConfig.collectionConfig.useCollection) {
+        if (nanoTDFConfig.getCollectionConfig().getUseCollection()) {
             ByteBuffer b = ByteBuffer.allocate(4);
             b.order(ByteOrder.LITTLE_ENDIAN);
             b.putInt(iteration);
@@ -272,18 +272,18 @@ class NanoTDF {
 
     public void readNanoTDF(ByteBuffer nanoTDF, OutputStream outputStream,
                             Config.NanoTDFReaderConfig nanoTdfReaderConfig, String platformUrl) throws IOException {
-        if (!nanoTdfReaderConfig.ignoreKasAllowlist && (nanoTdfReaderConfig.kasAllowlist == null || nanoTdfReaderConfig.kasAllowlist.isEmpty())) {
+        if (!nanoTdfReaderConfig.isIgnoreKasAllowlist() && (nanoTdfReaderConfig.getKasAllowlist() == null || nanoTdfReaderConfig.getKasAllowlist().isEmpty())) {
             ListKeyAccessServersRequest request = ListKeyAccessServersRequest.newBuilder()
                     .build();
             ListKeyAccessServersResponse response = ResponseMessageKt.getOrThrow(services.kasRegistry().listKeyAccessServersBlocking(request, Collections.emptyMap()).execute());
-            nanoTdfReaderConfig.kasAllowlist = new HashSet<>();
+            nanoTdfReaderConfig.setKasAllowlist(new HashSet<>());
             var kases = response.getKeyAccessServersList();
 
             for (var entry : kases) {
-                nanoTdfReaderConfig.kasAllowlist.add(Config.getKasAddress(entry.getUri()));
+                nanoTdfReaderConfig.getKasAllowlist().add(Config.getKasAddress(entry.getUri()));
             }
 
-            nanoTdfReaderConfig.kasAllowlist.add(Config.getKasAddress(platformUrl));
+            nanoTdfReaderConfig.getKasAllowlist().add(Config.getKasAddress(platformUrl));
         }
         readNanoTDF(nanoTDF, outputStream, nanoTdfReaderConfig);
     }
@@ -308,12 +308,12 @@ class NanoTDF {
             String kasUrl = header.getKasLocator().getResourceUrl();
 
             var realAddress = Config.getKasAddress(kasUrl);
-            if (nanoTdfReaderConfig.ignoreKasAllowlist) {
+            if (nanoTdfReaderConfig.isIgnoreKasAllowlist()) {
                 logger.warn("Ignoring KasAllowlist for url {}", realAddress);
-            } else if (nanoTdfReaderConfig.kasAllowlist == null || nanoTdfReaderConfig.kasAllowlist.isEmpty()) {
+            } else if (nanoTdfReaderConfig.getKasAllowlist() == null || nanoTdfReaderConfig.getKasAllowlist().isEmpty()) {
                 logger.error("KasAllowlist: No KAS allowlist provided and no KeyAccessServerRegistry available, {} is not allowed", realAddress);
                 throw new KasAllowlistException("No KAS allowlist provided and no KeyAccessServerRegistry available");
-            } else if (!nanoTdfReaderConfig.kasAllowlist.contains(realAddress)) {
+            } else if (!nanoTdfReaderConfig.getKasAllowlist().contains(realAddress)) {
                 logger.error("KasAllowlist: kas url {} is not allowed", realAddress);
                 throw new KasAllowlistException("KasAllowlist: kas url "+realAddress+" is not allowed");
             }

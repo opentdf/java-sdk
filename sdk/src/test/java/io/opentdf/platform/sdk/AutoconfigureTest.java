@@ -427,7 +427,7 @@ public class AutoconfigureTest {
                 Set<String> actualKases = new HashSet<>();
                 for (Autoconfigure.KeyAccessGrant g : grants.getGrants().values()) {
                     assertThat(g).isNotNull();
-                    for (String k : g.kases) {
+                    for (String k : g.getKases()) {
                         actualKases.add(k);
                     }
                 }
@@ -863,10 +863,10 @@ public class AutoconfigureTest {
         // Verify that the key was stored in the cache
         Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1", "test-kid");
         assertNotNull(storedKASInfo);
-        assertEquals("https://example.com/kas", storedKASInfo.URL);
-        assertEquals("test-kid", storedKASInfo.KID);
-        assertEquals("ec:secp256r1", storedKASInfo.Algorithm);
-        assertEquals("public-key-pem", storedKASInfo.PublicKey);
+        assertEquals("https://example.com/kas", storedKASInfo.getURL());
+        assertEquals("test-kid", storedKASInfo.getKID());
+        assertEquals("ec:secp256r1", storedKASInfo.getAlgorithm());
+        assertEquals("public-key-pem", storedKASInfo.getPublicKey());
     }
 
     @Test
@@ -906,17 +906,17 @@ public class AutoconfigureTest {
         // Verify that the key was stored in the cache
         Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1", "test-kid");
         assertNotNull(storedKASInfo);
-        assertEquals("https://example.com/kas", storedKASInfo.URL);
-        assertEquals("test-kid", storedKASInfo.KID);
-        assertEquals("ec:secp256r1", storedKASInfo.Algorithm);
-        assertEquals("public-key-pem", storedKASInfo.PublicKey);
+        assertEquals("https://example.com/kas", storedKASInfo.getURL());
+        assertEquals("test-kid", storedKASInfo.getKID());
+        assertEquals("ec:secp256r1", storedKASInfo.getAlgorithm());
+        assertEquals("public-key-pem", storedKASInfo.getPublicKey());
 
         Config.KASInfo storedKASInfo2 = keyCache.get("https://example.com/kas", "rsa:2048", "test-kid-2");
         assertNotNull(storedKASInfo2);
-        assertEquals("https://example.com/kas", storedKASInfo2.URL);
-        assertEquals("test-kid-2", storedKASInfo2.KID);
-        assertEquals("rsa:2048", storedKASInfo2.Algorithm);
-        assertEquals("public-key-pem-2", storedKASInfo2.PublicKey);
+        assertEquals("https://example.com/kas", storedKASInfo2.getURL());
+        assertEquals("test-kid-2", storedKASInfo2.getKID());
+        assertEquals("rsa:2048", storedKASInfo2.getAlgorithm());
+        assertEquals("public-key-pem-2", storedKASInfo2.getPublicKey());
     }
 
     GetAttributeValuesByFqnsResponse getResponseWithGrants(GetAttributeValuesByFqnsRequest req,
@@ -995,17 +995,17 @@ public class AutoconfigureTest {
         // Verify that the key was stored in the cache
         Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1", "test-kid");
         assertNotNull(storedKASInfo);
-        assertEquals("https://example.com/kas", storedKASInfo.URL);
-        assertEquals("test-kid", storedKASInfo.KID);
-        assertEquals("ec:secp256r1", storedKASInfo.Algorithm);
-        assertEquals("public-key-pem", storedKASInfo.PublicKey);
+        assertEquals("https://example.com/kas", storedKASInfo.getURL());
+        assertEquals("test-kid", storedKASInfo.getKID());
+        assertEquals("ec:secp256r1", storedKASInfo.getAlgorithm());
+        assertEquals("public-key-pem", storedKASInfo.getPublicKey());
 
         Config.KASInfo storedKASInfo2 = keyCache.get("https://example.com/kas", "rsa:2048", "test-kid-2");
         assertNotNull(storedKASInfo2);
-        assertEquals("https://example.com/kas", storedKASInfo2.URL);
-        assertEquals("test-kid-2", storedKASInfo2.KID);
-        assertEquals("rsa:2048", storedKASInfo2.Algorithm);
-        assertEquals("public-key-pem-2", storedKASInfo2.PublicKey);
+        assertEquals("https://example.com/kas", storedKASInfo2.getURL());
+        assertEquals("test-kid-2", storedKASInfo2.getKID());
+        assertEquals("rsa:2048", storedKASInfo2.getAlgorithm());
+        assertEquals("public-key-pem-2", storedKASInfo2.getPublicKey());
     }
 
     @Test
@@ -1052,7 +1052,7 @@ public class AutoconfigureTest {
     void createsGranterFromAttributeValues() {
         // Arrange
         Config.TDFConfig config = new Config.TDFConfig();
-        config.attributeValues = List.of(mockValueFor(spk2spk), mockValueFor(rel2gbr));
+        config.setAttributeValues(List.of(mockValueFor(spk2spk), mockValueFor(rel2gbr)));
 
         SDK.Services services = mock(SDK.Services.class);
         SDK.KAS kas = mock(SDK.KAS.class);
@@ -1104,11 +1104,12 @@ public class AutoconfigureTest {
             return TestUtil.successfulUnaryCall(builder.build());
         });
 
+        Config.TDFConfig tdfConfig = new Config.TDFConfig();
+        tdfConfig.setAttributeValues(null);
+        tdfConfig.setAttributes(policy);
+
         // Act
-        Autoconfigure.Granter granter = Autoconfigure.createGranter(services, new Config.TDFConfig() {{
-            attributeValues = null; // force use of service
-            attributes = policy;
-        }});
+        Autoconfigure.Granter granter = Autoconfigure.createGranter(services, tdfConfig);
 
         // Assert
         assertThat(granter).isNotNull();
@@ -1120,17 +1121,16 @@ public class AutoconfigureTest {
     @Test
     void getSplits_usesAutoconfigurePlan_whenAutoconfigureTrue() {
         var tdfConfig = new Config.TDFConfig();
-        tdfConfig.autoconfigure = true;
-        tdfConfig.kasInfoList = new ArrayList<>();
-        tdfConfig.splitPlan = null;
+        tdfConfig.setAutoconfigure(true);
+        tdfConfig.setKasInfoList(new ArrayList<>());
+        tdfConfig.setSplitPlan(null);
 
         var kas = Mockito.mock(SDK.KAS.class);
         Mockito.when(kas.getKeyCache()).thenReturn(new KASKeyCache());
-        Config.KASInfo kasInfo = new Config.KASInfo() {{
-            URL = "https://kas.example.com";
-            Algorithm = "ec:secp256r1";
-            KID = "kid";
-        }};
+        Config.KASInfo kasInfo = new Config.KASInfo();
+        kasInfo.setURL("https://kas.example.com");
+        kasInfo.setAlgorithm("ec:secp256r1");
+        kasInfo.setKID("kid");
         Mockito.when(kas.getPublicKey(any())).thenReturn(kasInfo);
 
         var services = new FakeServicesBuilder().setKas(kas).build();
@@ -1155,22 +1155,25 @@ public class AutoconfigureTest {
         // Assert
         assertThat(splits).containsKey("");
         assertThat(splits.get("")).hasSize(1);
-        assertThat(splits.get("").get(0).URL).isEqualTo("https://kas.example.com");
-        assertThat(splits.get("").get(0).KID).isEqualTo("kid");
-        assertThat(splits.get("").get(0).Algorithm).isEqualTo("ec:secp256r1");
+        assertThat(splits.get("").get(0).getURL()).isEqualTo("https://kas.example.com");
+        assertThat(splits.get("").get(0).getKID()).isEqualTo("kid");
+        assertThat(splits.get("").get(0).getAlgorithm()).isEqualTo("ec:secp256r1");
     }
 
     @Test
     void testInvalidConfigurations() {
         var config = new Config.TDFConfig();
-        config.autoconfigure = true;
-        config.splitPlan = List.of(new KeySplitStep("kas1", ""));
+        config.setAutoconfigure(true);
+        config.setSplitPlan(List.of(new KeySplitStep("kas1", "")));
         Planner planner = new Planner(config, new FakeServicesBuilder().build(), (a, b) -> { throw new IllegalStateException("no way"); });
         Exception thrown = assertThrows(IllegalArgumentException.class, () -> planner.getSplits());
         assertThat(thrown.getMessage()).contains("cannot use autoconfigure with a split plan provided in the TDFConfig");
 
 
-        config = new Config.TDFConfig() {{ autoconfigure = false; kasInfoList = Collections.EMPTY_LIST; splitPlan = null; }};
+        config = new Config.TDFConfig();
+        config.setAutoconfigure(false);
+        config.setKasInfoList(Collections.EMPTY_LIST);
+        config.setSplitPlan(null);
         var otherPlanner = new Planner(config, new FakeServicesBuilder().build(), (a, b) -> { throw new IllegalStateException("no way"); });
         thrown = assertThrows(SDK.KasInfoMissing.class, () -> otherPlanner.getSplits());
         assertThat(thrown.getMessage()).contains("no plan was constructed via autoconfigure, explicit split plan or provided kases");
