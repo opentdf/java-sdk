@@ -5,9 +5,9 @@ import io.opentdf.platform.policy.KasPublicKeyAlgEnum;
 
 import javax.annotation.Nonnull;
 
-import static io.opentdf.platform.sdk.NanoTDFType.ECCurve.SECP256R1;
-import static io.opentdf.platform.sdk.NanoTDFType.ECCurve.SECP384R1;
-import static io.opentdf.platform.sdk.NanoTDFType.ECCurve.SECP521R1;
+import static io.opentdf.platform.sdk.ECCurve.SECP256R1;
+import static io.opentdf.platform.sdk.ECCurve.SECP384R1;
+import static io.opentdf.platform.sdk.ECCurve.SECP521R1;
 
 public enum KeyType {
     RSA2048Key("rsa:2048"),
@@ -16,9 +16,9 @@ public enum KeyType {
     EC521Key("ec:secp521r1", SECP521R1);
 
     private final String keyType;
-    private final NanoTDFType.ECCurve curve;
+    private final ECCurve curve;
 
-    KeyType(String keyType, NanoTDFType.ECCurve ecCurve) {
+    KeyType(String keyType, ECCurve ecCurve) {
         this.keyType = keyType;
         this.curve = ecCurve;
     }
@@ -28,7 +28,7 @@ public enum KeyType {
     }
 
     @Nonnull
-    NanoTDFType.ECCurve getECCurve() {
+    ECCurve getECCurve() {
         if (!isEc()) {
             throw new IllegalStateException("This key type does not have an ECCurve associated with it: " + keyType);
         }
