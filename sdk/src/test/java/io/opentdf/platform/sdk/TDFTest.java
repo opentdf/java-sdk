@@ -420,6 +420,101 @@ public class TDFTest {
     }
 
     @Test
+    void testVerifyAssertionWithJwkHeaderInJWT() throws Exception {
+        var keypair = CryptoUtils.generateRSAKeypair();
+
+        var assertionConfig = new AssertionConfig();
+        assertionConfig.type = AssertionConfig.Type.BaseAssertion;
+        assertionConfig.scope = AssertionConfig.Scope.TrustedDataObj;
+        assertionConfig.appliesToState = AssertionConfig.AppliesToState.Unencrypted;
+        assertionConfig.statement = new AssertionConfig.Statement();
+        assertionConfig.statement.format = "base64binary";
+        assertionConfig.statement.schema = "text";
+        assertionConfig.statement.value = "ICAgIDxlZGoOkVkaD4=";
+
+        JWK jwk = JWK.parse(CryptoUtils.getPublicKeyJWK(keypair.getPublic()));
+
+        assertionConfig.signingKey = new AssertionConfig.AssertionKey(
+                AssertionConfig.AssertionKeyAlg.RS256,
+                keypair.getPrivate()
+        ).withJwk(jwk.toPublicJWK());
+
+        var rsaKasInfo = new Config.KASInfo();
+        rsaKasInfo.URL = "https://example.com/kas" + 0;
+
+        Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
+                Config.withKasInformation(rsaKasInfo),
+                Config.withAssertionConfig(assertionConfig));
+
+        String plainText = "this is extremely sensitive stuff!!!";
+        InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+
+        TDF tdf = new TDF(
+                new FakeServicesBuilder().setKas(kas)
+                        .setKeyAccessServerRegistryService(kasRegistryService).build());
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
+
+        var unwrappedData = new ByteArrayOutputStream();
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()),
+                Config.newTDFReaderConfig(), platformUrl);
+        reader.readPayload(unwrappedData);
+
+        assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
+                .withFailMessage("extracted data does not match")
+                .isEqualTo(plainText);
+    }
+
+    @Test
+    void testVerifyAssertionWithX5cHeaderInJWT() throws Exception {
+        var keypair = CryptoUtils.generateRSAKeypair();
+        var assertionConfig = new AssertionConfig();
+        assertionConfig.type = AssertionConfig.Type.BaseAssertion;
+        assertionConfig.scope = AssertionConfig.Scope.TrustedDataObj;
+        assertionConfig.appliesToState = AssertionConfig.AppliesToState.Unencrypted;
+        assertionConfig.statement = new AssertionConfig.Statement();
+        assertionConfig.statement.format = "base64binary";
+        assertionConfig.statement.schema = "text";
+        assertionConfig.statement.value = "ICAgIDxlZGoOkVkaD4=";
+
+        X509Certificate cert = TestUtil.createTestCertificate(keypair.getPublic(), keypair.getPrivate());
+        List<com.nimbusds.jose.util.Base64> x5c = new ArrayList<>();
+        x5c.add(com.nimbusds.jose.util.Base64.encode(cert.getEncoded()));
+
+        assertionConfig.signingKey = new AssertionConfig.AssertionKey(
+                AssertionConfig.AssertionKeyAlg.RS256,
+                keypair.getPrivate()
+        ).withX5c(x5c);
+
+        var rsaKasInfo = new Config.KASInfo();
+        rsaKasInfo.URL = "https://example.com/kas" + 0;
+
+        Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
+                Config.withKasInformation(rsaKasInfo),
+                Config.withAssertionConfig(assertionConfig));
+
+        String plainText = "this is extremely sensitive stuff!!!";
+        InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes());
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+
+        TDF tdf = new TDF(
+                new FakeServicesBuilder().setKas(kas)
+                        .setKeyAccessServerRegistryService(kasRegistryService).build());
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
+
+        var unwrappedData = new ByteArrayOutputStream();
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()),
+                Config.newTDFReaderConfig(), platformUrl);
+        reader.readPayload(unwrappedData);
+
+        assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
+                .withFailMessage("extracted data does not match")
+                .isEqualTo(plainText);
+    }
+
+    @Test
     void testWithAssertionVerificationDisabled() throws Exception {
         String assertion1Id = "assertion1";
         var keypair = CryptoUtils.generateRSAKeypair();

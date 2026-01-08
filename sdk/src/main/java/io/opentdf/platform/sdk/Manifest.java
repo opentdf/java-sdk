@@ -458,19 +458,27 @@ public class Manifest {
 
         private SignedJWT createSignedJWT(final JWTClaimsSet claims, final AssertionConfig.AssertionKey assertionKey)
                 throws SDKException {
-            final JWSHeader jwsHeader;
+            final JWSHeader.Builder headerBuilder;
             switch (assertionKey.alg) {
                 case RS256:
-                    jwsHeader = new JWSHeader.Builder(JWSAlgorithm.RS256).build();
+                    headerBuilder = new JWSHeader.Builder(JWSAlgorithm.RS256);
                     break;
                 case HS256:
-                    jwsHeader = new JWSHeader.Builder(JWSAlgorithm.HS256).build();
+                    headerBuilder = new JWSHeader.Builder(JWSAlgorithm.HS256);
                     break;
                 default:
                     throw new SDKException("Unknown assertion key algorithm, error signing assertion");
             }
 
-            return new SignedJWT(jwsHeader, claims);
+            if (assertionKey.jwk != null) {
+                headerBuilder.jwk(assertionKey.jwk);
+            }
+
+            if (assertionKey.x5c != null) {
+                headerBuilder.x509CertChain(assertionKey.x5c);
+            }
+
+            return new SignedJWT(headerBuilder.build(), claims);
         }
 
         private JWSSigner createSigner(final AssertionConfig.AssertionKey assertionKey)
