@@ -517,7 +517,7 @@ public class Manifest {
         }
 
         private JWSVerifier createVerifier(JWK jwk) throws JOSEException {
-            return new DefaultJWSVerifierFactory().createJWSVerifier(new JWSHeader.Builder(JWSAlgorithm.RS256).build(), jwk.toRSAKey().toPublicKey());
+            return new RSASSAVerifier(jwk.toRSAKey());
         }
 
         private JWSVerifier createVerifier(RSAPublicKey publicKey) throws JOSEException {
