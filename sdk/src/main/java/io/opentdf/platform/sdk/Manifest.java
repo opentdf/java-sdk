@@ -434,8 +434,8 @@ public class Manifest {
                     } else {
                         throw new SDKException("Unsupported public key type in X.509 certificate");
                     }
-                } catch (Exception e) {
-                    throw new SDKException("Invalid X.509 certificate in JWT header", e);
+                } catch (IllegalArgumentException e) {
+                    throw new SDKException("Invalid Base64 in X.509 certificate in JWT header", e);
                 }
             }
 
