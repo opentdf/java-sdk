@@ -58,6 +58,25 @@ public class CryptoUtils {
                 "\r\n-----END PUBLIC KEY-----";
     }
 
+    public static String getPublicKeyJWK(PublicKey publicKey) {
+        if ("RSA".equals(publicKey.getAlgorithm())) {
+            java.security.interfaces.RSAPublicKey rsaPublicKey = (java.security.interfaces.RSAPublicKey) publicKey;
+            byte[] modulusBytes = rsaPublicKey.getModulus().toByteArray();
+            if (modulusBytes[0] == 0) {
+                modulusBytes = java.util.Arrays.copyOfRange(modulusBytes, 1, modulusBytes.length);
+            }
+            byte[] exponentBytes = rsaPublicKey.getPublicExponent().toByteArray();
+            if (exponentBytes[0] == 0) {
+                exponentBytes = java.util.Arrays.copyOfRange(exponentBytes, 1, exponentBytes.length);
+            }
+            String n = Base64.getUrlEncoder().withoutPadding().encodeToString(modulusBytes);
+            String e = Base64.getUrlEncoder().withoutPadding().encodeToString(exponentBytes);
+            return String.format("{\"kty\":\"RSA\",\"n\":\"%s\",\"e\":\"%s\"}", n, e);
+        } else {
+            throw new IllegalArgumentException("Unsupported public key algorithm: " + publicKey.getAlgorithm());
+        }
+    }
+
     public  static String getPrivateKeyPEM(PrivateKey privateKey) {
         return "-----BEGIN PRIVATE KEY-----\r\n" +
                 Base64.getMimeEncoder().encodeToString(privateKey.getEncoded()) +

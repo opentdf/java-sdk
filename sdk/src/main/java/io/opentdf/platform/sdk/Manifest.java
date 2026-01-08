@@ -20,6 +20,9 @@ import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
+import com.nimbusds.jose.crypto.factories.DefaultJWSVerifierFactory;
+import com.nimbusds.jose.jwk.JWK;
+import com.nimbusds.jose.util.X509CertUtils;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import io.opentdf.platform.sdk.SDK.AssertionException;
@@ -33,6 +36,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.interfaces.RSAPublicKey;
+import java.security.cert.X509Certificate;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -400,7 +404,7 @@ public class Manifest {
         // returns the hash and the signature. It returns an error if the verification
         // fails.
         public Assertion.HashValues verify(AssertionConfig.AssertionKey assertionKey)
-                throws ParseException, JOSEException {
+                throws ParseException, JOSEException, java.security.cert.CertificateException {
             if (binding == null) {
                 throw new AssertionException("Binding is null in assertion", this.id);
             }
@@ -409,7 +413,37 @@ public class Manifest {
             binding = null; // Clear the binding after use
 
             SignedJWT signedJWT = SignedJWT.parse(signatureString);
-            JWSVerifier verifier = createVerifier(assertionKey);
+            JWSHeader header = signedJWT.getHeader();
+            JWSVerifier verifier = null;
+
+            // Check for JWK in header
+            if (header.getJWK() != null) {
+                try {
+                    verifier = createVerifier(header.getJWK());
+                } catch (JOSEException e) {
+                    throw new SDKException("Invalid JWK in JWT header", e);
+                }
+            }
+
+            // Check for X.509 certificate chain in header
+            if (verifier == null && header.getX509CertChain() != null && !header.getX509CertChain().isEmpty()) {
+                try {
+                    X509Certificate cert = X509CertUtils.parse(header.getX509CertChain().get(0).decode());
+                    if (cert.getPublicKey() instanceof RSAPublicKey) {
+                        verifier = createVerifier((RSAPublicKey) cert.getPublicKey());
+                    } else {
+                        throw new SDKException("Unsupported public key type in X.509 certificate");
+                    }
+                } catch (Exception e) {
+                    throw new SDKException("Invalid X.509 certificate in JWT header", e);
+                }
+            }
+
+
+            if (verifier == null) {
+                verifier = createVerifier(assertionKey);
+            }
+
 
             if (!signedJWT.verify(verifier)) {
                 throw new SDKException("Unable to verify assertion signature");
@@ -460,12 +494,26 @@ public class Manifest {
         private JWSVerifier createVerifier(AssertionConfig.AssertionKey assertionKey) throws JOSEException {
             switch (assertionKey.alg) {
                 case RS256:
-                    return new RSASSAVerifier((RSAPublicKey) assertionKey.key);
+                    if (assertionKey.key instanceof JWK) {
+                        return createVerifier((JWK) assertionKey.key);
+                    } else if (assertionKey.key instanceof RSAPublicKey) {
+                        return createVerifier((RSAPublicKey) assertionKey.key);
+                    } else {
+                        throw new SDKException("Expected JWK or RSAPublicKey for RS256 algorithm");
+                    }
                 case HS256:
                     return new MACVerifier((byte[]) assertionKey.key);
                 default:
                     throw new SDKException("Unknown verify key, unable to verify assertion signature");
             }
+        }
+
+        private JWSVerifier createVerifier(JWK jwk) throws JOSEException {
+            return new DefaultJWSVerifierFactory().createJWSVerifier(new JWSHeader.Builder(JWSAlgorithm.RS256).build(), jwk.toRSAKey().toPublicKey());
+        }
+
+        private JWSVerifier createVerifier(RSAPublicKey publicKey) throws JOSEException {
+            return new RSASSAVerifier(publicKey);
         }
     }
 
