@@ -2,7 +2,6 @@ package io.opentdf.platform.sdk;
 
 import com.connectrpc.Code;
 import com.connectrpc.ConnectException;
-import com.connectrpc.ResponseMessageKt;
 import com.connectrpc.impl.ProtocolClient;
 import com.google.gson.Gson;
 import com.nimbusds.jose.JOSEException;
@@ -24,8 +23,6 @@ import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
@@ -34,7 +31,6 @@ import java.util.HashMap;
 import java.util.function.BiFunction;
 
 import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
-import static java.lang.String.format;
 
 /**
  * A client implementation that communicates with a Key Access Service (KAS).
@@ -69,24 +65,6 @@ class KASClient implements SDK.KAS {
             throw new SDKException("error creating dpop signer", e);
         }
         this.kasKeyCache = new KASKeyCache();
-    }
-
-    @Override
-    public KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
-        log.debug("retrieving public key with kasinfo = [{}]", kasInfo);
-
-        var req = PublicKeyRequest.newBuilder().setAlgorithm(curve.getPlatformCurveName()).build();
-        var r = getStub(kasInfo.URL).publicKeyBlocking(req, Collections.emptyMap()).execute();
-        PublicKeyResponse res;
-        try {
-            res = ResponseMessageKt.getOrThrow(r);
-        } catch (Exception e) {
-            throw new SDKException("error getting public key", e);
-        }
-        var k2 = kasInfo.clone();
-        k2.KID = res.getKid();
-        k2.PublicKey = res.getPublicKey();
-        return k2;
     }
 
     @Override
@@ -133,19 +111,6 @@ class KASClient implements SDK.KAS {
         String policy;
         String clientPublicKey;
         Manifest.KeyAccess keyAccess;
-    }
-
-    static class NanoTDFKeyAccess {
-        String header;
-        String type;
-        String url;
-        String protocol;
-    }
-
-    static class NanoTDFRewrapRequestBody {
-        String algorithm;
-        String clientPublicKey;
-        NanoTDFKeyAccess keyAccess;
     }
 
     private static final Gson gson = new Gson();
@@ -221,68 +186,6 @@ class KASClient implements SDK.KAS {
         } else {
             return decryptor.decrypt(wrappedKey);
         }
-    }
-
-    public byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL) {
-        ECKeyPair keyPair = new ECKeyPair(curve, ECKeyPair.ECAlgorithm.ECDH);
-
-        NanoTDFKeyAccess keyAccess = new NanoTDFKeyAccess();
-        keyAccess.header = header;
-        keyAccess.type = "remote";
-        keyAccess.url = kasURL;
-        keyAccess.protocol = "kas";
-
-        NanoTDFRewrapRequestBody body = new NanoTDFRewrapRequestBody();
-        body.algorithm = format("ec:%s", curve.getCurveName());
-        body.clientPublicKey = keyPair.publicKeyInPEMFormat();
-        body.keyAccess = keyAccess;
-
-        var requestBody = gson.toJson(body);
-        var claims = new JWTClaimsSet.Builder()
-                .claim("requestBody", requestBody)
-                .issueTime(Date.from(Instant.now()))
-                .expirationTime(Date.from(Instant.now().plus(Duration.ofMinutes(1))))
-                .build();
-
-        var jws = new JWSHeader.Builder(JWSAlgorithm.RS256).build();
-        SignedJWT jwt = new SignedJWT(jws, claims);
-        try {
-            jwt.sign(signer);
-        } catch (JOSEException e) {
-            throw new SDKException("error signing KAS request", e);
-        }
-
-        var req = RewrapRequest
-                .newBuilder()
-                .setSignedRequestToken(jwt.serialize())
-                .build();
-
-        var request = getStub(keyAccess.url).rewrapBlocking(req, Collections.emptyMap()).execute();
-        RewrapResponse response;
-        try {
-            response = RequestHelper.getOrThrow(request);
-        } catch (ConnectException e) {
-            throw new SDKException("error rewrapping key", e);
-        }
-        var wrappedKey = response.getEntityWrappedKey().toByteArray();
-
-        // Generate symmetric key
-        byte[] symmetricKey = ECKeyPair.computeECDHKey(ECKeyPair.publicKeyFromPem(response.getSessionPublicKey()),
-                keyPair.getPrivateKey());
-
-        // Generate HKDF key
-        MessageDigest digest;
-        try {
-            digest = MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException e) {
-            throw new SDKException("error creating SHA-256 message digest", e);
-        }
-        byte[] hashOfSalt = digest.digest(NanoTDF.MAGIC_NUMBER_AND_VERSION);
-        byte[] key = ECKeyPair.calculateHKDF(hashOfSalt, symmetricKey);
-
-        AesGcm gcm = new AesGcm(key);
-        AesGcm.Encrypted encrypted = new AesGcm.Encrypted(wrappedKey);
-        return gcm.decrypt(encrypted);
     }
 
     private final HashMap<String, AccessServiceClient> stubs = new HashMap<>();

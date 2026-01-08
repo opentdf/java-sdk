@@ -15,7 +15,6 @@ import javax.net.ssl.TrustManager;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.util.Optional;
 
@@ -49,12 +48,8 @@ public class SDK implements AutoCloseable {
     public interface KAS extends AutoCloseable {
         Config.KASInfo getPublicKey(Config.KASInfo kasInfo);
 
-        Config.KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve);
-
         byte[] unwrap(Manifest.KeyAccess keyAccess, String policy,
                       KeyType sessionKeyType);
-
-        byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL);
 
         KASKeyCache getKeyCache();
     }
@@ -111,16 +106,6 @@ public class SDK implements AutoCloseable {
     public Manifest createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig config) throws SDKException, IOException {
         var tdf = new TDF(services);
         return tdf.createTDF(payload, outputStream, config).getManifest();
-    }
-
-    public int createNanoTDF(ByteBuffer payload, OutputStream outputStream, Config.NanoTDFConfig config) throws SDKException, IOException {
-        var ntdf = new NanoTDF(services);
-        return ntdf.createNanoTDF(payload, outputStream, config);
-    }
-
-    public void readNanoTDF(ByteBuffer nanoTDF, OutputStream out, Config.NanoTDFReaderConfig config) throws SDKException, IOException {
-        var ntdf = new NanoTDF(services);
-        ntdf.readNanoTDF(nanoTDF, out, config, platformUrl);
     }
 
     public ProtocolClient getPlatformServicesClient() {

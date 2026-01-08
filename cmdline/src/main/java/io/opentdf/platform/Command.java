@@ -8,7 +8,6 @@ import io.opentdf.platform.sdk.AutoConfigureException;
 import io.opentdf.platform.sdk.Config;
 import io.opentdf.platform.sdk.KeyType;
 import io.opentdf.platform.sdk.Config.AssertionVerificationKeys;
-import io.opentdf.platform.sdk.NanoTDFType;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
 import nl.altindag.ssl.SSLFactory;
@@ -23,7 +22,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -320,70 +318,6 @@ class Command {
                 var readerConfig = Config.newTDFReaderConfig(opts.toArray(new Consumer[0]));
                 var reader = sdk.loadTDF(in, readerConfig);
                 stdout.write(reader.getMetadata() == null ? "" : reader.getMetadata());
-            }
-        }
-    }
-
-    @CommandLine.Command(name = "encryptnano")
-    void createNanoTDF(
-            @Option(names = { "-f", "--file" }, defaultValue = Option.NULL_VALUE) Optional<File> file,
-            @Option(names = { "-k", "--kas-url" }, required = true) List<String> kas,
-            @Option(names = { "-m", "--metadata" }, defaultValue = Option.NULL_VALUE) Optional<String> metadata,
-            @Option(names = { "--policy-type" }, defaultValue = Option.NULL_VALUE, description = "how to embed the policy, either plaintext or encrypted") Optional<String> policyType,
-            @Option(names = { "-a", "--attr" }, defaultValue = Option.NULL_VALUE) Optional<String> attributes)
-            throws Exception {
-
-        var sdk = buildSDK();
-        var kasInfos = kas.stream().map(k -> {
-            var ki = new Config.KASInfo();
-            ki.URL = k;
-            return ki;
-        }).toArray(Config.KASInfo[]::new);
-
-        List<Consumer<Config.NanoTDFConfig>> configs = new ArrayList<>();
-        configs.add(Config.withNanoKasInformation(kasInfos));
-        attributes.ifPresent(attr -> {
-            configs.add(Config.witDataAttributes(attr.split(",")));
-        });
-        policyType.ifPresent(mode -> {
-            switch (mode) {
-                case "":
-                case "encrypted":
-                    configs.add(Config.withPolicyType(NanoTDFType.PolicyType.EMBEDDED_POLICY_ENCRYPTED));
-                    break;
-                case "plaintext":
-                    configs.add(Config.withPolicyType(NanoTDFType.PolicyType.EMBEDDED_POLICY_PLAIN_TEXT));
-                    break;
-                default:
-                    throw new IllegalArgumentException("Unknown policy type: " + mode);
-            }
-        });
-
-        var nanoTDFConfig = Config.newNanoTDFConfig(configs.toArray(Consumer[]::new));
-        try (var in = file.isEmpty() ? new BufferedInputStream(System.in) : new FileInputStream(file.get())) {
-            try (var out = new BufferedOutputStream(System.out)) {
-                sdk.createNanoTDF(ByteBuffer.wrap(in.readAllBytes()), out, nanoTDFConfig);
-            }
-        }
-    }
-
-    @CommandLine.Command(name = "decryptnano")
-    void readNanoTDF(@Option(names = { "-f", "--file" }, required = true) Path nanoTDFPath,
-            @Option(names = { "--kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<String> kasAllowlistStr,
-            @Option(names = {
-                    "--ignore-kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<Boolean> ignoreAllowlist)
-            throws Exception {
-        var sdk = buildSDK();
-        try (var in = FileChannel.open(nanoTDFPath, StandardOpenOption.READ)) {
-            try (var stdout = new BufferedOutputStream(System.out)) {
-                ByteBuffer buffer = ByteBuffer.allocate((int) in.size());
-                in.read(buffer);
-                buffer.flip();
-                var opts = new ArrayList<Consumer<Config.NanoTDFReaderConfig>>();
-                ignoreAllowlist.map(Config::WithNanoIgnoreKasAllowlist).ifPresent(opts::add);
-                kasAllowlistStr.map(s -> s.split(",")).map(Config::WithNanoKasAllowlist).ifPresent(opts::add);
-                var readerConfig = Config.newNanoTDFReaderConfig(opts.toArray(new Consumer[0]));
-                sdk.readNanoTDF(buffer, stdout, readerConfig);
             }
         }
     }
