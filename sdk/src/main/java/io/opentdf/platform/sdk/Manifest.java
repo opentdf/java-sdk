@@ -517,10 +517,13 @@ public class Manifest {
         }
 
         private JWSVerifier createVerifier(JWK jwk) throws JOSEException {
-            return new RSASSAVerifier(jwk.toRSAKey());
+            if (jwk instanceof com.nimbusds.jose.jwk.RSAKey) {
+                return new RSASSAVerifier(jwk.toRSAKey());
+            }
+            throw new JOSEException("Unsupported JWK type: " + jwk.getKeyType() + ". Only RSA keys are supported.");
         }
 
-        private JWSVerifier createVerifier(RSAPublicKey publicKey) throws JOSEException {
+        private JWSVerifier createVerifier(RSAPublicKey publicKey) {
             return new RSASSAVerifier(publicKey);
         }
     }
