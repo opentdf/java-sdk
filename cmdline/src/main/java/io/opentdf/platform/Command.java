@@ -1,6 +1,16 @@
 package io.opentdf.platform;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
+import com.nimbusds.jose.jwk.JWK;
+import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
+
+import java.text.ParseException;
 import com.google.gson.JsonSyntaxException;
 import com.nimbusds.jose.JOSEException;
 import io.opentdf.platform.sdk.AssertionConfig;
@@ -57,8 +67,38 @@ class Versions {
         + "\",\"tdfSpecVersion\":\"" + Versions.TDF_SPEC + "\"}")
 class Command {
 
-    @Option(names = { "-V", "--version" }, versionHelp = true, description = "display version info")
-    boolean versionInfoRequested;
+    private static class AssertionKeyDeserializer implements JsonDeserializer<AssertionConfig.AssertionKey> {
+        @Override
+        public AssertionConfig.AssertionKey deserialize(JsonElement json, java.lang.reflect.Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+            JsonObject jsonObject = json.getAsJsonObject();
+            AssertionConfig.AssertionKey assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.NotDefined, null);
+
+            if (jsonObject.has("alg")) {
+                assertionKey.alg = context.deserialize(jsonObject.get("alg"), AssertionConfig.AssertionKeyAlg.class);
+            }
+            if (jsonObject.has("key")) {
+                assertionKey.key = context.deserialize(jsonObject.get("key"), Object.class);
+            }
+            if (jsonObject.has("jwk")) {
+                try {
+                    assertionKey.jwk = JWK.parse(jsonObject.get("jwk").toString());
+                } catch (ParseException e) {
+                    throw new JsonParseException("Failed to parse jwk", e);
+                }
+            }
+            if (jsonObject.has("x5c")) {
+                assertionKey.x5c = context.deserialize(jsonObject.get("x5c"), new TypeToken<List<com.nimbusds.jose.util.Base64>>() {}.getType());
+            }
+
+            return assertionKey;
+        }
+    }
+
+    private Gson buildGson() {
+        return new GsonBuilder()
+                .registerTypeAdapter(AssertionConfig.AssertionKey.class, new AssertionKeyDeserializer())
+                .create();
+    }
 
     private static final String PRIVATE_KEY_HEADER = "-----BEGIN PRIVATE KEY-----";
     private static final String PRIVATE_KEY_FOOTER = "-----END PRIVATE KEY-----";
@@ -177,7 +217,7 @@ class Command {
 
         if (assertion.isPresent()) {
             var assertionConfig = assertion.get();
-            Gson gson = new Gson();
+            Gson gson = buildGson();
 
             AssertionConfig[] assertionConfigs;
             try {
@@ -252,7 +292,7 @@ class Command {
                 try (var stdout = new BufferedOutputStream(System.out)) {
                     if (assertionVerification.isPresent()) {
                         var assertionVerificationInput = assertionVerification.get();
-                        Gson gson = new Gson();
+                        Gson gson = buildGson();
 
                         AssertionVerificationKeys assertionVerificationKeys;
                         try {

@@ -695,7 +695,7 @@ class TDF {
             Manifest.Assertion.HashValues hashValues;
             try {
                 hashValues = assertion.verify(assertionKey);
-            } catch (ParseException | JOSEException e) {
+            } catch (ParseException | JOSEException | java.security.cert.CertificateException e) {
                 throw new SDKException("error validating assertion hash", e);
             }
             var hashOfAssertionAsHex = assertion.hash();

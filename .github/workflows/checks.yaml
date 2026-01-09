@@ -113,7 +113,7 @@ jobs:
 
       - name: Check out and start up platform with deps/containers
         id: run-platform
-        uses: opentdf/platform/test/start-up-with-containers@main
+        uses: opentdf/platform/test/start-up-with-containers@fix/start-additional-kas-workflow
         with:
           platform-ref: main
 
@@ -240,7 +240,7 @@ jobs:
         working-directory: cmdline
 
       - name: Start additional kas
-        uses: opentdf/platform/test/start-additional-kas@main
+        uses: opentdf/platform/test/start-additional-kas@fix/start-additional-kas-workflow
         with:
           kas-port: 8282
           kas-name: beta
