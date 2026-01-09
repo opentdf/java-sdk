@@ -1,10 +1,10 @@
-
 package io.opentdf.platform.sdk;
 
 import com.connectrpc.ResponseMessage;
 import com.connectrpc.UnaryBlockingCall;
 import com.google.gson.reflect.TypeToken;
 import com.nimbusds.jose.JOSEException;
+import com.nimbusds.jose.jwk.JWK;
 import com.google.gson.Gson;
 import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
@@ -14,7 +14,6 @@ import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.TDF.Reader;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
-import com.nimbusds.jose.jwk.JWK;
 import org.junit.jupiter.api.Test;
 
 import javax.annotation.Nonnull;
