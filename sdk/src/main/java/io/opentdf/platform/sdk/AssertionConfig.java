@@ -91,8 +91,8 @@ public class AssertionConfig {
     static public class AssertionKey {
         public Object key;
         public AssertionKeyAlg alg = AssertionKeyAlg.NotDefined;
-        public JWK jwk;
-        public List<Base64> x5c;
+        public transient JWK jwk;
+        public transient List<Base64> x5c;
 
         public AssertionKey(AssertionKeyAlg alg, Object key) {
             this.alg = alg;
