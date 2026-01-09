@@ -2,7 +2,6 @@ package io.opentdf.platform.sdk;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 
@@ -25,13 +24,6 @@ public class Fuzzing {
             // ignored
         }
     };
-
-    @FuzzTest(maxDuration=TEST_DURATION)
-    public void fuzzNanoTDF(FuzzedDataProvider data) throws IOException {
-        byte[] fuzzBytes = data.consumeRemainingAsBytes();
-        NanoTDF nanoTDF = new NanoTDF(new FakeServicesBuilder().setKas(NanoTDFTest.kas).build());
-        nanoTDF.readNanoTDF(ByteBuffer.wrap(fuzzBytes), IGNORE_OUTPUT_STREAM);
-    }
 
     @FuzzTest(maxDuration=TEST_DURATION)
     public void fuzzTDF(FuzzedDataProvider data) {

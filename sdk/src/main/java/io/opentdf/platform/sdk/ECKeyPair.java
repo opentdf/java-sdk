@@ -35,7 +35,7 @@ public class ECKeyPair {
         Security.addProvider(new BouncyCastleProvider());
     }
 
-    private final NanoTDFType.ECCurve curve;
+    private final ECCurve curve;
 
     public enum ECAlgorithm {
         ECDH,
@@ -47,10 +47,10 @@ public class ECKeyPair {
     private KeyPair keyPair;
 
     public ECKeyPair() {
-        this(NanoTDFType.ECCurve.SECP256R1, ECAlgorithm.ECDH);
+        this(ECCurve.SECP256R1, ECAlgorithm.ECDH);
     }
 
-    public ECKeyPair(NanoTDFType.ECCurve curve, ECAlgorithm algorithm) {
+    public ECKeyPair(ECCurve curve, ECAlgorithm algorithm) {
         this.curve = Objects.requireNonNull(curve);
         KeyPairGenerator generator;
 
@@ -83,7 +83,7 @@ public class ECKeyPair {
         return (ECPrivateKey) this.keyPair.getPrivate();
     }
 
-    NanoTDFType.ECCurve getCurve() {
+    ECCurve getCurve() {
         return this.curve;
     }
 

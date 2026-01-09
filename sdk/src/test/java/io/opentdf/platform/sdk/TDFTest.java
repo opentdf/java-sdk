@@ -110,16 +110,6 @@ public class TDFTest {
         }
 
         @Override
-        public KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve) {
-            return null;
-        }
-
-        @Override
-        public byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL) {
-            return null;
-        }
-
-        @Override
         public KASKeyCache getKeyCache() {
             return new KASKeyCache();
         }
