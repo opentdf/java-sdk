@@ -67,6 +67,9 @@ class Versions {
         + "\",\"tdfSpecVersion\":\"" + Versions.TDF_SPEC + "\"}")
 class Command {
 
+    @Option(names = { "-V", "--version" }, versionHelp = true, description = "display version info")
+    boolean versionInfoRequested;
+
     private static class AssertionKeyDeserializer implements JsonDeserializer<AssertionConfig.AssertionKey> {
         @Override
         public AssertionConfig.AssertionKey deserialize(JsonElement json, java.lang.reflect.Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
@@ -105,20 +108,11 @@ class Command {
     private static final String PEM_HEADER = "-----BEGIN (.*)-----";
     private static final String PEM_FOOTER = "-----END (.*)-----";
 
-    @Option(names = { "--client-secret" }, required = true)
-    private String clientSecret;
-
     @Option(names = { "-h", "--plaintext" }, defaultValue = "false")
     private boolean plaintext;
 
     @Option(names = { "-i", "--insecure" }, defaultValue = "false")
     private boolean insecure;
-
-    @Option(names = { "--client-id" }, required = true)
-    private String clientId;
-
-    @Option(names = { "-p", "--platform-endpoint" }, required = true)
-    private String platformEndpoint;
 
     private Object correctKeyType(AssertionConfig.AssertionKeyAlg alg, Object key, boolean publicKey)
             throws RuntimeException {
@@ -185,6 +179,12 @@ class Command {
 
     @CommandLine.Command(name = "encrypt")
     void encrypt(
+            @Option(names = { "--client-id" }, required = true)
+            String clientId,
+            @Option(names = { "--client-secret" }, required = true)
+            String clientSecret,
+            @Option(names = { "-p", "--platform-endpoint" }, required = true)
+            String platformEndpoint,
             @Option(names = { "-f", "--file" }, defaultValue = Option.NULL_VALUE) Optional<File> file,
             @Option(names = { "-k", "--kas-url" }, required = true, split = ",") List<String> kas,
             @Option(names = { "-m", "--metadata" }, defaultValue = Option.NULL_VALUE) Optional<String> metadata,
@@ -200,7 +200,7 @@ class Command {
 
             throws IOException, AutoConfigureException {
 
-        var sdk = buildSDK();
+        var sdk = buildSDK(clientId, clientSecret, platformEndpoint);
         var kasInfos = kas.stream().map(k -> {
             var ki = new Config.KASInfo();
             ki.URL = k;
@@ -260,7 +260,7 @@ class Command {
         }
     }
 
-    private SDK buildSDK() {
+    private SDK buildSDK(String clientId, String clientSecret, String platformEndpoint) {
         SDKBuilder builder = new SDKBuilder();
         if (insecure) {
             SSLFactory sslFactory = SSLFactory.builder()
@@ -275,7 +275,14 @@ class Command {
     }
 
     @CommandLine.Command(name = "decrypt")
-    void decrypt(@Option(names = { "-f", "--file" }, required = true) Path tdfPath,
+    void decrypt(
+            @Option(names = { "--client-id" }, required = true)
+            String clientId,
+            @Option(names = { "--client-secret" }, required = true)
+            String clientSecret,
+            @Option(names = { "-p", "--platform-endpoint" }, required = true)
+            String platformEndpoint,
+            @Option(names = { "-f", "--file" }, required = true) Path tdfPath,
             @Option(names = {
                     "--rewrap-key-type" }, defaultValue = Option.NULL_VALUE, description = "Preferred rewrap algorithm, one of ${COMPLETION-CANDIDATES}") Optional<KeyType> rewrapKeyType,
             @Option(names = {
@@ -286,7 +293,7 @@ class Command {
             @Option(names = {
                     "--ignore-kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<Boolean> ignoreAllowlist)
             throws Exception {
-        try (var sdk = buildSDK()) {
+        try (var sdk = buildSDK(clientId, clientSecret, platformEndpoint)) {
             var opts = new ArrayList<Consumer<Config.TDFReaderConfig>>();
             try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
                 try (var stdout = new BufferedOutputStream(System.out)) {
@@ -294,15 +301,15 @@ class Command {
                         var assertionVerificationInput = assertionVerification.get();
                         Gson gson = buildGson();
 
-                        AssertionVerificationKeys assertionVerificationKeys;
+                        Config.AssertionVerificationKeys assertionVerificationKeys;
                         try {
                             assertionVerificationKeys = gson.fromJson(assertionVerificationInput,
-                                    AssertionVerificationKeys.class);
+                                    Config.AssertionVerificationKeys.class);
                         } catch (JsonSyntaxException e) {
                             // try it as a file path
                             try {
                                 String fileJson = new String(Files.readAllBytes(Paths.get(assertionVerificationInput)));
-                                assertionVerificationKeys = gson.fromJson(fileJson, AssertionVerificationKeys.class);
+                                assertionVerificationKeys = gson.fromJson(fileJson, Config.AssertionVerificationKeys.class);
                             } catch (JsonSyntaxException e2) {
                                 throw new RuntimeException("Failed to parse assertion verification keys from file", e2);
                             } catch (Exception e3) {
@@ -342,12 +349,19 @@ class Command {
     }
 
     @CommandLine.Command(name = "metadata")
-    void readMetadata(@Option(names = { "-f", "--file" }, required = true) Path tdfPath,
+    void readMetadata(
+            @Option(names = { "--client-id" }, required = true)
+            String clientId,
+            @Option(names = { "--client-secret" }, required = true)
+            String clientSecret,
+            @Option(names = { "-p", "--platform-endpoint" }, required = true)
+            String platformEndpoint,
+            @Option(names = { "-f", "--file" }, required = true) Path tdfPath,
             @Option(names = { "--kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<String> kasAllowlistStr,
             @Option(names = {
                     "--ignore-kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<Boolean> ignoreAllowlist)
             throws IOException {
-        var sdk = buildSDK();
+        var sdk = buildSDK(clientId, clientSecret, platformEndpoint);
         var opts = new ArrayList<Consumer<Config.TDFReaderConfig>>();
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
             try (var stdout = new PrintWriter(System.out)) {
