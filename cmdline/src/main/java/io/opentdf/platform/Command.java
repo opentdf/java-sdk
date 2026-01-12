@@ -188,12 +188,6 @@ class Command {
 
     @CommandLine.Command(name = "encrypt")
     void encrypt(
-            @Option(names = { "--client-id" }, required = true)
-            String clientId,
-            @Option(names = { "--client-secret" }, required = true)
-            String clientSecret,
-            @Option(names = { "-p", "--platform-endpoint" }, required = true)
-            String platformEndpoint,
             @Option(names = { "-f", "--file" }, defaultValue = Option.NULL_VALUE) Optional<File> file,
             @Option(names = { "-k", "--kas-url" }, required = true, split = ",") List<String> kas,
             @Option(names = { "-m", "--metadata" }, defaultValue = Option.NULL_VALUE) Optional<String> metadata,
@@ -285,12 +279,6 @@ class Command {
 
     @CommandLine.Command(name = "decrypt")
     void decrypt(
-            @Option(names = { "--client-id" }, required = true)
-            String clientId,
-            @Option(names = { "--client-secret" }, required = true)
-            String clientSecret,
-            @Option(names = { "-p", "--platform-endpoint" }, required = true)
-            String platformEndpoint,
             @Option(names = { "-f", "--file" }, required = true) Path tdfPath,
             @Option(names = {
                     "--rewrap-key-type" }, defaultValue = Option.NULL_VALUE, description = "Preferred rewrap algorithm, one of ${COMPLETION-CANDIDATES}") Optional<KeyType> rewrapKeyType,
@@ -359,12 +347,6 @@ class Command {
 
     @CommandLine.Command(name = "metadata")
     void readMetadata(
-            @Option(names = { "--client-id" }, required = true)
-            String clientId,
-            @Option(names = { "--client-secret" }, required = true)
-            String clientSecret,
-            @Option(names = { "-p", "--platform-endpoint" }, required = true)
-            String platformEndpoint,
             @Option(names = { "-f", "--file" }, required = true) Path tdfPath,
             @Option(names = { "--kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<String> kasAllowlistStr,
             @Option(names = {
