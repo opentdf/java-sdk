@@ -108,11 +108,20 @@ class Command {
     private static final String PEM_HEADER = "-----BEGIN (.*)-----";
     private static final String PEM_FOOTER = "-----END (.*)-----";
 
+    @Option(names = { "--client-secret" }, required = true)
+    private String clientSecret;
+
     @Option(names = { "-h", "--plaintext" }, defaultValue = "false")
     private boolean plaintext;
 
     @Option(names = { "-i", "--insecure" }, defaultValue = "false")
     private boolean insecure;
+
+    @Option(names = { "--client-id" }, required = true)
+    private String clientId;
+
+    @Option(names = { "-p", "--platform-endpoint" }, required = true)
+    private String platformEndpoint;
 
     private Object correctKeyType(AssertionConfig.AssertionKeyAlg alg, Object key, boolean publicKey)
             throws RuntimeException {
