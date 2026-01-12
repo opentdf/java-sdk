@@ -12,16 +12,13 @@ import com.google.gson.reflect.TypeToken;
 
 import java.text.ParseException;
 import com.google.gson.JsonSyntaxException;
-import com.nimbusds.jose.JOSEException;
 import io.opentdf.platform.sdk.AssertionConfig;
 import io.opentdf.platform.sdk.AutoConfigureException;
 import io.opentdf.platform.sdk.Config;
 import io.opentdf.platform.sdk.KeyType;
-import io.opentdf.platform.sdk.Config.AssertionVerificationKeys;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
 import nl.altindag.ssl.SSLFactory;
-import org.apache.commons.codec.DecoderException;
 import picocli.CommandLine;
 import picocli.CommandLine.HelpCommand;
 import picocli.CommandLine.Option;
@@ -48,7 +45,6 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
 /**
@@ -203,7 +199,7 @@ class Command {
 
             throws IOException, AutoConfigureException {
 
-        var sdk = buildSDK(clientId, clientSecret, platformEndpoint);
+        var sdk = buildSDK();
         var kasInfos = kas.stream().map(k -> {
             var ki = new Config.KASInfo();
             ki.URL = k;
@@ -263,7 +259,7 @@ class Command {
         }
     }
 
-    private SDK buildSDK(String clientId, String clientSecret, String platformEndpoint) {
+    private SDK buildSDK() {
         SDKBuilder builder = new SDKBuilder();
         if (insecure) {
             SSLFactory sslFactory = SSLFactory.builder()
@@ -290,7 +286,7 @@ class Command {
             @Option(names = {
                     "--ignore-kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<Boolean> ignoreAllowlist)
             throws Exception {
-        try (var sdk = buildSDK(clientId, clientSecret, platformEndpoint)) {
+        try (var sdk = buildSDK()) {
             var opts = new ArrayList<Consumer<Config.TDFReaderConfig>>();
             try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
                 try (var stdout = new BufferedOutputStream(System.out)) {
@@ -352,7 +348,7 @@ class Command {
             @Option(names = {
                     "--ignore-kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<Boolean> ignoreAllowlist)
             throws IOException {
-        var sdk = buildSDK(clientId, clientSecret, platformEndpoint);
+        var sdk = buildSDK();
         var opts = new ArrayList<Consumer<Config.TDFReaderConfig>>();
         try (var in = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
             try (var stdout = new PrintWriter(System.out)) {
