@@ -2,11 +2,14 @@ package io.opentdf.platform.sdk;
 
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
+import com.nimbusds.jose.jwk.JWK;
+import com.nimbusds.jose.util.Base64;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -88,10 +91,22 @@ public class AssertionConfig {
     static public class AssertionKey {
         public Object key;
         public AssertionKeyAlg alg = AssertionKeyAlg.NotDefined;
+        public transient JWK jwk;
+        public transient List<Base64> x5c;
 
         public AssertionKey(AssertionKeyAlg alg, Object key) {
             this.alg = alg;
             this.key = key;
+        }
+
+        public AssertionKey withJwk(JWK jwk) {
+            this.jwk = jwk;
+            return this;
+        }
+
+        public AssertionKey withX5c(List<Base64> x5c) {
+            this.x5c = x5c;
+            return this;
         }
 
         public boolean isDefined() {
