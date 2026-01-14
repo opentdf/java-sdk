@@ -4,6 +4,7 @@ import com.connectrpc.Interceptor;
 
 import com.connectrpc.impl.ProtocolClient;
 import io.opentdf.platform.authorization.AuthorizationServiceClientInterface;
+import io.opentdf.platform.policy.SimpleKasKey;
 import io.opentdf.platform.policy.attributes.AttributesServiceClientInterface;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClientInterface;
 import io.opentdf.platform.policy.namespaces.NamespaceServiceClientInterface;
@@ -96,6 +97,15 @@ public class SDK implements AutoCloseable {
 
     public Services getServices() {
         return this.services;
+    }
+
+    /**
+     * Fetch the platform "base key" from the well-known configuration, if present.
+     * <p>
+     * This is read from the {@code base_key} field returned by {@code GetWellKnownConfiguration}.
+     */
+    public Optional<SimpleKasKey> getBaseKey() {
+        return Planner.fetchBaseKey(services.wellknown());
     }
 
     public TDF.Reader loadTDF(SeekableByteChannel channel, Config.TDFReaderConfig config) throws SDKException, IOException {
