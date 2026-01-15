@@ -37,6 +37,12 @@ public class Example {
                     .platformEndpoint("https://your.cluster/")
                     .build();
 
+        // Fetch the platform base key (if configured)
+        sdk.getBaseKey().ifPresent(baseKey -> {
+            System.out.println(baseKey.getKasUri());
+            System.out.println(baseKey.getPublicKey().getKid());
+        });
+
         // Encrypt a file
         try (InputStream in = new FileInputStream("input.plaintext")) {
             Config.TDFConfig c = Config.newTDFConfig(Config.withDataAttributes("attr1", "attr2"));

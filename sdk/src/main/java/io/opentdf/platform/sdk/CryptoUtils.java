@@ -1,8 +1,11 @@
 package io.opentdf.platform.sdk;
 
+import com.nimbusds.jose.jwk.RSAKey;
+
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.*;
+import java.security.interfaces.RSAPublicKey;
 import java.security.spec.ECGenParameterSpec;
 import java.util.Base64;
 
@@ -56,6 +59,15 @@ public class CryptoUtils {
         return "-----BEGIN PUBLIC KEY-----\r\n" +
                 Base64.getMimeEncoder().encodeToString(publicKey.getEncoded()) +
                 "\r\n-----END PUBLIC KEY-----";
+    }
+
+    public static String getPublicKeyJWK(PublicKey publicKey) {
+        if (publicKey instanceof RSAPublicKey) {
+            RSAKey jwk = new RSAKey.Builder((RSAPublicKey) publicKey).build();
+            return jwk.toString();
+        } else {
+            throw new IllegalArgumentException("Unsupported public key algorithm: " + publicKey.getAlgorithm());
+        }
     }
 
     public  static String getPrivateKeyPEM(PrivateKey privateKey) {

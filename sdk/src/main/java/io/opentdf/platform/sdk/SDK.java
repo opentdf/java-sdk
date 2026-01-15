@@ -4,6 +4,7 @@ import com.connectrpc.Interceptor;
 
 import com.connectrpc.impl.ProtocolClient;
 import io.opentdf.platform.authorization.AuthorizationServiceClientInterface;
+import io.opentdf.platform.policy.SimpleKasKey;
 import io.opentdf.platform.policy.attributes.AttributesServiceClientInterface;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClientInterface;
 import io.opentdf.platform.policy.namespaces.NamespaceServiceClientInterface;
@@ -15,7 +16,6 @@ import javax.net.ssl.TrustManager;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.util.Optional;
 
@@ -49,12 +49,8 @@ public class SDK implements AutoCloseable {
     public interface KAS extends AutoCloseable {
         Config.KASInfo getPublicKey(Config.KASInfo kasInfo);
 
-        Config.KASInfo getECPublicKey(Config.KASInfo kasInfo, NanoTDFType.ECCurve curve);
-
         byte[] unwrap(Manifest.KeyAccess keyAccess, String policy,
                       KeyType sessionKeyType);
-
-        byte[] unwrapNanoTDF(NanoTDFType.ECCurve curve, String header, String kasURL);
 
         KASKeyCache getKeyCache();
     }
@@ -103,6 +99,15 @@ public class SDK implements AutoCloseable {
         return this.services;
     }
 
+    /**
+     * Fetch the platform "base key" from the well-known configuration, if present.
+     * <p>
+     * This is read from the {@code base_key} field returned by {@code GetWellKnownConfiguration}.
+     */
+    public Optional<SimpleKasKey> getBaseKey() {
+        return Planner.fetchBaseKey(services.wellknown());
+    }
+
     public TDF.Reader loadTDF(SeekableByteChannel channel, Config.TDFReaderConfig config) throws SDKException, IOException {
         var tdf = new TDF(services);
         return tdf.loadTDF(channel, config, platformUrl);
@@ -111,16 +116,6 @@ public class SDK implements AutoCloseable {
     public Manifest createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig config) throws SDKException, IOException {
         var tdf = new TDF(services);
         return tdf.createTDF(payload, outputStream, config).getManifest();
-    }
-
-    public int createNanoTDF(ByteBuffer payload, OutputStream outputStream, Config.NanoTDFConfig config) throws SDKException, IOException {
-        var ntdf = new NanoTDF(services);
-        return ntdf.createNanoTDF(payload, outputStream, config);
-    }
-
-    public void readNanoTDF(ByteBuffer nanoTDF, OutputStream out, Config.NanoTDFReaderConfig config) throws SDKException, IOException {
-        var ntdf = new NanoTDF(services);
-        ntdf.readNanoTDF(nanoTDF, out, config, platformUrl);
     }
 
     public ProtocolClient getPlatformServicesClient() {
