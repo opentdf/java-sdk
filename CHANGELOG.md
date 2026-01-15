@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.12.0](https://github.com/opentdf/java-sdk/compare/v0.11.1...v0.12.0) (2026-01-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sdk:** remove NanoTDF implementation ([#321](https://github.com/opentdf/java-sdk/issues/321))
+
+### Features
+
+* **sdk:** enhance assertion verification to support jwk and x509 certificates ([#322](https://github.com/opentdf/java-sdk/issues/322)) ([251fea2](https://github.com/opentdf/java-sdk/commit/251fea2ad92581f9e3127d790d5caacddf58f400))
+* **sdk:** expose base key ([#323](https://github.com/opentdf/java-sdk/issues/323)) ([c370a46](https://github.com/opentdf/java-sdk/commit/c370a461caaa09b2010b82355685944af4a34344))
+
+
+### Bug Fixes
+
+* **sdk:** remove NanoTDF implementation ([#321](https://github.com/opentdf/java-sdk/issues/321)) ([63715d2](https://github.com/opentdf/java-sdk/commit/63715d2c72b6a5124bd7df0fc8bcc19ab02c5b0d))
+
 ## [0.11.1](https://github.com/opentdf/java-sdk/compare/v0.11.0...v0.11.1) (2025-12-08)
 
 
