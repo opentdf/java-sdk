@@ -205,7 +205,7 @@ public class KASClientTest {
                             .sign(new JWSHeader.Builder(JWSAlgorithm.RS256).build(), input)
                             .decode();
                 } catch (JOSEException e) {
-                    throw new RuntimeException(e);
+                    throw new AssertionError("Signing failed unexpectedly in test", e);
                 }
             }
 

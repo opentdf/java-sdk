@@ -219,7 +219,7 @@ class KASClient implements SDK.KAS {
 
             try {
                 return Base64URL.encode(srtSigner.sign(signingInput));
-            } catch (Exception e) {
+            } catch (java.security.GeneralSecurityException e) {
                 throw new JOSEException("error signing SRT payload", e);
             }
         }

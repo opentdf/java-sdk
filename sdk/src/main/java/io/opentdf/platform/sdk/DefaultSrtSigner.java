@@ -19,8 +19,12 @@ final class DefaultSrtSigner implements SrtSigner {
     }
 
     @Override
-    public byte[] sign(byte[] input) throws Exception {
-        return signer.sign(HEADER, input).decode();
+    public byte[] sign(byte[] input) throws java.security.GeneralSecurityException {
+        try {
+            return signer.sign(HEADER, input).decode();
+        } catch (JOSEException e) {
+            throw new java.security.GeneralSecurityException("error signing SRT payload", e);
+        }
     }
 
     @Override
