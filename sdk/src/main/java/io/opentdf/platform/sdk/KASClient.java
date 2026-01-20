@@ -7,8 +7,9 @@ import com.google.gson.Gson;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
-import com.nimbusds.jose.crypto.RSASSASigner;
-import com.nimbusds.jose.jwk.RSAKey;
+import com.nimbusds.jose.JWSSigner;
+import com.nimbusds.jose.util.Base64URL;
+import com.nimbusds.jose.jca.JCAContext;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import io.opentdf.platform.kas.AccessServiceClient;
@@ -28,6 +29,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Set;
 import java.util.function.BiFunction;
 
 import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
@@ -42,7 +44,7 @@ class KASClient implements SDK.KAS {
     private final OkHttpClient httpClient;
     private final BiFunction<OkHttpClient, String, ProtocolClient> protocolClientFactory;
     private final boolean usePlaintext;
-    private final RSASSASigner signer;
+    private final JWSSigner signer;
     private AsymDecryption decryptor;
     private String clientPublicKey;
     private KASKeyCache kasKeyCache;
@@ -53,17 +55,16 @@ class KASClient implements SDK.KAS {
      * A client that communicates with KAS
      * 
      *                       communicate
-     * @param dpopKey
+     * @param srtSigner
      */
-    KASClient(OkHttpClient httpClient, BiFunction<OkHttpClient, String, ProtocolClient> protocolClientFactory, RSAKey dpopKey, boolean usePlaintext) {
+    KASClient(OkHttpClient httpClient, BiFunction<OkHttpClient, String, ProtocolClient> protocolClientFactory, SrtSigner srtSigner, boolean usePlaintext) {
         this.httpClient = httpClient;
         this.protocolClientFactory = protocolClientFactory;
         this.usePlaintext = usePlaintext;
-        try {
-            this.signer = new RSASSASigner(dpopKey);
-        } catch (JOSEException e) {
-            throw new SDKException("error creating dpop signer", e);
+        if (srtSigner == null) {
+            throw new SDKException("srtSigner must be provided");
         }
+        this.signer = new SrtJwsSigner(srtSigner);
         this.kasKeyCache = new KASKeyCache();
     }
 
@@ -196,5 +197,41 @@ class KASClient implements SDK.KAS {
             var client = protocolClientFactory.apply(httpClient, address);
             return new AccessServiceClient(client);
         });
+    }
+
+    private static final class SrtJwsSigner implements JWSSigner {
+        private static final JWSAlgorithm EXPECTED_ALG = JWSAlgorithm.RS256;
+        private final SrtSigner srtSigner;
+        private final JCAContext jcaContext = new JCAContext();
+
+        private SrtJwsSigner(SrtSigner srtSigner) {
+            this.srtSigner = srtSigner;
+            if (!EXPECTED_ALG.getName().equals(srtSigner.alg())) {
+                throw new SDKException("unsupported SRT signing algorithm: " + srtSigner.alg());
+            }
+        }
+
+        @Override
+        public Base64URL sign(JWSHeader header, byte[] signingInput) throws JOSEException {
+            if (!EXPECTED_ALG.equals(header.getAlgorithm())) {
+                throw new JOSEException("SRT signer algorithm mismatch: " + header.getAlgorithm());
+            }
+
+            try {
+                return Base64URL.encode(srtSigner.sign(signingInput));
+            } catch (Exception e) {
+                throw new JOSEException("error signing SRT payload", e);
+            }
+        }
+
+        @Override
+        public Set<JWSAlgorithm> supportedJWSAlgorithms() {
+            return Collections.singleton(EXPECTED_ALG);
+        }
+
+        @Override
+        public JCAContext getJCAContext() {
+            return jcaContext;
+        }
     }
 }
