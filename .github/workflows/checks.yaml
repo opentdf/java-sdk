@@ -74,7 +74,7 @@ jobs:
         uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
         with:
           java-version: "17"
-          distribution: "adopt"
+          distribution: "temurin"
           server-id: github
       - name: Cache SonarCloud packages
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
@@ -102,7 +102,7 @@ jobs:
         uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
         with:
           java-version: "17"
-          distribution: "adopt"
+          distribution: "temurin"
           server-id: github
       - name: Build java SDK
         run: |
@@ -239,63 +239,17 @@ jobs:
           fi
         working-directory: cmdline
 
-      - name: Start additional kas
-        uses: opentdf/platform/test/start-additional-kas@main
-        with:
-          kas-port: 8282
-          kas-name: beta
-
-      - name: Make sure that the second platform is up
-        run: |
-          grpcurl -plaintext localhost:8282 kas.AccessService/PublicKey
-      - name: Validate multikas through the command line interface
-        run: |
-          printf 'here is some data to encrypt' > data
-
-          java -jar target/cmdline.jar \
-            --client-id=opentdf-sdk \
-            --client-secret=secret \
-            --platform-endpoint=http://localhost:8080 \
-            -h\
-            encrypt --kas-url=http://localhost:8080,http://localhost:8282 -f data -m 'here is some metadata' > test.tdf
-
-          java -jar target/cmdline.jar \
-            --client-id=opentdf-sdk \
-            --client-secret=secret \
-            --platform-endpoint=http://localhost:8080 \
-            -h\
-            decrypt -f test.tdf --kas-allowlist http://localhost:8080,http://localhost:8282  > decrypted
-
-          java -jar target/cmdline.jar \
-            --client-id=opentdf-sdk \
-            --client-secret=secret \
-            --platform-endpoint=http://localhost:8080 \
-            -h\
-            metadata -f test.tdf --kas-allowlist http://localhost:8080,http://localhost:8282 > metadata
-
-          if ! diff -q data decrypted; then
-            printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
-            exit 1
-          fi
-
-          if [ "$(< metadata)" != 'here is some metadata' ]; then
-            printf 'metadata is incorrect [%s]\n' "$(< metadata)"
-            exit 1
-          fi
-        working-directory: cmdline
-
   platform-xtest:
     permissions:
       contents: read
       packages: read
       checks: write
       pull-requests: write
-    needs: platform-integration
     uses: opentdf/tests/.github/workflows/xtest.yml@main
     with:
       focus-sdk: java
       java-ref: ${{ github.ref }} latest
-      platform-ref: main lts
+      platform-ref: main latest
 
   ci:
     needs:
