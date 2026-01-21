@@ -31,6 +31,7 @@ public class SDK implements AutoCloseable {
     private final Interceptor authInterceptor;
     private final String platformUrl;
     private final ProtocolClient platformServicesClient;
+    private final SrtSigner srtSigner;
 
     /**
      * Closes the SDK, including its associated services.
@@ -87,12 +88,13 @@ public class SDK implements AutoCloseable {
         return Optional.ofNullable(authInterceptor);
     }
 
-    SDK(Services services, TrustManager trustManager, Interceptor authInterceptor, ProtocolClient platformServicesClient, String platformUrl) {
+    SDK(Services services, TrustManager trustManager, Interceptor authInterceptor, ProtocolClient platformServicesClient, String platformUrl, SrtSigner srtSigner) {
         this.platformUrl = platformUrl;
         this.services = services;
         this.trustManager = trustManager;
         this.authInterceptor = authInterceptor;
         this.platformServicesClient = platformServicesClient;
+        this.srtSigner = srtSigner;
     }
 
     public Services getServices() {
@@ -120,6 +122,10 @@ public class SDK implements AutoCloseable {
 
     public ProtocolClient getPlatformServicesClient() {
         return this.platformServicesClient;
+    }
+
+    public Optional<SrtSigner> getSrtSigner() {
+        return Optional.ofNullable(srtSigner);
     }
 
     /**
