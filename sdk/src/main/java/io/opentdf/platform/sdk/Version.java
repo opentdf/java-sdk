@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
 class Version implements Comparable<Version> {
 
     // Version of the SDK, managed by release-please.
-    public static final String SDK = "0.12.0"; // x-release-please-version
+    public static final String SDK = "0.12.1-SNAPSHOT"; // x-release-please-version
 
     private final int major;
     private final int minor;
