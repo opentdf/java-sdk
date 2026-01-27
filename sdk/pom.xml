@@ -16,7 +16,7 @@
         <kotlin.version>2.1.0</kotlin.version>
         <connect.version>0.7.2</connect.version>
         <okhttp.version>4.12.0</okhttp.version>
-        <platform.branch>v0.14.0</platform.branch>
+        <platform.branch>v0.15.0</platform.branch>
     </properties>
     <dependencies>
         <!-- Logging Dependencies -->
