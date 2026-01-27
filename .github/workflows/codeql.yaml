@@ -27,17 +27,17 @@ jobs:
       uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1.50.0
 
     - name: Initialize the CodeQL tools for scanning
-      uses: github/codeql-action/init@v3
+      uses: github/codeql-action/init@cdefb33c0f6224e58673d9004f47f7cb3e328b89 # v4.31.10
       with:
         languages: ${{ matrix.language }}
       timeout-minutes: 5
 
     - name: Autobuild
-      uses: github/codeql-action/autobuild@v3
+      uses: github/codeql-action/autobuild@cdefb33c0f6224e58673d9004f47f7cb3e328b89 # v4.31.10
       timeout-minutes: 10
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
+      uses: github/codeql-action/analyze@cdefb33c0f6224e58673d9004f47f7cb3e328b89 # v4.31.10
       with:
         category: "/language:${{matrix.language}}"
       timeout-minutes: 10
