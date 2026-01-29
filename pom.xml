@@ -18,7 +18,7 @@
         <protobuf.version>4.29.2</protobuf.version>
         <bouncycastle.version>1.82</bouncycastle.version>
         <ayza.version>10.0.0</ayza.version>
-        <bytebuddy.version>1.14.12</bytebuddy.version>
+        <bytebuddy.version>1.18.3</bytebuddy.version>
         <!-- JaCoCo Properties -->
         <jacoco.version>0.8.13</jacoco.version>
         <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
