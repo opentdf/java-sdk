@@ -1,6 +1,9 @@
 # OpenTDF Java SDK
 
 A Java implementation of the OpenTDF protocol, and access library for the services provided by the OpenTDF platform.
+
+**New to the OpenTDF SDK?** See the [OpenTDF SDK Quickstart Guide](https://opentdf.io/category/sdk) for a comprehensive introduction.
+
 This SDK is available from Maven central as:
 
 ```xml
@@ -12,51 +15,112 @@ This SDK is available from Maven central as:
 ### Additional Maven Modules
 - cmdline: Command line utility
 
-## Quick Start Example
+## Example code
+
+This example demonstrates how to create and read TDF (Trusted Data Format) files using the OpenTDF SDK.
+
+**Prerequisites:** Follow the [OpenTDF Quickstart](https://opentdf.io/quickstart) to get a local platform running, or if you already have a hosted version, replace the values with your OpenTDF platform details.
+
+For more code examples, see:
+- [Creating TDFs](https://opentdf.io/sdks/tdf)
+- [Managing policy](https://opentdf.io/sdks/policy)
 
 ```java
 package io.opentdf.platform;
 
 import io.opentdf.platform.sdk.Config;
-import io.opentdf.platform.sdk.Reader;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
+import io.opentdf.platform.sdk.TDF;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.FileInputStream;
+import java.io.ByteArrayInputStream;
+import java.io.FileOutputStream;
 import java.nio.channels.FileChannel;
-import java.nio.channels.SeekableByteChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 
 public class Example {
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws Exception {
+        // Initialize SDK with platform endpoint and authentication
+        // Replace these values with your actual configuration:
+        String platformEndpoint = "localhost:8080";           // Your platform URL
+        String clientId = "opentdf";                          // Your OAuth client ID
+        String clientSecret = "secret";                       // Your OAuth client secret
+        String kasUrl = "http://localhost:8080/kas";          // Your KAS URL
+
         SDK sdk = new SDKBuilder()
-                    .clientSecret("myClient", "token")
-                    .platformEndpoint("https://your.cluster/")
-                    .build();
+                .platformEndpoint(platformEndpoint)
+                .clientSecret(clientId, clientSecret)
+                .useInsecurePlaintextConnection(true)         // Only for local development with HTTP
+                .build();
 
-        // Fetch the platform base key (if configured)
-        sdk.getBaseKey().ifPresent(baseKey -> {
-            System.out.println(baseKey.getKasUri());
-            System.out.println(baseKey.getPublicKey().getKid());
-        });
+        // Create a TDF
+        // This attribute is created in the quickstart guide
+        String dataAttribute = "https://opentdf.io/attr/department/value/finance";
 
-        // Encrypt a file
-        try (InputStream in = new FileInputStream("input.plaintext")) {
-            Config.TDFConfig c = Config.newTDFConfig(Config.withDataAttributes("attr1", "attr2"));
-            sdk.createTDF(in, System.out, c);
+        String plaintext = "Hello, world!";
+        var plaintextInputStream = new ByteArrayInputStream(plaintext.getBytes(StandardCharsets.UTF_8));
+
+        var kasInfo = new Config.KASInfo();
+        kasInfo.URL = kasUrl;
+
+        var tdfConfig = Config.newTDFConfig(
+            Config.withKasInformation(kasInfo),
+            Config.withDataAttributes(dataAttribute)
+        );
+
+        // Write encrypted TDF to file
+        try (FileOutputStream out = new FileOutputStream("encrypted.tdf")) {
+            sdk.createTDF(plaintextInputStream, out, tdfConfig);
         }
 
-        // Decrypt a file
-        try (SeekableByteChannel in = FileChannel.open(Path.of("input.ciphertext"), StandardOpenOption.READ)) {
-            Reader reader = sdk.loadTDF(in, Config.newTDFReaderConfig());
-            reader.readPayload(System.out);
+        System.out.println("TDF created successfully");
+
+        // Decrypt the TDF
+        // LoadTDF contacts the Key Access Service (KAS) to verify that this client
+        // has been granted access to the data attributes, then decrypts the TDF.
+        // Note: The client must have entitlements configured on the platform first.
+        Path tdfPath = Paths.get("encrypted.tdf");
+        try (FileChannel tdfChannel = FileChannel.open(tdfPath, StandardOpenOption.READ)) {
+            TDF.Reader reader = sdk.loadTDF(tdfChannel, Config.newTDFReaderConfig());
+
+            // Write the decrypted plaintext to a file
+            try (FileOutputStream out = new FileOutputStream("output.txt")) {
+                reader.readPayload(out);
+            }
         }
+
+        System.out.println("Successfully created and decrypted TDF");
     }
 }
 ```
+
+### Configuration Values
+
+Replace these placeholder values with your actual configuration:
+
+| Variable | Default (Quickstart) | Description |
+|----------|---------------------|-------------|
+| `platformEndpoint` | `localhost:8080` | Your OpenTDF platform URL |
+| `clientId` | `opentdf` | OAuth client ID (from quickstart) |
+| `clientSecret` | `secret` | OAuth client secret (from quickstart) |
+| `kasUrl` | `http://localhost:8080/kas` | Your Key Access Service URL |
+| `dataAttribute` | `https://opentdf.io/attr/department/value/finance` | Data attribute FQN (created in quickstart) |
+
+**Before running:**
+1. Follow the [OpenTDF Quickstart](https://opentdf.io/quickstart) to start the platform
+2. Create an OAuth client in Keycloak and note the credentials
+3. Grant your client entitlements to the `department` attribute (see [Managing policy](https://opentdf.io/sdks/policy))
+
+**Expected Output:**
+```
+TDF created successfully
+Successfully created and decrypted TDF
+```
+
+The `output.txt` file will contain the decrypted plaintext: `Hello, world!`
 
 ### Cryptography Library
 
