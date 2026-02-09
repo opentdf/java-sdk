@@ -18,6 +18,9 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 public class READMETest {
 
+    // Pre-compiled pattern for extracting Java code blocks from markdown
+    private static final Pattern JAVA_CODE_BLOCK_PATTERN = Pattern.compile("```java\\n(.*?)```", Pattern.DOTALL);
+
     @Test
     public void testREADMECodeBlocks() throws IOException {
         // Read the README file
@@ -61,8 +64,7 @@ public class READMETest {
      */
     private List<String> extractJavaCodeBlocks(String content) {
         List<String> blocks = new ArrayList<>();
-        Pattern pattern = Pattern.compile("```java\\n(.*?)```", Pattern.DOTALL);
-        Matcher matcher = pattern.matcher(content);
+        Matcher matcher = JAVA_CODE_BLOCK_PATTERN.matcher(content);
 
         while (matcher.find()) {
             blocks.add(matcher.group(1));
@@ -108,7 +110,7 @@ public class READMETest {
         assertTrue(code.contains("public class"),
                 "Block " + blockNumber + ": Should contain a public class");
         assertTrue(code.contains("public static void main(String[] args)") ||
-                        code.contains("public static void main(String...args)"),
+                        code.contains("public static void main(String... args)"),
                 "Block " + blockNumber + ": Should contain a main method");
 
         // Check for proper exception handling
