@@ -15,7 +15,7 @@ This SDK is available from Maven central as:
 ### Additional Maven Modules
 - cmdline: Command line utility
 
-## Example code
+## Quick Start Example
 
 This example demonstrates how to create and read TDF (Trusted Data Format) files using the OpenTDF SDK.
 
