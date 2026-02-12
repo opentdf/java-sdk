@@ -1,0 +1,46 @@
+name: Java Code Coverage
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches: [ '*' ]
+
+jobs:
+  coverage:
+    name: Generate Coverage Report
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install buf
+      run: |
+        curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-$(uname -s)-$(uname -m)" -o /usr/local/bin/buf
+        chmod +x /usr/local/bin/buf
+
+    - name: Set up JDK 11
+      uses: actions/setup-java@v4
+      with:
+            distribution: 'temurin'
+            java-version: '11'
+
+    - name: Build with Maven
+      run: mvn -B clean package
+
+    - name: Run tests
+      run: mvn test jacoco:prepare-agent
+
+    - name: Generate Jacoco coverage report
+      run: mvn jacoco:report
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: |
+          ${{ github.workspace }}/sdk/target/site/jacoco/
+
+
