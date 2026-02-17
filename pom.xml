@@ -299,6 +299,7 @@
                 <module>sdk</module>
                 <module>cmdline</module>
                 <module>examples</module>
+                <module>wasm-host</module>
             </modules>
             <activation>
                 <activeByDefault>true</activeByDefault>
