@@ -1,11 +1,21 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.ConnectException;
 import com.connectrpc.Interceptor;
-
+import com.connectrpc.ResponseMessageKt;
 import com.connectrpc.impl.ProtocolClient;
 import io.opentdf.platform.authorization.AuthorizationServiceClientInterface;
+import io.opentdf.platform.authorization.Entity;
+import io.opentdf.platform.authorization.EntityEntitlements;
+import io.opentdf.platform.authorization.GetEntitlementsRequest;
+import io.opentdf.platform.authorization.GetEntitlementsResponse;
+import io.opentdf.platform.policy.Attribute;
+import io.opentdf.platform.policy.PageRequest;
 import io.opentdf.platform.policy.SimpleKasKey;
 import io.opentdf.platform.policy.attributes.AttributesServiceClientInterface;
+import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
+import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
+import io.opentdf.platform.policy.attributes.ListAttributesRequest;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClientInterface;
 import io.opentdf.platform.policy.namespaces.NamespaceServiceClientInterface;
 import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceClientInterface;
@@ -17,7 +27,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.channels.SeekableByteChannel;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * The SDK class represents a software development kit for interacting with the
@@ -179,6 +194,143 @@ public class SDK implements AutoCloseable {
         return platformUrl;
     }
 
+    // Caps the pagination loop in listAttributes to prevent unbounded memory growth
+    // if a server repeatedly returns a non-zero next_offset.
+    private static final int MAX_LIST_ATTRIBUTES_PAGES = 1000;
+
+    // Matches the server-side limit on GetAttributeValuesByFqns so callers get a
+    // clear local error instead of a cryptic server rejection.
+    private static final int MAX_VALIDATE_FQNS = 250;
+
+    /**
+     * Lists all active attributes available on the platform, auto-paginating through all results.
+     * An optional namespace name or ID may be provided to filter results.
+     *
+     * <p>Use this before calling {@code createTDF()} to see what attributes are available for data tagging.
+     *
+     * @param namespace optional namespace name or ID to filter results
+     * @return list of all active {@link Attribute} objects
+     * @throws SDKException if a service error occurs or pagination exceeds the maximum page limit
+     */
+    public List<Attribute> listAttributes(String... namespace) {
+        ListAttributesRequest.Builder reqBuilder = ListAttributesRequest.newBuilder();
+        if (namespace.length > 0 && namespace[0] != null) {
+            reqBuilder.setNamespace(namespace[0]);
+        }
+        List<Attribute> result = new ArrayList<>();
+        for (int pages = 0; pages < MAX_LIST_ATTRIBUTES_PAGES; pages++) {
+            try {
+                var resp = ResponseMessageKt.getOrThrow(
+                        services.attributes()
+                                .listAttributesBlocking(reqBuilder.build(), Collections.emptyMap())
+                                .execute());
+                result.addAll(resp.getAttributesList());
+                int nextOffset = resp.getPagination().getNextOffset();
+                if (nextOffset == 0) {
+                    return result;
+                }
+                reqBuilder.setPagination(PageRequest.newBuilder().setOffset(nextOffset).build());
+            } catch (ConnectException e) {
+                throw new SDKException("listing attributes: " + e.getMessage(), e);
+            }
+        }
+        throw new SDKException("listing attributes: exceeded maximum page limit (" + MAX_LIST_ATTRIBUTES_PAGES + ")");
+    }
+
+    /**
+     * Checks that all provided attribute value FQNs exist on the platform.
+     * Validates FQN format first, then verifies existence via the platform API.
+     *
+     * <p>Use this before {@code createTDF()} to catch missing or misspelled attributes early
+     * instead of discovering the problem at decryption time.
+     *
+     * @param fqns list of attribute value FQNs in the form
+     *             {@code https://<namespace>/attr/<name>/value/<value>}
+     * @throws AttributeNotFoundException if any FQNs are not found on the platform
+     * @throws SDKException if input validation fails or a service error occurs
+     */
+    public void validateAttributes(List<String> fqns) {
+        if (fqns == null || fqns.isEmpty()) {
+            return;
+        }
+        if (fqns.size() > MAX_VALIDATE_FQNS) {
+            throw new SDKException("too many attribute FQNs: " + fqns.size()
+                    + " exceeds maximum of " + MAX_VALIDATE_FQNS);
+        }
+        for (String fqn : fqns) {
+            try {
+                new Autoconfigure.AttributeValueFQN(fqn);
+            } catch (AutoConfigureException e) {
+                throw new SDKException("invalid attribute value FQN \"" + fqn + "\": " + e.getMessage(), e);
+            }
+        }
+        GetAttributeValuesByFqnsResponse resp;
+        try {
+            resp = ResponseMessageKt.getOrThrow(
+                    services.attributes()
+                            .getAttributeValuesByFqnsBlocking(
+                                    GetAttributeValuesByFqnsRequest.newBuilder().addAllFqns(fqns).build(),
+                                    Collections.emptyMap())
+                            .execute());
+        } catch (ConnectException e) {
+            throw new SDKException("validating attributes: " + e.getMessage(), e);
+        }
+        Map<String, GetAttributeValuesByFqnsResponse.AttributeAndValue> found = resp.getFqnAttributeValuesMap();
+        List<String> missing = fqns.stream()
+                .filter(fqn -> !found.containsKey(fqn))
+                .collect(Collectors.toList());
+        if (!missing.isEmpty()) {
+            throw new AttributeNotFoundException("attribute not found: " + String.join(", ", missing));
+        }
+    }
+
+    /**
+     * Returns the attribute value FQNs assigned to an entity (person or non-person entity).
+     *
+     * <p>Use this to inspect what attributes a user, service account, or other entity has been
+     * granted before making authorization decisions or constructing access policies.
+     *
+     * @param entity the entity to look up; must not be null
+     * @return list of attribute value FQNs assigned to the entity, or an empty list if none
+     * @throws SDKException if entity is null or a service error occurs
+     */
+    public List<String> getEntityAttributes(Entity entity) {
+        if (entity == null) {
+            throw new SDKException("entity must not be null");
+        }
+        GetEntitlementsResponse resp;
+        try {
+            resp = ResponseMessageKt.getOrThrow(
+                    services.authorization()
+                            .getEntitlementsBlocking(
+                                    GetEntitlementsRequest.newBuilder().addEntities(entity).build(),
+                                    Collections.emptyMap())
+                            .execute());
+        } catch (ConnectException e) {
+            throw new SDKException("getting entity attributes: " + e.getMessage(), e);
+        }
+        String entityId = entity.getId();
+        for (EntityEntitlements e : resp.getEntitlementsList()) {
+            if (entityId.isEmpty() || e.getEntityId().equals(entityId)) {
+                return e.getAttributeValueFqnsList();
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * Checks that a single attribute value FQN is valid in format and exists on the platform.
+     *
+     * <p>This is a convenience wrapper around {@link #validateAttributes(List)} for the single-FQN case.
+     *
+     * @param fqn the attribute value FQN to validate
+     * @throws AttributeNotFoundException if the FQN does not exist on the platform
+     * @throws SDKException if the FQN format is invalid or a service error occurs
+     */
+    public void validateAttributeValue(String fqn) {
+        validateAttributes(Collections.singletonList(fqn));
+    }
+
     /**
      *  Indicates that the TDF is malformed in some way
      */
@@ -282,6 +434,17 @@ public class SDK implements AutoCloseable {
     public static class AssertionException extends TamperException {
         public AssertionException(String errorMessage, String id) {
             super("assertion id: "+ id + "; " + errorMessage);
+        }
+    }
+
+    /**
+     * {@link AttributeNotFoundException} is thrown by {@link #validateAttributes(List)} and
+     * {@link #validateAttributeValue(String)} when one or more attribute FQNs are not found
+     * on the platform.
+     */
+    public static class AttributeNotFoundException extends SDKException {
+        public AttributeNotFoundException(String errorMessage) {
+            super(errorMessage);
         }
     }
 }
