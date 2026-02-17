@@ -41,6 +41,15 @@ import java.util.stream.Collectors;
  * platform.
  */
 public class SDK implements AutoCloseable {
+
+    // Caps the pagination loop in listAttributes to prevent unbounded memory growth
+    // if a server repeatedly returns a non-zero next_offset.
+    private static final int MAX_LIST_ATTRIBUTES_PAGES = 1000;
+
+    // Matches the server-side limit on GetAttributeValuesByFqns so callers get a
+    // clear local error instead of a cryptic server rejection.
+    private static final int MAX_VALIDATE_FQNS = 250;
+
     private final Services services;
     private final TrustManager trustManager;
     private final Interceptor authInterceptor;
@@ -194,14 +203,6 @@ public class SDK implements AutoCloseable {
         return platformUrl;
     }
 
-    // Caps the pagination loop in listAttributes to prevent unbounded memory growth
-    // if a server repeatedly returns a non-zero next_offset.
-    private static final int MAX_LIST_ATTRIBUTES_PAGES = 1000;
-
-    // Matches the server-side limit on GetAttributeValuesByFqns so callers get a
-    // clear local error instead of a cryptic server rejection.
-    private static final int MAX_VALIDATE_FQNS = 250;
-
     /**
      * Lists all active attributes available on the platform, auto-paginating through all results.
      * An optional namespace name or ID may be provided to filter results.
@@ -277,7 +278,7 @@ public class SDK implements AutoCloseable {
         }
         Map<String, GetAttributeValuesByFqnsResponse.AttributeAndValue> found = resp.getFqnAttributeValuesMap();
         List<String> missing = fqns.stream()
-                .filter(fqn -> !found.containsKey(fqn))
+                .filter(f -> !found.containsKey(f))
                 .collect(Collectors.toList());
         if (!missing.isEmpty()) {
             throw new AttributeNotFoundException("attribute not found: " + String.join(", ", missing));
