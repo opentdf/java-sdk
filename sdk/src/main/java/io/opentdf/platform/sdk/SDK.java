@@ -1,6 +1,5 @@
 package io.opentdf.platform.sdk;
 
-import com.connectrpc.ConnectException;
 import com.connectrpc.Interceptor;
 import com.connectrpc.ResponseMessageKt;
 import com.connectrpc.impl.ProtocolClient;
@@ -220,20 +219,16 @@ public class SDK implements AutoCloseable {
         }
         List<Attribute> result = new ArrayList<>();
         for (int pages = 0; pages < MAX_LIST_ATTRIBUTES_PAGES; pages++) {
-            try {
-                var resp = ResponseMessageKt.getOrThrow(
-                        services.attributes()
-                                .listAttributesBlocking(reqBuilder.build(), Collections.emptyMap())
-                                .execute());
-                result.addAll(resp.getAttributesList());
-                int nextOffset = resp.getPagination().getNextOffset();
-                if (nextOffset == 0) {
-                    return result;
-                }
-                reqBuilder.setPagination(PageRequest.newBuilder().setOffset(nextOffset).build());
-            } catch (ConnectException e) {
-                throw new SDKException("listing attributes: " + e.getMessage(), e);
+            var resp = ResponseMessageKt.getOrThrow(
+                    services.attributes()
+                            .listAttributesBlocking(reqBuilder.build(), Collections.emptyMap())
+                            .execute());
+            result.addAll(resp.getAttributesList());
+            int nextOffset = resp.getPagination().getNextOffset();
+            if (nextOffset == 0) {
+                return result;
             }
+            reqBuilder.setPagination(PageRequest.newBuilder().setOffset(nextOffset).build());
         }
         throw new SDKException("listing attributes: exceeded maximum page limit (" + MAX_LIST_ATTRIBUTES_PAGES + ")");
     }
@@ -265,17 +260,12 @@ public class SDK implements AutoCloseable {
                 throw new SDKException("invalid attribute value FQN \"" + fqn + "\": " + e.getMessage(), e);
             }
         }
-        GetAttributeValuesByFqnsResponse resp;
-        try {
-            resp = ResponseMessageKt.getOrThrow(
-                    services.attributes()
-                            .getAttributeValuesByFqnsBlocking(
-                                    GetAttributeValuesByFqnsRequest.newBuilder().addAllFqns(fqns).build(),
-                                    Collections.emptyMap())
-                            .execute());
-        } catch (ConnectException e) {
-            throw new SDKException("validating attributes: " + e.getMessage(), e);
-        }
+        GetAttributeValuesByFqnsResponse resp = ResponseMessageKt.getOrThrow(
+                services.attributes()
+                        .getAttributeValuesByFqnsBlocking(
+                                GetAttributeValuesByFqnsRequest.newBuilder().addAllFqns(fqns).build(),
+                                Collections.emptyMap())
+                        .execute());
         Map<String, GetAttributeValuesByFqnsResponse.AttributeAndValue> found = resp.getFqnAttributeValuesMap();
         List<String> missing = fqns.stream()
                 .filter(f -> !found.containsKey(f))
@@ -299,17 +289,12 @@ public class SDK implements AutoCloseable {
         if (entity == null) {
             throw new SDKException("entity must not be null");
         }
-        GetEntitlementsResponse resp;
-        try {
-            resp = ResponseMessageKt.getOrThrow(
-                    services.authorization()
-                            .getEntitlementsBlocking(
-                                    GetEntitlementsRequest.newBuilder().addEntities(entity).build(),
-                                    Collections.emptyMap())
-                            .execute());
-        } catch (ConnectException e) {
-            throw new SDKException("getting entity attributes: " + e.getMessage(), e);
-        }
+        GetEntitlementsResponse resp = ResponseMessageKt.getOrThrow(
+                services.authorization()
+                        .getEntitlementsBlocking(
+                                GetEntitlementsRequest.newBuilder().addEntities(entity).build(),
+                                Collections.emptyMap())
+                        .execute());
         String entityId = entity.getId();
         for (EntityEntitlements e : resp.getEntitlementsList()) {
             if (entityId.isEmpty() || e.getEntityId().equals(entityId)) {
