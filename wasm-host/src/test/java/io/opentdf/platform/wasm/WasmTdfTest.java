@@ -17,21 +17,19 @@ import io.opentdf.platform.sdk.CryptoUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.security.KeyPair;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
+import java.util.zip.ZipInputStream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -297,25 +295,14 @@ public class WasmTdfTest {
     }
 
     private Map<String, byte[]> parseZip(byte[] zipBytes) throws Exception {
-        // Use ZipFile (central-directory based) instead of ZipInputStream because
-        // the TDF ZIP uses STORED entries with data descriptors, which ZipInputStream rejects.
-        Path tempFile = Files.createTempFile("tdf", ".zip");
-        try {
-            Files.write(tempFile, zipBytes);
-            Map<String, byte[]> entries = new HashMap<>();
-            try (ZipFile zf = new ZipFile(tempFile.toFile())) {
-                Enumeration<? extends ZipEntry> e = zf.entries();
-                while (e.hasMoreElements()) {
-                    ZipEntry entry = e.nextElement();
-                    try (InputStream is = zf.getInputStream(entry)) {
-                        entries.put(entry.getName(), is.readAllBytes());
-                    }
-                }
+        Map<String, byte[]> entries = new HashMap<>();
+        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                entries.put(entry.getName(), zis.readAllBytes());
             }
-            return entries;
-        } finally {
-            Files.deleteIfExists(tempFile);
         }
+        return entries;
     }
 
     // ---- Tests ----
