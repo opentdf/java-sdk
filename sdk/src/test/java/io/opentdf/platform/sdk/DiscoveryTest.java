@@ -383,6 +383,18 @@ class DiscoveryTest {
     }
 
     @Test
+    void validateAttributeValue_emptyValue() {
+        var sdk = sdkWith(null, null);
+        assertThatThrownBy(() -> sdk.validateAttributeValue("https://example.com/attr/clearance", ""))
+                .isInstanceOf(SDKException.class)
+                .hasMessageContaining("must not be empty");
+
+        assertThatThrownBy(() -> sdk.validateAttributeValue("https://example.com/attr/clearance", null))
+                .isInstanceOf(SDKException.class)
+                .hasMessageContaining("must not be empty");
+    }
+
+    @Test
     void validateAttributeValue_invalidFqn() {
         // Passing a value FQN (contains /value/) should be rejected as an invalid attribute FQN.
         var sdk = sdkWith(null, null);

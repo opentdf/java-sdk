@@ -337,6 +337,9 @@ public class SDK implements AutoCloseable {
      * @throws SDKException               if the FQN format is invalid or a service error occurs
      */
     public void validateAttributeValue(String attributeFqn, String value) {
+        if (value == null || value.isEmpty()) {
+            throw new SDKException("attribute value must not be empty");
+        }
         try {
             new Autoconfigure.AttributeNameFQN(attributeFqn);
         } catch (AutoConfigureException e) {
