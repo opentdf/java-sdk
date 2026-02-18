@@ -7,6 +7,9 @@ import io.opentdf.platform.authorization.AuthorizationServiceClientInterface;
 import io.opentdf.platform.policy.Attribute;
 import io.opentdf.platform.policy.PageResponse;
 import io.opentdf.platform.policy.attributes.AttributesServiceClientInterface;
+import io.opentdf.platform.policy.Value;
+import io.opentdf.platform.policy.attributes.GetAttributeRequest;
+import io.opentdf.platform.policy.attributes.GetAttributeResponse;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
 import io.opentdf.platform.policy.attributes.ListAttributesRequest;
 import io.opentdf.platform.policy.attributes.ListAttributesResponse;
@@ -274,10 +277,10 @@ class DiscoveryTest {
                 .isEmpty();
     }
 
-    // --- validateAttributeValue ---
+    // --- validateAttributeExists ---
 
     @Test
-    void validateAttributeValue_validAndExists() {
+    void validateAttributeExists_validAndExists() {
         var fqn = "https://example.com/attr/level/value/high";
         var attrSvc = mock(AttributesServiceClientInterface.class);
         when(attrSvc.getAttributeValuesByFqnsBlocking(any(), any()))
@@ -285,26 +288,110 @@ class DiscoveryTest {
 
         var sdk = sdkWith(attrSvc, null);
         // Should complete without exception.
-        sdk.validateAttributeValue(fqn);
+        sdk.validateAttributeExists(fqn);
     }
 
     @Test
-    void validateAttributeValue_validButMissing() {
+    void validateAttributeExists_validButMissing() {
         var fqn = "https://example.com/attr/level/value/nonexistent";
         var attrSvc = mock(AttributesServiceClientInterface.class);
         when(attrSvc.getAttributeValuesByFqnsBlocking(any(), any()))
                 .thenReturn(TestUtil.successfulUnaryCall(fqnResponse()));
 
         var sdk = sdkWith(attrSvc, null);
-        assertThatThrownBy(() -> sdk.validateAttributeValue(fqn))
+        assertThatThrownBy(() -> sdk.validateAttributeExists(fqn))
                 .isInstanceOf(SDK.AttributeNotFoundException.class);
     }
 
     @Test
-    void validateAttributeValue_invalidFormat() {
+    void validateAttributeExists_invalidFormat() {
         var sdk = sdkWith(null, null);
-        assertThatThrownBy(() -> sdk.validateAttributeValue("bad-fqn-format"))
+        assertThatThrownBy(() -> sdk.validateAttributeExists("bad-fqn-format"))
                 .isInstanceOf(SDKException.class)
                 .hasMessageContaining("invalid attribute value FQN");
+    }
+
+    // --- validateAttributeValue ---
+
+    // Helper: build a GetAttributeResponse with the given enumerated values.
+    private GetAttributeResponse attrResponse(String... values) {
+        var attrBuilder = Attribute.newBuilder();
+        for (String v : values) {
+            attrBuilder.addValues(Value.newBuilder().setValue(v).build());
+        }
+        return GetAttributeResponse.newBuilder().setAttribute(attrBuilder.build()).build();
+    }
+
+    @Test
+    void validateAttributeValue_enumeratedMatch() {
+        var attrFqn = "https://example.com/attr/clearance";
+        var attrSvc = mock(AttributesServiceClientInterface.class);
+        when(attrSvc.getAttributeBlocking(any(), any()))
+                .thenReturn(TestUtil.successfulUnaryCall(attrResponse("low", "secret", "top-secret")));
+
+        var sdk = sdkWith(attrSvc, null);
+        // "secret" is in the list — should not throw.
+        sdk.validateAttributeValue(attrFqn, "secret");
+    }
+
+    @Test
+    void validateAttributeValue_enumeratedCaseInsensitive() {
+        var attrFqn = "https://example.com/attr/clearance";
+        var attrSvc = mock(AttributesServiceClientInterface.class);
+        when(attrSvc.getAttributeBlocking(any(), any()))
+                .thenReturn(TestUtil.successfulUnaryCall(attrResponse("Secret")));
+
+        var sdk = sdkWith(attrSvc, null);
+        sdk.validateAttributeValue(attrFqn, "SECRET");
+    }
+
+    @Test
+    void validateAttributeValue_enumeratedNotFound() {
+        var attrFqn = "https://example.com/attr/clearance";
+        var attrSvc = mock(AttributesServiceClientInterface.class);
+        when(attrSvc.getAttributeBlocking(any(), any()))
+                .thenReturn(TestUtil.successfulUnaryCall(attrResponse("low", "secret")));
+
+        var sdk = sdkWith(attrSvc, null);
+        assertThatThrownBy(() -> sdk.validateAttributeValue(attrFqn, "top-secret"))
+                .isInstanceOf(SDK.AttributeNotFoundException.class)
+                .hasMessageContaining("top-secret");
+    }
+
+    @Test
+    void validateAttributeValue_dynamic() {
+        // Dynamic attribute: no pre-registered values — any string is valid.
+        var attrFqn = "https://example.com/attr/tag";
+        var attrSvc = mock(AttributesServiceClientInterface.class);
+        when(attrSvc.getAttributeBlocking(any(), any()))
+                .thenReturn(TestUtil.successfulUnaryCall(attrResponse())); // no values
+
+        var sdk = sdkWith(attrSvc, null);
+        sdk.validateAttributeValue(attrFqn, "anything-goes");
+    }
+
+    @Test
+    void validateAttributeValue_attributeNotFound() {
+        var attrFqn = "https://example.com/attr/nonexistent";
+        var attrSvc = mock(AttributesServiceClientInterface.class);
+        when(attrSvc.getAttributeBlocking(any(), any()))
+                .thenThrow(new RuntimeException("not_found: attribute does not exist"));
+
+        var sdk = sdkWith(attrSvc, null);
+        assertThatThrownBy(() -> sdk.validateAttributeValue(attrFqn, "somevalue"))
+                .isInstanceOf(SDK.AttributeNotFoundException.class);
+    }
+
+    @Test
+    void validateAttributeValue_invalidFqn() {
+        // Passing a value FQN (contains /value/) should be rejected as an invalid attribute FQN.
+        var sdk = sdkWith(null, null);
+        assertThatThrownBy(() -> sdk.validateAttributeValue("https://example.com/attr/level/value/high", "high"))
+                .isInstanceOf(SDKException.class)
+                .hasMessageContaining("invalid attribute FQN");
+
+        assertThatThrownBy(() -> sdk.validateAttributeValue("not-a-fqn", "somevalue"))
+                .isInstanceOf(SDKException.class)
+                .hasMessageContaining("invalid attribute FQN");
     }
 }

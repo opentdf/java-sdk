@@ -11,7 +11,9 @@ import io.opentdf.platform.authorization.GetEntitlementsResponse;
 import io.opentdf.platform.policy.Attribute;
 import io.opentdf.platform.policy.PageRequest;
 import io.opentdf.platform.policy.SimpleKasKey;
+import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.policy.attributes.AttributesServiceClientInterface;
+import io.opentdf.platform.policy.attributes.GetAttributeRequest;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
 import io.opentdf.platform.policy.attributes.ListAttributesRequest;
@@ -297,7 +299,7 @@ public class SDK implements AutoCloseable {
                         .execute());
         String entityId = entity.getId();
         for (EntityEntitlements e : resp.getEntitlementsList()) {
-            if (entityId.isEmpty() || e.getEntityId().equals(entityId)) {
+            if (e.getEntityId().equals(entityId)) {
                 return e.getAttributeValueFqnsList();
             }
         }
@@ -313,8 +315,60 @@ public class SDK implements AutoCloseable {
      * @throws AttributeNotFoundException if the FQN does not exist on the platform
      * @throws SDKException if the FQN format is invalid or a service error occurs
      */
-    public void validateAttributeValue(String fqn) {
+    public void validateAttributeExists(String fqn) {
         validateAttributes(Collections.singletonList(fqn));
+    }
+
+    /**
+     * Checks that {@code value} is a permitted value for the attribute identified by
+     * {@code attributeFqn}. Handles both enumerated and dynamic attribute types:
+     * <ul>
+     *   <li>Enumerated attributes: {@code value} must match one of the pre-registered values
+     *       (case-insensitive).</li>
+     *   <li>Dynamic attributes (no pre-registered values): any non-empty value is accepted.</li>
+     * </ul>
+     *
+     * @param attributeFqn the attribute-level FQN, e.g.
+     *                     {@code https://example.com/attr/clearance}
+     * @param value        the candidate value string, e.g. {@code secret}
+     * @throws AttributeNotFoundException if the attribute does not exist on the platform, or if
+     *                                    the attribute is enumerated and {@code value} is not in
+     *                                    the allowed set
+     * @throws SDKException               if the FQN format is invalid or a service error occurs
+     */
+    public void validateAttributeValue(String attributeFqn, String value) {
+        try {
+            new Autoconfigure.AttributeNameFQN(attributeFqn);
+        } catch (AutoConfigureException e) {
+            throw new SDKException("invalid attribute FQN \"" + attributeFqn + "\": " + e.getMessage(), e);
+        }
+
+        Attribute attribute;
+        try {
+            attribute = ResponseMessageKt.getOrThrow(
+                    services.attributes()
+                            .getAttributeBlocking(
+                                    GetAttributeRequest.newBuilder().setFqn(attributeFqn).build(),
+                                    Collections.emptyMap())
+                            .execute())
+                    .getAttribute();
+        } catch (Exception e) {
+            throw new AttributeNotFoundException("attribute not found: " + attributeFqn);
+        }
+
+        List<Value> vals = attribute.getValuesList();
+        if (vals.isEmpty()) {
+            // Dynamic attribute — any value is permitted.
+            return;
+        }
+
+        for (Value v : vals) {
+            if (v.getValue().equalsIgnoreCase(value)) {
+                return;
+            }
+        }
+        throw new AttributeNotFoundException(
+                "attribute not found: value \"" + value + "\" not permitted for attribute " + attributeFqn);
     }
 
     /**
@@ -424,9 +478,10 @@ public class SDK implements AutoCloseable {
     }
 
     /**
-     * {@link AttributeNotFoundException} is thrown by {@link #validateAttributes(List)} and
-     * {@link #validateAttributeValue(String)} when one or more attribute FQNs are not found
-     * on the platform.
+     * {@link AttributeNotFoundException} is thrown by {@link #validateAttributes(List)},
+     * {@link #validateAttributeExists(String)}, and
+     * {@link #validateAttributeValue(String, String)} when one or more attributes or values
+     * are not found on the platform.
      */
     public static class AttributeNotFoundException extends SDKException {
         public AttributeNotFoundException(String errorMessage) {
