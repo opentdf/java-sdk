@@ -359,15 +359,16 @@ class DiscoveryTest {
     }
 
     @Test
-    void validateAttributeValue_dynamic() {
-        // Dynamic attribute: no pre-registered values — any string is valid.
+    void validateAttributeValue_noRegisteredValues() {
+        // Attribute with no registered values — value cannot be found, so the call must fail.
         var attrFqn = "https://example.com/attr/tag";
         var attrSvc = mock(AttributesServiceClientInterface.class);
         when(attrSvc.getAttributeBlocking(any(), any()))
                 .thenReturn(TestUtil.successfulUnaryCall(attrResponse())); // no values
 
         var sdk = sdkWith(attrSvc, null);
-        sdk.validateAttributeValue(attrFqn, "anything-goes");
+        assertThrows(SDK.AttributeNotFoundException.class,
+                () -> sdk.validateAttributeValue(attrFqn, "anything-goes"));
     }
 
     @Test

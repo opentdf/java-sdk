@@ -320,20 +320,18 @@ public class SDK implements AutoCloseable {
     }
 
     /**
-     * Checks that {@code value} is a permitted value for the attribute identified by
-     * {@code attributeFqn}. Handles both enumerated and dynamic attribute types:
-     * <ul>
-     *   <li>Enumerated attributes: {@code value} must match one of the pre-registered values
-     *       (case-insensitive).</li>
-     *   <li>Dynamic attributes (no pre-registered values): any non-empty value is accepted.</li>
-     * </ul>
+     * Checks that {@code value} is registered on the attribute identified by
+     * {@code attributeFqn}. The value must match one of the attribute's registered values
+     * (case-insensitive), or the call fails.
+     * <p>
+     * The attribute rule type ({@code ANY_OF}, {@code ALL_OF}, {@code HIERARCHY}) is not relevant
+     * here — it governs access decisions at decryption time, not value registration.
      *
      * @param attributeFqn the attribute-level FQN, e.g.
      *                     {@code https://example.com/attr/clearance}
      * @param value        the candidate value string, e.g. {@code secret}
      * @throws AttributeNotFoundException if the attribute does not exist on the platform, or if
-     *                                    the attribute is enumerated and {@code value} is not in
-     *                                    the allowed set
+     *                                    {@code value} is not among its registered values
      * @throws SDKException               if the FQN format is invalid or a service error occurs
      */
     public void validateAttributeValue(String attributeFqn, String value) {
@@ -360,18 +358,13 @@ public class SDK implements AutoCloseable {
         }
 
         List<Value> vals = attribute.getValuesList();
-        if (vals.isEmpty()) {
-            // Dynamic attribute — any value is permitted.
-            return;
-        }
-
         for (Value v : vals) {
             if (v.getValue().equalsIgnoreCase(value)) {
                 return;
             }
         }
         throw new AttributeNotFoundException(
-                "attribute not found: value \"" + value + "\" not permitted for attribute " + attributeFqn);
+                "attribute not found: value \"" + value + "\" not found for attribute " + attributeFqn);
     }
 
     /**
