@@ -307,64 +307,62 @@ public class SDK implements AutoCloseable {
     }
 
     /**
-     * Checks that a single attribute value FQN is valid in format and exists on the platform.
+     * Reports whether the attribute definition identified by {@code attributeFqn} exists on the
+     * platform.
      *
-     * <p>This is a convenience wrapper around {@link #validateAttributes(List)} for the single-FQN case.
+     * <p>{@code attributeFqn} should be an attribute-level FQN (no {@code /value/} segment):
+     * <pre>{@code https://<namespace>/attr/<attribute_name>}</pre>
      *
-     * @param fqn the attribute value FQN to validate
-     * @throws AttributeNotFoundException if the FQN does not exist on the platform
-     * @throws SDKException if the FQN format is invalid or a service error occurs
+     * @param attributeFqn the attribute-level FQN to check
+     * @return {@code true} if the attribute exists, {@code false} if it does not
+     * @throws SDKException if the FQN format is invalid or a non-not-found service error occurs
      */
-    public void validateAttributeExists(String fqn) {
-        validateAttributes(Collections.singletonList(fqn));
-    }
-
-    /**
-     * Checks that {@code value} is registered on the attribute identified by
-     * {@code attributeFqn}. The value must match one of the attribute's registered values
-     * (case-insensitive), or the call fails.
-     * <p>
-     * The attribute rule type ({@code ANY_OF}, {@code ALL_OF}, {@code HIERARCHY}) is not relevant
-     * here — it governs access decisions at decryption time, not value registration.
-     *
-     * @param attributeFqn the attribute-level FQN, e.g.
-     *                     {@code https://example.com/attr/clearance}
-     * @param value        the candidate value string, e.g. {@code secret}
-     * @throws AttributeNotFoundException if the attribute does not exist on the platform, or if
-     *                                    {@code value} is not among its registered values
-     * @throws SDKException               if the FQN format is invalid or a service error occurs
-     */
-    public void validateAttributeValue(String attributeFqn, String value) {
-        if (value == null || value.isEmpty()) {
-            throw new SDKException("attribute value must not be empty");
-        }
+    public boolean attributeExists(String attributeFqn) {
         try {
             new Autoconfigure.AttributeNameFQN(attributeFqn);
         } catch (AutoConfigureException e) {
             throw new SDKException("invalid attribute FQN \"" + attributeFqn + "\": " + e.getMessage(), e);
         }
-
-        Attribute attribute;
         try {
-            attribute = ResponseMessageKt.getOrThrow(
+            ResponseMessageKt.getOrThrow(
                     services.attributes()
                             .getAttributeBlocking(
                                     GetAttributeRequest.newBuilder().setFqn(attributeFqn).build(),
                                     Collections.emptyMap())
-                            .execute())
-                    .getAttribute();
+                            .execute());
+            return true;
         } catch (Exception e) {
-            throw new AttributeNotFoundException("attribute not found: " + attributeFqn);
-        }
-
-        List<Value> vals = attribute.getValuesList();
-        for (Value v : vals) {
-            if (v.getValue().equalsIgnoreCase(value)) {
-                return;
+            String msg = e.getMessage();
+            if (msg != null && msg.contains("not_found")) {
+                return false;
             }
+            throw new SDKException("checking attribute existence: " + msg, e);
         }
-        throw new AttributeNotFoundException(
-                "attribute not found: value \"" + value + "\" not found for attribute " + attributeFqn);
+    }
+
+    /**
+     * Reports whether the attribute value FQN exists on the platform.
+     *
+     * <p>{@code valueFqn} should be a full attribute value FQN (with {@code /value/} segment):
+     * <pre>{@code https://<namespace>/attr/<attribute_name>/value/<value>}</pre>
+     *
+     * @param valueFqn the attribute value FQN to check
+     * @return {@code true} if the value exists, {@code false} if it does not
+     * @throws SDKException if the FQN format is invalid or a service error occurs
+     */
+    public boolean attributeValueExists(String valueFqn) {
+        try {
+            new Autoconfigure.AttributeValueFQN(valueFqn);
+        } catch (AutoConfigureException e) {
+            throw new SDKException("invalid attribute value FQN \"" + valueFqn + "\": " + e.getMessage(), e);
+        }
+        GetAttributeValuesByFqnsResponse resp = ResponseMessageKt.getOrThrow(
+                services.attributes()
+                        .getAttributeValuesByFqnsBlocking(
+                                GetAttributeValuesByFqnsRequest.newBuilder().addFqns(valueFqn).build(),
+                                Collections.emptyMap())
+                        .execute());
+        return resp.getFqnAttributeValuesMap().containsKey(valueFqn);
     }
 
     /**
