@@ -356,12 +356,17 @@ public class SDK implements AutoCloseable {
         } catch (AutoConfigureException e) {
             throw new SDKException("invalid attribute value FQN \"" + valueFqn + "\": " + e.getMessage(), e);
         }
-        GetAttributeValuesByFqnsResponse resp = ResponseMessageKt.getOrThrow(
-                services.attributes()
-                        .getAttributeValuesByFqnsBlocking(
-                                GetAttributeValuesByFqnsRequest.newBuilder().addFqns(valueFqn).build(),
-                                Collections.emptyMap())
-                        .execute());
+        GetAttributeValuesByFqnsResponse resp;
+        try {
+            resp = ResponseMessageKt.getOrThrow(
+                    services.attributes()
+                            .getAttributeValuesByFqnsBlocking(
+                                    GetAttributeValuesByFqnsRequest.newBuilder().addFqns(valueFqn).build(),
+                                    Collections.emptyMap())
+                            .execute());
+        } catch (Exception e) {
+            throw new SDKException("checking attribute value existence: " + e.getMessage(), e);
+        }
         return resp.getFqnAttributeValuesMap().containsKey(valueFqn);
     }
 
