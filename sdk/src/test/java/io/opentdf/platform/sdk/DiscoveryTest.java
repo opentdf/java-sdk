@@ -367,8 +367,8 @@ class DiscoveryTest {
                 .thenReturn(TestUtil.successfulUnaryCall(attrResponse())); // no values
 
         var sdk = sdkWith(attrSvc, null);
-        assertThrows(SDK.AttributeNotFoundException.class,
-                () -> sdk.validateAttributeValue(attrFqn, "anything-goes"));
+        assertThatThrownBy(() -> sdk.validateAttributeValue(attrFqn, "anything-goes"))
+                .isInstanceOf(SDK.AttributeNotFoundException.class);
     }
 
     @Test
