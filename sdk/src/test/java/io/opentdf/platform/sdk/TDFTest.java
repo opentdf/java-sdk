@@ -1046,8 +1046,7 @@ public class TDFTest {
         assertThat(createdManifest.assertions).isNotNull();
         assertThat(createdManifest.assertions.size()).isEqualTo(3);
 
-
-        var assertionsWithoutIds= createdManifest.assertions.subList(0, 2);
+        var assertionsWithoutIds = createdManifest.assertions.subList(0, 2);
         for (var assertionWithoutId: assertionsWithoutIds) {
             // Verify the assertion without an ID now has a UUID
             assertThat(assertionWithoutId).isNotNull();
@@ -1058,7 +1057,6 @@ public class TDFTest {
         }
 
         var assertionWithId = createdManifest.assertions.get(2);
-
         // Verify the assertion with explicit ID kept its ID
         assertThat(assertionWithId).isNotNull();
         assertThat(assertionWithId.id).isEqualTo("explicit-id");
