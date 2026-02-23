@@ -17,11 +17,14 @@ import io.opentdf.platform.sdk.CryptoUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.security.KeyPair;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
@@ -29,12 +32,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
+import java.util.zip.ZipFile;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -44,6 +46,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class WasmTdfTest {
 
+    /** Thrown by our proc_exit override to halt _start without killing the module. */
+    private static class ProcExitSignal extends RuntimeException {
+        final int exitCode;
+        ProcExitSignal(int code) { this.exitCode = code; }
+    }
+
     private static final long ERR_SENTINEL = 0xFFFFFFFFL;
     private static final int ALG_HS256 = 0;
     private static final int ALG_GMAC = 1;
@@ -52,6 +60,11 @@ public class WasmTdfTest {
     private String kasPubPEM;
     private String kasPrivPEM;
     private String lastError = "";
+
+    // Streaming I/O state
+    private byte[] pendingInput;
+    private int inputOffset;
+    private ByteArrayOutputStream outputBuffer;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -67,16 +80,42 @@ public class WasmTdfTest {
                     .withOptions(WasiOptions.builder().build())
                     .build();
 
+            // Override proc_exit so the module stays alive after _start.
+            // TinyGo/Go wasip1 calls proc_exit(0) after main() — we throw
+            // ProcExitSignal to halt _start without closing the module.
+            List<HostFunction> wasiFns = new ArrayList<>();
+            for (HostFunction fn : wasi.toHostFunctions()) {
+                if (!"proc_exit".equals(fn.name())) {
+                    wasiFns.add(fn);
+                }
+            }
+            wasiFns.add(new HostFunction(
+                    "wasi_snapshot_preview1", "proc_exit",
+                    FunctionType.of(List.of(ValType.I32), List.of()),
+                    (inst, args) -> {
+                        throw new ProcExitSignal((int) args[0]);
+                    }));
+
             var store = new Store();
-            store.addFunction(wasi.toHostFunctions());
+            store.addFunction(wasiFns.toArray(new HostFunction[0]));
             store.addFunction(cryptoHostFunctions());
             store.addFunction(ioHostFunctions());
 
-            instance = store.instantiate("tdfcore", Parser.parse(wasmStream));
+            // Instantiate without auto-calling _start, then call it manually
+            var module = Parser.parse(wasmStream);
+            instance = store.instantiate("tdfcore", importValues ->
+                    Instance.builder(module)
+                            .withImportValues(importValues)
+                            .withStart(false)
+                            .build());
         }
 
-        // Initialize the TinyGo c-shared module
-        instance.export("_initialize").apply();
+        // Call _start to init runtime. proc_exit(0) is expected after main().
+        try {
+            instance.export("_start").apply();
+        } catch (ProcExitSignal e) {
+            if (e.exitCode != 0) throw new RuntimeException("WASM _start exited with code " + e.exitCode);
+        }
     }
 
     // ---- Host crypto functions ----
@@ -228,17 +267,33 @@ public class WasmTdfTest {
 
     private HostFunction[] ioHostFunctions() {
         return new HostFunction[]{
-                // read_input: return 0 (EOF) — not used during encrypt
                 new HostFunction(
                         "io", "read_input",
                         FunctionType.of(List.of(ValType.I32, ValType.I32), List.of(ValType.I32)),
-                        (inst, args) -> new long[]{0}),
+                        (inst, args) -> {
+                            int bufPtr = (int) args[0];
+                            int bufCapacity = (int) args[1];
+                            if (pendingInput == null || inputOffset >= pendingInput.length) {
+                                return new long[]{0}; // EOF
+                            }
+                            int remaining = pendingInput.length - inputOffset;
+                            int toRead = Math.min(bufCapacity, remaining);
+                            inst.memory().write(bufPtr,
+                                    Arrays.copyOfRange(pendingInput, inputOffset, inputOffset + toRead));
+                            inputOffset += toRead;
+                            return new long[]{toRead};
+                        }),
 
-                // write_output: no-op, return length — not used during encrypt
                 new HostFunction(
                         "io", "write_output",
                         FunctionType.of(List.of(ValType.I32, ValType.I32), List.of(ValType.I32)),
-                        (inst, args) -> new long[]{args[1]})
+                        (inst, args) -> {
+                            int bufPtr = (int) args[0];
+                            int bufLen = (int) args[1];
+                            byte[] data = inst.memory().readBytes(bufPtr, bufLen);
+                            outputBuffer.write(data, 0, bufLen);
+                            return new long[]{bufLen};
+                        })
         };
     }
 
@@ -266,6 +321,10 @@ public class WasmTdfTest {
     }
 
     private byte[] wasmEncrypt(byte[] plaintext, int integrityAlg, int segIntegrityAlg) {
+        return wasmEncryptWithSegSize(plaintext, integrityAlg, segIntegrityAlg, 0);
+    }
+
+    private byte[] wasmEncryptWithSegSize(byte[] plaintext, int integrityAlg, int segIntegrityAlg, int segmentSize) {
         byte[] kasPubBytes = kasPubPEM.getBytes(StandardCharsets.UTF_8);
         byte[] kasURLBytes = "https://kas.example.com".getBytes(StandardCharsets.UTF_8);
         byte[] attrBytes = "https://example.com/attr/classification/value/secret"
@@ -274,35 +333,49 @@ public class WasmTdfTest {
         long kasPubPtr = allocAndWrite(kasPubBytes);
         long kasURLPtr = allocAndWrite(kasURLBytes);
         long attrPtr = allocAndWrite(attrBytes);
-        long ptPtr = allocAndWrite(plaintext);
 
-        int outCapacity = 1024 * 1024;
-        long outPtr = wasmMalloc(outCapacity);
+        // Set up streaming I/O state
+        pendingInput = plaintext;
+        inputOffset = 0;
+        outputBuffer = new ByteArrayOutputStream(plaintext.length + 65536);
 
         long[] result = instance.export("tdf_encrypt").apply(
                 kasPubPtr, (long) kasPubBytes.length,
                 kasURLPtr, (long) kasURLBytes.length,
                 attrPtr, (long) attrBytes.length,
-                ptPtr, (long) plaintext.length,
-                outPtr, (long) outCapacity,
-                (long) integrityAlg, (long) segIntegrityAlg
+                (long) plaintext.length, // plaintextSize (i64)
+                (long) integrityAlg, (long) segIntegrityAlg,
+                (long) segmentSize
         );
 
         long resultLen = result[0];
         assertTrue(resultLen > 0, "WASM encrypt failed: " + getWasmError());
 
-        return instance.memory().readBytes((int) outPtr, (int) resultLen);
+        byte[] output = outputBuffer.toByteArray();
+        assertEquals(resultLen, output.length, "Output length mismatch");
+        return output;
     }
 
     private Map<String, byte[]> parseZip(byte[] zipBytes) throws Exception {
-        Map<String, byte[]> entries = new HashMap<>();
-        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
-            ZipEntry entry;
-            while ((entry = zis.getNextEntry()) != null) {
-                entries.put(entry.getName(), zis.readAllBytes());
+        // Use ZipFile (central-directory based) instead of ZipInputStream to
+        // handle data descriptors on STORED entries (multi-segment TDFs).
+        File tmp = File.createTempFile("tdf-test-", ".zip");
+        try {
+            Files.write(tmp.toPath(), zipBytes);
+            Map<String, byte[]> entries = new HashMap<>();
+            try (ZipFile zf = new ZipFile(tmp)) {
+                var it = zf.entries();
+                while (it.hasMoreElements()) {
+                    ZipEntry entry = it.nextElement();
+                    try (InputStream is = zf.getInputStream(entry)) {
+                        entries.put(entry.getName(), is.readAllBytes());
+                    }
+                }
             }
+            return entries;
+        } finally {
+            tmp.delete();
         }
-        return entries;
     }
 
     // ---- Tests ----
@@ -383,28 +456,74 @@ public class WasmTdfTest {
         byte[] plaintext = "test".getBytes(StandardCharsets.UTF_8);
         byte[] invalidPEM = "not-a-valid-pem".getBytes(StandardCharsets.UTF_8);
         byte[] kasURLBytes = "https://kas.example.com".getBytes(StandardCharsets.UTF_8);
-        byte[] attrBytes = new byte[0];
 
         long kasPubPtr = allocAndWrite(invalidPEM);
         long kasURLPtr = allocAndWrite(kasURLBytes);
         long attrPtr = wasmMalloc(1); // empty attrs need at least 1 byte allocation
-        long ptPtr = allocAndWrite(plaintext);
 
-        int outCapacity = 1024 * 1024;
-        long outPtr = wasmMalloc(outCapacity);
+        // Set up streaming I/O state
+        pendingInput = plaintext;
+        inputOffset = 0;
+        outputBuffer = new ByteArrayOutputStream();
 
         long[] result = instance.export("tdf_encrypt").apply(
                 kasPubPtr, (long) invalidPEM.length,
                 kasURLPtr, (long) kasURLBytes.length,
                 attrPtr, 0L,
-                ptPtr, (long) plaintext.length,
-                outPtr, (long) outCapacity,
-                (long) ALG_HS256, (long) ALG_HS256
+                (long) plaintext.length, // plaintextSize (i64)
+                (long) ALG_HS256, (long) ALG_HS256,
+                0L // default segment size
         );
 
         assertEquals(0, result[0], "Expected encrypt to fail with invalid PEM");
 
         String error = getWasmError();
         assertFalse(error.isEmpty(), "Expected non-empty error message");
+    }
+
+    @Test
+    void testStreamingLargePayload() throws Exception {
+        // 1MB payload with 64KB segments → 16 segments
+        int payloadSize = 1024 * 1024;
+        int segSize = 64 * 1024;
+        byte[] plaintext = new byte[payloadSize];
+        new SecureRandom().nextBytes(plaintext);
+
+        byte[] tdfBytes = wasmEncryptWithSegSize(plaintext, ALG_HS256, ALG_HS256, segSize);
+
+        // Parse ZIP and verify structure
+        Map<String, byte[]> entries = parseZip(tdfBytes);
+        assertTrue(entries.containsKey("0.manifest.json"), "Missing manifest");
+        assertTrue(entries.containsKey("0.payload"), "Missing payload");
+
+        // Verify segment count in manifest
+        String manifestJson = new String(entries.get("0.manifest.json"), StandardCharsets.UTF_8);
+        JsonObject manifest = JsonParser.parseString(manifestJson).getAsJsonObject();
+        JsonObject encInfo = manifest.getAsJsonObject("encryptionInformation");
+        JsonObject intInfo = encInfo.getAsJsonObject("integrityInformation");
+        int segmentCount = intInfo.getAsJsonArray("segments").size();
+        assertEquals(16, segmentCount, "Expected 16 segments for 1MB / 64KB");
+
+        // Unwrap DEK and decrypt each segment to verify round-trip
+        String wrappedKeyB64 = encInfo.getAsJsonArray("keyAccess")
+                .get(0).getAsJsonObject().get("wrappedKey").getAsString();
+        byte[] dek = new AsymDecryption(kasPrivPEM).decrypt(
+                Base64.getDecoder().decode(wrappedKeyB64));
+
+        // Decrypt all segments and reassemble plaintext
+        byte[] payload = entries.get("0.payload");
+        ByteArrayOutputStream decryptedOut = new ByteArrayOutputStream(payloadSize);
+        int offset = 0;
+        for (int i = 0; i < segmentCount; i++) {
+            long encSegSize = intInfo.getAsJsonArray("segments")
+                    .get(i).getAsJsonObject().get("encryptedSegmentSize").getAsLong();
+            byte[] segCt = Arrays.copyOfRange(payload, offset, offset + (int) encSegSize);
+            byte[] segPt = new AesGcm(dek).decrypt(new AesGcm.Encrypted(segCt));
+            decryptedOut.write(segPt);
+            offset += (int) encSegSize;
+        }
+
+        assertArrayEquals(plaintext, decryptedOut.toByteArray(),
+                "Decrypted plaintext must match original");
     }
 }

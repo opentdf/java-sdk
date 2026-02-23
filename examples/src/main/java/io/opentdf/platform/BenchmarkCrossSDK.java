@@ -20,11 +20,19 @@ import java.security.KeyPair;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Base64;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 
 public class BenchmarkCrossSDK {
+
+    /** Thrown by our proc_exit override to halt _start without killing the module. */
+    private static class ProcExitSignal extends RuntimeException {
+        final int exitCode;
+        ProcExitSignal(int code) { this.exitCode = code; }
+    }
 
     private static final long ERR_SENTINEL = 0xFFFFFFFFL;
 
@@ -37,6 +45,11 @@ public class BenchmarkCrossSDK {
     // RSA key pair for WASM encrypt/decrypt
     private static String wasmPubPEM;
     private static String wasmPrivPEM;
+
+    // Streaming I/O state
+    private static byte[] pendingInput;
+    private static int inputOffset;
+    private static ByteArrayOutputStream outputBuffer;
 
     public static void main(String[] args) throws Exception {
         Options options = new Options();
@@ -80,9 +93,9 @@ public class BenchmarkCrossSDK {
         CommandLine cmd = parser.parse(options, args);
 
         int iterations = Integer.parseInt(cmd.getOptionValue("iterations", "5"));
-        String sizesStr = cmd.getOptionValue("sizes", "256,1024,16384,65536,262144,1048576");
+        String sizesStr = cmd.getOptionValue("sizes", "256,1024,16384,65536,262144,1048576,10485760,104857600");
         String platformEndpoint = cmd.getOptionValue("platform-endpoint", "localhost:8080");
-        String clientId = cmd.getOptionValue("client-id", "opentdf");
+        String clientId = cmd.getOptionValue("client-id", "opentdf-sdk");
         String clientSecret = cmd.getOptionValue("client-secret", "secret");
         String attribute = cmd.getOptionValue("attribute", "https://example.com/attr/attr1/value/value1");
         wasmBinaryPath = cmd.getOptionValue("wasm-binary", "wasm-host/src/test/resources/tdfcore.wasm");
@@ -123,6 +136,7 @@ public class BenchmarkCrossSDK {
         long[] wasmDecryptTimes = new long[sizes.length];
         String[] wasmEncErrors = new String[sizes.length];
         String[] wasmDecErrors = new String[sizes.length];
+        String[] sdkDecErrors = new String[sizes.length];
 
         for (int i = 0; i < sizes.length; i++) {
             int size = sizes[i];
@@ -151,13 +165,21 @@ public class BenchmarkCrossSDK {
             encryptTimes[i] = encTotal / iterations;
 
             // ── WASM encrypt ────────────────────────────────────────
+            // Auto-select segment size: 0 for <1MB, 256KB for 1-10MB, 1MB for >10MB
+            int segSize = 0;
+            if (size > 10 * 1024 * 1024) {
+                segSize = 1024 * 1024;
+            } else if (size >= 1024 * 1024) {
+                segSize = 256 * 1024;
+            }
+
             byte[] wasmTdf = null;
             if (wasmOK) {
                 try {
                     long wasmEncTotal = 0;
                     for (int j = 0; j < iterations; j++) {
                         long start = System.nanoTime();
-                        byte[] tdf = wasmEncrypt(payload, wasmPubPEM);
+                        byte[] tdf = wasmEncryptWithSegSize(payload, wasmPubPEM, segSize);
                         wasmEncTotal += System.nanoTime() - start;
                         wasmTdf = tdf;
                     }
@@ -173,17 +195,22 @@ public class BenchmarkCrossSDK {
 
             // ── Native SDK decrypt ──────────────────────────────────
             long decTotal = 0;
-            for (int j = 0; j < iterations; j++) {
-                var channel = new SeekableInMemoryByteChannel(lastTdf);
-                var readerConfig = Config.newTDFReaderConfig();
-                var decOut = new ByteArrayOutputStream();
+            try {
+                for (int j = 0; j < iterations; j++) {
+                    var channel = new SeekableInMemoryByteChannel(lastTdf);
+                    var readerConfig = Config.newTDFReaderConfig();
+                    var decOut = new ByteArrayOutputStream();
 
-                long start = System.nanoTime();
-                var reader = sdk.loadTDF(channel, readerConfig);
-                reader.readPayload(decOut);
-                decTotal += System.nanoTime() - start;
+                    long start = System.nanoTime();
+                    var reader = sdk.loadTDF(channel, readerConfig);
+                    reader.readPayload(decOut);
+                    decTotal += System.nanoTime() - start;
+                }
+                decryptTimes[i] = decTotal / iterations;
+            } catch (Exception e) {
+                System.out.printf("  SDK decrypt failed: %s%n", e.getMessage());
+                sdkDecErrors[i] = "err";
             }
-            decryptTimes[i] = decTotal / iterations;
 
             // ── WASM decrypt ────────────────────────────────────────
             if (wasmTdf != null && wasmOK) {
@@ -195,7 +222,8 @@ public class BenchmarkCrossSDK {
                         wasmDecrypt(wasmTdf, dek);
                         wasmDecTotal += System.nanoTime() - start;
                     }
-                    wasmDecryptTimes[i] = wasmDecTotal / iterations;
+                    // Add estimated KAS rewrap latency (25ms) for apples-to-apples comparison
+                    wasmDecryptTimes[i] = wasmDecTotal / iterations + 25_000_000L;
                 } catch (Exception e) {
                     System.out.printf("  WASM decrypt failed: %s%n", e.getMessage());
                     wasmDecErrors[i] = "OOM";
@@ -228,11 +256,12 @@ public class BenchmarkCrossSDK {
         System.out.println("| Payload | Java SDK* | WASM** |");
         System.out.println("|---------|-----------|--------|");
         for (int i = 0; i < sizes.length; i++) {
+            String sdkCol = sdkDecErrors[i] != null ? sdkDecErrors[i] : fmtDurationMS(decryptTimes[i]);
             String wasmCol = wasmDecErrors[i] != null ? wasmDecErrors[i] : fmtDurationMS(wasmDecryptTimes[i]);
-            System.out.printf("| %s | %s | %s |%n", formatSize(sizes[i]), fmtDurationMS(decryptTimes[i]), wasmCol);
+            System.out.printf("| %s | %s | %s |%n", formatSize(sizes[i]), sdkCol, wasmCol);
         }
         System.out.println("*Java SDK: includes KAS rewrap network latency");
-        System.out.println("**WASM: includes local RSA-OAEP DEK unwrap (no network); in production the host would call KAS for rewrap");
+        System.out.println("**WASM: local decrypt + estimated 25ms KAS rewrap latency");
     }
 
     // ── WASM lifecycle ──────────────────────────────────────────────────
@@ -244,14 +273,39 @@ public class BenchmarkCrossSDK {
                     .withOptions(WasiOptions.builder().build())
                     .build();
 
+            // Override proc_exit so the module stays alive after _start.
+            java.util.ArrayList<HostFunction> wasiFns = new java.util.ArrayList<>();
+            for (HostFunction fn : wasi.toHostFunctions()) {
+                if (!"proc_exit".equals(fn.name())) {
+                    wasiFns.add(fn);
+                }
+            }
+            wasiFns.add(new HostFunction(
+                    "wasi_snapshot_preview1", "proc_exit",
+                    FunctionType.of(List.of(ValType.I32), List.of()),
+                    (inst, args) -> {
+                        throw new ProcExitSignal((int) args[0]);
+                    }));
+
             var store = new Store();
-            store.addFunction(wasi.toHostFunctions());
+            store.addFunction(wasiFns.toArray(new HostFunction[0]));
             store.addFunction(cryptoHostFunctions());
             store.addFunction(ioHostFunctions());
 
-            wasmInstance = store.instantiate("tdfcore", Parser.parse(wasmStream));
+            var module = Parser.parse(wasmStream);
+            wasmInstance = store.instantiate("tdfcore", importValues ->
+                    Instance.builder(module)
+                            .withImportValues(importValues)
+                            .withStart(false)
+                            .build());
         }
-        wasmInstance.export("_initialize").apply();
+
+        // Call _start to init Go runtime. proc_exit(0) is expected.
+        try {
+            wasmInstance.export("_start").apply();
+        } catch (ProcExitSignal e) {
+            if (e.exitCode != 0) throw new RuntimeException("WASM _start exited with code " + e.exitCode);
+        }
     }
 
     static void reinitWasm() {
@@ -416,12 +470,30 @@ public class BenchmarkCrossSDK {
                 new HostFunction(
                         "io", "read_input",
                         FunctionType.of(List.of(ValType.I32, ValType.I32), List.of(ValType.I32)),
-                        (inst, args) -> new long[]{0}),
+                        (inst, args) -> {
+                            int bufPtr = (int) args[0];
+                            int bufCapacity = (int) args[1];
+                            if (pendingInput == null || inputOffset >= pendingInput.length) {
+                                return new long[]{0}; // EOF
+                            }
+                            int remaining = pendingInput.length - inputOffset;
+                            int toRead = Math.min(bufCapacity, remaining);
+                            inst.memory().write(bufPtr,
+                                    Arrays.copyOfRange(pendingInput, inputOffset, inputOffset + toRead));
+                            inputOffset += toRead;
+                            return new long[]{toRead};
+                        }),
 
                 new HostFunction(
                         "io", "write_output",
                         FunctionType.of(List.of(ValType.I32, ValType.I32), List.of(ValType.I32)),
-                        (inst, args) -> new long[]{args[1]})
+                        (inst, args) -> {
+                            int bufPtr = (int) args[0];
+                            int bufLen = (int) args[1];
+                            byte[] data = inst.memory().readBytes(bufPtr, bufLen);
+                            outputBuffer.write(data, 0, bufLen);
+                            return new long[]{bufLen};
+                        })
         };
     }
 
@@ -451,6 +523,10 @@ public class BenchmarkCrossSDK {
     // ── WASM encrypt ────────────────────────────────────────────────────
 
     static byte[] wasmEncrypt(byte[] plaintext, String kasPubPEM) throws Exception {
+        return wasmEncryptWithSegSize(plaintext, kasPubPEM, 0);
+    }
+
+    static byte[] wasmEncryptWithSegSize(byte[] plaintext, String kasPubPEM, int segmentSize) throws Exception {
         byte[] kasPubBytes = kasPubPEM.getBytes(StandardCharsets.UTF_8);
         byte[] kasURLBytes = "https://kas.example.com".getBytes(StandardCharsets.UTF_8);
         byte[] attrBytes = "https://example.com/attr/classification/value/secret"
@@ -459,19 +535,19 @@ public class BenchmarkCrossSDK {
         long kasPubPtr = allocAndWrite(kasPubBytes);
         long kasURLPtr = allocAndWrite(kasURLBytes);
         long attrPtr = allocAndWrite(attrBytes);
-        long ptPtr = allocAndWrite(plaintext);
 
-        int outCapacity = plaintext.length * 2 + 65536;
-        long outPtr = wasmMalloc(outCapacity);
+        // Set up streaming I/O state
+        pendingInput = plaintext;
+        inputOffset = 0;
+        outputBuffer = new ByteArrayOutputStream(plaintext.length + 65536);
 
         long[] result = wasmInstance.export("tdf_encrypt").apply(
                 kasPubPtr, (long) kasPubBytes.length,
                 kasURLPtr, (long) kasURLBytes.length,
                 attrPtr, (long) attrBytes.length,
-                ptPtr, (long) plaintext.length,
-                outPtr, (long) outCapacity,
+                (long) plaintext.length, // plaintextSize (i64)
                 0L, 0L, // HS256 for root + segment integrity
-                0L      // default segment size
+                (long) segmentSize
         );
 
         long resultLen = result[0];
@@ -480,21 +556,26 @@ public class BenchmarkCrossSDK {
             throw new Exception("WASM encrypt failed: " + (err.isEmpty() ? "unknown error" : err));
         }
 
-        return wasmInstance.memory().readBytes((int) outPtr, (int) resultLen);
+        return outputBuffer.toByteArray();
     }
 
     // ── DEK unwrap ──────────────────────────────────────────────────────
 
     static byte[] unwrapDEKLocal(byte[] tdfBytes, String privPEM) throws Exception {
         String manifestJson = null;
-        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(tdfBytes))) {
-            ZipEntry entry;
-            while ((entry = zis.getNextEntry()) != null) {
-                if ("0.manifest.json".equals(entry.getName())) {
-                    manifestJson = new String(zis.readAllBytes(), StandardCharsets.UTF_8);
-                    break;
+        File tmp = File.createTempFile("tdf-bench-", ".zip");
+        try {
+            Files.write(tmp.toPath(), tdfBytes);
+            try (ZipFile zf = new ZipFile(tmp)) {
+                ZipEntry entry = zf.getEntry("0.manifest.json");
+                if (entry != null) {
+                    try (InputStream is = zf.getInputStream(entry)) {
+                        manifestJson = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                    }
                 }
             }
+        } finally {
+            tmp.delete();
         }
         if (manifestJson == null) {
             throw new Exception("0.manifest.json not found in TDF ZIP");
