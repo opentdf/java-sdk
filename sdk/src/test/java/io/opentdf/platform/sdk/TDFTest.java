@@ -1044,7 +1044,7 @@ public class TDFTest {
 
         // Verify both assertions exist and have the correct IDs
         assertThat(createdManifest.assertions).isNotNull();
-        assertThat(createdManifest.assertions.size()).isEqualTo(3);
+        assertThat(createdManifest.assertions).hasSize(3);
 
         var assertionsWithoutIds = createdManifest.assertions.subList(0, 2);
         for (var assertionWithoutId: assertionsWithoutIds) {
