@@ -56,7 +56,7 @@ jobs:
               sed 's|.*/||' | \
               sort -V | \
               tail -n1)
-            echo "LATEST_TAG=protocol/go/$LATEST_TAG" >> "$GITHUB_ENV"
+            echo "LATEST_TAG=$LATEST_TAG" >> "$GITHUB_ENV"
           else
             echo "LATEST_TAG=${{ github.event.inputs.tag }}" >> "$GITHUB_ENV"
           fi
@@ -93,7 +93,7 @@ jobs:
         if: steps.check-update.outputs.no_updates != 'true'
         id: update-platform-branch
         run: |
-          find . -name "pom.xml" -exec sed -i.bak "s|<platform.branch>.*</platform.branch>|<platform.branch>${LATEST_TAG}</platform.branch>|g" {} \;
+          find . -name "pom.xml" -exec sed -i.bak "s|<platform.branch>.*</platform.branch>|<platform.branch>protocol/go/${LATEST_TAG}</platform.branch>|g" {} \;
           CHANGED_FILES=$(find . -name "pom.xml" -exec diff -u {} {}.bak \;)
           if [ -z "$CHANGED_FILES" ]; then
             echo "No changes detected in pom.xml files." | tee -a $GITHUB_STEP_SUMMARY
