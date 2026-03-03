@@ -11,6 +11,7 @@ import static io.opentdf.platform.sdk.ECCurve.SECP521R1;
 
 public enum KeyType {
     RSA2048Key("rsa:2048"),
+    RSA4096Key("rsa:4096"),
     EC256Key("ec:secp256r1", SECP256R1),
     EC384Key("ec:secp384r1", SECP384R1),
     EC521Key("ec:secp521r1", SECP521R1);
@@ -56,6 +57,8 @@ public enum KeyType {
         switch (algorithm) {
             case ALGORITHM_RSA_2048:
                 return KeyType.RSA2048Key;
+            case ALGORITHM_RSA_4096:
+                return KeyType.RSA4096Key;
             case ALGORITHM_EC_P256:
                 return KeyType.EC256Key;
             case ALGORITHM_EC_P384:
@@ -74,6 +77,8 @@ public enum KeyType {
         switch (algorithm) {
             case KAS_PUBLIC_KEY_ALG_ENUM_RSA_2048:
                 return KeyType.RSA2048Key;
+            case KAS_PUBLIC_KEY_ALG_ENUM_RSA_4096:
+                return KeyType.RSA4096Key;
             case KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP256R1:
                 return KeyType.EC256Key;
             case KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP384R1:
