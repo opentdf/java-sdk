@@ -17,7 +17,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>11</maven.compiler.release>
-    <platform.branch>v0.16.0</platform.branch>
+    <platform.branch>f0039397b814cba85187fae62b77835dc6803355	protocol/go/v0.3.6</platform.branch>
   </properties>
 
   <dependencyManagement>
