@@ -246,7 +246,7 @@ jobs:
       packages: read
       checks: write
       pull-requests: write
-    uses: opentdf/tests/.github/workflows/xtest.yml@dspx-2517-enable-rsa-extended-java
+    uses: opentdf/tests/.github/workflows/xtest.yml@main
     with:
       focus-sdk: java
       java-ref: ${{ github.ref }} latest
