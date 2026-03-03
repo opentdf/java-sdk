@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.12.0](https://github.com/opentdf/java-sdk/compare/v0.11.1...v0.12.0) (2026-01-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sdk:** remove NanoTDF implementation ([#321](https://github.com/opentdf/java-sdk/issues/321))
+
+### Features
+
+* **sdk:** enhance assertion verification to support jwk and x509 certificates ([#322](https://github.com/opentdf/java-sdk/issues/322)) ([251fea2](https://github.com/opentdf/java-sdk/commit/251fea2ad92581f9e3127d790d5caacddf58f400))
+* **sdk:** expose base key ([#323](https://github.com/opentdf/java-sdk/issues/323)) ([c370a46](https://github.com/opentdf/java-sdk/commit/c370a461caaa09b2010b82355685944af4a34344))
+
+
+### Bug Fixes
+
+* **sdk:** remove NanoTDF implementation ([#321](https://github.com/opentdf/java-sdk/issues/321)) ([63715d2](https://github.com/opentdf/java-sdk/commit/63715d2c72b6a5124bd7df0fc8bcc19ab02c5b0d))
+
+## [0.11.1](https://github.com/opentdf/java-sdk/compare/v0.11.0...v0.11.1) (2025-12-08)
+
+
+### Bug Fixes
+
+* **examples:** improve logging and setup logic in examples ([#316](https://github.com/opentdf/java-sdk/issues/316)) ([2e5660c](https://github.com/opentdf/java-sdk/commit/2e5660c50b7c5fd80ad4137c1f17a1e1f4470588))
+
+## [0.11.0](https://github.com/opentdf/java-sdk/compare/v0.10.0...v0.11.0) (2025-11-20)
+
+
+### Features
+
+* **ci:** DSPX-1716 Updating permission for bundled tests ([#306](https://github.com/opentdf/java-sdk/issues/306)) ([87ff3e6](https://github.com/opentdf/java-sdk/commit/87ff3e6f24e7cfedbb5aab7f6d0d0bfb1a798888))
+
+
+### Bug Fixes
+
+* **ci:** Fix the workflow that updates the proto version ([#301](https://github.com/opentdf/java-sdk/issues/301)) ([9bd9ce5](https://github.com/opentdf/java-sdk/commit/9bd9ce5eeaf3c4fe0f683d16bb65974c09fe1068))
+* **main:** make examples runnable ([#311](https://github.com/opentdf/java-sdk/issues/311)) ([5ede7dd](https://github.com/opentdf/java-sdk/commit/5ede7dd5555bb60db94fdab875b9a318c6075412))
+* parse hostnames with no ports correctly ([#292](https://github.com/opentdf/java-sdk/issues/292)) ([3da5f51](https://github.com/opentdf/java-sdk/commit/3da5f511a950da4f468f63f62fe52617410fca48))
+* **sdk:** remove reserved and unused proto field ([#299](https://github.com/opentdf/java-sdk/issues/299)) ([50b0302](https://github.com/opentdf/java-sdk/commit/50b0302a8d85b45cc81f465292636330a512c74b))
+* we can't parse things like `192.168.1.1:4000` ([#294](https://github.com/opentdf/java-sdk/issues/294)) ([dc3142d](https://github.com/opentdf/java-sdk/commit/dc3142da71198e16688912152ac5ce866faec060))
+
 ## [0.10.0](https://github.com/opentdf/java-sdk/compare/v0.9.0...v0.10.0) (2025-09-02)
 
 

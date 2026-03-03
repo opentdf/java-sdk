@@ -462,7 +462,7 @@ class TDF {
 
         for (var assertionConfig : tdfConfig.assertionConfigList) {
             var assertion = new Manifest.Assertion();
-            assertion.id = assertionConfig.id;
+            assertion.id = assertionConfig.id != null && !assertionConfig.id.isEmpty() ? assertionConfig.id : UUID.randomUUID().toString();
             assertion.type = assertionConfig.type.toString();
             assertion.scope = assertionConfig.scope.toString();
             assertion.statement = assertionConfig.statement;
@@ -695,7 +695,7 @@ class TDF {
             Manifest.Assertion.HashValues hashValues;
             try {
                 hashValues = assertion.verify(assertionKey);
-            } catch (ParseException | JOSEException e) {
+            } catch (ParseException | JOSEException | java.security.cert.CertificateException e) {
                 throw new SDKException("error validating assertion hash", e);
             }
             var hashOfAssertionAsHex = assertion.hash();
