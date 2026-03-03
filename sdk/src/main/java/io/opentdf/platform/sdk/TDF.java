@@ -227,8 +227,9 @@ class TDF {
                     ? tdfConfig.wrappingKeyType.toString()
                     : kasInfo.Algorithm;
 
-            if (KeyType.fromString(algorithm).isEc()) {
-                var ecKeyWrappedKeyInfo = createECWrappedKey(tdfConfig, kasInfo, symKey);
+            var keyType = KeyType.fromString(algorithm);
+            if (keyType.isEc()) {
+                var ecKeyWrappedKeyInfo = createECWrappedKey(kasInfo, symKey, keyType);
                 keyAccess.wrappedKey = ecKeyWrappedKeyInfo.wrappedKey;
                 keyAccess.ephemeralPublicKey = ecKeyWrappedKeyInfo.publicKey;
                 keyAccess.keyType = kECWrapped;
@@ -239,9 +240,9 @@ class TDF {
             return keyAccess;
         }
 
-        private ECKeyWrappedKeyInfo createECWrappedKey(Config.TDFConfig tdfConfig, Config.KASInfo kasInfo,
-                byte[] symKey) {
-            var curveName = tdfConfig.wrappingKeyType.getECCurve();
+        private ECKeyWrappedKeyInfo createECWrappedKey(Config.KASInfo kasInfo,
+                byte[] symKey, KeyType keyType) {
+            var curveName = keyType.getECCurve();
             var keyPair = new ECKeyPair(curveName, ECKeyPair.ECAlgorithm.ECDH);
 
             ECPublicKey kasPubKey = ECKeyPair.publicKeyFromPem(kasInfo.PublicKey);
