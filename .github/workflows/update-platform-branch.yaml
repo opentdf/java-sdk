@@ -9,6 +9,10 @@ name: "Update Platform Branch"
 on:
   schedule:
     - cron: "17 0 * * *" # Runs daily at 00:17 UTC
+  pull_request:
+    branches:
+      - main
+      - 'release/**'
   workflow_call:
     inputs:
       tag:
@@ -49,7 +53,7 @@ jobs:
           if [ -z "${{ github.event.inputs.tag }}" ]; then
             LATEST_TAG=$(git ls-remote --tags https://github.com/opentdf/platform.git | \
               grep "refs/tags/protocol/go" | \
-              sed 's|.*/||' | \
+              sed 's|refs/tags/||' | \
               sort -V | \
               tail -n1)
             echo "LATEST_TAG=$LATEST_TAG" >> "$GITHUB_ENV"
