@@ -143,7 +143,7 @@ jobs:
 
 
       - name: Get protocol release notes
-        if: steps.update-platform-branch.outputs.changes == 'true'
+        if: steps.update-platform-branch.outputs.changes == 'true' || 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -158,7 +158,7 @@ jobs:
           EOF
 
       - name: Update existing PR Title and description
-        if: steps.check-pr.outputs.EXISTING_PR != '' && steps.update-platform-branch.outputs.changes == 'true'
+        if: steps.check-pr.outputs.EXISTING_PR != '' && (steps.update-platform-branch.outputs.changes == 'true' || 'true')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH_NAME: update-platform-branch
