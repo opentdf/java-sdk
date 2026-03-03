@@ -1,18 +1,19 @@
 package io.opentdf.platform.sdk;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 class Version implements Comparable<Version> {
 
     // Version of the SDK, managed by release-please.
-    public static final String SDK = "0.12.0"; // x-release-please-version
+    public static final String SDK = "0.13.0"; // x-release-please-version
 
     private final int major;
     private final int minor;
