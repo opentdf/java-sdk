@@ -53,10 +53,10 @@ jobs:
           if [ -z "${{ github.event.inputs.tag }}" ]; then
             LATEST_TAG=$(git ls-remote --tags https://github.com/opentdf/platform.git | \
               grep "refs/tags/protocol/go" | \
-              sed 's|refs/tags/||' | \
+              sed 's|.*/||' | \
               sort -V | \
               tail -n1)
-            echo "LATEST_TAG=$LATEST_TAG" >> "$GITHUB_ENV"
+            echo "LATEST_TAG=protocol/go/$LATEST_TAG" >> "$GITHUB_ENV"
           else
             echo "LATEST_TAG=${{ github.event.inputs.tag }}" >> "$GITHUB_ENV"
           fi
