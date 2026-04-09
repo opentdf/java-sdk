@@ -163,6 +163,7 @@ public class Planner {
                 logger.info("no public key provided for KAS at {}, retrieving", splitInfo.kas);
                 var getKI = new Config.KASInfo();
                 getKI.URL = splitInfo.kas;
+                getKI.KID = splitInfo.kid;
                 getKI.Algorithm = splitInfo.keyType == null
                         ? (tdfConfig.wrappingKeyType == null ? null : tdfConfig.wrappingKeyType.toString())
                         : splitInfo.keyType.toString();

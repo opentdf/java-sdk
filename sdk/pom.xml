@@ -16,7 +16,7 @@
         <kotlin.version>2.1.0</kotlin.version>
         <connect.version>0.7.2</connect.version>
         <okhttp.version>4.12.0</okhttp.version>
-        <platform.branch>protocol/go/v0.11.0</platform.branch>
+        <platform.branch>protocol/go/v0.16.0</platform.branch>
     </properties>
     <dependencies>
         <!-- Logging Dependencies -->
@@ -193,7 +193,7 @@
         <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
-            <version>3.8.0</version>
+            <version>3.27.7</version>
             <scope>test</scope>
         </dependency>
         <dependency>

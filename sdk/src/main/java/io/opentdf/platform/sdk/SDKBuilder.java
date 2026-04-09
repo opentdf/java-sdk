@@ -66,6 +66,7 @@ public class SDKBuilder {
     private SSLFactory sslFactory;
     private AuthorizationGrant authzGrant;
     private ProtocolType protocolType = ProtocolType.CONNECT;
+    private SrtSigner srtSigner;
 
     private static final Logger logger = LoggerFactory.getLogger(SDKBuilder.class);
 
@@ -177,6 +178,11 @@ public class SDKBuilder {
         return this;
     }
 
+    public SDKBuilder srtSigner(SrtSigner signer) {
+        this.srtSigner = signer;
+        return this;
+    }
+
     private Interceptor getAuthInterceptor(RSAKey rsaKey) {
         if (platformEndpoint == null) {
             throw new SDKException("cannot build an SDK without specifying the platform endpoint");
@@ -236,14 +242,16 @@ public class SDKBuilder {
         final Interceptor interceptor;
         final TrustManager trustManager;
         final ProtocolClient protocolClient;
+        final SrtSigner srtSigner;
 
         final SDK.Services services;
 
-        ServicesAndInternals(Interceptor interceptor, TrustManager trustManager, SDK.Services services, ProtocolClient protocolClient) {
+        ServicesAndInternals(Interceptor interceptor, TrustManager trustManager, SDK.Services services, ProtocolClient protocolClient, SrtSigner srtSigner) {
             this.interceptor = interceptor;
             this.trustManager = trustManager;
             this.services = services;
             this.protocolClient = protocolClient;
+            this.srtSigner = srtSigner;
         }
     }
 
@@ -267,7 +275,8 @@ public class SDKBuilder {
 
         this.platformEndpoint = AddressNormalizer.normalizeAddress(this.platformEndpoint, this.usePlainText);
         var authInterceptor = getAuthInterceptor(dpopKey);
-        var kasClient = getKASClient(dpopKey, authInterceptor);
+        var srtSignerToUse = this.srtSigner == null ? new DefaultSrtSigner(dpopKey) : this.srtSigner;
+        var kasClient = getKASClient(srtSignerToUse, authInterceptor);
         var httpClient = getHttpClient();
         var client = getProtocolClient(platformEndpoint, httpClient, authInterceptor);
         var attributeService = new AttributesServiceClient(client);
@@ -337,18 +346,19 @@ public class SDKBuilder {
                 authInterceptor,
                 sslFactory == null ? null : sslFactory.getTrustManager().orElse(null),
                 services,
-                client);
+                client,
+                srtSignerToUse);
     }
 
     @Nonnull
-    private KASClient getKASClient(RSAKey dpopKey, Interceptor interceptor) {
+    private KASClient getKASClient(SrtSigner srtSigner, Interceptor interceptor) {
         BiFunction<OkHttpClient, String, ProtocolClient> protocolClientFactory = (OkHttpClient client, String address) -> getProtocolClient(address, client, interceptor);
-        return new KASClient(getHttpClient(), protocolClientFactory, dpopKey, usePlainText);
+        return new KASClient(getHttpClient(), protocolClientFactory, srtSigner, usePlainText);
     }
 
     public SDK build() {
         var services = buildServices();
-        return new SDK(services.services, services.trustManager, services.interceptor, services.protocolClient, platformEndpoint);
+        return new SDK(services.services, services.trustManager, services.interceptor, services.protocolClient, platformEndpoint, services.srtSigner);
     }
 
     private ProtocolClient getUnauthenticatedProtocolClient(String endpoint, OkHttpClient httpClient) {

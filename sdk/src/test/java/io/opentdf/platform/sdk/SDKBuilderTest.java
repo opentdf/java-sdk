@@ -108,6 +108,55 @@ public class SDKBuilderTest {
         sdkServicesSetup(false, false);
     }
 
+    @Test
+    void testInjectedSrtSignerIsExposedOnSdk() throws Exception {
+        WellKnownServiceGrpc.WellKnownServiceImplBase wellKnownService = new WellKnownServiceGrpc.WellKnownServiceImplBase() {
+            @Override
+            public void getWellKnownConfiguration(GetWellKnownConfigurationRequest request,
+                                                  StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
+                responseObserver.onNext(GetWellKnownConfigurationResponse.getDefaultInstance());
+                responseObserver.onCompleted();
+            }
+        };
+
+        Server platformServices = null;
+        SrtSigner signer = new SrtSigner() {
+            @Override
+            public byte[] sign(byte[] input) {
+                return new byte[] { 7 };
+            }
+
+            @Override
+            public String alg() {
+                return "RS256";
+            }
+        };
+
+        try {
+            platformServices = ServerBuilder
+                    .forPort(getRandomPort())
+                    .directExecutor()
+                    .addService(wellKnownService)
+                    .build()
+                    .start();
+
+            var sdk = SDKBuilder.newBuilder()
+                    .clientSecret("user", "password")
+                    .platformEndpoint("http://localhost:" + platformServices.getPort())
+                    .useInsecurePlaintextConnection(true)
+                    .protocol(ProtocolType.GRPC)
+                    .srtSigner(signer)
+                    .build();
+
+            assertThat(sdk.getSrtSigner()).isPresent();
+            assertThat(sdk.getSrtSigner().get()).isSameAs(signer);
+        } finally {
+            if (platformServices != null) {
+                platformServices.shutdownNow();
+            }
+        }
+    }
+
     void sdkServicesSetup(boolean useSSLPlatform, boolean useSSLIDP) throws Exception {
 
         HeldCertificate rootCertificate = new HeldCertificate.Builder()

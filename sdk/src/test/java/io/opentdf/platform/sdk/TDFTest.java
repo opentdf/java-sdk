@@ -994,6 +994,74 @@ public class TDFTest {
                 .isEqualTo(plainText);
     }
 
+    @Test
+    void testAssertionWithoutIdGeneratesUUID() throws Exception {
+        // Create an assertion WITHOUT specifying an ID
+        var assertionConfigNoId = new AssertionConfig();
+        assertionConfigNoId.id = null; // No ID specified
+        assertionConfigNoId.type = AssertionConfig.Type.BaseAssertion;
+        assertionConfigNoId.scope = AssertionConfig.Scope.TrustedDataObj;
+        assertionConfigNoId.appliesToState = AssertionConfig.AppliesToState.Unencrypted;
+        assertionConfigNoId.statement = new AssertionConfig.Statement();
+        assertionConfigNoId.statement.format = "json";
+        assertionConfigNoId.statement.schema = "test-schema";
+        assertionConfigNoId.statement.value = "{\"test\":\"value\"}";
+
+        var assertionConfigEmptyId = new AssertionConfig();
+        assertionConfigEmptyId.id = ""; // empty id
+        assertionConfigEmptyId.type = AssertionConfig.Type.BaseAssertion;
+        assertionConfigEmptyId.scope = AssertionConfig.Scope.TrustedDataObj;
+        assertionConfigEmptyId.appliesToState = AssertionConfig.AppliesToState.Unencrypted;
+        assertionConfigEmptyId.statement = new AssertionConfig.Statement();
+        assertionConfigEmptyId.statement.format = "json";
+        assertionConfigEmptyId.statement.schema = "another-schema";
+        assertionConfigEmptyId.statement.value = "{\"test\":\"value\"}";
+
+        // Create an assertion WITH an explicit ID for comparison
+        var assertionConfigWithId = new AssertionConfig();
+        assertionConfigWithId.id = "explicit-id";
+        assertionConfigWithId.type = AssertionConfig.Type.HandlingAssertion;
+        assertionConfigWithId.scope = AssertionConfig.Scope.Payload;
+        assertionConfigWithId.appliesToState = AssertionConfig.AppliesToState.Encrypted;
+        assertionConfigWithId.statement = new AssertionConfig.Statement();
+        assertionConfigWithId.statement.format = "json";
+        assertionConfigWithId.statement.schema = "handling-schema";
+        assertionConfigWithId.statement.value = "{\"handling\":\"data\"}";
+
+        Config.TDFConfig tdfConfig = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
+                Config.withKasInformation(getRSAKASInfos()),
+                Config.withAssertionConfig(assertionConfigNoId, assertionConfigEmptyId, assertionConfigWithId));
+
+        String plainText = "Test data for UUID assertion generation.";
+        InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes(StandardCharsets.UTF_8));
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+
+        TDF tdf = new TDF(
+                new FakeServicesBuilder().setKas(kas)
+                        .setKeyAccessServerRegistryService(kasRegistryService).build());
+        var createdManifest = tdf.createTDF(plainTextInputStream, tdfOutputStream, tdfConfig).getManifest();
+
+        // Verify both assertions exist and have the correct IDs
+        assertThat(createdManifest.assertions).isNotNull();
+        assertThat(createdManifest.assertions).hasSize(3);
+
+        var assertionsWithoutIds = createdManifest.assertions.subList(0, 2);
+        for (var assertionWithoutId: assertionsWithoutIds) {
+            // Verify the assertion without an ID now has a UUID
+            assertThat(assertionWithoutId).isNotNull();
+            assertThat(assertionWithoutId.id).isNotNull();
+            assertThat(assertionWithoutId.id).isNotEmpty();
+            // Verify it's a valid UUID format (basic check)
+            assertThat(assertionWithoutId.id).matches("[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}");
+        }
+
+        var assertionWithId = createdManifest.assertions.get(2);
+        // Verify the assertion with explicit ID kept its ID
+        assertThat(assertionWithId).isNotNull();
+        assertThat(assertionWithId.id).isEqualTo("explicit-id");
+    }
+
     @Nonnull
     private static Config.KASInfo[] getKASInfos(Predicate<Integer> filter) {
         var kasInfos = new ArrayList<Config.KASInfo>();

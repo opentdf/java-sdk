@@ -32,7 +32,7 @@ class SDKTest {
     @Test
     void testReadingProtocolClient() {
         var platformServicesClient = mock(ProtocolClient.class);
-        var sdk = new SDK(new FakeServicesBuilder().build(), null, null, platformServicesClient, null);
+        var sdk = new SDK(new FakeServicesBuilder().build(), null, null, platformServicesClient, null, null);
         assertThat(sdk.getPlatformServicesClient()).isSameAs(platformServicesClient);
     }
 
@@ -52,7 +52,7 @@ class SDKTest {
                 .thenReturn(TestUtil.successfulUnaryCall(response));
 
         var services = new FakeServicesBuilder().setWellknownService(wellknownService).build();
-        var sdk = new SDK(services, null, null, platformServicesClient, null);
+        var sdk = new SDK(services, null, null, platformServicesClient, null, null);
 
         var baseKey = sdk.getBaseKey();
         assertThat(baseKey).isPresent();
@@ -68,7 +68,7 @@ class SDKTest {
         var platformServicesClient = mock(ProtocolClient.class);
         io.opentdf.platform.authorization.v2.AuthorizationServiceClientInterface authSvcV2 = mock(io.opentdf.platform.authorization.v2.AuthorizationServiceClientInterface.class);
         var fakeServiceBuilder = new FakeServicesBuilder().setAuthorizationServiceV2(authSvcV2).build();
-        var sdk = new SDK(fakeServiceBuilder, null, null, platformServicesClient, null);
+        var sdk = new SDK(fakeServiceBuilder, null, null, platformServicesClient, null, null);
         assertThat(sdk.getServices().authorizationV2()).isSameAs(fakeServiceBuilder.authorizationV2());
     }
 
