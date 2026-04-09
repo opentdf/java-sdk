@@ -53,9 +53,9 @@ class EntityIdentifiersTest {
         assertEquals(Entity.Category.CATEGORY_SUBJECT, e.getCategory());
     }
 
-    @Test
-    void forToken() {
-        String jwt = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.test";
+    @ParameterizedTest
+    @ValueSource(strings = {"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.test", ""})
+    void forToken(String jwt) {
         EntityIdentifier eid = EntityIdentifiers.forToken(jwt);
 
         assertEquals(EntityIdentifier.IdentifierCase.TOKEN, eid.getIdentifierCase());
@@ -63,11 +63,11 @@ class EntityIdentifiersTest {
     }
 
     @Test
-    void forTokenEmptyString() {
-        EntityIdentifier eid = EntityIdentifiers.forToken("");
-
-        assertEquals(EntityIdentifier.IdentifierCase.TOKEN, eid.getIdentifierCase());
-        assertEquals("", eid.getToken().getJwt());
+    void nullInputsThrow() {
+        assertThrows(NullPointerException.class, () -> EntityIdentifiers.forEmail(null));
+        assertThrows(NullPointerException.class, () -> EntityIdentifiers.forClientId(null));
+        assertThrows(NullPointerException.class, () -> EntityIdentifiers.forUserName(null));
+        assertThrows(NullPointerException.class, () -> EntityIdentifiers.forToken(null));
     }
 
     private static EntityChain extractEntityChain(EntityIdentifier eid) {
