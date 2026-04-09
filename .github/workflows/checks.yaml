@@ -49,6 +49,7 @@ jobs:
           #   - sdk: changes to sdk
           #   - tests: test only changes
           #   - examples: examples only changes
+          #   - release/v0.\d+: release-please release branch PRs
           scopes: |
             ci
             cmdline
@@ -57,6 +58,7 @@ jobs:
             sdk
             tests
             examples
+            release/v0\.\d+
 
   mavenverify:
     runs-on: ubuntu-latest
