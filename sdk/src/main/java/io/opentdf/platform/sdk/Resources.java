@@ -6,8 +6,8 @@ import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * Convenience constructors for {@link Resource}, mirroring the Go SDK helpers
- * in {@code authorization/v2.ForAttributeValues}, {@code ForRegisteredResourceValueFqn}.
+ * Convenience constructors for {@link Resource}, analogous to the
+ * {@link EntityIdentifiers} helpers for {@link io.opentdf.platform.authorization.v2.EntityIdentifier}.
  *
  * <p>Each method builds the full {@code Resource} proto so callers avoid
  * deeply nested builder chains.
