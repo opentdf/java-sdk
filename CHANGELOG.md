@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.14.0](https://github.com/opentdf/java-sdk/compare/v0.13.0...v0.14.0) (2026-04-21)
+
+
+### Features
+
+* **sdk:** add ergonomic Resource constructors for authorization ([#354](https://github.com/opentdf/java-sdk/issues/354)) ([9e05ca2](https://github.com/opentdf/java-sdk/commit/9e05ca27517cd28dbf97caf721f9a22083ff680d))
+
+
+### Bug Fixes
+
+* **ci:** allow release branch scopes in PR title validation ([#349](https://github.com/opentdf/java-sdk/issues/349)) ([8020a3b](https://github.com/opentdf/java-sdk/commit/8020a3b243d36a6f866a6a81b0ca1898871d89e8))
+
 ## [0.13.0](https://github.com/opentdf/java-sdk/compare/v0.12.0...v0.13.0) (2026-04-09)
 
 
