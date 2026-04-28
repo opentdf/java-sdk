@@ -1,12 +1,12 @@
 package io.opentdf.platform;
 
 import com.connectrpc.ResponseMessageKt;
-import io.opentdf.platform.policy.AttributeRuleTypeEnum;
 import io.opentdf.platform.policy.Namespace;
 import io.opentdf.platform.policy.attributes.CreateAttributeRequest;
 import io.opentdf.platform.policy.attributes.CreateAttributeResponse;
 import io.opentdf.platform.policy.namespaces.GetNamespaceRequest;
 import io.opentdf.platform.sdk.*;
+import static io.opentdf.platform.sdk.PolicyEnums.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -51,9 +51,7 @@ public class CreateAttribute {
           CreateAttributeRequest.newBuilder()
               .setNamespaceId(namespace.getId())
               .setName("test-attribute")
-              .setRule(
-                  AttributeRuleTypeEnum.forNumber(
-                      AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ALL_OF_VALUE))
+              .setRule(RULE_ALL_OF)
               .addAllValues(Arrays.asList("test1", "test2"))
               .build();
 

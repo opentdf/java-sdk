@@ -4,13 +4,12 @@ import com.connectrpc.ResponseMessageKt;
 import io.opentdf.platform.policy.Action;
 import io.opentdf.platform.policy.Attribute;
 import io.opentdf.platform.policy.Condition;
-import io.opentdf.platform.policy.ConditionBooleanTypeEnum;
 import io.opentdf.platform.policy.ConditionGroup;
 import io.opentdf.platform.policy.Namespace;
 import io.opentdf.platform.policy.SubjectConditionSet;
 import io.opentdf.platform.policy.SubjectMapping;
-import io.opentdf.platform.policy.SubjectMappingOperatorEnum;
 import io.opentdf.platform.policy.SubjectSet;
+import static io.opentdf.platform.sdk.PolicyEnums.*;
 import io.opentdf.platform.policy.attributes.GetAttributeRequest;
 import io.opentdf.platform.policy.namespaces.GetNamespaceRequest;
 import io.opentdf.platform.policy.subjectmapping.CreateSubjectConditionSetRequest;
@@ -100,14 +99,11 @@ public class CreateSubjectMapping {
                           SubjectSet.newBuilder()
                               .addConditionGroups(
                                   ConditionGroup.newBuilder()
-                                      .setBooleanOperator(
-                                          ConditionBooleanTypeEnum.CONDITION_BOOLEAN_TYPE_ENUM_AND)
+                                      .setBooleanOperator(BOOLEAN_AND)
                                       .addConditions(
                                           Condition.newBuilder()
                                               .setSubjectExternalSelectorValue(".myfield")
-                                              .setOperator(
-                                                  SubjectMappingOperatorEnum
-                                                      .SUBJECT_MAPPING_OPERATOR_ENUM_IN)
+                                              .setOperator(OPERATOR_IN)
                                               .addSubjectExternalValues("myvalue")))))
               .build();
 
