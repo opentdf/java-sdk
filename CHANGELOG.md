@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.0](https://github.com/opentdf/java-sdk/compare/v0.14.0...v0.15.0) (2026-04-29)
+
+
+### Features
+
+* **sdk:** add shorthand enum constants for policy types ([#357](https://github.com/opentdf/java-sdk/issues/357)) ([a1d4651](https://github.com/opentdf/java-sdk/commit/a1d4651e709b88834932398332f5c50101f9c54a))
+
 ## [0.14.0](https://github.com/opentdf/java-sdk/compare/v0.13.0...v0.14.0) (2026-04-21)
 
 
