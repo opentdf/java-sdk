@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.14.0](https://github.com/opentdf/java-sdk/compare/v0.13.0...v0.14.0) (2026-04-21)
+
+
+### Features
+
+* **sdk:** add ergonomic Resource constructors for authorization ([#354](https://github.com/opentdf/java-sdk/issues/354)) ([9e05ca2](https://github.com/opentdf/java-sdk/commit/9e05ca27517cd28dbf97caf721f9a22083ff680d))
+
+
+### Bug Fixes
+
+* **ci:** allow release branch scopes in PR title validation ([#349](https://github.com/opentdf/java-sdk/issues/349)) ([8020a3b](https://github.com/opentdf/java-sdk/commit/8020a3b243d36a6f866a6a81b0ca1898871d89e8))
+
+## [0.13.0](https://github.com/opentdf/java-sdk/compare/v0.12.0...v0.13.0) (2026-04-09)
+
+
+### Features
+
+* **sdk:** add EntityIdentifier convenience constructors ([#346](https://github.com/opentdf/java-sdk/issues/346)) ([eeb8805](https://github.com/opentdf/java-sdk/commit/eeb880598c0121771ce00838610900da5aa2995c))
+* **sdk:** DSPX-2418 add discovery convenience methods ([#339](https://github.com/opentdf/java-sdk/issues/339)) ([8de6068](https://github.com/opentdf/java-sdk/commit/8de60683794daf64d6fbfbc36b1fc5225d015714))
+* **sdk:** expose SRT signer ([#329](https://github.com/opentdf/java-sdk/issues/329)) ([f93d332](https://github.com/opentdf/java-sdk/commit/f93d33275c4343c04fef4fba2e98ab8b06c1a670))
+
+
+### Bug Fixes
+
+* add a default assertion id if one is not specified ([#341](https://github.com/opentdf/java-sdk/issues/341)) ([69d6a53](https://github.com/opentdf/java-sdk/commit/69d6a53387c8427e0ff968e599086484e6ae90da))
+* **docs:** DSPX-2409 replace SDK README code example with working code ([#336](https://github.com/opentdf/java-sdk/issues/336)) ([0f224a6](https://github.com/opentdf/java-sdk/commit/0f224a636b4e67418680309a1c66ef06519a4e81))
+* **sdk:** Support kas keys with extended EC methods  ([#344](https://github.com/opentdf/java-sdk/issues/344)) ([982b287](https://github.com/opentdf/java-sdk/commit/982b28766da4f996b2149fa2cd2c6a180412bcbf))
+* **sdk:** Support RSA4096 Kas keys ([#343](https://github.com/opentdf/java-sdk/issues/343)) ([dba9bbf](https://github.com/opentdf/java-sdk/commit/dba9bbf5fb33df6dfa467af37374071c46bf521e))
+* **sdk:** Updates to proto version v0.16.0 ([#308](https://github.com/opentdf/java-sdk/issues/308)) ([4660e27](https://github.com/opentdf/java-sdk/commit/4660e27fcec193734d6e343088505be98a278621))
+
 ## [0.12.0](https://github.com/opentdf/java-sdk/compare/v0.11.1...v0.12.0) (2026-01-15)
 
 

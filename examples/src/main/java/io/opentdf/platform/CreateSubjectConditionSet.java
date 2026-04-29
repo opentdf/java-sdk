@@ -2,11 +2,10 @@ package io.opentdf.platform;
 
 import com.connectrpc.ResponseMessageKt;
 import io.opentdf.platform.policy.Condition;
-import io.opentdf.platform.policy.ConditionBooleanTypeEnum;
 import io.opentdf.platform.policy.ConditionGroup;
 import io.opentdf.platform.policy.SubjectConditionSet;
-import io.opentdf.platform.policy.SubjectMappingOperatorEnum;
 import io.opentdf.platform.policy.SubjectSet;
+import static io.opentdf.platform.sdk.PolicyEnums.*;
 import io.opentdf.platform.policy.subjectmapping.CreateSubjectConditionSetRequest;
 import io.opentdf.platform.policy.subjectmapping.CreateSubjectConditionSetResponse;
 import io.opentdf.platform.policy.subjectmapping.SubjectConditionSetCreate;
@@ -39,12 +38,11 @@ public class CreateSubjectConditionSet {
           SubjectSet.newBuilder()
               .addConditionGroups(
                   ConditionGroup.newBuilder()
-                      .setBooleanOperator(ConditionBooleanTypeEnum.CONDITION_BOOLEAN_TYPE_ENUM_AND)
+                      .setBooleanOperator(BOOLEAN_AND)
                       .addConditions(
                           Condition.newBuilder()
                               .setSubjectExternalSelectorValue(".myfield")
-                              .setOperator(
-                                  SubjectMappingOperatorEnum.SUBJECT_MAPPING_OPERATOR_ENUM_IN)
+                              .setOperator(OPERATOR_IN)
                               .addSubjectExternalValues("myvalue")));
 
       CreateSubjectConditionSetRequest createSubjectConditionSetRequest =
