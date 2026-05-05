@@ -108,6 +108,55 @@ public class SDKBuilderTest {
         sdkServicesSetup(false, false);
     }
 
+    @Test
+    void testInjectedSrtSignerIsExposedOnSdk() throws Exception {
+        WellKnownServiceGrpc.WellKnownServiceImplBase wellKnownService = new WellKnownServiceGrpc.WellKnownServiceImplBase() {
+            @Override
+            public void getWellKnownConfiguration(GetWellKnownConfigurationRequest request,
+                                                  StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
+                responseObserver.onNext(GetWellKnownConfigurationResponse.getDefaultInstance());
+                responseObserver.onCompleted();
+            }
+        };
+
+        Server platformServices = null;
+        SrtSigner signer = new SrtSigner() {
+            @Override
+            public byte[] sign(byte[] input) {
+                return new byte[] { 7 };
+            }
+
+            @Override
+            public String alg() {
+                return "RS256";
+            }
+        };
+
+        try {
+            platformServices = ServerBuilder
+                    .forPort(getRandomPort())
+                    .directExecutor()
+                    .addService(wellKnownService)
+                    .build()
+                    .start();
+
+            var sdk = SDKBuilder.newBuilder()
+                    .clientSecret("user", "password")
+                    .platformEndpoint("http://localhost:" + platformServices.getPort())
+                    .useInsecurePlaintextConnection(true)
+                    .protocol(ProtocolType.GRPC)
+                    .srtSigner(signer)
+                    .build();
+
+            assertThat(sdk.getSrtSigner()).isPresent();
+            assertThat(sdk.getSrtSigner().get()).isSameAs(signer);
+        } finally {
+            if (platformServices != null) {
+                platformServices.shutdownNow();
+            }
+        }
+    }
+
     void sdkServicesSetup(boolean useSSLPlatform, boolean useSSLIDP) throws Exception {
 
         HeldCertificate rootCertificate = new HeldCertificate.Builder()
@@ -249,7 +298,8 @@ public class SDKBuilderTest {
             SDKBuilder servicesBuilder = SDKBuilder
                     .newBuilder()
                     .clientSecret("client-id", "client-secret")
-                    .platformEndpoint("http" + (useSSLPlatform ? "s" : "") + "://localhost:" + platformServicesServer.getPort());
+                    .platformEndpoint("http" + (useSSLPlatform ? "s" : "") + "://localhost:" + platformServicesServer.getPort())
+                    .protocol(ProtocolType.GRPC); // Use gRPC protocol for test servers
 
             if (!useSSLPlatform) {
                 servicesBuilder = servicesBuilder.useInsecurePlaintextConnection(true);
@@ -267,6 +317,9 @@ public class SDKBuilderTest {
             services = servicesAndComponents.services;
 
             assertThat(services).isNotNull();
+            io.opentdf.platform.authorization.v2.AuthorizationServiceClientInterface authorizationServiceClientInterface
+             = services.authorizationV2();
+            assertThat(authorizationServiceClientInterface).isNotNull();
 
             httpServer.enqueue(new MockResponse()
                     .setBody("{\"access_token\": \"hereisthetoken\", \"token_type\": \"Bearer\"}")
@@ -396,6 +449,7 @@ public class SDKBuilderTest {
                     .clientSecret("user", "password")
                     .platformEndpoint("http://localhost:" + platformServices.getPort())
                     .useInsecurePlaintextConnection(true)
+                    .protocol(ProtocolType.GRPC) // Use gRPC protocol for test server
                     .build();
             assertThat(sdk.getAuthInterceptor()).isEmpty();
 
@@ -410,6 +464,32 @@ public class SDKBuilderTest {
         } finally {
             platformServices.shutdownNow();
         }
+    }
+
+    @Test
+    void testProtocolConfiguration() {
+        // Test protocol setter and getter functionality
+        SDKBuilder builder = SDKBuilder.newBuilder();
+        
+        // Test setting different protocol types
+        builder.protocol(ProtocolType.GRPC);
+        builder.protocol(ProtocolType.GRPC_WEB);
+        builder.protocol(ProtocolType.CONNECT);
+        
+        // Test null validation
+        assertThrows(IllegalArgumentException.class, () -> {
+            builder.protocol(null);
+        });
+        
+        // Test invalid configuration validation
+        assertThrows(SDKException.class, () -> {
+            SDKBuilder.newBuilder()
+                    .clientSecret("user", "password")
+                    .platformEndpoint("http://localhost:8080")
+                    .useInsecurePlaintextConnection(true)
+                    .protocol(ProtocolType.GRPC_WEB)
+                    .buildServices();
+        });
     }
 
     public static int getRandomPort() throws IOException {

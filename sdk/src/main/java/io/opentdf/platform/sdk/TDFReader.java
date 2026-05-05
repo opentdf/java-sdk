@@ -1,10 +1,8 @@
 package io.opentdf.platform.sdk;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -64,10 +62,8 @@ public class TDFReader {
     }
 
     PolicyObject readPolicyObject() {
-        try (var reader = new BufferedReader(new InputStreamReader(manifestEntry.getData()))){
-            return Manifest.readPolicyObject(reader);
-        } catch (IOException e) {
-            throw new SDKException("error reading policy object", e);
-        }
+        String manifestJson = manifest();
+        Manifest manifest = Manifest.readManifest(manifestJson);
+        return Manifest.decodePolicyObject(manifest);
     }
 }

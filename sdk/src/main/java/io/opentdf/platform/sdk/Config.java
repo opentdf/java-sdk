@@ -1,13 +1,18 @@
 package io.opentdf.platform.sdk;
 
+import io.opentdf.platform.policy.KeyAccessServer;
+import io.opentdf.platform.policy.SimpleKasKey;
 import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Configuration class for setting various configurations related to TDF.
@@ -21,7 +26,7 @@ public class Config {
     public static final int MIN_SEGMENT_SIZE = 16 * 1024;       // not currently enforced in parsing due to existing payloads in testing
     public static final String KAS_PUBLIC_KEY_PATH = "/kas_public_key";
     public static final String DEFAULT_MIME_TYPE = "application/octet-stream";
-    public static final int MAX_COLLECTION_ITERATION = (1 << 24) - 1;
+    private static Logger logger = LoggerFactory.getLogger(Config.class);
 
     public enum TDFFormat {
         JSONFormat,
@@ -32,8 +37,6 @@ public class Config {
         HS256,
         GMAC
     }
-
-    public static final int K_HTTP_OK = 200;
 
     public static class KASInfo implements Cloneable {
         public String URL;
@@ -70,6 +73,36 @@ public class Config {
                 sb.append("Algorithm:\"").append(this.Algorithm).append("\",");
             }
             return sb.append("}").toString();
+        }
+
+        public static List<KASInfo> fromKeyAccessServer(KeyAccessServer kas) {
+            var keys = kas.getPublicKey().getCached().getKeysList();
+            if (keys.isEmpty()) {
+                logger.warn("Invalid KAS key mapping for kas [{}]: publicKey is empty", kas.getUri());
+                return Collections.emptyList();
+            }
+            return keys.stream().flatMap(ki -> {
+                if (ki.getPem().isEmpty()) {
+                    logger.warn("Invalid KAS key mapping for kas [{}]: publicKey PEM is empty", kas.getUri());
+                    return Stream.empty();
+                }
+                Config.KASInfo kasInfo = new Config.KASInfo();
+                kasInfo.URL = kas.getUri();
+                kasInfo.KID = ki.getKid();
+                kasInfo.Algorithm = KeyType.fromPublicKeyAlgorithm(ki.getAlg()).toString();
+                kasInfo.PublicKey = ki.getPem();
+                return Stream.of(kasInfo);
+            }).collect(Collectors.toList());
+        }
+
+        public static KASInfo fromSimpleKasKey(SimpleKasKey ki) {
+            Config.KASInfo kasInfo = new Config.KASInfo();
+            kasInfo.URL = ki.getKasUri();
+            kasInfo.KID = ki.getPublicKey().getKid();
+            kasInfo.Algorithm = KeyType.fromAlgorithm(ki.getPublicKey().getAlgorithm()).toString();
+            kasInfo.PublicKey = ki.getPublicKey().getPem();
+
+            return kasInfo;
         }
     }
 
@@ -160,6 +193,7 @@ public class Config {
         public KeyType wrappingKeyType;
         public boolean hexEncodeRootAndSegmentHashes;
         public boolean renderVersionInfoInManifest;
+        public boolean systemMetadataAssertion;
 
         public TDFConfig() {
             this.autoconfigure = true;
@@ -176,6 +210,7 @@ public class Config {
             this.wrappingKeyType = KeyType.RSA2048Key;
             this.hexEncodeRootAndSegmentHashes = false;
             this.renderVersionInfoInManifest = true;
+            this.systemMetadataAssertion = false;
         }
     }
 
@@ -239,6 +274,11 @@ public class Config {
         };
     }
 
+    /**
+     * Deprecated since 9.1.0, will be removed. To produce key shares use
+     * the key mapping feature
+     */
+    @Deprecated(since = "9.1.0", forRemoval = true)
     public static Consumer<TDFConfig> withSplitPlan(Autoconfigure.KeySplitStep... p) {
         return (TDFConfig config) -> {
             config.splitPlan = new ArrayList<>(Arrays.asList(p));
@@ -297,178 +337,8 @@ public class Config {
         return (TDFConfig config) -> config.mimeType = mimeType;
     }
 
-    public static class NanoTDFConfig {
-        public ECCMode eccMode;
-        public NanoTDFType.Cipher cipher;
-        public SymmetricAndPayloadConfig config;
-        public List<String> attributes;
-        public List<KASInfo> kasInfoList;
-        public CollectionConfig collectionConfig;
-        public NanoTDFType.PolicyType policyType;
-
-        public NanoTDFConfig() {
-            this.eccMode = new ECCMode();
-            this.eccMode.setEllipticCurve(NanoTDFType.ECCurve.SECP256R1);
-            this.eccMode.setECDSABinding(false);
-
-            this.cipher = NanoTDFType.Cipher.AES_256_GCM_96_TAG;
-
-            this.config = new SymmetricAndPayloadConfig();
-            this.config.setHasSignature(false);
-            this.config.setSymmetricCipherType(NanoTDFType.Cipher.AES_256_GCM_96_TAG);
-
-            this.attributes = new ArrayList<>();
-            this.kasInfoList = new ArrayList<>();
-            this.collectionConfig = new CollectionConfig(false);
-            this.policyType = NanoTDFType.PolicyType.EMBEDDED_POLICY_ENCRYPTED;
-        }
-    }
-
-    public static NanoTDFConfig newNanoTDFConfig(Consumer<NanoTDFConfig>... options) {
-        NanoTDFConfig config = new NanoTDFConfig();
-        for (Consumer<NanoTDFConfig> option : options) {
-            option.accept(config);
-        }
-        return config;
-    }
-
-    public static Consumer<NanoTDFConfig> withCollection() {
-        return (NanoTDFConfig config) -> {
-            config.collectionConfig = new CollectionConfig(true);
-        };
-    }
-
-    public static Consumer<NanoTDFConfig> witDataAttributes(String... attributes) {
-        return (NanoTDFConfig config) -> {
-            Collections.addAll(config.attributes, attributes);
-        };
-    }
-
-    public static Consumer<NanoTDFConfig> withNanoKasInformation(KASInfo... kasInfoList) {
-        return (NanoTDFConfig config) -> {
-            Collections.addAll(config.kasInfoList, kasInfoList);
-        };
-    }
-
-    public static Consumer<NanoTDFConfig> withEllipticCurve(String curve) {
-        NanoTDFType.ECCurve ecCurve;
-        if (curve == null || curve.isEmpty()) {
-            ecCurve = NanoTDFType.ECCurve.SECP256R1; // default curve
-        } else if (curve.compareToIgnoreCase(NanoTDFType.ECCurve.SECP384R1.toString()) == 0) {
-            ecCurve = NanoTDFType.ECCurve.SECP384R1;
-        } else if (curve.compareToIgnoreCase(NanoTDFType.ECCurve.SECP521R1.toString()) == 0) {
-            ecCurve = NanoTDFType.ECCurve.SECP521R1;
-        } else if (curve.compareToIgnoreCase(NanoTDFType.ECCurve.SECP256R1.toString()) == 0) {
-            ecCurve = NanoTDFType.ECCurve.SECP256R1;
-        } else {
-            throw new IllegalArgumentException("The supplied curve string " + curve + " is not recognized.");
-        }
-        return (NanoTDFConfig config) -> config.eccMode.setEllipticCurve(ecCurve);
-    }
-
-    public static Consumer<NanoTDFConfig> WithECDSAPolicyBinding() {
-        return (NanoTDFConfig config) -> config.eccMode.setECDSABinding(true);
-    }
-
-    public static Consumer<NanoTDFConfig> WithECDSAPolicyBinding(boolean enable) {
-        return (NanoTDFConfig config) -> config.eccMode.setECDSABinding(enable);
-    }
-
-    public static Consumer<NanoTDFConfig> withPolicyType(NanoTDFType.PolicyType policyType) {
-        return (NanoTDFConfig config) -> config.policyType = policyType;
-    }
-
-    public static class NanoTDFReaderConfig {
-        Set<String> kasAllowlist;
-        boolean ignoreKasAllowlist;
-    }
-
-    public static NanoTDFReaderConfig newNanoTDFReaderConfig(Consumer<NanoTDFReaderConfig>... options) {
-        NanoTDFReaderConfig config = new NanoTDFReaderConfig();
-        for (Consumer<NanoTDFReaderConfig> option : options) {
-            option.accept(config);
-        }
-        return config;
-    }
-
-    public static Consumer<NanoTDFReaderConfig> WithNanoKasAllowlist(String... kasAllowlist) {
-        return (NanoTDFReaderConfig config) -> {
-            // apply getKasAddress to each kasAllowlist entry and add to hashset
-            config.kasAllowlist = Arrays.stream(kasAllowlist)
-                    .map(Config::getKasAddress)
-                    .collect(Collectors.toSet());
-        };
-    }
-
-    public static Consumer<NanoTDFReaderConfig> withNanoKasAllowlist(Set<String> kasAllowlist) {
-        return (NanoTDFReaderConfig config) -> {
-            config.kasAllowlist = kasAllowlist;
-        };
-    }
-
-    public static Consumer<NanoTDFReaderConfig> WithNanoIgnoreKasAllowlist(boolean ignore) {
-        return (NanoTDFReaderConfig config) -> config.ignoreKasAllowlist = ignore;
-    }
-
-    public static class HeaderInfo {
-        private final Header header;
-        private final AesGcm key;
-        private final int iteration;
-
-        public HeaderInfo(Header header,AesGcm key, int iteration) {
-            this.header = header;
-            this.key = key;
-            this.iteration = iteration;
-        }
-
-        public Header getHeader() {
-            return header;
-        }
-
-        public int getIteration() {
-            return iteration;
-        }
-
-        public AesGcm getKey() {
-            return key;
-        }
-    }
-
-    public static class CollectionConfig {
-        private int iterationCounter;
-        private HeaderInfo headerInfo;
-        public final boolean useCollection;
-        private Boolean updatedHeaderInfo;
-
-
-        public CollectionConfig(boolean useCollection) {
-            this.useCollection = useCollection;
-        }
-
-        public synchronized HeaderInfo getHeaderInfo() throws SDKException {
-            int iteration = iterationCounter;
-            iterationCounter = (iterationCounter + 1) % MAX_COLLECTION_ITERATION;
-
-            if (iteration == 0) {
-                updatedHeaderInfo = false;
-                return null;
-            }
-            while (!updatedHeaderInfo) {
-                try {
-                    this.wait();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new SDKException("interrupted while waiting for header info", e);
-                }
-            }
-            return new HeaderInfo(headerInfo.getHeader(), headerInfo.getKey(), iteration);
-        }
-
-        public synchronized void updateHeaderInfo(HeaderInfo headerInfo) {
-            this.headerInfo = headerInfo;
-            updatedHeaderInfo = true;
-            this.notifyAll();
-        }
+    public static Consumer<TDFConfig> withSystemMetadataAssertion() {
+        return (TDFConfig config) -> config.systemMetadataAssertion = true;
     }
 
     public static String getKasAddress(String kasURL) throws SDKException {

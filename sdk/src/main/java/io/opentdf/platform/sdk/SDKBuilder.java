@@ -33,6 +33,7 @@ import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClient;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRequest;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClient;
+import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClientInterface;
 import nl.altindag.ssl.SSLFactory;
 import nl.altindag.ssl.pem.util.PemUtils;
 import okhttp3.OkHttpClient;
@@ -64,6 +65,8 @@ public class SDKBuilder {
     private Boolean usePlainText;
     private SSLFactory sslFactory;
     private AuthorizationGrant authzGrant;
+    private ProtocolType protocolType = ProtocolType.CONNECT;
+    private SrtSigner srtSigner;
 
     private static final Logger logger = LoggerFactory.getLogger(SDKBuilder.class);
 
@@ -159,6 +162,27 @@ public class SDKBuilder {
         return this;
     }
 
+    /**
+     * Set the network protocol to use for communication with platform services.
+     * 
+     * @param protocolType the protocol type to use (CONNECT, GRPC, or GRPC_WEB)
+     * @return this builder instance for method chaining
+     * @throws IllegalArgumentException if protocolType is null
+     * @see ProtocolType for available protocol options
+     */
+    public SDKBuilder protocol(ProtocolType protocolType) {
+        if (protocolType == null) {
+            throw new IllegalArgumentException("ProtocolType cannot be null");
+        }
+        this.protocolType = protocolType;
+        return this;
+    }
+
+    public SDKBuilder srtSigner(SrtSigner signer) {
+        this.srtSigner = signer;
+        return this;
+    }
+
     private Interceptor getAuthInterceptor(RSAKey rsaKey) {
         if (platformEndpoint == null) {
             throw new SDKException("cannot build an SDK without specifying the platform endpoint");
@@ -218,18 +242,27 @@ public class SDKBuilder {
         final Interceptor interceptor;
         final TrustManager trustManager;
         final ProtocolClient protocolClient;
+        final SrtSigner srtSigner;
 
         final SDK.Services services;
 
-        ServicesAndInternals(Interceptor interceptor, TrustManager trustManager, SDK.Services services, ProtocolClient protocolClient) {
+        ServicesAndInternals(Interceptor interceptor, TrustManager trustManager, SDK.Services services, ProtocolClient protocolClient, SrtSigner srtSigner) {
             this.interceptor = interceptor;
             this.trustManager = trustManager;
             this.services = services;
             this.protocolClient = protocolClient;
+            this.srtSigner = srtSigner;
         }
     }
 
     ServicesAndInternals buildServices() {
+        // Validate configuration compatibility
+        if (Boolean.TRUE.equals(usePlainText) && protocolType == ProtocolType.GRPC_WEB) {
+            throw new SDKException("gRPC-Web protocol is not compatible with useInsecurePlaintextConnection(true). " +
+                    "gRPC-Web is designed for web browsers and typically operates over HTTP/1.1, " +
+                    "while plaintext connections force HTTP/2 prior knowledge.");
+        }
+        
         RSAKey dpopKey;
         try {
             dpopKey = new RSAKeyGenerator(2048)
@@ -242,7 +275,8 @@ public class SDKBuilder {
 
         this.platformEndpoint = AddressNormalizer.normalizeAddress(this.platformEndpoint, this.usePlainText);
         var authInterceptor = getAuthInterceptor(dpopKey);
-        var kasClient = getKASClient(dpopKey, authInterceptor);
+        var srtSignerToUse = this.srtSigner == null ? new DefaultSrtSigner(dpopKey) : this.srtSigner;
+        var kasClient = getKASClient(srtSignerToUse, authInterceptor);
         var httpClient = getHttpClient();
         var client = getProtocolClient(platformEndpoint, httpClient, authInterceptor);
         var attributeService = new AttributesServiceClient(client);
@@ -250,7 +284,9 @@ public class SDKBuilder {
         var subjectMappingService = new SubjectMappingServiceClient(client);
         var resourceMappingService = new ResourceMappingServiceClient(client);
         var authorizationService = new AuthorizationServiceClient(client);
+        var authorizationServiceV2 = new io.opentdf.platform.authorization.v2.AuthorizationServiceClient(client);
         var kasRegistryService = new KeyAccessServerRegistryServiceClient(client);
+        var wellKnownService = new WellKnownServiceClient(client);
 
         var services = new SDK.Services() {
             @Override
@@ -286,8 +322,18 @@ public class SDKBuilder {
             }
 
             @Override
+            public io.opentdf.platform.authorization.v2.AuthorizationServiceClient authorizationV2() {
+                return authorizationServiceV2;
+            }
+
+            @Override
             public KeyAccessServerRegistryServiceClient kasRegistry() {
                 return kasRegistryService;
+            }
+
+            @Override
+            public WellKnownServiceClientInterface wellknown() {
+                return wellKnownService;
             }
 
             @Override
@@ -300,18 +346,19 @@ public class SDKBuilder {
                 authInterceptor,
                 sslFactory == null ? null : sslFactory.getTrustManager().orElse(null),
                 services,
-                client);
+                client,
+                srtSignerToUse);
     }
 
     @Nonnull
-    private KASClient getKASClient(RSAKey dpopKey, Interceptor interceptor) {
+    private KASClient getKASClient(SrtSigner srtSigner, Interceptor interceptor) {
         BiFunction<OkHttpClient, String, ProtocolClient> protocolClientFactory = (OkHttpClient client, String address) -> getProtocolClient(address, client, interceptor);
-        return new KASClient(getHttpClient(), protocolClientFactory, dpopKey, usePlainText);
+        return new KASClient(getHttpClient(), protocolClientFactory, srtSigner, usePlainText);
     }
 
     public SDK build() {
         var services = buildServices();
-        return new SDK(services.services, services.trustManager, services.interceptor, services.protocolClient, platformEndpoint);
+        return new SDK(services.services, services.trustManager, services.interceptor, services.protocolClient, platformEndpoint, services.srtSigner);
     }
 
     private ProtocolClient getUnauthenticatedProtocolClient(String endpoint, OkHttpClient httpClient) {
@@ -322,7 +369,7 @@ public class SDKBuilder {
         var protocolClientConfig = new ProtocolClientConfig(
                 endpoint,
                 new GoogleJavaProtobufStrategy(),
-                NetworkProtocol.GRPC,
+                protocolType.getNetworkProtocol(),
                 null,
                 GETConfiguration.Enabled.INSTANCE,
                 authInterceptor == null ? Collections.emptyList() : List.of(ignoredConfig -> authInterceptor)
@@ -336,7 +383,8 @@ public class SDKBuilder {
         // have the same protocols
         var httpClient = new OkHttpClient.Builder();
         if (usePlainText) {
-            // we can only connect using HTTP/2 without any negotiation when using plain test
+            // For plaintext connections, we need HTTP/2 prior knowledge because gRPC servers
+            // expect HTTP/2, and Connect protocol can communicate with gRPC servers over HTTP/2
             httpClient.protocols(List.of(Protocol.H2_PRIOR_KNOWLEDGE));
         }
         if (sslFactory != null) {

@@ -1,18 +1,8 @@
 package io.opentdf.platform.sdk;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 import com.connectrpc.ResponseMessage;
 import com.connectrpc.UnaryBlockingCall;
+import io.opentdf.platform.policy.Algorithm;
 import io.opentdf.platform.policy.Attribute;
 import io.opentdf.platform.policy.AttributeRuleTypeEnum;
 import io.opentdf.platform.policy.KasPublicKey;
@@ -21,16 +11,17 @@ import io.opentdf.platform.policy.KasPublicKeySet;
 import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.Namespace;
 import io.opentdf.platform.policy.PublicKey;
+import io.opentdf.platform.policy.SimpleKasKey;
+import io.opentdf.platform.policy.SimpleKasPublicKey;
 import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.policy.attributes.AttributesServiceClient;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
+import io.opentdf.platform.sdk.Autoconfigure.Granter;
 import io.opentdf.platform.sdk.Autoconfigure.Granter.AttributeBooleanExpression;
 import io.opentdf.platform.sdk.Autoconfigure.Granter.BooleanKeyExpression;
 import io.opentdf.platform.sdk.Autoconfigure.KeySplitStep;
-import io.opentdf.platform.sdk.Autoconfigure.Granter;
-
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -39,10 +30,27 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class AutoconfigureTest {
 
@@ -56,6 +64,16 @@ public class AutoconfigureTest {
     public static final String SPECIFIED_KAS = "https://attr.kas.com/";
     public static final String EVEN_MORE_SPECIFIC_KAS = "https://value.kas.com/";
     private static final String NAMESPACE_KAS = "https://namespace.kas.com/";
+    private static final SimpleKasKey NAMESPACE_KAS_KEY = SimpleKasKey.newBuilder().setKasUri("https://mapped.example.com").setKasId("mapped").setPublicKey(
+            SimpleKasPublicKey.newBuilder().setAlgorithm(Algorithm.ALGORITHM_EC_P521).setPem("namespacekey").setKid("namespacekeykid").build()
+    ).build();
+    private static final SimpleKasKey ATTRIBUTE_KEY = SimpleKasKey.newBuilder().setKasUri("https://mapped.example.com").setKasId("mapped").setPublicKey(
+            SimpleKasPublicKey.newBuilder().setAlgorithm(Algorithm.ALGORITHM_EC_P521).setPem("attrpem").setKid("attrkeykid").build()
+    ).build();
+    private static final SimpleKasKey VALUE_KEY = SimpleKasKey.newBuilder().setKasUri("https://mapped.example.com").setKasId("mapped").setPublicKey(
+            SimpleKasPublicKey.newBuilder().setAlgorithm(Algorithm.ALGORITHM_EC_P521).setPem("valuepem").setKid("valuekeykid").build()
+    ).build();
+    private static Autoconfigure.AttributeNameFQN UNMAPPED;
     private static Autoconfigure.AttributeNameFQN SPKSPECKED;
     private static Autoconfigure.AttributeNameFQN SPKUNSPECKED;
 
@@ -64,6 +82,8 @@ public class AutoconfigureTest {
     private static Autoconfigure.AttributeNameFQN REL;
     private static Autoconfigure.AttributeNameFQN UNSPECKED;
     private static Autoconfigure.AttributeNameFQN SPECKED;
+    private static Autoconfigure.AttributeNameFQN MAPPED;
+    private static Autoconfigure.AttributeNameFQN SPKMAPPED;
 
     private static Autoconfigure.AttributeValueFQN clsA;
     private static Autoconfigure.AttributeValueFQN clsS;
@@ -84,6 +104,9 @@ public class AutoconfigureTest {
     private static Autoconfigure.AttributeValueFQN spk2spk2uns;
     private static Autoconfigure.AttributeValueFQN spk2spk2spk;
 
+    private static Autoconfigure.AttributeValueFQN mp2uns2uns;
+    private static Autoconfigure.AttributeValueFQN mp2uns2mp;
+
     @BeforeAll
     public static void setup() throws AutoConfigureException {
         // Initialize the FQNs (Fully Qualified Names)
@@ -92,8 +115,11 @@ public class AutoconfigureTest {
         REL = new Autoconfigure.AttributeNameFQN("https://virtru.com/attr/Releasable%20To");
         UNSPECKED = new Autoconfigure.AttributeNameFQN("https://other.com/attr/unspecified");
         SPECKED = new Autoconfigure.AttributeNameFQN("https://other.com/attr/specified");
+        MAPPED = new Autoconfigure.AttributeNameFQN("https://other.com/attr/mapped");
+        UNMAPPED = new Autoconfigure.AttributeNameFQN("https://mapped.com/attr/unspecified");
         SPKUNSPECKED = new Autoconfigure.AttributeNameFQN("https://hasgrants.com/attr/unspecified");
         SPKSPECKED = new Autoconfigure.AttributeNameFQN("https://hasgrants.com/attr/specified");
+        SPKMAPPED = new Autoconfigure.AttributeNameFQN("https://hasgrants.com/attr/mapped");
 
         clsA = new Autoconfigure.AttributeValueFQN("https://virtru.com/attr/Classification/value/Allowed");
         clsS = new Autoconfigure.AttributeValueFQN("https://virtru.com/attr/Classification/value/Secret");
@@ -117,6 +143,9 @@ public class AutoconfigureTest {
         spk2uns2spk = new Autoconfigure.AttributeValueFQN("https://hasgrants.com/attr/unspecified/value/specked");
         spk2spk2uns = new Autoconfigure.AttributeValueFQN("https://hasgrants.com/attr/specified/value/unspecked");
         spk2spk2spk = new Autoconfigure.AttributeValueFQN("https://hasgrants.com/attr/specified/value/specked");
+
+        mp2uns2uns = new Autoconfigure.AttributeValueFQN("https://mapped.com/attr/unspecified/value/unspecked");
+        mp2uns2mp = new Autoconfigure.AttributeValueFQN("https://mapped.com/attr/unspecified/value/mapped");
     }
 
     private static String spongeCase(String s) {
@@ -181,6 +210,7 @@ public class AutoconfigureTest {
         Namespace ns1 = Namespace.newBuilder().setId("v").setName("virtru.com").setFqn("https://virtru.com").build();
         Namespace ns2 = Namespace.newBuilder().setId("o").setName("other.com").setFqn("https://other.com").build();
         Namespace ns3 = Namespace.newBuilder().setId("h").setName("hasgrants.com").addGrants(KeyAccessServer.newBuilder().setUri(NAMESPACE_KAS).build()).setFqn("https://hasgrants.com").build();
+        Namespace ns4 = Namespace.newBuilder().setId("m").setName("mapped.com").addKasKeys(NAMESPACE_KAS_KEY).build();
 
         String key = fqn.getKey();
         if (key.equals(CLS.getKey())) {
@@ -196,10 +226,15 @@ public class AutoconfigureTest {
                     .setName("Releasable To").setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ANY_OF)
                     .setFqn(fqn.toString()).build();
         } else if (key.equals(SPECKED.getKey())) {
+            var kasKey = SimpleKasKey.newBuilder()
+                    .setKasUri(SPECKED.getKey())
+                    .setPublicKey(SimpleKasPublicKey.newBuilder().setPem("speckedpem")
+                            .setAlgorithm(Algorithm.ALGORITHM_EC_P521)
+                            .setKid("speckedkeykid")).build();
             return Attribute.newBuilder().setId("SPK").setNamespace(ns2)
                     .setName("specified").setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ANY_OF)
                     .setFqn(fqn.toString())
-                    .addGrants(KeyAccessServer.newBuilder().setUri(SPECIFIED_KAS).build())
+                    .addGrants(KeyAccessServer.newBuilder().setUri(SPECIFIED_KAS).addKasKeys(kasKey))
                     .build();
         } else if (key.equals(UNSPECKED.getKey())) {
             return Attribute.newBuilder().setId("UNS").setNamespace(ns2)
@@ -214,6 +249,17 @@ public class AutoconfigureTest {
         } else if (key.equals(SPKUNSPECKED.getKey())) {
             return Attribute.newBuilder().setId("SPKUNSPK").setNamespace(ns3)
                     .setName("unspecified").setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ANY_OF)
+                    .setName(fqn.toString())
+                    .build();
+        } else if (key.equals(MAPPED.getKey())) {
+            return Attribute.newBuilder().setId(MAPPED.getKey()).setNamespace(ns4)
+                    .setName("mapped attribute").setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ANY_OF)
+                    .setKasKeys(0, ATTRIBUTE_KEY)
+                    .setName(fqn.toString())
+                    .build();
+        } else if (key.equals(UNMAPPED.getKey())) {
+            return Attribute.newBuilder().setId(UNMAPPED.getKey()).setNamespace(ns4)
+                    .setName("unmapped attribute").setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ANY_OF)
                     .setName(fqn.toString())
                     .build();
         }
@@ -287,7 +333,13 @@ public class AutoconfigureTest {
                 p = p.toBuilder().addGrants(KeyAccessServer.newBuilder().setUri(EVEN_MORE_SPECIFIC_KAS).build())
                         .build();
             }
+        } else if (Objects.equals(UNMAPPED.getKey(), an.getKey())) {
+            if (fqn.value().equalsIgnoreCase("mapped")) {
+                p = p.toBuilder().addKasKeys(VALUE_KEY)
+                        .build();
+            }
         }
+
         return p;
     }
 
@@ -368,7 +420,7 @@ public class AutoconfigureTest {
         for (ConfigurationTestCase tc : testCases) {
             assertDoesNotThrow(() -> {
                 List<Value> v = valuesToPolicy(tc.getPolicy().toArray(new AttributeValueFQN[0]));
-                Granter grants = Autoconfigure.newGranterFromAttributes(v.toArray(new Value[0]));
+                Granter grants = Autoconfigure.newGranterFromAttributes(null, v.toArray(new Value[0]));
                 assertThat(grants).isNotNull();
                 assertThat(grants.getGrants()).hasSize(tc.getSize());
                 assertThat(policyToStringKeys(tc.getPolicy())).containsAll(grants.getGrants().keySet());
@@ -396,7 +448,7 @@ public class AutoconfigureTest {
                         "https://virtru.com/attr/Classification/value/Secret&https://virtru.com/attr/Releasable%20To/value/CAN",
                         "[DEFAULT]&(https://kas.ca/)",
                         "(https://kas.ca/)",
-                        List.of(new KeySplitStep(KAS_CA, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(KAS_CA, "", null, null))),
                 new ReasonerTestCase(
                         "one defaulted attr",
                         List.of(clsS),
@@ -404,7 +456,7 @@ public class AutoconfigureTest {
                         "https://virtru.com/attr/Classification/value/Secret",
                         "[DEFAULT]",
                         "",
-                        List.of(new KeySplitStep(KAS_US, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(KAS_US, "", null, null))),
                 new ReasonerTestCase(
                         "empty policy",
                         List.of(),
@@ -412,7 +464,7 @@ public class AutoconfigureTest {
                         "∅",
                         "",
                         "",
-                        List.of(new KeySplitStep(KAS_US, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(KAS_US, "", null, null))),
                 new ReasonerTestCase(
                         "old school splits",
                         List.of(),
@@ -420,8 +472,9 @@ public class AutoconfigureTest {
                         "∅",
                         "",
                         "",
-                        List.of(new KeySplitStep(KAS_AU, "1"), new KeySplitStep(KAS_CA, "2"),
-                                new KeySplitStep(KAS_US, "3"))),
+                        List.of(new Autoconfigure.KeySplitTemplate(KAS_AU, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(KAS_CA, "2", null, null),
+                                new Autoconfigure.KeySplitTemplate(KAS_US, "3", null, null))),
                 new ReasonerTestCase(
                         "simple with all three ops",
                         List.of(clsS, rel2gbr, n2kInt),
@@ -429,7 +482,7 @@ public class AutoconfigureTest {
                         "https://virtru.com/attr/Classification/value/Secret&https://virtru.com/attr/Releasable%20To/value/GBR&https://virtru.com/attr/Need%20to%20Know/value/INT",
                         "[DEFAULT]&(https://kas.uk/)&(https://kas.uk/)",
                         "(https://kas.uk/)",
-                        List.of(new KeySplitStep(KAS_UK, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(KAS_UK, "", null, null))),
                 new ReasonerTestCase(
                         "compartments",
                         List.of(clsS, rel2gbr, rel2usa, n2kHCS, n2kSI),
@@ -437,8 +490,10 @@ public class AutoconfigureTest {
                         "https://virtru.com/attr/Classification/value/Secret&https://virtru.com/attr/Releasable%20To/value/{GBR,USA}&https://virtru.com/attr/Need%20to%20Know/value/{HCS,SI}",
                         "[DEFAULT]&(https://kas.uk/⋁https://kas.us/)&(https://hcs.kas.us/⋀https://si.kas.us/)",
                         "(https://kas.uk/⋁https://kas.us/)&(https://hcs.kas.us/)&(https://si.kas.us/)",
-                        List.of(new KeySplitStep(KAS_UK, "1"), new KeySplitStep(KAS_US, "1"),
-                                new KeySplitStep(KAS_US_HCS, "2"), new KeySplitStep(KAS_US_SA, "3"))),
+                        List.of(new Autoconfigure.KeySplitTemplate(KAS_UK, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(KAS_US, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(KAS_US_HCS, "2", null, null),
+                                new Autoconfigure.KeySplitTemplate(KAS_US_SA, "3", null, null))),
                 new ReasonerTestCase(
                         "compartments - case insensitive",
                         List.of(
@@ -447,11 +502,13 @@ public class AutoconfigureTest {
                         "https://virtru.com/attr/Classification/value/Secret&https://virtru.com/attr/Releasable%20To/value/{GBR,USA}&https://virtru.com/attr/Need%20to%20Know/value/{HCS,SI}",
                         "[DEFAULT]&(https://kas.uk/⋁https://kas.us/)&(https://hcs.kas.us/⋀https://si.kas.us/)",
                         "(https://kas.uk/⋁https://kas.us/)&(https://hcs.kas.us/)&(https://si.kas.us/)",
-                        List.of(new KeySplitStep(KAS_UK, "1"), new KeySplitStep(KAS_US, "1"),
-                                new KeySplitStep(KAS_US_HCS, "2"), new KeySplitStep(KAS_US_SA, "3"))));
+                        List.of(new Autoconfigure.KeySplitTemplate(KAS_UK, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(KAS_US, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(KAS_US_HCS, "2", null, null),
+                                new Autoconfigure.KeySplitTemplate(KAS_US_SA, "3", null, null))));
 
         for (ReasonerTestCase tc : testCases) {
-            Granter reasoner = Autoconfigure.newGranterFromAttributes(
+            Granter reasoner = Autoconfigure.newGranterFromAttributes(null,
                     valuesToPolicy(tc.getPolicy().toArray(new AttributeValueFQN[0])).toArray(new Value[0]));
             assertThat(reasoner).isNotNull();
 
@@ -467,13 +524,31 @@ public class AutoconfigureTest {
             var wrapper = new Object() {
                 int i = 0;
             };
-            List<KeySplitStep> plan = reasoner.plan(tc.getDefaults(), () -> {
-                        return String.valueOf(wrapper.i++ + 1);
-                    }
-
-            );
-            assertThat(plan).isEqualTo(tc.getPlan());
+            List<Autoconfigure.KeySplitTemplate> plan = reasoner.getSplits(tc.getDefaults(), () -> String.valueOf(wrapper.i++ + 1), Optional::empty);
+            assertThat(plan)
+                    .as(tc.name)
+                    .isEqualTo(tc.getPlan());
         }
+    }
+
+    @Test
+    void testUsingAttributeMappedAtNamespace() {
+        Granter granter = Autoconfigure.newGranterFromAttributes(new KASKeyCache(), mockValueFor(mp2uns2uns));
+        var counter = new AtomicInteger(0);
+        var splitPlan = granter.getSplits(Collections.emptyList(), () -> Integer.toString(counter.getAndIncrement()), Optional::empty);
+        assertThat(splitPlan).isEqualTo(List.of(new Autoconfigure.KeySplitTemplate("https://mapped.example.com", "", NAMESPACE_KAS_KEY.getPublicKey().getKid(), KeyType.EC521Key)));
+    }
+
+    @Test
+    void testUsingAttributeMappedAtMultiplePlaces() {
+        var attributes = new Value[]{mockValueFor(mp2uns2uns), mockValueFor(mp2uns2mp)};
+        Granter granter = Autoconfigure.newGranterFromAttributes(new KASKeyCache(), attributes);
+        var counter = new AtomicInteger(0);
+        var splitPlan = granter.getSplits(Collections.emptyList(), () -> Integer.toString(counter.getAndIncrement()), Optional::empty);
+        assertThat(splitPlan).isEqualTo(List.of(
+                new Autoconfigure.KeySplitTemplate(NAMESPACE_KAS_KEY.getKasUri(), "0", NAMESPACE_KAS_KEY.getPublicKey().getKid(), KeyType.EC521Key),
+                new Autoconfigure.KeySplitTemplate(VALUE_KEY.getKasUri(), "0", VALUE_KEY.getPublicKey().getKid(), KeyType.EC521Key)
+        ));
     }
 
     GetAttributeValuesByFqnsResponse getResponse(GetAttributeValuesByFqnsRequest req) {
@@ -505,72 +580,77 @@ public class AutoconfigureTest {
                         "uns.uns => default",
                         List.of(uns2uns),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(KAS_US, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(KAS_US, "", null, null))),
                 new ReasonerTestCase(
                         "uns.spk => spk",
                         List.of(uns2spk),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "", null, null))),
                 new ReasonerTestCase(
                         "spk.uns => spk",
                         List.of(spk2uns),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(SPECIFIED_KAS, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(SPECIFIED_KAS, "", null, null))),
                 new ReasonerTestCase(
                         "spk.spk => value.spk",
                         List.of(spk2spk),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "", null, null))),
                 new ReasonerTestCase(
                         "spk.spk & spk.uns => value.spk || attr.spk",
                         List.of(spk2spk, spk2uns),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, "1"), new KeySplitStep(SPECIFIED_KAS, "1"))),
+                        List.of(new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(SPECIFIED_KAS, "1", null, null))),
                 new ReasonerTestCase(
                         "spk.uns & spk.spk => value.spk || attr.spk",
                         List.of(spk2uns, spk2spk),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(SPECIFIED_KAS, "1"), new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, "1"))),
+                        List.of(new Autoconfigure.KeySplitTemplate(SPECIFIED_KAS, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "1", null, null))),
                 new ReasonerTestCase(
                         "uns.spk & spk.spk => value.spk",
                         List.of(spk2spk, uns2spk),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "", null, null))),
                 new ReasonerTestCase(
                         "uns.spk & uns.uns => spk",
                         List.of(uns2spk, uns2uns),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "", null, null))),
                 new ReasonerTestCase(
                         "uns.uns & uns.spk => spk",
                         List.of(uns2uns, uns2spk),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "", null, null))),
                 new ReasonerTestCase(
-                        "uns.uns & uns.spk => spk",
+                        "uns.uns & spk.spk => spk",
                         List.of(uns2uns, spk2spk),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "", null, null))),
                 new ReasonerTestCase(
                         "spk.uns.uns => ns.spk",
                         List.of(spk2uns2uns, uns2uns),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(NAMESPACE_KAS, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(NAMESPACE_KAS, "", null, null))),
                 new ReasonerTestCase(
                         "spk.uns.uns & uns.uns => ns.spk",
                         List.of(spk2uns2uns, uns2uns),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(NAMESPACE_KAS, ""))),
+                        List.of(new Autoconfigure.KeySplitTemplate(NAMESPACE_KAS, "", null, null))),
                 new ReasonerTestCase(
                         "spk.uns.uns & uns.spk => ns.spk && spk",
                         List.of(spk2uns2uns, uns2spk),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(NAMESPACE_KAS, "1"), new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, "2"))),
+                        List.of(new Autoconfigure.KeySplitTemplate(NAMESPACE_KAS, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "2", null, null))),
                 new ReasonerTestCase(
                         "spk.uns.uns & spk.spk.uns && spk.uns.spk => ns.spk || attr.spk || value.spk",
                         List.of(spk2uns2uns, spk2spk2uns, spk2uns2spk),
                         List.of(KAS_US),
-                        List.of(new KeySplitStep(NAMESPACE_KAS, "1"), new KeySplitStep(EVEN_MORE_SPECIFIC_KAS, "1"), new KeySplitStep(SPECIFIED_KAS, "2")))
+                        List.of(new Autoconfigure.KeySplitTemplate(NAMESPACE_KAS, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(EVEN_MORE_SPECIFIC_KAS, "1", null, null),
+                                new Autoconfigure.KeySplitTemplate(SPECIFIED_KAS, "2", null, null)))
         );
 
         for (ReasonerTestCase tc : testCases) {
@@ -598,12 +678,11 @@ public class AutoconfigureTest {
             var wrapper = new Object() {
                 int i = 0;
             };
-            List<KeySplitStep> plan = reasoner.plan(tc.getDefaults(), () -> {
-                        return String.valueOf(wrapper.i++ + 1);
-                    }
+            List<Autoconfigure.KeySplitTemplate> plan = reasoner.getSplits(tc.getDefaults(), () -> String.valueOf(wrapper.i++ + 1), Optional::empty);
+            assertThat(plan)
+                    .as(tc.name)
+                    .hasSameElementsAs(tc.getPlan());
 
-            );
-            assertThat(plan).hasSameElementsAs(tc.getPlan());
         }
     }
 
@@ -688,10 +767,10 @@ public class AutoconfigureTest {
         private final String ats;
         private final String keyed;
         private final String reduced;
-        private final List<KeySplitStep> plan;
+        private final List<Autoconfigure.KeySplitTemplate> plan;
 
         ReasonerTestCase(String name, List<AttributeValueFQN> policy, List<String> defaults, String ats, String keyed,
-                String reduced, List<KeySplitStep> plan) {
+                         String reduced, List<Autoconfigure.KeySplitTemplate> plan) {
             this.name = name;
             this.policy = policy;
             this.defaults = defaults;
@@ -701,7 +780,7 @@ public class AutoconfigureTest {
             this.plan = plan;
         }
 
-        ReasonerTestCase(String name, List<AttributeValueFQN> policy, List<String> defaults, List<KeySplitStep> plan) {
+        ReasonerTestCase(String name, List<AttributeValueFQN> policy, List<String> defaults, List<Autoconfigure.KeySplitTemplate> plan) {
             this.name = name;
             this.policy = policy;
             this.defaults = defaults;
@@ -735,7 +814,7 @@ public class AutoconfigureTest {
             return reduced;
         }
 
-        public List<KeySplitStep> getPlan() {
+        public List<Autoconfigure.KeySplitTemplate> getPlan() {
             return plan;
         }
     }
@@ -744,13 +823,11 @@ public class AutoconfigureTest {
     void testStoreKeysToCache_NoKeys() {
         KASKeyCache keyCache = Mockito.mock(KASKeyCache.class);
         KeyAccessServer kas1 = KeyAccessServer.newBuilder().setPublicKey(
-                PublicKey.newBuilder().setCached(
-                        KasPublicKeySet.newBuilder()))
+                        PublicKey.newBuilder().setCached(
+                                KasPublicKeySet.newBuilder()))
                 .build();
 
-        List<KeyAccessServer> kases = List.of(kas1);
-
-        Autoconfigure.storeKeysToCache(kases, keyCache);
+        Autoconfigure.storeKeysToCache(List.of(kas1), Collections.emptyList(), keyCache);
 
         verify(keyCache, never()).store(any(Config.KASInfo.class));
     }
@@ -780,14 +857,11 @@ public class AutoconfigureTest {
                 .setUri("https://example.com/kas")
                 .build();
 
-        // Add the KeyAccessServer to a list
-        List<KeyAccessServer> kases = List.of(kas1);
-
         // Call the method under test
-        Autoconfigure.storeKeysToCache(kases, keyCache);
+        Autoconfigure.storeKeysToCache(List.of(kas1), Collections.emptyList(), keyCache);
 
         // Verify that the key was stored in the cache
-        Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1");
+        Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1", "test-kid");
         assertNotNull(storedKASInfo);
         assertEquals("https://example.com/kas", storedKASInfo.URL);
         assertEquals("test-kid", storedKASInfo.KID);
@@ -826,21 +900,18 @@ public class AutoconfigureTest {
                 .setUri("https://example.com/kas")
                 .build();
 
-        // Add the KeyAccessServer to a list
-        List<KeyAccessServer> kases = List.of(kas1);
-
         // Call the method under test
-        Autoconfigure.storeKeysToCache(kases, keyCache);
+        Autoconfigure.storeKeysToCache(List.of(kas1), Collections.emptyList(), keyCache);
 
         // Verify that the key was stored in the cache
-        Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1");
+        Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1", "test-kid");
         assertNotNull(storedKASInfo);
         assertEquals("https://example.com/kas", storedKASInfo.URL);
         assertEquals("test-kid", storedKASInfo.KID);
         assertEquals("ec:secp256r1", storedKASInfo.Algorithm);
         assertEquals("public-key-pem", storedKASInfo.PublicKey);
 
-        Config.KASInfo storedKASInfo2 = keyCache.get("https://example.com/kas", "rsa:2048");
+        Config.KASInfo storedKASInfo2 = keyCache.get("https://example.com/kas", "rsa:2048", "test-kid-2");
         assertNotNull(storedKASInfo2);
         assertEquals("https://example.com/kas", storedKASInfo2.URL);
         assertEquals("test-kid-2", storedKASInfo2.KID);
@@ -849,7 +920,7 @@ public class AutoconfigureTest {
     }
 
     GetAttributeValuesByFqnsResponse getResponseWithGrants(GetAttributeValuesByFqnsRequest req,
-            List<KeyAccessServer> grants) {
+                                                           List<KeyAccessServer> grants) {
         GetAttributeValuesByFqnsResponse.Builder builder = GetAttributeValuesByFqnsResponse.newBuilder();
 
         for (String v : req.getFqnsList()) {
@@ -901,13 +972,15 @@ public class AutoconfigureTest {
 
         AttributesServiceClient attributesServiceClient = mock(AttributesServiceClient.class);
         when(attributesServiceClient.getAttributeValuesByFqnsBlocking(any(), any())).thenAnswer(invocation -> {
-            var request = (GetAttributeValuesByFqnsRequest)invocation.getArgument(0);
-            return new UnaryBlockingCall<GetAttributeValuesByFqnsResponse>(){
+            var request = (GetAttributeValuesByFqnsRequest) invocation.getArgument(0);
+            return new UnaryBlockingCall<GetAttributeValuesByFqnsResponse>() {
                 @Override
                 public ResponseMessage<GetAttributeValuesByFqnsResponse> execute() {
                     return new ResponseMessage.Success<>(getResponseWithGrants(request, List.of(kas1)), Collections.emptyMap(), Collections.emptyMap());
                 }
-                @Override public void cancel() {
+
+                @Override
+                public void cancel() {
                     // not really calling anything
                 }
             };
@@ -920,14 +993,14 @@ public class AutoconfigureTest {
         assertThat(reasoner).isNotNull();
 
         // Verify that the key was stored in the cache
-        Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1");
+        Config.KASInfo storedKASInfo = keyCache.get("https://example.com/kas", "ec:secp256r1", "test-kid");
         assertNotNull(storedKASInfo);
         assertEquals("https://example.com/kas", storedKASInfo.URL);
         assertEquals("test-kid", storedKASInfo.KID);
         assertEquals("ec:secp256r1", storedKASInfo.Algorithm);
         assertEquals("public-key-pem", storedKASInfo.PublicKey);
 
-        Config.KASInfo storedKASInfo2 = keyCache.get("https://example.com/kas", "rsa:2048");
+        Config.KASInfo storedKASInfo2 = keyCache.get("https://example.com/kas", "rsa:2048", "test-kid-2");
         assertNotNull(storedKASInfo2);
         assertEquals("https://example.com/kas", storedKASInfo2.URL);
         assertEquals("test-kid-2", storedKASInfo2.KID);
@@ -935,4 +1008,171 @@ public class AutoconfigureTest {
         assertEquals("public-key-pem-2", storedKASInfo2.PublicKey);
     }
 
+    @Test
+    void testUsingBaseKeyWhenNoMappedKeysOrGrants() {
+        Autoconfigure.Granter granter = Autoconfigure.newGranterFromAttributes(null);
+        SimpleKasKey key = SimpleKasKey.newBuilder()
+                .setKasUri("https://example.com/kas")
+                .setPublicKey(
+                        SimpleKasPublicKey.newBuilder()
+                                .setKid("thenewkid")
+                                .setPem("anotherpem")
+                                .setAlgorithm(Algorithm.ALGORITHM_EC_P521)
+                ).build();
+
+        var splits = granter.getSplits(
+                List.of("https://example.org/kas2"),
+                () -> {
+                    throw new IllegalStateException("the plan should have a single element");
+                },
+                () -> Optional.of(key));
+        assertThat(splits).hasSize(1);
+        assertThat(splits.get(0)).isEqualTo(new Autoconfigure.KeySplitTemplate("https://example.com/kas", "", "thenewkid", KeyType.EC521Key));
+    }
+
+    @Test
+    void testUsingDefaultKasesWhenNothingElseProvided() {
+        Autoconfigure.Granter granter = Autoconfigure.newGranterFromAttributes(null);
+        var counter = new AtomicInteger();
+        Supplier<String> splitGen = () -> String.valueOf(counter.getAndIncrement());
+        var splits = granter.getSplits(
+                List.of("https://example.org/kas1", "https://example.org/kas2"),
+                splitGen,
+                Optional::empty);
+
+        assertThat(splits)
+                .hasSize(2)
+                .asList().containsExactly(
+                    new Autoconfigure.KeySplitTemplate("https://example.org/kas1", "0", null, null),
+                    new Autoconfigure.KeySplitTemplate("https://example.org/kas2", "1", null, null)
+                );
+    }
+
+    @Test
+    void createsGranterFromAttributeValues() {
+        // Arrange
+        Config.TDFConfig config = new Config.TDFConfig();
+        config.attributeValues = List.of(mockValueFor(spk2spk), mockValueFor(rel2gbr));
+
+        SDK.Services services = mock(SDK.Services.class);
+        SDK.KAS kas = mock(SDK.KAS.class);
+        when(services.kas()).thenReturn(kas);
+        when(services.attributes()).thenThrow(new IllegalStateException("should never use the attribute service when attributes are provided"));
+        when(kas.getKeyCache()).thenReturn(null); // No cache needed for this test
+
+        // Act
+        Autoconfigure.Granter granter = Autoconfigure.createGranter(services, config);
+
+        // Assert
+        assertThat(granter).isNotNull();
+        assertThat(granter.getPolicy()).hasSize(2);
+        assertThat(granter.getPolicy()).containsExactlyInAnyOrder(
+                new AttributeValueFQN("https://other.com/attr/specified/value/specked"),
+                new AttributeValueFQN("https://virtru.com/attr/Releasable%20To/value/GBR")
+        );
+    }
+
+    @Test
+    void createsGranterFromService() {
+        // Arrange
+        SDK.Services services = mock(SDK.Services.class);
+        SDK.KAS kas = mock(SDK.KAS.class);
+        AttributesServiceClient attributesServiceClient = mock(AttributesServiceClient.class);
+
+        // Prepare a request and a mocked response
+        List<AttributeValueFQN> policy = List.of(
+                new AttributeValueFQN("https://other.com/attr/specified/value/specked"),
+                new AttributeValueFQN("https://virtru.com/attr/Releasable%20To/value/GBR")
+        );
+
+        when(services.kas()).thenReturn(kas);
+        when(services.attributes()).thenReturn(attributesServiceClient);
+
+        // Mock the attribute service to return a response with the expected values
+        when(attributesServiceClient.getAttributeValuesByFqnsBlocking(any(), any())).thenAnswer(invocation -> {
+            GetAttributeValuesByFqnsResponse.Builder builder = GetAttributeValuesByFqnsResponse.newBuilder();
+            for (AttributeValueFQN fqn : policy) {
+                Value value = Value.newBuilder()
+                        .setId(fqn.toString())
+                        .setFqn(fqn.toString())
+                        .build();
+                builder.putFqnAttributeValues(fqn.toString(),
+                        GetAttributeValuesByFqnsResponse.AttributeAndValue.newBuilder()
+                                .setValue(value)
+                                .build());
+            }
+            return TestUtil.successfulUnaryCall(builder.build());
+        });
+
+        // Act
+        Autoconfigure.Granter granter = Autoconfigure.createGranter(services, new Config.TDFConfig() {{
+            attributeValues = null; // force use of service
+            attributes = policy;
+        }});
+
+        // Assert
+        assertThat(granter).isNotNull();
+        // The policy should be empty because attributeValues is null, but the test ensures the service is called
+        // If you want to check the service call, verify it:
+        verify(services).attributes();
+    }
+
+    @Test
+    void getSplits_usesAutoconfigurePlan_whenAutoconfigureTrue() {
+        var tdfConfig = new Config.TDFConfig();
+        tdfConfig.autoconfigure = true;
+        tdfConfig.kasInfoList = new ArrayList<>();
+        tdfConfig.splitPlan = null;
+
+        var kas = Mockito.mock(SDK.KAS.class);
+        Mockito.when(kas.getKeyCache()).thenReturn(new KASKeyCache());
+        Config.KASInfo kasInfo = new Config.KASInfo() {{
+            URL = "https://kas.example.com";
+            Algorithm = "ec:secp256r1";
+            KID = "kid";
+        }};
+        Mockito.when(kas.getPublicKey(any())).thenReturn(kasInfo);
+
+        var services = new FakeServicesBuilder().setKas(kas).build();
+
+        // Mock granterFactory to return a granter with a known split plan
+        var expectedSplit = new Autoconfigure.KeySplitTemplate("https://kas.example.com", "", "kid", null);
+        var granter = Mockito.mock(Autoconfigure.Granter.class);
+        Mockito.when(granter.getSplits(
+                        Mockito.anyList(),
+                        Mockito.any(),
+                        Mockito.any()))
+                .thenReturn(List.of(expectedSplit));
+
+        BiFunction<SDK.Services, Config.TDFConfig, Granter> granterFactory =
+                (s, c) -> granter;
+
+        var planner = new Planner(tdfConfig, services, granterFactory);
+
+        // Act
+        var splits = planner.getSplits();
+
+        // Assert
+        assertThat(splits).containsKey("");
+        assertThat(splits.get("")).hasSize(1);
+        assertThat(splits.get("").get(0).URL).isEqualTo("https://kas.example.com");
+        assertThat(splits.get("").get(0).KID).isEqualTo("kid");
+        assertThat(splits.get("").get(0).Algorithm).isEqualTo("ec:secp256r1");
+    }
+
+    @Test
+    void testInvalidConfigurations() {
+        var config = new Config.TDFConfig();
+        config.autoconfigure = true;
+        config.splitPlan = List.of(new KeySplitStep("kas1", ""));
+        Planner planner = new Planner(config, new FakeServicesBuilder().build(), (a, b) -> { throw new IllegalStateException("no way"); });
+        Exception thrown = assertThrows(IllegalArgumentException.class, () -> planner.getSplits());
+        assertThat(thrown.getMessage()).contains("cannot use autoconfigure with a split plan provided in the TDFConfig");
+
+
+        config = new Config.TDFConfig() {{ autoconfigure = false; kasInfoList = Collections.EMPTY_LIST; splitPlan = null; }};
+        var otherPlanner = new Planner(config, new FakeServicesBuilder().build(), (a, b) -> { throw new IllegalStateException("no way"); });
+        thrown = assertThrows(SDK.KasInfoMissing.class, () -> otherPlanner.getSplits());
+        assertThat(thrown.getMessage()).contains("no plan was constructed via autoconfigure, explicit split plan or provided kases");
+    }
 }

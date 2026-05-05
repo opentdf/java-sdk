@@ -8,6 +8,8 @@ import java.security.interfaces.ECPublicKey;
 import java.util.Arrays;
 import java.util.Base64;
 
+import static io.opentdf.platform.sdk.ECCurve.SECP256R1;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -58,8 +60,7 @@ public class ECKeyPairTest {
         byte[] compressedKey2 = ECKeyPair.compressECPublickey(keyPairA.publicKeyInPEMFormat());
         assertArrayEquals(compressedKey1, compressedKey2);
 
-        String publicKey = ECKeyPair.publicKeyFromECPoint(compressedKey1,
-                ECKeyPair.NanoTDFECCurve.SECP256R1.toString());
+        String publicKey = ECKeyPair.publicKeyFromECPoint(compressedKey1, SECP256R1.getCurveName());
         assertEquals(keyPairA.publicKeyInPEMFormat(), publicKey);
 
         ECKeyPair keyPairB = new ECKeyPair();
@@ -76,6 +77,17 @@ public class ECKeyPairTest {
         byte[] symmetricKey2 = ECKeyPair.computeECDHKey(publicKeyB, privateKeyA);
         assertArrayEquals(symmetricKey1, symmetricKey2);
         System.out.println(Arrays.toString(symmetricKey1));
+    }
+
+    @Test
+    void createSymmetricKeysWithOtherCurves() {
+        ECKeyPair pubPair = new ECKeyPair(ECCurve.SECP384R1, ECKeyPair.ECAlgorithm.ECDH);
+        ECKeyPair keyPair = new ECKeyPair(ECCurve.SECP384R1, ECKeyPair.ECAlgorithm.ECDH);
+
+        byte[] sharedSecret = ECKeyPair.computeECDHKey(pubPair.getPublicKey(), keyPair.getPrivateKey());
+        byte[] encryptionKey = ECKeyPair.calculateHKDF(ECKeys.salt.getBytes(StandardCharsets.UTF_8), sharedSecret);
+
+        assertThat(encryptionKey).hasSize(32); // SHA-256 produces a 32-byte key
     }
 
     @Test
@@ -104,18 +116,17 @@ public class ECKeyPairTest {
         String encodeECPoint = Base64.getEncoder().encodeToString(ecPoint);
         assertEquals("Al3vx59pBnP8tRxuUFw18aK9ym6rFrxZRhpVQytUQ+Kg", encodeECPoint);
 
-//        String publicKey = ECKeyPair.publicKeyFromECPoint(ecPoint,
-//                ECKeyPair.NanoTDFECCurve.SECP256R1.toString());
-//        assertArrayEquals(ECKeys.sdkPublicKey.toCharArray(), publicKey.toCharArray());
+        String publicKey = ECKeyPair.publicKeyFromECPoint(ecPoint,
+                SECP256R1.getCurveName());
+        assertArrayEquals(ECKeys.sdkPublicKey.toCharArray(), publicKey.toCharArray());
     }
 
     @Test
     void testECDSA() {
 
         String plainText = "Virtru!";
-        for (ECKeyPair.NanoTDFECCurve curve: ECKeyPair.NanoTDFECCurve.values()) {
-
-            ECKeyPair keyPair = new ECKeyPair(curve.toString(), ECKeyPair.ECAlgorithm.ECDSA);
+        for (var curve: ECCurve.values()) {
+            ECKeyPair keyPair = new ECKeyPair(curve, ECKeyPair.ECAlgorithm.ECDSA);
             byte[] signature = ECKeyPair.computeECDSASig(plainText.getBytes(), keyPair.getPrivateKey());
             boolean verify = ECKeyPair.verifyECDSAig(plainText.getBytes(), signature, keyPair.getPublicKey());
             assertEquals(verify, true);

@@ -5,20 +5,16 @@ import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.asn1.x9.ECNamedCurveTable;
 import org.bouncycastle.asn1.x9.X962Parameters;
-import org.bouncycastle.asn1.x9.X9ECParameters;
 import org.bouncycastle.asn1.x9.X9ECPoint;
+import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.crypto.generators.HKDFBytesGenerator;
 import org.bouncycastle.crypto.params.HKDFParameters;
 import org.bouncycastle.jcajce.provider.asymmetric.ec.KeyPairGeneratorSpi;
-import org.bouncycastle.jcajce.util.ECKeyUtil;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec;
-import org.bouncycastle.math.ec.ECCurve;
-import org.bouncycastle.math.ec.ECPoint;
+import org.bouncycastle.openssl.PEMException;
 import org.bouncycastle.openssl.PEMParser;
 import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
-import org.bouncycastle.pqc.jcajce.provider.util.KeyUtil;
 import org.bouncycastle.util.io.pem.*;
 import org.bouncycastle.util.io.pem.PemReader;
 
@@ -28,51 +24,34 @@ import java.security.interfaces.ECPublicKey;
 import java.io.*;
 import java.security.*;
 import java.security.spec.*;
+import java.util.Objects;
 // https://www.bouncycastle.org/latest_releases.html
 
 public class ECKeyPair {
 
+    private static final int SHA256_BYTES = 32;
+
     static {
         Security.addProvider(new BouncyCastleProvider());
     }
+
+    private final ECCurve curve;
+
     public enum ECAlgorithm {
         ECDH,
         ECDSA
     }
 
-    public enum NanoTDFECCurve {
-        SECP256R1("secp256r1", KeyType.EC256Key),
-        PRIME256V1("prime256v1", KeyType.EC256Key),
-        SECP384R1("secp384r1", KeyType.EC384Key),
-        SECP521R1("secp521r1", KeyType.EC521Key);
+    private static final BouncyCastleProvider BOUNCY_CASTLE_PROVIDER = new BouncyCastleProvider();
 
-        private String name;
-        private KeyType keyType;
-
-        NanoTDFECCurve(String curveName, KeyType keyType) {
-            this.name = curveName;
-            this.keyType = keyType;
-        }
-
-        @Override
-        public String toString() {
-            return name;
-        }
-
-        public KeyType getKeyType() {
-            return keyType;
-        }
-    }
-
-    private final ECPrivateKey privateKey;
-    private final ECPublicKey publicKey;
-    private final String curveName;
+    private KeyPair keyPair;
 
     public ECKeyPair() {
-        this("secp256r1", ECAlgorithm.ECDH);
+        this(ECCurve.SECP256R1, ECAlgorithm.ECDH);
     }
 
-    public ECKeyPair(String curveName, ECAlgorithm algorithm) {
+    public ECKeyPair(ECCurve curve, ECAlgorithm algorithm) {
+        this.curve = Objects.requireNonNull(curve);
         KeyPairGenerator generator;
 
         try {
@@ -87,43 +66,25 @@ public class ECKeyPair {
             throw new RuntimeException(e);
         }
 
-        ECGenParameterSpec spec = new ECGenParameterSpec(curveName);
+        ECGenParameterSpec spec = new ECGenParameterSpec(this.curve.getCurveName());
         try {
             generator.initialize(spec);
         } catch (InvalidAlgorithmParameterException e) {
             throw new RuntimeException(e);
         }
-        KeyPair keyPair = generator.generateKeyPair();
-        this.publicKey = (ECPublicKey)keyPair.getPublic();
-        this.privateKey = (ECPrivateKey)keyPair.getPrivate();
-        this.curveName = curveName;
-    }
-
-    public ECKeyPair(ECPublicKey publicKey, ECPrivateKey privateKey, String curveName) {
-        this.privateKey = privateKey;
-        this.publicKey = publicKey;
-        this.curveName = curveName;
+        this.keyPair = generator.generateKeyPair();
     }
 
     public ECPublicKey getPublicKey() {
-        return this.publicKey;
+        return (ECPublicKey) this.keyPair.getPublic();
     }
 
     public ECPrivateKey getPrivateKey() {
-        return this.privateKey;
+        return (ECPrivateKey) this.keyPair.getPrivate();
     }
 
-    public static int getECKeySize(String curveName) {
-        if (curveName.equalsIgnoreCase(NanoTDFECCurve.SECP256R1.toString()) ||
-                curveName.equalsIgnoreCase(NanoTDFECCurve.PRIME256V1.toString())) {
-            return 32;
-        } else if (curveName.equalsIgnoreCase(NanoTDFECCurve.SECP384R1.toString())) {
-            return 48;
-        } else if (curveName.equalsIgnoreCase(NanoTDFECCurve.SECP521R1.toString())) {
-            return 66;
-        } else {
-            throw new IllegalArgumentException("Unsupported ECC algorithm.");
-        }
+    ECCurve getCurve() {
+        return this.curve;
     }
 
     public String publicKeyInPEMFormat() {
@@ -131,7 +92,7 @@ public class ECKeyPair {
         PemWriter pemWriter = new PemWriter(writer);
 
         try {
-            pemWriter.writeObject(new PemObject("PUBLIC KEY", publicKey.getEncoded()));
+            pemWriter.writeObject(new PemObject("PUBLIC KEY", this.keyPair.getPublic().getEncoded()));
             pemWriter.flush();
             pemWriter.close();
         } catch (IOException e) {
@@ -146,7 +107,7 @@ public class ECKeyPair {
         PemWriter pemWriter = new PemWriter(writer);
 
         try {
-            pemWriter.writeObject(new PemObject("PRIVATE KEY", privateKey.getEncoded()));
+            pemWriter.writeObject(new PemObject("PRIVATE KEY", this.keyPair.getPrivate().getEncoded()));
             pemWriter.flush();
             pemWriter.close();
         } catch (IOException e) {
@@ -157,15 +118,11 @@ public class ECKeyPair {
     }
 
     public int keySize() {
-        return privateKey.getEncoded().length * 8;
-    }
-
-    public String curveName() {
-        return this.curveName;
+        return this.keyPair.getPrivate().getEncoded().length * 8;
     }
 
     public byte[] compressECPublickey() {
-        return getCompressedECPublicKey(publicKey);
+        return getCompressedECPublicKey(this.keyPair.getPublic());
     }
 
     private static byte[] getCompressedECPublicKey(PublicKey publicKey) {
@@ -175,10 +132,39 @@ public class ECKeyPair {
             throw new IllegalArgumentException("Implicitly CA parameters are not supported.");
         }
 
-        ECCurve curve = ECNamedCurveTable.getByOID((ASN1ObjectIdentifier)params.getParameters()).getCurve();
-        ECPoint p = curve.decodePoint(publicKeyInfo.getPublicKeyData().getOctets());
+        org.bouncycastle.math.ec.ECCurve bcCurve =
+                ECNamedCurveTable.getByOID((ASN1ObjectIdentifier) params.getParameters()).getCurve();
+        org.bouncycastle.math.ec.ECPoint p =
+                bcCurve.decodePoint(publicKeyInfo.getPublicKeyData().getOctets());
 
         return new X9ECPoint(p, true).getPointEncoding();
+    }
+
+    public static String getPEMPublicKeyFromX509Cert(String pemInX509Format) {
+        try {
+            PEMParser parser = new PEMParser(new StringReader(pemInX509Format));
+            X509CertificateHolder x509CertificateHolder = (X509CertificateHolder) parser.readObject();
+            parser.close();
+            SubjectPublicKeyInfo publicKeyInfo = x509CertificateHolder.getSubjectPublicKeyInfo();
+            JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider(BOUNCY_CASTLE_PROVIDER);
+            ECPublicKey publicKey = null;
+            try {
+                publicKey = (ECPublicKey) converter.getPublicKey(publicKeyInfo);
+            } catch (PEMException e) {
+                throw new RuntimeException(e);
+            }
+
+            // EC public key to pem formated.
+            StringWriter writer = new StringWriter();
+            PemWriter pemWriter = new PemWriter(writer);
+
+            pemWriter.writeObject(new PemObject("PUBLIC KEY", publicKey.getEncoded()));
+            pemWriter.flush();
+            pemWriter.close();
+            return writer.toString();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static byte[] compressECPublickey(String pemECPubKey) {
@@ -195,8 +181,10 @@ public class ECKeyPair {
 
     public static String publicKeyFromECPoint(byte[] ecPoint, String curveName) {
         try {
-            ECPoint point = ECNamedCurveTable.getByName(curveName).getCurve().decodePoint(ecPoint);
-            java.security.spec.ECPoint jpoint = new java.security.spec.ECPoint(point.getAffineXCoord().toBigInteger(), point.getAffineYCoord().toBigInteger());
+            org.bouncycastle.math.ec.ECPoint point =
+                    ECNamedCurveTable.getByName(curveName).getCurve().decodePoint(ecPoint);
+            java.security.spec.ECPoint jpoint = new java.security.spec.ECPoint(
+                    point.getAffineXCoord().toBigInteger(), point.getAffineYCoord().toBigInteger());
 
             // Create EC Public key
             AlgorithmParameters algorithmParameters = AlgorithmParameters.getInstance("EC");
@@ -207,7 +195,7 @@ public class ECKeyPair {
             KeyFactory keyFactory = KeyFactory.getInstance("EC");
             PublicKey publicKey = keyFactory.generatePublic(spec);
 
-            // EC Public keu to pem format.
+            // EC Public key to pem format.
             StringWriter writer = new StringWriter();
             PemWriter pemWriter = new PemWriter(writer);
             pemWriter.writeObject(new PemObject("PUBLIC KEY", publicKey.getEncoded()));
@@ -256,8 +244,12 @@ public class ECKeyPair {
         }
     }
 
+    /**
+     * Returns a HKDF key derived from the provided salt and secret
+     * that is 32 bytes (256 bits) long.
+     */
     public static byte[] calculateHKDF(byte[] salt, byte[] secret) {
-        byte[] key = new byte[secret.length];
+        byte[] key = new byte[SHA256_BYTES];
         HKDFParameters params = new HKDFParameters(secret, salt, null);
 
         HKDFBytesGenerator hkdf = new HKDFBytesGenerator(SHA256Digest.newInstance());

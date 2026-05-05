@@ -3,8 +3,11 @@ package io.opentdf.platform.sdk;
 
 import org.junit.jupiter.api.Test;
 
+import java.net.URISyntaxException;
+
 import static io.opentdf.platform.sdk.AddressNormalizer.normalizeAddress;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class AddressNormalizerTest {
 
@@ -14,6 +17,9 @@ class AddressNormalizerTest {
         // default to https if no scheme is provided
         assertThat(normalizeAddress("example.org:1234", false)).isEqualTo("https://example.org:1234");
         assertThat(normalizeAddress("ftp://example.org", false)).isEqualTo("https://example.org:443");
+        assertThat(normalizeAddress("keycloak.vm", false)).isEqualTo("https://keycloak.vm:443");
+        assertThat(normalizeAddress("192.168.1.1:1234", false)).isEqualTo("https://192.168.1.1:1234");
+        assertThat(normalizeAddress("192.168.1.1", false)).isEqualTo("https://192.168.1.1:443");
     }
 
     @Test
@@ -23,5 +29,23 @@ class AddressNormalizerTest {
         // default to http if no scheme is provided
         assertThat(normalizeAddress("example.org:1234", true)).isEqualTo("http://example.org:1234");
         assertThat(normalizeAddress("sftp://example.org", true)).isEqualTo("http://example.org:80");
+        assertThat(normalizeAddress("keycloak.vm", true)).isEqualTo("http://keycloak.vm:80");
+        assertThat(normalizeAddress("192.168.1.1:1234", true)).isEqualTo("http://192.168.1.1:1234");
+        assertThat(normalizeAddress("192.168.1.1", true)).isEqualTo("http://192.168.1.1:80");
+    }
+
+    @Test
+    void testAddressNormalizationWithInvalidPort() {
+        var thrown = assertThrows(SDKException.class, () -> normalizeAddress("example.org:notaport", true));
+        assertThat(thrown.getMessage()).contains("example.org:notaport");
+
+        thrown = assertThrows(SDKException.class, () -> normalizeAddress("http://example.org:notaport", true));
+        assertThat(thrown.getMessage()).contains("http://example.org:notaport");
+    }
+
+    @Test
+    void testInsaneAddressThrowsException() {
+        var thrown = assertThrows(SDKException.class, () -> normalizeAddress("1://&()&{$!//1//1", true));
+        assertThat(thrown.getCause()).isInstanceOf(URISyntaxException.class);
     }
 }

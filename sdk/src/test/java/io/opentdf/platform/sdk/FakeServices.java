@@ -1,69 +1,86 @@
 package io.opentdf.platform.sdk;
 
-import io.opentdf.platform.authorization.AuthorizationServiceClient;
-import io.opentdf.platform.policy.attributes.AttributesServiceClient;
-import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
-import io.opentdf.platform.policy.namespaces.NamespaceServiceClient;
-import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceClient;
-import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClient;
+import io.opentdf.platform.authorization.AuthorizationServiceClientInterface;
+import io.opentdf.platform.policy.attributes.AttributesServiceClientInterface;
+import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClientInterface;
+import io.opentdf.platform.policy.namespaces.NamespaceServiceClientInterface;
+import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceClientInterface;
+import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClientInterface;
+import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClientInterface;
 
 import java.util.Objects;
 
 public class FakeServices implements SDK.Services {
 
-    private final AuthorizationServiceClient authorizationService;
-    private final AttributesServiceClient attributesService;
-    private final NamespaceServiceClient namespaceService;
-    private final SubjectMappingServiceClient subjectMappingService;
-    private final ResourceMappingServiceClient resourceMappingService;
-    private final KeyAccessServerRegistryServiceClient keyAccessServerRegistryServiceFutureStub;
+    private final AuthorizationServiceClientInterface authorizationService;
+    private final io.opentdf.platform.authorization.v2.AuthorizationServiceClientInterface authorizationServiceV2;
+    private final AttributesServiceClientInterface attributesService;
+    private final NamespaceServiceClientInterface namespaceService;
+    private final SubjectMappingServiceClientInterface subjectMappingService;
+    private final ResourceMappingServiceClientInterface resourceMappingService;
+    private final KeyAccessServerRegistryServiceClientInterface keyAccessServerRegistryServiceFutureStub;
+    private final WellKnownServiceClientInterface wellKnownService;
     private final SDK.KAS kas;
 
     public FakeServices(
-            AuthorizationServiceClient authorizationService,
-            AttributesServiceClient attributesService,
-            NamespaceServiceClient namespaceService,
-            SubjectMappingServiceClient subjectMappingService,
-            ResourceMappingServiceClient resourceMappingService,
-            KeyAccessServerRegistryServiceClient keyAccessServerRegistryServiceFutureStub,
+            AuthorizationServiceClientInterface authorizationService,
+            io.opentdf.platform.authorization.v2.AuthorizationServiceClientInterface authorizationServiceV2,
+            AttributesServiceClientInterface attributesService,
+            NamespaceServiceClientInterface namespaceService,
+            SubjectMappingServiceClientInterface subjectMappingService,
+            ResourceMappingServiceClientInterface resourceMappingService,
+            KeyAccessServerRegistryServiceClientInterface keyAccessServerRegistryServiceFutureStub,
+            WellKnownServiceClientInterface wellKnownServiceClient,
             SDK.KAS kas) {
         this.authorizationService = authorizationService;
+        this.authorizationServiceV2 = authorizationServiceV2;
         this.attributesService = attributesService;
         this.namespaceService = namespaceService;
         this.subjectMappingService = subjectMappingService;
         this.resourceMappingService = resourceMappingService;
         this.keyAccessServerRegistryServiceFutureStub = keyAccessServerRegistryServiceFutureStub;
+        this.wellKnownService = wellKnownServiceClient;
         this.kas = kas;
     }
 
     @Override
-    public AuthorizationServiceClient authorization() {
+    public io.opentdf.platform.authorization.v2.AuthorizationServiceClientInterface authorizationV2() {
+        return Objects.requireNonNull(authorizationServiceV2);
+    }
+
+    @Override
+    public AuthorizationServiceClientInterface authorization() {
         return Objects.requireNonNull(authorizationService);
     }
 
     @Override
-    public AttributesServiceClient attributes() {
+    public AttributesServiceClientInterface attributes() {
         return Objects.requireNonNull(attributesService);
     }
 
     @Override
-    public NamespaceServiceClient namespaces() {
+    public NamespaceServiceClientInterface namespaces() {
         return Objects.requireNonNull(namespaceService);
     }
 
     @Override
-    public SubjectMappingServiceClient subjectMappings() {
+    public SubjectMappingServiceClientInterface subjectMappings() {
         return Objects.requireNonNull(subjectMappingService);
     }
 
     @Override
-    public ResourceMappingServiceClient resourceMappings() {
+    public ResourceMappingServiceClientInterface resourceMappings() {
         return Objects.requireNonNull(resourceMappingService);
     }
 
     @Override
-    public KeyAccessServerRegistryServiceClient kasRegistry() {
+    public KeyAccessServerRegistryServiceClientInterface kasRegistry() {
         return Objects.requireNonNull(keyAccessServerRegistryServiceFutureStub);
+    }
+
+    @Override
+    public WellKnownServiceClientInterface wellknown() {
+        return Objects.requireNonNull(wellKnownService);
     }
 
     @Override

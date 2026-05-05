@@ -1,22 +1,28 @@
 package io.opentdf.platform.sdk;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 class Version implements Comparable<Version> {
+
+    // Version of the SDK, managed by release-please.
+    public static final String SDK = "0.15.0"; // x-release-please-version
+
     private final int major;
     private final int minor;
     private final int patch;
     private final String prereleaseAndMetadata;
     private static final Logger log = LoggerFactory.getLogger(Version.class);
 
-    Pattern SEMVER_PATTERN = Pattern.compile("^(?<major>0|[1-9]\\d*)\\.(?<minor>0|[1-9]\\d*)\\.(?<patch>0|[1-9]\\d*)(?<prereleaseAndMetadata>\\D.*)?$");
+    Pattern SEMVER_PATTERN = Pattern.compile(
+            "^(?<major>0|[1-9]\\d*)\\.(?<minor>0|[1-9]\\d*)\\.(?<patch>0|[1-9]\\d*)(?<prereleaseAndMetadata>\\D.*)?$");
 
     @Override
     public String toString() {
@@ -63,7 +69,8 @@ class Version implements Comparable<Version> {
 
     @Override
     public boolean equals(Object o) {
-        if (o == null || getClass() != o.getClass()) return false;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Version version = (Version) o;
         return major == version.major && minor == version.minor && patch == version.patch;
     }
