@@ -6,13 +6,10 @@ import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.asn1.x9.ECNamedCurveTable;
 import org.bouncycastle.asn1.x9.X962Parameters;
 import org.bouncycastle.asn1.x9.X9ECPoint;
-import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.crypto.generators.HKDFBytesGenerator;
 import org.bouncycastle.crypto.params.HKDFParameters;
 import org.bouncycastle.jcajce.provider.asymmetric.ec.KeyPairGeneratorSpi;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.bouncycastle.openssl.PEMException;
 import org.bouncycastle.openssl.PEMParser;
 import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
 import org.bouncycastle.util.io.pem.*;
@@ -25,24 +22,16 @@ import java.io.*;
 import java.security.*;
 import java.security.spec.*;
 import java.util.Objects;
-// https://www.bouncycastle.org/latest_releases.html
 
 public class ECKeyPair {
 
     private static final int SHA256_BYTES = 32;
-
-    static {
-        Security.addProvider(new BouncyCastleProvider());
-    }
-
     private final ECCurve curve;
 
     public enum ECAlgorithm {
         ECDH,
         ECDSA
     }
-
-    private static final BouncyCastleProvider BOUNCY_CASTLE_PROVIDER = new BouncyCastleProvider();
 
     private KeyPair keyPair;
 
@@ -138,33 +127,6 @@ public class ECKeyPair {
                 bcCurve.decodePoint(publicKeyInfo.getPublicKeyData().getOctets());
 
         return new X9ECPoint(p, true).getPointEncoding();
-    }
-
-    public static String getPEMPublicKeyFromX509Cert(String pemInX509Format) {
-        try {
-            PEMParser parser = new PEMParser(new StringReader(pemInX509Format));
-            X509CertificateHolder x509CertificateHolder = (X509CertificateHolder) parser.readObject();
-            parser.close();
-            SubjectPublicKeyInfo publicKeyInfo = x509CertificateHolder.getSubjectPublicKeyInfo();
-            JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider(BOUNCY_CASTLE_PROVIDER);
-            ECPublicKey publicKey = null;
-            try {
-                publicKey = (ECPublicKey) converter.getPublicKey(publicKeyInfo);
-            } catch (PEMException e) {
-                throw new RuntimeException(e);
-            }
-
-            // EC public key to pem formated.
-            StringWriter writer = new StringWriter();
-            PemWriter pemWriter = new PemWriter(writer);
-
-            pemWriter.writeObject(new PemObject("PUBLIC KEY", publicKey.getEncoded()));
-            pemWriter.flush();
-            pemWriter.close();
-            return writer.toString();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     public static byte[] compressECPublickey(String pemECPubKey) {

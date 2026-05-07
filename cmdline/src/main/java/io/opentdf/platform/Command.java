@@ -10,6 +10,7 @@ import com.nimbusds.jose.jwk.JWK;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 
+import java.security.Security;
 import java.text.ParseException;
 import com.google.gson.JsonSyntaxException;
 import io.opentdf.platform.sdk.AssertionConfig;
@@ -19,6 +20,7 @@ import io.opentdf.platform.sdk.KeyType;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
 import nl.altindag.ssl.SSLFactory;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import picocli.CommandLine;
 import picocli.CommandLine.HelpCommand;
 import picocli.CommandLine.Option;
@@ -62,6 +64,10 @@ class Versions {
 @CommandLine.Command(name = "tdf", subcommands = { HelpCommand.class }, version = "{\"version\":\"" + Versions.SDK
         + "\",\"tdfSpecVersion\":\"" + Versions.TDF_SPEC + "\"}")
 class Command {
+
+    static {
+        Security.addProvider(new BouncyCastleProvider());
+    }
 
     @Option(names = { "-V", "--version" }, versionHelp = true, description = "display version info")
     boolean versionInfoRequested;
