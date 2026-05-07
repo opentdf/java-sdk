@@ -47,9 +47,9 @@ public class ECKeyPair {
             // Should this just use the algorithm vs use ECDH only for ECDH and ECDSA for
             // everything else.
             if (algorithm == ECAlgorithm.ECDH) {
-                generator = KeyPairGeneratorSpi.getInstance(ECAlgorithm.ECDH.name());
+                generator = KeyPairGenerator.getInstance(ECAlgorithm.ECDH.name());
             } else {
-                generator = KeyPairGeneratorSpi.getInstance(ECAlgorithm.ECDSA.name());
+                generator = KeyPairGenerator.getInstance(ECAlgorithm.ECDSA.name());
             }
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException(e);
