@@ -20,9 +20,6 @@ import io.opentdf.platform.policy.namespaces.NamespaceServiceGrpc;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRequest;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceGrpc;
-import nl.altindag.ssl.SSLFactory;
-import nl.altindag.ssl.pem.util.PemUtils;
-import nl.altindag.ssl.util.KeyStoreUtils;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.tls.HandshakeCertificates;
@@ -30,6 +27,8 @@ import okhttp3.tls.HeldCertificate;
 import org.apache.commons.io.IOUtils;
 import org.junit.jupiter.api.Test;
 
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.X509TrustManager;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -40,6 +39,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyStore;
+import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Base64;
@@ -70,24 +70,31 @@ public class SDKBuilderTest {
         IOUtils.write(EXAMPLE_COM_PEM, fos);
         fos.close();
         SDKBuilder builder = SDKBuilder.newBuilder().sslFactoryFromDirectory(certDirPath.toAbsolutePath().toString());
-        SSLFactory sslFactory = builder.getSslFactory();
-        assertNotNull(sslFactory);
-        X509Certificate[] acceptedIssuers = sslFactory.getTrustManager().get().getAcceptedIssuers();
+        SSLSocketFactory sslSocketFactory = builder.getSslFactory();
+        assertNotNull(sslSocketFactory);
+        X509TrustManager trustManager = builder.getTrustManager();
+        assertNotNull(trustManager);
+        X509Certificate[] acceptedIssuers = trustManager.getAcceptedIssuers();
         assertEquals(1, Arrays.stream(acceptedIssuers).filter(x -> x.getIssuerX500Principal().getName()
                 .equals("CN=example.com")).count());
     }
 
     @Test
     void testKeystoreSSLContext() throws Exception {
-        KeyStore keystore = KeyStoreUtils.createKeyStore();
-        keystore.setCertificateEntry("example.com", PemUtils.parseCertificate(EXAMPLE_COM_PEM).get(0));
+        KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
+        keystore.load(null, null);
+        X509Certificate cert = (X509Certificate) CertificateFactory.getInstance("X.509")
+                .generateCertificate(new ByteArrayInputStream(EXAMPLE_COM_PEM.getBytes(StandardCharsets.UTF_8)));
+        keystore.setCertificateEntry("example.com", cert);
         Path keyStorePath = Files.createTempFile("ca", "jks");
         keystore.store(new FileOutputStream(keyStorePath.toAbsolutePath().toString()), "foo".toCharArray());
         SDKBuilder builder = SDKBuilder.newBuilder().sslFactoryFromKeyStore(keyStorePath.toAbsolutePath().toString(),
                 "foo");
-        SSLFactory sslFactory = builder.getSslFactory();
-        assertNotNull(sslFactory);
-        X509Certificate[] acceptedIssuers = sslFactory.getTrustManager().get().getAcceptedIssuers();
+        SSLSocketFactory sslSocketFactory = builder.getSslFactory();
+        assertNotNull(sslSocketFactory);
+        X509TrustManager trustManager = builder.getTrustManager();
+        assertNotNull(trustManager);
+        X509Certificate[] acceptedIssuers = trustManager.getAcceptedIssuers();
         assertEquals(1, Arrays.stream(acceptedIssuers).filter(x -> x.getIssuerX500Principal().getName()
                 .equals("CN=example.com")).count());
 
@@ -305,8 +312,11 @@ public class SDKBuilderTest {
                 servicesBuilder = servicesBuilder.useInsecurePlaintextConnection(true);
             }
             if (useSSLPlatform || useSSLIDP) {
+                TrustProvider trustProvider = TrustProvider.builder()
+                        .withTrustMaterial(rootCertificate.certificate())
+                        .build();
                 servicesBuilder = servicesBuilder
-                        .sslFactory(SSLFactory.builder().withTrustMaterial(rootCertificate.certificate()).build());
+                        .sslFactory(trustProvider.getSslSocketFactory(), trustProvider.getTrustManager());
             }
 
             var servicesAndComponents = servicesBuilder.buildServices();

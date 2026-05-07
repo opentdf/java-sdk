@@ -14,10 +14,10 @@ import com.nimbusds.oauth2.sdk.dpop.DefaultDPoPProofFactory;
 import com.nimbusds.oauth2.sdk.http.HTTPRequest;
 import com.nimbusds.oauth2.sdk.http.HTTPResponse;
 import com.nimbusds.oauth2.sdk.token.AccessToken;
-import nl.altindag.ssl.SSLFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLSocketFactory;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -34,22 +34,22 @@ class TokenSource {
     private final RSAKey rsaKey;
     private final URI tokenEndpointURI;
     private final AuthorizationGrant authzGrant;
-    private final SSLFactory sslFactory;
+    private final SSLSocketFactory sslSocketFactory;
     private static final Logger logger = LoggerFactory.getLogger(TokenSource.class);
 
 
     /**
      * Constructs a new TokenSource with the specified client authentication and RSA key.
      *
-     * @param clientAuth the client authentication to be used by the interceptor
-     * @param rsaKey     the RSA key to be used by the interceptor
-     * @param sslFactory Optional SSLFactory for Requests
+     * @param clientAuth        the client authentication to be used by the interceptor
+     * @param rsaKey            the RSA key to be used by the interceptor
+     * @param sslSocketFactory  Optional SSLSocketFactory for token endpoint requests
      */
-    public TokenSource(ClientAuthentication clientAuth, RSAKey rsaKey, URI tokenEndpointURI, AuthorizationGrant authzGrant, SSLFactory sslFactory) {
+    public TokenSource(ClientAuthentication clientAuth, RSAKey rsaKey, URI tokenEndpointURI, AuthorizationGrant authzGrant, SSLSocketFactory sslSocketFactory) {
         this.clientAuth = clientAuth;
         this.rsaKey = rsaKey;
         this.tokenEndpointURI = tokenEndpointURI;
-        this.sslFactory = sslFactory;
+        this.sslSocketFactory = sslSocketFactory;
         this.authzGrant = authzGrant;
     }
 
@@ -108,8 +108,8 @@ class TokenSource {
                 TokenRequest tokenRequest = new TokenRequest(this.tokenEndpointURI,
                         clientAuth, authzGrant, null);
                 HTTPRequest httpRequest = tokenRequest.toHTTPRequest();
-                if(sslFactory!=null){
-                    httpRequest.setSSLSocketFactory(sslFactory.getSslSocketFactory());
+                if (sslSocketFactory != null) {
+                    httpRequest.setSSLSocketFactory(sslSocketFactory);
                 }
 
                 DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(rsaKey, JWSAlgorithm.RS256);

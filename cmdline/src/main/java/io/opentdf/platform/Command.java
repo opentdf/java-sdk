@@ -18,7 +18,7 @@ import io.opentdf.platform.sdk.Config;
 import io.opentdf.platform.sdk.KeyType;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
-import nl.altindag.ssl.SSLFactory;
+import io.opentdf.platform.sdk.TrustProvider;
 import picocli.CommandLine;
 import picocli.CommandLine.HelpCommand;
 import picocli.CommandLine.Option;
@@ -262,10 +262,8 @@ class Command {
     private SDK buildSDK() {
         SDKBuilder builder = new SDKBuilder();
         if (insecure) {
-            SSLFactory sslFactory = SSLFactory.builder()
-                    .withUnsafeTrustMaterial() // Trust all certificates
-                    .build();
-            builder.sslFactory(sslFactory);
+            // Trust all certificates
+            builder.sslFactory(TrustProvider.insecure().getSslSocketFactory());
         }
 
         return builder.platformEndpoint(platformEndpoint)
