@@ -13,6 +13,7 @@ import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.TDF.Reader;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -25,6 +26,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.SecureRandom;
+import java.security.Security;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Base64;
