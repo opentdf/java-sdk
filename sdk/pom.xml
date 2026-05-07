@@ -31,18 +31,6 @@
             <artifactId>oauth2-oidc-sdk</artifactId>
             <version>11.10.1</version>
         </dependency>
-        <dependency>
-            <groupId>io.github.hakky54</groupId>
-            <artifactId>ayza-for-pem</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.github.hakky54</groupId>
-            <artifactId>ayza</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.github.hakky54</groupId>
-            <artifactId>ayza-for-netty</artifactId>
-        </dependency>
         <!-- Serialization and Deserialization Dependencies -->
         <dependency>
             <groupId>com.google.code.gson</groupId>

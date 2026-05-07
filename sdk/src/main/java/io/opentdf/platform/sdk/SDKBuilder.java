@@ -34,22 +34,17 @@ import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationReque
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClient;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClientInterface;
-import nl.altindag.ssl.SSLFactory;
-import nl.altindag.ssl.pem.util.PemUtils;
 import okhttp3.OkHttpClient;
 import okhttp3.Protocol;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
+import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509ExtendedTrustManager;
-import java.io.File;
-import java.io.FileInputStream;
+import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -63,7 +58,8 @@ public class SDKBuilder {
     private String platformEndpoint = null;
     private ClientAuthentication clientAuth = null;
     private Boolean usePlainText;
-    private SSLFactory sslFactory;
+    private SSLSocketFactory sslSocketFactory;
+    private X509TrustManager trustManager;
     private AuthorizationGrant authzGrant;
     private ProtocolType protocolType = ProtocolType.CONNECT;
     private SrtSigner srtSigner;
@@ -80,42 +76,61 @@ public class SDKBuilder {
         return builder;
     }
 
-    public SDKBuilder sslFactory(SSLFactory sslFactory) {
-        this.sslFactory = sslFactory;
+    /**
+     * Configure the SDK to use the supplied {@link SSLSocketFactory} for outbound TLS connections.
+     * Callers using this overload bring their own pre-built socket factory; cert-chain trust
+     * material is whatever the supplied factory was built with. For full PKIX validation under a
+     * matching {@link X509TrustManager}, use {@link #sslFactoryFromDirectory(String)} or
+     * {@link #sslFactoryFromKeyStore(String, String)} which build both via {@link TrustProvider}.
+     */
+    public SDKBuilder sslFactory(SSLSocketFactory sslSocketFactory) {
+        this.sslSocketFactory = sslSocketFactory;
+        this.trustManager = null;
+        return this;
+    }
+
+    /**
+     * Configure the SDK to use the supplied {@link SSLSocketFactory} together with a matching
+     * {@link X509TrustManager}. The trust manager is used by OkHttp for certificate pinning and
+     * cleartext-fallback decisions; supply this overload when the caller has a trust manager that
+     * matches the socket factory's trust material (e.g. both built from a {@link TrustProvider}).
+     */
+    public SDKBuilder sslFactory(SSLSocketFactory sslSocketFactory, X509TrustManager trustManager) {
+        this.sslSocketFactory = sslSocketFactory;
+        this.trustManager = trustManager;
         return this;
     }
 
     /**
      * Add SSL Context with trusted certs from certDirPath
-     * 
+     *
      * @param certsDirPath Path to a directory containing .pem or .crt trusted certs
      */
     public SDKBuilder sslFactoryFromDirectory(String certsDirPath) throws Exception {
-        File certsDir = new File(certsDirPath);
-        File[] certFiles = certsDir.listFiles((dir, name) -> name.endsWith(".pem") || name.endsWith(".crt"));
-        logger.info("Loading certificates from: " + certsDir.getAbsolutePath());
-        List<InputStream> certStreams = new ArrayList<>(certFiles.length);
-        for (File certFile : certFiles) {
-            certStreams.add(new FileInputStream(certFile));
-        }
-        X509ExtendedTrustManager trustManager = PemUtils.loadTrustMaterial(certStreams.toArray(new InputStream[0]));
-        this.sslFactory = SSLFactory.builder().withDefaultTrustMaterial().withSystemTrustMaterial()
-                .withTrustMaterial(trustManager).build();
+        logger.info("Loading certificates from: {}", certsDirPath);
+        TrustProvider provider = TrustProvider.fromDirectory(certsDirPath);
+        this.sslSocketFactory = provider.getSslSocketFactory();
+        this.trustManager = provider.getTrustManager();
         return this;
     }
 
     /**
      * Add SSL Context with default system trust material + certs contained in a
      * Java keystore
-     * 
+     *
      * @param keystorePath     Path to keystore
      * @param keystorePassword Password to keystore
      */
     public SDKBuilder sslFactoryFromKeyStore(String keystorePath, String keystorePassword) {
-        this.sslFactory = SSLFactory.builder().withDefaultTrustMaterial().withSystemTrustMaterial()
-                .withTrustMaterial(Path.of(keystorePath),
-                        keystorePassword == null ? "".toCharArray() : keystorePassword.toCharArray())
-                .build();
+        try {
+            TrustProvider provider = TrustProvider.fromKeyStore(
+                    Path.of(keystorePath),
+                    keystorePassword == null ? "".toCharArray() : keystorePassword.toCharArray());
+            this.sslSocketFactory = provider.getSslSocketFactory();
+            this.trustManager = provider.getTrustManager();
+        } catch (IOException | java.security.GeneralSecurityException e) {
+            throw new SDKException("failed to load keystore from " + keystorePath, e);
+        }
         return this;
     }
 
@@ -223,8 +238,8 @@ public class SDKBuilder {
         OIDCProviderMetadata providerMetadata;
         try {
             providerMetadata = OIDCProviderMetadata.resolve(issuer, httpRequest -> {
-                if (sslFactory != null) {
-                    httpRequest.setSSLSocketFactory(sslFactory.getSslSocketFactory());
+                if (sslSocketFactory != null) {
+                    httpRequest.setSSLSocketFactory(sslSocketFactory);
                 }
             });
         } catch (IOException | GeneralException e) {
@@ -234,7 +249,7 @@ public class SDKBuilder {
         if (this.authzGrant == null) {
             this.authzGrant = new ClientCredentialsGrant();
         }
-        var ts = new TokenSource(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI(), this.authzGrant, sslFactory);
+        var ts = new TokenSource(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI(), this.authzGrant, sslSocketFactory);
         return new AuthInterceptor(ts);
     }
 
@@ -344,7 +359,7 @@ public class SDKBuilder {
 
         return new ServicesAndInternals(
                 authInterceptor,
-                sslFactory == null ? null : sslFactory.getTrustManager().orElse(null),
+                trustManager,
                 services,
                 client,
                 srtSignerToUse);
@@ -378,6 +393,7 @@ public class SDKBuilder {
         return new ProtocolClient(new ConnectOkHttpClient(httpClient), protocolClientConfig);
     }
 
+    @SuppressWarnings("deprecation")
     private OkHttpClient getHttpClient() {
         // using a single http client is apparently the best practice, subject to everyone wanting to
         // have the same protocols
@@ -387,17 +403,24 @@ public class SDKBuilder {
             // expect HTTP/2, and Connect protocol can communicate with gRPC servers over HTTP/2
             httpClient.protocols(List.of(Protocol.H2_PRIOR_KNOWLEDGE));
         }
-        if (sslFactory != null) {
-            var trustManager = sslFactory.getTrustManager();
-            if (trustManager.isEmpty()) {
-                throw new SDKException("SSL factory must have a trust manager");
+        if (sslSocketFactory != null) {
+            if (trustManager != null) {
+                httpClient.sslSocketFactory(sslSocketFactory, trustManager);
+            } else {
+                // Caller supplied an SSLSocketFactory without a matching trust manager (e.g. via
+                // sslFactory(SSLSocketFactory)). Falls back to OkHttp's reflection-based platform
+                // default trust manager — only the SSLSocketFactory governs the actual handshake.
+                httpClient.sslSocketFactory(sslSocketFactory);
             }
-            httpClient.sslSocketFactory(sslFactory.getSslSocketFactory(), trustManager.get());
         }
         return httpClient.build();
     }
 
-    SSLFactory getSslFactory() {
-        return this.sslFactory;
+    SSLSocketFactory getSslFactory() {
+        return this.sslSocketFactory;
+    }
+
+    X509TrustManager getTrustManager() {
+        return this.trustManager;
     }
 }
