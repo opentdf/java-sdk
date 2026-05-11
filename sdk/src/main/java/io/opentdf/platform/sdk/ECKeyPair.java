@@ -97,7 +97,7 @@ public class ECKeyPair {
         }
     }
 
-    private static String HMAC_SHA_256 = "HmacSHA256";
+    private static final String HMAC_SHA_256 = "HmacSHA256";
     /**
      * Returns a HKDF key derived from the provided salt and secret
      * that is 32 bytes (256 bits) long.
