@@ -119,7 +119,7 @@ public class ECKeyPair {
         }
     }
 
-    public static byte[] computeECDSASig(byte[] digest, ECPrivateKey privateKey) {
+    public static byte[] computeECDSASig(byte[] data, ECPrivateKey privateKey) {
         try {
             Signature ecdsaSign = Signature.getInstance("SHA256withECDSA");
             ecdsaSign.initSign(privateKey);
