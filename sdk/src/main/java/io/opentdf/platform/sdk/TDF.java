@@ -249,11 +249,7 @@ class TDF {
 
             ECPublicKey kasPubKey;
             try {
-                byte[] der = Base64.getDecoder().decode(kasInfo.PublicKey
-                        .replaceAll("-----[^-]+-----", "")
-                        .replaceAll("\\s+", ""));
-                kasPubKey = (ECPublicKey) KeyFactory.getInstance("EC")
-                        .generatePublic(new X509EncodedKeySpec(der));
+                kasPubKey = ECKeyPair.publicKeyFromPem(kasInfo.PublicKey);
             } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
                 throw new SDKException("error decoding KAS EC public key", e);
             }

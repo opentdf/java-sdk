@@ -183,11 +183,7 @@ class KASClient implements SDK.KAS {
             var kasEphemeralPublicKey = response.getSessionPublicKey();
             ECPublicKey publicKey;
             try {
-                byte[] der = Base64.getDecoder().decode(kasEphemeralPublicKey
-                        .replaceAll("-----[^-]+-----", "")
-                        .replaceAll("\\s+", ""));
-                publicKey = (ECPublicKey) KeyFactory.getInstance("EC")
-                        .generatePublic(new X509EncodedKeySpec(der));
+                publicKey = ECKeyPair.publicKeyFromPem(kasEphemeralPublicKey);
             } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
                 throw new SDKException("error decoding KAS session public key", e);
             }

@@ -6,6 +6,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.math.BigInteger;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
+import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
@@ -16,6 +17,8 @@ import java.security.interfaces.ECPublicKey;
 import java.security.spec.ECGenParameterSpec;
 import java.security.spec.ECParameterSpec;
 import java.security.spec.ECPoint;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.Objects;
 
@@ -46,6 +49,13 @@ public class ECKeyPair {
         } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    static ECPublicKey publicKeyFromPem(String pem) throws InvalidKeySpecException, NoSuchAlgorithmException {
+        String pemData = pem.replaceAll("-----(BEGIN|END) [A-Z ]+-----", "").replaceAll("\\s", "");
+        byte[] der = Base64.getDecoder().decode(pemData);
+        KeyFactory keyFactory = KeyFactory.getInstance("EC");
+        return (ECPublicKey) keyFactory.generatePublic(new X509EncodedKeySpec(der));
     }
 
     public ECPublicKey getPublicKey() {
