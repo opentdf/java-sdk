@@ -89,9 +89,9 @@ public class TDFTest {
                 if (sessionKeyType.isEc()) {
                     var kasPrivateKey = CryptoUtils
                             .getPrivateKeyPEM(keypairs.get(index).getPrivate());
-                    var privateKey = ECKeyPair.privateKeyFromPem(kasPrivateKey);
+                    var privateKey = PemUtils.privateKeyFromPem(kasPrivateKey);
                     var clientEphemeralPublicKey = keyAccess.ephemeralPublicKey;
-                    var publicKey = ECKeyPair.publicKeyFromPem(clientEphemeralPublicKey);
+                    var publicKey = PemUtils.publicKeyFromPem(clientEphemeralPublicKey);
                     byte[] symKey = ECKeyPair.computeECDHKey(publicKey, privateKey);
 
                     var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symKey);

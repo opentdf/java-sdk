@@ -24,8 +24,14 @@ import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
+import java.security.interfaces.ECPublicKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -176,7 +182,16 @@ class KASClient implements SDK.KAS {
             }
 
             var kasEphemeralPublicKey = response.getSessionPublicKey();
-            var publicKey = ECKeyPair.publicKeyFromPem(kasEphemeralPublicKey);
+            ECPublicKey publicKey;
+            try {
+                byte[] der = Base64.getDecoder().decode(kasEphemeralPublicKey
+                        .replaceAll("-----[^-]+-----", "")
+                        .replaceAll("\\s+", ""));
+                publicKey = (ECPublicKey) KeyFactory.getInstance("EC")
+                        .generatePublic(new X509EncodedKeySpec(der));
+            } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+                throw new SDKException("error decoding KAS session public key", e);
+            }
             byte[] symKey = ECKeyPair.computeECDHKey(publicKey, ecKeyPair.getPrivateKey());
 
             var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symKey);

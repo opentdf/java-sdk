@@ -11,7 +11,6 @@ import io.opentdf.platform.sdk.Config.KASInfo;
 
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
-import org.bouncycastle.jce.interfaces.ECPublicKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,6 +21,9 @@ import java.io.OutputStream;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
+import java.security.interfaces.ECPublicKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 import java.text.ParseException;
 import java.util.*;
 
@@ -245,7 +247,16 @@ class TDF {
             var curveName = keyType.getECCurve();
             var keyPair = new ECKeyPair(curveName, ECKeyPair.ECAlgorithm.ECDH);
 
-            ECPublicKey kasPubKey = ECKeyPair.publicKeyFromPem(kasInfo.PublicKey);
+            ECPublicKey kasPubKey;
+            try {
+                byte[] der = Base64.getDecoder().decode(kasInfo.PublicKey
+                        .replaceAll("-----[^-]+-----", "")
+                        .replaceAll("\\s+", ""));
+                kasPubKey = (ECPublicKey) KeyFactory.getInstance("EC")
+                        .generatePublic(new X509EncodedKeySpec(der));
+            } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+                throw new SDKException("error decoding KAS EC public key", e);
+            }
             byte[] symmetricKey = ECKeyPair.computeECDHKey(kasPubKey, keyPair.getPrivateKey());
 
             var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symmetricKey);
