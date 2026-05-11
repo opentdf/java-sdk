@@ -124,8 +124,8 @@ public class ECKeyPairTest {
 
     @Test
     void createSymmetricKeysWithOtherCurves() {
-        ECKeyPair pubPair = new ECKeyPair(ECCurve.SECP384R1, ECKeyPair.ECAlgorithm.ECDH);
-        ECKeyPair keyPair = new ECKeyPair(ECCurve.SECP384R1, ECKeyPair.ECAlgorithm.ECDH);
+        ECKeyPair pubPair = new ECKeyPair(ECCurve.SECP384R1);
+        ECKeyPair keyPair = new ECKeyPair(ECCurve.SECP384R1);
 
         byte[] sharedSecret = ECKeyPair.computeECDHKey(pubPair.getPublicKey(), keyPair.getPrivateKey());
         byte[] encryptionKey = ECKeyPair.calculateHKDF(ECKeys.salt.getBytes(StandardCharsets.UTF_8), sharedSecret);
@@ -172,7 +172,7 @@ public class ECKeyPairTest {
             if (!curve.isSupported()) {
                 continue;
             }
-            ECKeyPair keyPair = new ECKeyPair(curve, ECKeyPair.ECAlgorithm.ECDSA);
+            ECKeyPair keyPair = new ECKeyPair(curve);
             byte[] signature = ECKeyPair.computeECDSASig(plainText.getBytes(), keyPair.getPrivateKey());
             boolean verify = ECKeyPair.verifyECDSAig(plainText.getBytes(), signature, keyPair.getPublicKey());
             assertEquals(verify, true);

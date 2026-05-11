@@ -245,7 +245,7 @@ class TDF {
         private ECKeyWrappedKeyInfo createECWrappedKey(Config.KASInfo kasInfo,
                 byte[] symKey, KeyType keyType) {
             var curveName = keyType.getECCurve();
-            var keyPair = new ECKeyPair(curveName, ECKeyPair.ECAlgorithm.ECDH);
+            var keyPair = new ECKeyPair(curveName);
 
             ECPublicKey kasPubKey;
             try {

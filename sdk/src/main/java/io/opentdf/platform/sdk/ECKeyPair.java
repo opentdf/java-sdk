@@ -34,12 +34,11 @@ public class ECKeyPair {
     private KeyPair keyPair;
 
     public ECKeyPair() {
-        this(ECCurve.SECP256R1, ECAlgorithm.ECDH);
+        this(ECCurve.SECP256R1);
     }
 
-    public ECKeyPair(ECCurve curve, ECAlgorithm algorithm) {
+    public ECKeyPair(ECCurve curve) {
         this.curve = Objects.requireNonNull(curve);
-        Objects.requireNonNull(algorithm);
         try {
             KeyPairGenerator generator = KeyPairGenerator.getInstance(EC_ALGORITHM);
             generator.initialize(new ECGenParameterSpec(this.curve.getCurveName()));

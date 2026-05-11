@@ -17,7 +17,6 @@ import io.opentdf.platform.kas.PublicKeyRequest;
 import io.opentdf.platform.kas.PublicKeyResponse;
 import io.opentdf.platform.kas.RewrapRequest;
 import io.opentdf.platform.kas.RewrapResponse;
-import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.SDK.KasBadRequestException;
 
 import okhttp3.OkHttpClient;
@@ -127,7 +126,7 @@ class KASClient implements SDK.KAS {
         ECKeyPair ecKeyPair = null;
         if (sessionKeyType.isEc()) {
             var curve = sessionKeyType.getECCurve();
-            ecKeyPair = new ECKeyPair(curve, ECKeyPair.ECAlgorithm.ECDH);
+            ecKeyPair = new ECKeyPair(curve);
             clientPublicKey = ecKeyPair.publicKeyInPEMFormat();
         } else {
             // Initialize the RSA key pair only once and reuse it for future unwrap operations
