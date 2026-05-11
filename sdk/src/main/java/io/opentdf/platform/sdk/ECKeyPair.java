@@ -123,7 +123,7 @@ public class ECKeyPair {
         try {
             Signature ecdsaSign = Signature.getInstance("SHA256withECDSA");
             ecdsaSign.initSign(privateKey);
-            ecdsaSign.update(digest);
+            ecdsaSign.update(data);
             return ecdsaSign.sign();
         } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e) {
             throw new RuntimeException(e);
