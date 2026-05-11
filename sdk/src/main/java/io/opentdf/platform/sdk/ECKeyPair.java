@@ -97,6 +97,7 @@ public class ECKeyPair {
         }
     }
 
+    private static String HMAC_SHA_256 = "HmacSHA256";
     /**
      * Returns a HKDF key derived from the provided salt and secret
      * that is 32 bytes (256 bits) long.
@@ -105,12 +106,12 @@ public class ECKeyPair {
         try {
             // RFC 5869: if salt is absent, substitute a zero-filled buffer of Hash output size.
             byte[] effectiveSalt = (salt == null || salt.length == 0) ? new byte[SHA256_BYTES] : salt;
-            Mac hmac = Mac.getInstance("HmacSHA256");
-            hmac.init(new SecretKeySpec(effectiveSalt, "HmacSHA256"));
+            Mac hmac = Mac.getInstance(HMAC_SHA_256);
+            hmac.init(new SecretKeySpec(effectiveSalt, HMAC_SHA_256));
             byte[] prk = hmac.doFinal(secret);
 
             // HKDF-Expand with empty info and L = 32 (a single HMAC block).
-            hmac.init(new SecretKeySpec(prk, "HmacSHA256"));
+            hmac.init(new SecretKeySpec(prk, HMAC_SHA_256));
             hmac.update((byte) 0x01);
             return hmac.doFinal();
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
