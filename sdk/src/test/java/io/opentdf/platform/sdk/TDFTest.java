@@ -10,7 +10,6 @@ import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
-import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.TDF.Reader;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
@@ -89,9 +88,9 @@ public class TDFTest {
                 if (sessionKeyType.isEc()) {
                     var kasPrivateKey = CryptoUtils
                             .getPrivateKeyPEM(keypairs.get(index).getPrivate());
-                    var privateKey = PemUtils.privateKeyFromPem(kasPrivateKey);
+                    var privateKey = PemTestUtils.privateKeyFromPem(kasPrivateKey);
                     var clientEphemeralPublicKey = keyAccess.ephemeralPublicKey;
-                    var publicKey = PemUtils.publicKeyFromPem(clientEphemeralPublicKey);
+                    var publicKey = PemTestUtils.publicKeyFromPem(clientEphemeralPublicKey);
                     byte[] symKey = ECKeyPair.computeECDHKey(publicKey, privateKey);
 
                     var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symKey);

@@ -20,10 +20,12 @@ import java.io.StringWriter;
 import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
+import java.security.Security;
 import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.Objects;
 
 /**
  * BouncyCastle-flavored PEM/X.509 helpers used only by tests. Kept here so the SDK
@@ -31,10 +33,17 @@ import java.security.spec.X509EncodedKeySpec;
  * use BouncyCastle internally but expose standard JCA key interfaces, so callers can
  * pass results directly to JCA-based APIs.
  */
-final class PemUtils {
+final class PemTestUtils {
+    private static final JcaPEMKeyConverter converter;
 
+    static {
+        var provider = Objects.requireNonNull(
+                Security.getProvider("BC"),
+                "BC provider must be registered");
+        converter = new JcaPEMKeyConverter().setProvider(provider);
+    }
 
-    private PemUtils() {
+    private PemTestUtils() {
     }
 
     static ECPublicKey publicKeyFromPem(String pemEncoding) {
@@ -43,7 +52,6 @@ final class PemUtils {
             SubjectPublicKeyInfo publicKeyInfo = (SubjectPublicKeyInfo) parser.readObject();
             parser.close();
 
-            JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
             return (ECPublicKey) converter.getPublicKey(publicKeyInfo);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -56,7 +64,6 @@ final class PemUtils {
             PrivateKeyInfo privateKeyInfo = (PrivateKeyInfo) parser.readObject();
             parser.close();
 
-            JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
             return (ECPrivateKey) converter.getPrivateKey(privateKeyInfo);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -65,17 +72,7 @@ final class PemUtils {
 
     static String getPEMPublicKeyFromX509Cert(String pemInX509Format) {
         try {
-            PEMParser parser = new PEMParser(new StringReader(pemInX509Format));
-            X509CertificateHolder x509CertificateHolder = (X509CertificateHolder) parser.readObject();
-            parser.close();
-            SubjectPublicKeyInfo publicKeyInfo = x509CertificateHolder.getSubjectPublicKeyInfo();
-            JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
-            ECPublicKey publicKey;
-            try {
-                publicKey = (ECPublicKey) converter.getPublicKey(publicKeyInfo);
-            } catch (PEMException e) {
-                throw new RuntimeException(e);
-            }
+            ECPublicKey publicKey = getEcPublicKey(pemInX509Format);
 
             StringWriter writer = new StringWriter();
             PemWriter pemWriter = new PemWriter(writer);
@@ -86,6 +83,20 @@ final class PemUtils {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private static ECPublicKey getEcPublicKey(String pemInX509Format) throws IOException {
+        PEMParser parser = new PEMParser(new StringReader(pemInX509Format));
+        X509CertificateHolder x509CertificateHolder = (X509CertificateHolder) parser.readObject();
+        parser.close();
+        SubjectPublicKeyInfo publicKeyInfo = x509CertificateHolder.getSubjectPublicKeyInfo();
+        ECPublicKey publicKey;
+        try {
+            publicKey = (ECPublicKey) converter.getPublicKey(publicKeyInfo);
+        } catch (PEMException e) {
+            throw new RuntimeException(e);
+        }
+        return publicKey;
     }
 
     static byte[] compressECPublickey(String pemECPubKey) {
