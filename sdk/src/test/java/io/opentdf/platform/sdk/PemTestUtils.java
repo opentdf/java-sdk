@@ -4,7 +4,6 @@ import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.jce.ECNamedCurveTable;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec;
 import org.bouncycastle.jce.spec.ECPublicKeySpec;
 import org.bouncycastle.math.ec.ECPoint;
@@ -26,6 +25,7 @@ import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.Objects;
 
 /**
  * BouncyCastle-flavored PEM/X.509 helpers used only by tests. Kept here so the SDK
@@ -33,15 +33,17 @@ import java.security.spec.X509EncodedKeySpec;
  * use BouncyCastle internally but expose standard JCA key interfaces, so callers can
  * pass results directly to JCA-based APIs.
  */
-final class PemUtils {
-
-    private static final BouncyCastleProvider PROVIDER = new BouncyCastleProvider();
+final class PemTestUtils {
+    private static final JcaPEMKeyConverter converter;
 
     static {
-        Security.addProvider(PROVIDER);
+        var provider = Objects.requireNonNull(
+                Security.getProvider("BC"),
+                "BC provider must be registered");
+        converter = new JcaPEMKeyConverter().setProvider(provider);
     }
 
-    private PemUtils() {
+    private PemTestUtils() {
     }
 
     static ECPublicKey publicKeyFromPem(String pemEncoding) {
@@ -50,7 +52,6 @@ final class PemUtils {
             SubjectPublicKeyInfo publicKeyInfo = (SubjectPublicKeyInfo) parser.readObject();
             parser.close();
 
-            JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider(PROVIDER);
             return (ECPublicKey) converter.getPublicKey(publicKeyInfo);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -63,7 +64,6 @@ final class PemUtils {
             PrivateKeyInfo privateKeyInfo = (PrivateKeyInfo) parser.readObject();
             parser.close();
 
-            JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider(PROVIDER);
             return (ECPrivateKey) converter.getPrivateKey(privateKeyInfo);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -72,17 +72,7 @@ final class PemUtils {
 
     static String getPEMPublicKeyFromX509Cert(String pemInX509Format) {
         try {
-            PEMParser parser = new PEMParser(new StringReader(pemInX509Format));
-            X509CertificateHolder x509CertificateHolder = (X509CertificateHolder) parser.readObject();
-            parser.close();
-            SubjectPublicKeyInfo publicKeyInfo = x509CertificateHolder.getSubjectPublicKeyInfo();
-            JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider(PROVIDER);
-            ECPublicKey publicKey;
-            try {
-                publicKey = (ECPublicKey) converter.getPublicKey(publicKeyInfo);
-            } catch (PEMException e) {
-                throw new RuntimeException(e);
-            }
+            ECPublicKey publicKey = getEcPublicKey(pemInX509Format);
 
             StringWriter writer = new StringWriter();
             PemWriter pemWriter = new PemWriter(writer);
@@ -95,9 +85,23 @@ final class PemUtils {
         }
     }
 
+    private static ECPublicKey getEcPublicKey(String pemInX509Format) throws IOException {
+        PEMParser parser = new PEMParser(new StringReader(pemInX509Format));
+        X509CertificateHolder x509CertificateHolder = (X509CertificateHolder) parser.readObject();
+        parser.close();
+        SubjectPublicKeyInfo publicKeyInfo = x509CertificateHolder.getSubjectPublicKeyInfo();
+        ECPublicKey publicKey;
+        try {
+            publicKey = (ECPublicKey) converter.getPublicKey(publicKeyInfo);
+        } catch (PEMException e) {
+            throw new RuntimeException(e);
+        }
+        return publicKey;
+    }
+
     static byte[] compressECPublickey(String pemECPubKey) {
         try {
-            KeyFactory ecKeyFac = KeyFactory.getInstance("EC", PROVIDER);
+            KeyFactory ecKeyFac = KeyFactory.getInstance("EC");
             PemReader pemReader = new PemReader(new StringReader(pemECPubKey));
             PemObject pemObject = pemReader.readPemObject();
             PublicKey pubKey = ecKeyFac.generatePublic(new X509EncodedKeySpec(pemObject.getContent()));
@@ -112,7 +116,7 @@ final class PemUtils {
             ECNamedCurveParameterSpec ecSpec = ECNamedCurveTable.getParameterSpec(curveName);
             ECPoint point = ecSpec.getCurve().decodePoint(ecPoint);
             ECPublicKeySpec publicKeySpec = new ECPublicKeySpec(point, ecSpec);
-            KeyFactory keyFactory = KeyFactory.getInstance("ECDSA", PROVIDER);
+            KeyFactory keyFactory = KeyFactory.getInstance("ECDSA");
             PublicKey publicKey = keyFactory.generatePublic(publicKeySpec);
 
             StringWriter writer = new StringWriter();
