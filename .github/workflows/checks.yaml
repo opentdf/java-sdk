@@ -93,7 +93,7 @@ jobs:
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
         run: |
           mvn --batch-mode clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=opentdf_java-sdk -P coverage && \
-          mvn test -P 'fips,!non-fips'
+          mvn --batch-mode test -P 'fips,!non-fips'
         
 
   platform-integration:
