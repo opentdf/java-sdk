@@ -98,8 +98,6 @@ class TDF {
     private static final String kTDFAsZip = "zip";
     private static final String kTDFZipReference = "reference";
 
-    private static final SecureRandom sRandom = new SecureRandom();
-
     private static final Gson gson = new GsonBuilder().create();
 
     static class EncryptedMetadata {
@@ -162,8 +160,7 @@ class TDF {
                 String splitID = split.getKey();
 
                 // Symmetric key
-                byte[] symKey = new byte[GCM_KEY_SIZE];
-                sRandom.nextBytes(symKey);
+                byte[] symKey = AesGcm.generateKey();
                 symKeys.add(symKey);
 
                 // Add policyBinding

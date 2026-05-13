@@ -23,7 +23,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
-import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -169,9 +168,7 @@ public class TDFTest {
             }
         }
 
-        SecureRandom secureRandom = new SecureRandom();
-        byte[] key = new byte[32];
-        secureRandom.nextBytes(key);
+        byte[] key = AesGcm.generateKey();
 
         var assertion1 = new AssertionConfig();
         assertion1.id = "assertion1";
@@ -633,9 +630,7 @@ public class TDFTest {
     @Test
     void testSimpleTDFWithAssertionWithHS256Failure() throws Exception {
         // var keypair = CryptoUtils.generateRSAKeypair();
-        SecureRandom secureRandom = new SecureRandom();
-        byte[] key = new byte[32];
-        secureRandom.nextBytes(key);
+        byte[] key = AesGcm.generateKey();
 
         String assertion1Id = "assertion1";
         var assertionConfig1 = new AssertionConfig();
@@ -667,8 +662,7 @@ public class TDFTest {
                         .setKeyAccessServerRegistryService(kasRegistryService).build());
         tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
 
-        byte[] notkey = new byte[32];
-        secureRandom.nextBytes(notkey);
+        byte[] notkey = AesGcm.generateKey();
         var assertionVerificationKeys = new Config.AssertionVerificationKeys();
         assertionVerificationKeys.defaultKey = new AssertionConfig.AssertionKey(
                 AssertionConfig.AssertionKeyAlg.HS256,

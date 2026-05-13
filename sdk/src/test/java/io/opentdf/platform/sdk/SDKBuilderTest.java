@@ -168,11 +168,13 @@ public class SDKBuilderTest {
 
         HeldCertificate rootCertificate = new HeldCertificate.Builder()
                 .certificateAuthority(0)
+                .rsa2048()
                 .build();
         String localhost = InetAddress.getByName("localhost").getCanonicalHostName();
         HeldCertificate serverCertificate = new HeldCertificate.Builder()
                 .addSubjectAlternativeName(localhost)
-                .commonName("CN=localhost")
+                .rsa2048()
+                .commonName("localhost")
                 .signedBy(rootCertificate)
                 .build();
 
@@ -318,7 +320,6 @@ public class SDKBuilderTest {
                 servicesBuilder = servicesBuilder
                         .sslFactory(trustProvider.getSslSocketFactory(), trustProvider.getTrustManager());
             }
-
             var servicesAndComponents = servicesBuilder.buildServices();
             if (useSSLPlatform || useSSLIDP) {
                 assertThat(servicesAndComponents.trustManager).isNotNull();
@@ -392,7 +393,10 @@ public class SDKBuilderTest {
             }
             assertThat(kasDPoPHeader.get()).isNotNull();
             assertThat(kasAuthHeader.get()).isEqualTo("DPoP hereisthetoken");
-        } finally {
+        } catch (Exception e) {
+            assertThat(e).isNull();
+        }
+        finally {
             if (platformServicesServer != null) {
                 platformServicesServer.shutdownNow();
             }

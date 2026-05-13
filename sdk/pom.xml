@@ -17,6 +17,7 @@
         <connect.version>0.7.2</connect.version>
         <okhttp.version>4.12.0</okhttp.version>
         <platform.branch>protocol/go/v0.16.0</platform.branch>
+        <!-- test.java.security.file is set by the `non-fips` (default) or `fips` profile -->
     </properties>
     <dependencies>
         <!-- Logging Dependencies -->
@@ -148,17 +149,7 @@
             <version>6.0.53</version>
             <scope>provided</scope>
         </dependency>
-        <!-- Crypto Dependencies -->
-        <dependency>
-            <groupId>org.bouncycastle</groupId>
-            <artifactId>bcpkix-jdk18on</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.bouncycastle</groupId>
-            <artifactId>bcprov-jdk18on</artifactId>
-            <scope>test</scope>
-        </dependency>
+        <!-- Crypto Dependencies are pulled in via the `non-fips` (default) or `fips` profile -->
         <!-- Testing Dependencies -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -473,11 +464,69 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>-Djava.security.properties=${test.java.security.file}</argLine>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
-    <!--profile
-    to execute fuzz test -->
     <profiles>
+        <profile>
+            <id>non-fips</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <properties>
+                <test.java.security.file>${project.basedir}/src/test/java.security.test</test.java.security.file>
+            </properties>
+            <dependencies>
+                <dependency>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcprov-jdk18on</artifactId>
+                    <scope>runtime</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcpkix-jdk18on</artifactId>
+                    <scope>runtime</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bctls-jdk18on</artifactId>
+                    <scope>runtime</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>fips</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <properties>
+                <test.java.security.file>${project.basedir}/src/test/java.security.fips.test</test.java.security.file>
+            </properties>
+            <dependencies>
+                <dependency>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bc-fips</artifactId>
+                    <scope>runtime</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcpkix-fips</artifactId>
+                    <scope>runtime</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bctls-fips</artifactId>
+                    <scope>runtime</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+        <!-- profile to execute fuzz test -->
         <profile>
             <id>fuzz</id>
             <activation>
