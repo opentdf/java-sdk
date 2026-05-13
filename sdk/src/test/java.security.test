@@ -1,7 +1,3 @@
-keystore.type.compat=false
-ssl.KeyManagerFactory.algorithm=PKIX
-ssl.TrustManagerFactory.algorithm=PKIX
-
 # TODO: get rid of the BC providers, we should not need them
 security.provider.1=org.bouncycastle.jce.provider.BouncyCastleProvider
 security.provider.2=org.bouncycastle.jsse.provider.BouncyCastleJsseProvider
