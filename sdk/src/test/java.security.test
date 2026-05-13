@@ -1,1 +1,4 @@
-# TODO: get rid of the BCt di providers, we should not need them
+# the default for these is usually SunX509 but BC doesn't
+# support them. tell it to use PKIX instead which is supported by BC
+ssl.KeyManagerFactory.algorithm=PKIX
+ssl.TrustManagerFactory.algorithm=PKIX

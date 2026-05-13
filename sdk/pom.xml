@@ -17,7 +17,10 @@
         <connect.version>0.7.2</connect.version>
         <okhttp.version>4.12.0</okhttp.version>
         <platform.branch>protocol/go/v0.16.0</platform.branch>
-        <!-- test.java.security.file is set by the `non-fips` (default) or `fips` profile -->
+        <!-- in the non-FIPS case we don't need to pass anything to the jvm -->
+        <java.security.properties.test></java.security.properties.test>
+        <!-- Default empty argLine; overridden by jacoco:prepare-agent when the `coverage` profile is active -->
+        <argLine></argLine>
     </properties>
     <dependencies>
         <!-- Logging Dependencies -->
@@ -468,7 +471,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <argLine>-Djava.security.properties=${test.java.security.file}</argLine>
+                    <argLine>@{argLine} ${java.security.properties.test}</argLine>
                 </configuration>
             </plugin>
         </plugins>
@@ -477,11 +480,8 @@
         <profile>
             <id>non-fips</id>
             <activation>
-                <activeByDefault>false</activeByDefault>
+                <activeByDefault>true</activeByDefault>
             </activation>
-            <properties>
-                <test.java.security.file>${project.basedir}/src/test/java.security.test</test.java.security.file>
-            </properties>
             <dependencies>
                 <dependency>
                     <groupId>org.bouncycastle</groupId>
@@ -503,10 +503,10 @@
         <profile>
             <id>fips</id>
             <activation>
-                <activeByDefault>true</activeByDefault>
+                <activeByDefault>false</activeByDefault>
             </activation>
             <properties>
-                <test.java.security.file>${project.basedir}/src/test/java.security.fips.test</test.java.security.file>
+                <java.security.properties.test>-Djava.security.properties=${project.basedir}/src/test/java.security.fips.test</java.security.properties.test>
             </properties>
             <dependencies>
                 <dependency>
