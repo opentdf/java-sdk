@@ -1,6 +1,3 @@
-ssl.KeyManagerFactory.algorithm=PKIX
-ssl.TrustManagerFactory.algorithm=PKIX
-
 securerandom.strongAlgorithms=DRBG:SUN
 
 security.provider.1=org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider
