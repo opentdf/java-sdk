@@ -477,7 +477,7 @@
         <profile>
             <id>non-fips</id>
             <activation>
-                <activeByDefault>true</activeByDefault>
+                <activeByDefault>false</activeByDefault>
             </activation>
             <properties>
                 <test.java.security.file>${project.basedir}/src/test/java.security.test</test.java.security.file>
@@ -503,7 +503,7 @@
         <profile>
             <id>fips</id>
             <activation>
-                <activeByDefault>false</activeByDefault>
+                <activeByDefault>true</activeByDefault>
             </activation>
             <properties>
                 <test.java.security.file>${project.basedir}/src/test/java.security.fips.test</test.java.security.file>
