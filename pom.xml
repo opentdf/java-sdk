@@ -146,11 +146,6 @@
                 <artifactId>bctls-fips</artifactId>
                 <version>${bctls-fips.version}</version>
             </dependency>
-            <dependency>
-                <groupId>org.bouncycastle</groupId>
-                <artifactId>bctls-jdk18on</artifactId>
-                <version>${bouncycastle.version}</version>
-            </dependency>
             <!--
                 Pin Byte Buddy for test-time Mockito instrumentation on newer JVMs (e.g. Java 21).
                 This does NOT add a runtime dependency; it only manages the version used by modules.
