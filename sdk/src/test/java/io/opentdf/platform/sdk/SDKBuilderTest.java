@@ -168,13 +168,11 @@ public class SDKBuilderTest {
 
         HeldCertificate rootCertificate = new HeldCertificate.Builder()
                 .certificateAuthority(0)
-                .rsa2048()
                 .build();
         String localhost = InetAddress.getByName("localhost").getCanonicalHostName();
         HeldCertificate serverCertificate = new HeldCertificate.Builder()
                 .addSubjectAlternativeName(localhost)
-                .rsa2048()
-                .commonName("localhost")
+                .commonName("CN=localhost")
                 .signedBy(rootCertificate)
                 .build();
 
@@ -393,10 +391,7 @@ public class SDKBuilderTest {
             }
             assertThat(kasDPoPHeader.get()).isNotNull();
             assertThat(kasAuthHeader.get()).isEqualTo("DPoP hereisthetoken");
-        } catch (Exception e) {
-            assertThat(e).isNull();
-        }
-        finally {
+        } finally {
             if (platformServicesServer != null) {
                 platformServicesServer.shutdownNow();
             }
