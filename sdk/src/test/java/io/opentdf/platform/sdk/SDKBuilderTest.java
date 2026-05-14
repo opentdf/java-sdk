@@ -168,11 +168,13 @@ public class SDKBuilderTest {
 
         HeldCertificate rootCertificate = new HeldCertificate.Builder()
                 .certificateAuthority(0)
+                .rsa2048()
                 .build();
         String localhost = InetAddress.getByName("localhost").getCanonicalHostName();
         HeldCertificate serverCertificate = new HeldCertificate.Builder()
                 .addSubjectAlternativeName(localhost)
-                .commonName("CN=localhost")
+                .rsa2048()
+                .commonName("localhost")
                 .signedBy(rootCertificate)
                 .build();
 
