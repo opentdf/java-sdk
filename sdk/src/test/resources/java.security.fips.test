@@ -3,12 +3,14 @@
 ssl.KeyManagerFactory.algorithm=PKIX
 ssl.TrustManagerFactory.algorithm=PKIX
 
+# the SUN provider is required so that we can get the NativePRNGBlocking algorithm
 securerandom.strongAlgorithms=NativePRNGBlocking:SUN
 
 security.provider.1=org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider
 security.provider.2=org.bouncycastle.jsse.provider.BouncyCastleJsseProvider fips:BCFIPS
-# the SUN provider is required so that we can get the NativePRNGBlocking algorithm
 security.provider.3=SUN
+
+# since this file is appended we need to make sure that we remove the other providers
 security.provider.4=
 security.provider.5=
 security.provider.6=

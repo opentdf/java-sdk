@@ -85,15 +85,22 @@ jobs:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
-      - name: Maven Test Coverage
+      - name: Generate sources
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
+        run: mvn --batch-mode clean generate-sources
+      - name: Tests and enforcer (fips)
+        run: mvn --batch-mode verify -P 'fips,!non-fips' -Dmaven.antrun.skip
+      - name: Tests with coverage and javadoc (non-fips)
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          mvn --batch-mode clean verify -P 'fips,!non-fips' && \
-          mvn --batch-mode verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dmaven.antrun.skip -Dsonar.projectKey=opentdf_java-sdk -P 'coverage,non-fips,!fips'
+          mvn --batch-mode verify javadoc:javadoc \
+            org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+            -Dmaven.antrun.skip -Dsonar.projectKey=opentdf_java-sdk \
+            -P 'coverage,non-fips,!fips'
 
   platform-integration:
     runs-on: ubuntu-22.04
