@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Builds {@link SSLSocketFactory} and {@link X509ExtendedTrustManager} instances for verifying
@@ -125,9 +126,9 @@ public final class TrustProvider {
         // Try JKS first since it remains the JVM default; fall back to PKCS12 which is portable
         // across both bcprov-jdk18on and bc-fips. We do not pin a provider; whichever provider is
         // registered fulfills the request.
-        byte[] bytes = readAll(in);
+        byte[] bytes = in.readAllBytes();
         KeyStoreException last = null;
-        for (String type : new String[]{KeyStore.getDefaultType(), "JKS", "PKCS12"}) {
+        for (String type : Set.of(KeyStore.getDefaultType(), "JKS", "PKCS12")) {
             try {
                 KeyStore ks = KeyStore.getInstance(type);
                 ks.load(new java.io.ByteArrayInputStream(bytes), password);
@@ -139,17 +140,7 @@ public final class TrustProvider {
                 last = new KeyStoreException(e);
             }
         }
-        throw last != null ? last : new KeyStoreException("could not load keystore");
-    }
-
-    private static byte[] readAll(InputStream in) throws IOException {
-        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-        byte[] buf = new byte[8192];
-        int n;
-        while ((n = in.read(buf)) >= 0) {
-            out.write(buf, 0, n);
-        }
-        return out.toByteArray();
+        throw last;
     }
 
     private static X509ExtendedTrustManager extractTrustManager(KeyStore trustStore)
