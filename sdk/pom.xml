@@ -506,13 +506,13 @@
                 </dependency>
                 <dependency>
                     <groupId>org.bouncycastle</groupId>
-                    <artifactId>bcpkix-fips</artifactId>
+                    <artifactId>bctls-fips</artifactId>
                     <scope>runtime</scope>
                 </dependency>
                 <dependency>
                     <groupId>org.bouncycastle</groupId>
-                    <artifactId>bctls-fips</artifactId>
-                    <scope>runtime</scope>
+                    <artifactId>bcpkix-fips</artifactId>
+                    <scope>test</scope>
                 </dependency>
             </dependencies>
         </profile>
