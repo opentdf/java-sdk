@@ -10,6 +10,7 @@ import com.nimbusds.jose.jwk.JWK;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 
+import java.security.cert.X509Certificate;
 import java.text.ParseException;
 import com.google.gson.JsonSyntaxException;
 import io.opentdf.platform.sdk.AssertionConfig;
@@ -18,11 +19,11 @@ import io.opentdf.platform.sdk.Config;
 import io.opentdf.platform.sdk.KeyType;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
-import io.opentdf.platform.sdk.TrustProvider;
 import picocli.CommandLine;
 import picocli.CommandLine.HelpCommand;
 import picocli.CommandLine.Option;
 
+import javax.net.ssl.X509TrustManager;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -263,7 +264,12 @@ class Command {
         SDKBuilder builder = new SDKBuilder();
         if (insecure) {
             // Trust all certificates
-            builder.sslFactory(TrustProvider.insecure().getSslSocketFactory());
+            X509TrustManager insecureTrustManager = new X509TrustManager() {
+                @Override public void checkClientTrusted(X509Certificate[] chain, String authType) {}
+                @Override public void checkServerTrusted(X509Certificate[] chain, String authType) {}
+                @Override public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+            };
+            builder.sslFactoryFromTrustManager(insecureTrustManager);
         }
 
         return builder.platformEndpoint(platformEndpoint)

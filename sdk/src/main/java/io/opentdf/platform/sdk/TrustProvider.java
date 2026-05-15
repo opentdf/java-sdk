@@ -6,6 +6,7 @@ import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509ExtendedTrustManager;
+import javax.net.ssl.X509TrustManager;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -36,19 +37,19 @@ import java.util.Set;
  * work is fulfilled by whichever {@link java.security.Provider} is registered with the JVM,
  * including FIPS-mode providers.
  */
-public final class TrustProvider {
+final class TrustProvider {
 
     private final SSLSocketFactory sslSocketFactory;
-    private final X509ExtendedTrustManager trustManager;
+    private final X509TrustManager trustManager;
     private final SSLContext sslContext;
 
-    private TrustProvider(SSLContext sslContext, X509ExtendedTrustManager trustManager) {
+    private TrustProvider(SSLContext sslContext, X509TrustManager trustManager) {
         this.sslContext = sslContext;
         this.trustManager = trustManager;
         this.sslSocketFactory = sslContext.getSocketFactory();
     }
 
-    public X509ExtendedTrustManager getTrustManager() {
+    public X509TrustManager getTrustManager() {
         return trustManager;
     }
 
@@ -91,6 +92,12 @@ public final class TrustProvider {
         return builder.build();
     }
 
+    public static TrustProvider fromTrustManager(X509TrustManager trustManager) throws IOException, GeneralSecurityException {
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        sslContext.init(new KeyManager[0], new TrustManager[]{trustManager}, new SecureRandom());
+        return new TrustProvider(sslContext, trustManager);
+    }
+
     /**
      * Builds a {@link TrustProvider} that trusts JVM default cacerts plus the trusted-certificate
      * entries in the supplied keystore.
@@ -104,21 +111,6 @@ public final class TrustProvider {
             ks = loadKeyStore(in, password);
         }
         return builder().withDefaultTrustMaterial().withTrustMaterial(ks).build();
-    }
-
-    /**
-     * Builds a {@link TrustProvider} that accepts every server certificate. Intended only for
-     * tests and {@code --insecure} CLI flows.
-     */
-    public static TrustProvider insecure() {
-        try {
-            SSLContext ctx = SSLContext.getInstance("TLS");
-            X509ExtendedTrustManager trustAll = new InsecureTrustManager();
-            ctx.init(new KeyManager[0], new TrustManager[]{trustAll}, new SecureRandom());
-            return new TrustProvider(ctx, trustAll);
-        } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("failed to build insecure TrustProvider", e);
-        }
     }
 
     private static KeyStore loadKeyStore(InputStream in, char[] password)
@@ -175,13 +167,6 @@ public final class TrustProvider {
         public Builder withTrustMaterial(X509Certificate... certs) {
             if (certs != null) {
                 Collections.addAll(this.certificates, certs);
-            }
-            return this;
-        }
-
-        public Builder withTrustMaterial(Collection<X509Certificate> certs) {
-            if (certs != null) {
-                this.certificates.addAll(certs);
             }
             return this;
         }
@@ -249,17 +234,5 @@ public final class TrustProvider {
             ks.load(null, null);
             return ks;
         }
-    }
-
-    private static final class InsecureTrustManager extends X509ExtendedTrustManager {
-        private static final X509Certificate[] EMPTY = new X509Certificate[0];
-
-        @Override public void checkClientTrusted(X509Certificate[] chain, String authType) { }
-        @Override public void checkClientTrusted(X509Certificate[] chain, String authType, java.net.Socket socket) { }
-        @Override public void checkClientTrusted(X509Certificate[] chain, String authType, javax.net.ssl.SSLEngine engine) { }
-        @Override public void checkServerTrusted(X509Certificate[] chain, String authType) { }
-        @Override public void checkServerTrusted(X509Certificate[] chain, String authType, java.net.Socket socket) { }
-        @Override public void checkServerTrusted(X509Certificate[] chain, String authType, javax.net.ssl.SSLEngine engine) { }
-        @Override public X509Certificate[] getAcceptedIssuers() { return EMPTY; }
     }
 }

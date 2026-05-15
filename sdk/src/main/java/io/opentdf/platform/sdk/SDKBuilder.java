@@ -7,7 +7,6 @@ import com.connectrpc.extensions.GoogleJavaProtobufStrategy;
 import com.connectrpc.impl.ProtocolClient;
 import com.connectrpc.okhttp.ConnectOkHttpClient;
 import com.connectrpc.protocols.GETConfiguration;
-import com.connectrpc.protocols.NetworkProtocol;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.RSAKey;
@@ -45,6 +44,7 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -77,15 +77,18 @@ public class SDKBuilder {
     }
 
     /**
-     * Configure the SDK to use the supplied {@link SSLSocketFactory} for outbound TLS connections.
-     * Callers using this overload bring their own pre-built socket factory; cert-chain trust
-     * material is whatever the supplied factory was built with. For full PKIX validation under a
-     * matching {@link X509TrustManager}, use {@link #sslFactoryFromDirectory(String)} or
-     * {@link #sslFactoryFromKeyStore(String, String)} which build both via {@link TrustProvider}.
+     * The SDK will trust the certs that this TrustManager trusts
+     * @param trustManager
      */
-    public SDKBuilder sslFactory(SSLSocketFactory sslSocketFactory) {
-        this.sslSocketFactory = sslSocketFactory;
-        this.trustManager = null;
+    public SDKBuilder sslFactoryFromTrustManager(X509TrustManager trustManager) {
+        TrustProvider trustProvider;
+        try {
+            trustProvider = TrustProvider.fromTrustManager(trustManager);
+        } catch (IOException | GeneralSecurityException e) {
+            throw new SDKException("error creating trust provider", e);
+        }
+        this.trustManager = trustManager;
+        this.sslSocketFactory = trustProvider.getSslSocketFactory();
         return this;
     }
 

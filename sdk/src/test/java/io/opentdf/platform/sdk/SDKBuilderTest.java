@@ -41,6 +41,8 @@ import java.nio.file.Path;
 import java.security.KeyStore;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
@@ -98,6 +100,38 @@ public class SDKBuilderTest {
         assertEquals(1, Arrays.stream(acceptedIssuers).filter(x -> x.getIssuerX500Principal().getName()
                 .equals("CN=example.com")).count());
 
+    }
+
+    @Test
+    void testTrustManagerSetsSslFactory() throws Exception {
+        KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
+        keystore.load(null, null);
+        X509Certificate cert = (X509Certificate) CertificateFactory.getInstance("X.509")
+                .generateCertificate(new ByteArrayInputStream(EXAMPLE_COM_PEM.getBytes(StandardCharsets.UTF_8)));
+        keystore.setCertificateEntry("example.com", cert);
+
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        tmf.init(keystore);
+        X509TrustManager suppliedTrustManager = null;
+        for (TrustManager tm : tmf.getTrustManagers()) {
+            if (tm instanceof X509TrustManager) {
+                suppliedTrustManager = (X509TrustManager) tm;
+                break;
+            }
+        }
+        assertNotNull(suppliedTrustManager);
+
+        SDKBuilder builder = SDKBuilder.newBuilder().sslFactoryFromTrustManager(suppliedTrustManager);
+
+        SSLSocketFactory sslSocketFactory = builder.getSslFactory();
+        assertNotNull(sslSocketFactory);
+
+        // the builder should retain the exact trust manager the caller supplied
+        assertSame(suppliedTrustManager, builder.getTrustManager());
+
+        X509Certificate[] acceptedIssuers = builder.getTrustManager().getAcceptedIssuers();
+        assertEquals(1, Arrays.stream(acceptedIssuers).filter(x -> x.getIssuerX500Principal().getName()
+                .equals("CN=example.com")).count());
     }
 
     @Test
