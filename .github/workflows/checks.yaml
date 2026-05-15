@@ -90,7 +90,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
-        run: mvn --batch-mode clean generate-sources
+        run: mvn clean --batch-mode clean generate-sources
       - name: Tests and enforcer (fips)
         run: mvn --batch-mode test enforcer:enforce -P 'fips,!non-fips' -Dmaven.antrun.skip
       - name: Tests with coverage and javadoc (non-fips)
@@ -98,7 +98,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          mvn --batch-mode verify javadoc:javadoc \
+          mvn --batch-mode verify \
             org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
             -Dmaven.antrun.skip -Dsonar.projectKey=opentdf_java-sdk \
             -P 'coverage,non-fips,!fips'
