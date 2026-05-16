@@ -496,7 +496,7 @@
                 <activeByDefault>false</activeByDefault>
             </activation>
             <properties>
-                <java.security.properties.test>-Djava.security.properties=${project.basedir}/src/test/java.security.fips.test</java.security.properties.test>
+                <java.security.properties.test>-Djava.security.properties=${project.basedir}/src/test/resources/java.security.fips.test</java.security.properties.test>
             </properties>
             <dependencies>
                 <dependency>
