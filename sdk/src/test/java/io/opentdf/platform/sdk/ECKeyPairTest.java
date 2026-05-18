@@ -160,7 +160,7 @@ public class ECKeyPairTest {
         assertEquals(encodeECPoint, "Al3vx59pBnP8tRxuUFw18aK9ym6rFrxZRhpVQytUQ+Kg");
 
         String publicKey = PemTestUtils.publicKeyFromECPoint(ecPoint,
-                SECP256R1.name());
+                SECP256R1.getCurveName());
         assertArrayEquals(ECKeys.sdkPublicKey.toCharArray(), publicKey.toCharArray());
     }
 

@@ -84,7 +84,7 @@ public class SDKBuilder {
         TrustProvider trustProvider;
         try {
             trustProvider = TrustProvider.fromTrustManager(trustManager);
-        } catch (IOException | GeneralSecurityException e) {
+        } catch (GeneralSecurityException e) {
             throw new SDKException("error creating trust provider", e);
         }
         this.trustManager = trustManager;

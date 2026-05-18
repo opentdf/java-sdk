@@ -25,8 +25,8 @@ import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Builds {@link SSLSocketFactory} and {@link X509ExtendedTrustManager} instances for verifying
@@ -92,7 +92,7 @@ final class TrustProvider {
         return builder.build();
     }
 
-    public static TrustProvider fromTrustManager(X509TrustManager trustManager) throws IOException, GeneralSecurityException {
+    public static TrustProvider fromTrustManager(X509TrustManager trustManager) throws GeneralSecurityException {
         SSLContext sslContext = SSLContext.getInstance("TLS");
         sslContext.init(new KeyManager[0], new TrustManager[]{trustManager}, new SecureRandom());
         return new TrustProvider(sslContext, trustManager);
@@ -120,7 +120,7 @@ final class TrustProvider {
         // registered fulfills the request.
         byte[] bytes = in.readAllBytes();
         KeyStoreException last = null;
-        for (String type : Set.of(KeyStore.getDefaultType(), "JKS", "PKCS12")) {
+        for (String type : new HashSet<>(List.of(KeyStore.getDefaultType(), "JKS", "PKCS12"))) {
             try {
                 KeyStore ks = KeyStore.getInstance(type);
                 ks.load(new java.io.ByteArrayInputStream(bytes), password);
