@@ -50,6 +50,7 @@ class TokenSource {
         this.rsaKey = rsaKey;
         this.tokenEndpointURI = tokenEndpointURI;
         this.sslSocketFactory = sslSocketFactory;
+        this.tokenExpiryTime = Instant.now();
         this.authzGrant = authzGrant;
     }
 

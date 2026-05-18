@@ -128,7 +128,7 @@ public class SDKBuilder {
         try {
             TrustProvider provider = TrustProvider.fromKeyStore(
                     Path.of(keystorePath),
-                    keystorePassword == null ? "".toCharArray() : keystorePassword.toCharArray());
+                    keystorePassword == null ? null : keystorePassword.toCharArray());
             this.sslSocketFactory = provider.getSslSocketFactory();
             this.trustManager = provider.getTrustManager();
         } catch (IOException | java.security.GeneralSecurityException e) {

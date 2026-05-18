@@ -53,7 +53,12 @@ public class ECKeyPair {
 
     static ECPublicKey publicKeyFromPem(String pem) throws InvalidKeySpecException, NoSuchAlgorithmException {
         String pemData = pem.replaceAll("-----(BEGIN|END) [A-Z ]+-----", "").replaceAll("\\s", "");
-        byte[] der = Base64.getDecoder().decode(pemData);
+        byte[] der;
+        try {
+            der = Base64.getDecoder().decode(pemData);
+        } catch (IllegalArgumentException e) {
+            throw new SDKException("invalid public key format", e);
+        }
         KeyFactory keyFactory = KeyFactory.getInstance("EC");
         return (ECPublicKey) keyFactory.generatePublic(new X509EncodedKeySpec(der));
     }
