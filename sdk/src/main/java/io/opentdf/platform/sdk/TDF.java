@@ -87,6 +87,7 @@ class TDF {
     private static final String kSplitKeyType = "split";
     private static final String kWrapped = "wrapped";
     private static final String kECWrapped = "ec-wrapped";
+    private static final String kHybridWrapped = "hybrid-wrapped";
     private static final String kKasProtocol = "kas";
     private static final int kGcmIvSize = 12;
     private static final int kAesBlockSize = 16;
@@ -226,7 +227,13 @@ class TDF {
                     : kasInfo.Algorithm;
 
             var keyType = KeyType.fromString(algorithm);
-            if (keyType.isEc()) {
+            if (keyType.isHybrid()) {
+                byte[] wrapped = HybridCrypto.wrapDEK(keyType, kasInfo.PublicKey, symKey);
+                keyAccess.wrappedKey = Base64.getEncoder().encodeToString(wrapped);
+                keyAccess.keyType = kHybridWrapped;
+                // ephemeralPublicKey intentionally left null — the ephemeral material is
+                // carried inside the ASN.1 envelope in wrappedKey.
+            } else if (keyType.isEc()) {
                 var ecKeyWrappedKeyInfo = createECWrappedKey(kasInfo, symKey, keyType);
                 keyAccess.wrappedKey = ecKeyWrappedKeyInfo.wrappedKey;
                 keyAccess.ephemeralPublicKey = ecKeyWrappedKeyInfo.publicKey;
