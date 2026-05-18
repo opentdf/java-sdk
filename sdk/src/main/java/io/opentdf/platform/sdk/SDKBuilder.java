@@ -105,6 +105,17 @@ public class SDKBuilder {
     }
 
     /**
+     * Configure the SDK to use the supplied {@link SSLSocketFactory}. {@link SDKBuilder#sslFactory(SSLSocketFactory, X509TrustManager)}
+     * should be preferred since OkHttp will use reflection to derive a TrustManager which may
+     * fail on some platforms because of stronger forms of encapsulation.
+     */
+    public SDKBuilder sslFactory(SSLSocketFactory sslSocketFactory) {
+        this.sslSocketFactory = sslSocketFactory;
+        this.trustManager = null;
+        return this;
+    }
+
+    /**
      * Add SSL Context with trusted certs from certDirPath
      *
      * @param certsDirPath Path to a directory containing .pem or .crt trusted certs
