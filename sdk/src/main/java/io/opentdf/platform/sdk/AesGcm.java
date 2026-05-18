@@ -32,7 +32,7 @@ public class AesGcm {
      *
      * @return the encoded key bytes
      */
-    public static byte[] generateKey() {
+    static byte[] generateKey() {
         try {
             KeyGenerator keyGenerator = KeyGenerator.getInstance(KEY_ALGORITHM);
             keyGenerator.init(GCM_KEY_SIZE_BITS);
