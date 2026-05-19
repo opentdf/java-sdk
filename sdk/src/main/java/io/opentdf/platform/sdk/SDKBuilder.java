@@ -45,6 +45,7 @@ import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
+import java.security.cert.X509Certificate;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -265,6 +266,19 @@ public class SDKBuilder {
         }
         var ts = new TokenSource(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI(), this.authzGrant, sslSocketFactory);
         return new AuthInterceptor(ts);
+    }
+
+    /**
+     * The SDK will trust all certificates. This is not secure.
+     * @return this builder instance for method chaining
+     */
+    public SDKBuilder insecureSslFactory() {
+        X509TrustManager insecureTrustManager = new X509TrustManager() {
+            @Override public void checkClientTrusted(X509Certificate[] chain, String authType) {}
+            @Override public void checkServerTrusted(X509Certificate[] chain, String authType) {}
+            @Override public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+        };
+        return this.sslFactoryFromTrustManager(insecureTrustManager);
     }
 
     static class ServicesAndInternals {
