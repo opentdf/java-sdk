@@ -54,7 +54,7 @@ class RuleType {
  * This class includes functionality to create granter instances based on
  * attributes either from a list of attribute values or from a service.
  */
-public class Autoconfigure {
+class Autoconfigure {
 
     private static Logger logger = LoggerFactory.getLogger(Autoconfigure.class);
 
@@ -98,7 +98,7 @@ public class Autoconfigure {
         }
     }
 
-    public static class KeySplitStep {
+    static class KeySplitStep {
         final String kas;
         final String splitID;
 

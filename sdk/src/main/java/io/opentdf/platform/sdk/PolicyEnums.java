@@ -22,7 +22,7 @@ import io.opentdf.platform.policy.SubjectMappingOperatorEnum;
  *     .setOperator(OPERATOR_IN);
  * }</pre>
  */
-public final class PolicyEnums {
+final class PolicyEnums {
 
     private PolicyEnums() {}
 

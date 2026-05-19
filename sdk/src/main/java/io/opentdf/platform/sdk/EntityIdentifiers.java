@@ -27,7 +27,7 @@ import java.util.Objects;
  * EntityIdentifiers.forEmail("jen@example.com");
  * }</pre>
  */
-public final class EntityIdentifiers {
+final class EntityIdentifiers {
 
     private EntityIdentifiers() {}
 
