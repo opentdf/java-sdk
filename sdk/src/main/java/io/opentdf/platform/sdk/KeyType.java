@@ -14,7 +14,8 @@ public enum KeyType {
     RSA4096Key("rsa:4096"),
     EC256Key("ec:secp256r1", SECP256R1),
     EC384Key("ec:secp384r1", SECP384R1),
-    EC521Key("ec:secp521r1", SECP521R1);
+    EC521Key("ec:secp521r1", SECP521R1),
+    MLKEM768Key("mlkem:768");
 
     private final String keyType;
     private final ECCurve curve;
@@ -65,6 +66,8 @@ public enum KeyType {
                 return KeyType.EC384Key;
             case ALGORITHM_EC_P521:
                 return KeyType.EC521Key;
+            case ALGORITHM_ML_KEM_768:
+                return KeyType.MLKEM768Key;
             default:
                 throw new IllegalArgumentException("Unsupported algorithm: " + algorithm);
         }
@@ -85,6 +88,8 @@ public enum KeyType {
                 return KeyType.EC384Key;
             case KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP521R1:
                 return KeyType.EC521Key;
+            case KAS_PUBLIC_KEY_ALG_ENUM_MLKEM_768:
+                return KeyType.MLKEM768Key;
             default:
                 throw new IllegalArgumentException("Unsupported algorithm: " + algorithm);
         }
@@ -92,5 +97,9 @@ public enum KeyType {
 
     public boolean isEc() {
         return this.curve != null;
+    }
+
+    public boolean isMlkem() {
+        return this == MLKEM768Key;
     }
 }
