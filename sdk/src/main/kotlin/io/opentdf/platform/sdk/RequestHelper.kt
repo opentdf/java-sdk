@@ -4,7 +4,7 @@ import com.connectrpc.ConnectException
 import com.connectrpc.ResponseMessage
 import com.connectrpc.getOrThrow
 
-internal class RequestHelper {
+class RequestHelper {
     companion object {
         /**
          * Kotlin doesn't have checked exceptions (importantly it doesn't declare them).
