@@ -233,6 +233,9 @@ class TDF {
                 keyAccess.wrappedKey = ecKeyWrappedKeyInfo.wrappedKey;
                 keyAccess.ephemeralPublicKey = ecKeyWrappedKeyInfo.publicKey;
                 keyAccess.keyType = kECWrapped;
+            } else if (keyType.isMlkem()) {
+                keyAccess.wrappedKey = createMLKEMWrappedKey(kasInfo, symKey);
+                keyAccess.keyType = kWrapped;
             } else {
                 keyAccess.wrappedKey = createRSAWrappedKey(kasInfo, symKey);
                 keyAccess.keyType = kWrapped;
@@ -263,6 +266,11 @@ class TDF {
             AsymEncryption asymEncrypt = new AsymEncryption(kasInfo.PublicKey);
             byte[] wrappedKey = asymEncrypt.encrypt(symKey);
             return Base64.getEncoder().encodeToString(wrappedKey);
+        }
+
+        private String createMLKEMWrappedKey(Config.KASInfo kasInfo, byte[] symKey) {
+            MLKEMEncryption mlkem = new MLKEMEncryption(kasInfo.PublicKey);
+            return Base64.getEncoder().encodeToString(mlkem.encapsulateAndWrap(symKey));
         }
     }
 
