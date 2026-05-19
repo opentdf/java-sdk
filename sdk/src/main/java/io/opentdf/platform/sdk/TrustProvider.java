@@ -135,18 +135,6 @@ final class TrustProvider {
         throw last;
     }
 
-    private static X509ExtendedTrustManager extractTrustManager(KeyStore trustStore)
-            throws GeneralSecurityException {
-        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-        tmf.init(trustStore);
-        for (TrustManager tm : tmf.getTrustManagers()) {
-            if (tm instanceof X509ExtendedTrustManager) {
-                return (X509ExtendedTrustManager) tm;
-            }
-        }
-        throw new NoSuchAlgorithmException("no X509ExtendedTrustManager available from provider");
-    }
-
     public static final class Builder {
         private boolean includeDefault;
         private final List<KeyStore> keyStores = new ArrayList<>();
@@ -226,6 +214,18 @@ final class TrustProvider {
             } catch (GeneralSecurityException | IOException e) {
                 throw new IllegalStateException("failed to build TrustProvider", e);
             }
+        }
+
+        private static X509ExtendedTrustManager extractTrustManager(KeyStore trustStore)
+                throws GeneralSecurityException {
+            TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init(trustStore);
+            for (TrustManager tm : tmf.getTrustManagers()) {
+                if (tm instanceof X509ExtendedTrustManager) {
+                    return (X509ExtendedTrustManager) tm;
+                }
+            }
+            throw new NoSuchAlgorithmException("no X509ExtendedTrustManager available from provider");
         }
 
         private static KeyStore newEmptyKeyStore() throws GeneralSecurityException, IOException {
