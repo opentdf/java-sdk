@@ -47,7 +47,8 @@ class PublicApiSurfaceTest {
             SDKBuilder.class.getName(),
             AssertionConfig.class.getName(),
             Config.class.getName(),
-            RequestHelper.class.getName()
+            RequestHelper.class.getName(),
+            PolicyEnums.class.getName()
     );
     static List<JavaClass> reachableClasses;
     static JavaClasses apiClasses;
