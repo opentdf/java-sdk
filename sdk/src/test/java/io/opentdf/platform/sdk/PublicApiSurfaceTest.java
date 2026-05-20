@@ -10,13 +10,11 @@ import com.tngtech.archunit.core.domain.JavaType;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -50,7 +48,7 @@ class PublicApiSurfaceTest {
             RequestHelper.class.getName(),
             PolicyEnums.class.getName()
     );
-    static List<JavaClass> reachableClasses;
+    static Set<JavaClass> reachableClasses;
     static JavaClasses apiClasses;
 
     @BeforeAll
@@ -103,7 +101,7 @@ class PublicApiSurfaceTest {
 
     }
 
-    private static List<JavaClass> computeReachable(JavaClasses classes) {
+    private static Set<JavaClass> computeReachable(JavaClasses classes) {
         Set<JavaClass> reachable = new HashSet<>();
         Set<JavaClass> queued = new HashSet<>();
         Deque<JavaClass> work = new ArrayDeque<>();
@@ -121,16 +119,13 @@ class PublicApiSurfaceTest {
 
             for (JavaMethod m : c.getMethods()) {
                 if (!isExposed(m.getModifiers())) continue;
-                addAllRawTypes(m.getRawReturnType(), work, queued);
-                for (JavaType r: m.getParameterTypes()) {
-                    addAllRawTypes(r, work, queued);
-                }
+                addAllRawTypes(m.getReturnType(), work, queued);
                 m.getParameterTypes().forEach(t -> addAllRawTypes(t, work, queued));
                 m.getExceptionTypes().forEach(t -> addAllRawTypes(t, work, queued));
             }
             for (JavaConstructor ctor : c.getConstructors()) {
                 if (!isExposed(ctor.getModifiers())) continue;
-                addAllRawTypes(ctor.getRawReturnType(), work, queued);
+                addAllRawTypes(ctor.getReturnType(), work, queued);
                 ctor.getParameterTypes().forEach(t -> addAllRawTypes(t, work, queued));
                 ctor.getExceptionTypes().forEach(t -> addAllRawTypes(t, work, queued));
             }
@@ -139,7 +134,7 @@ class PublicApiSurfaceTest {
                 addAllRawTypes(f.getType(), work, queued);
             }
         }
-        return reachable.stream().collect(Collectors.toList());
+        return reachable;
     }
 
     private static void addAllRawTypes(JavaType javaType, Deque<JavaClass> work, Set<JavaClass> queued) {
