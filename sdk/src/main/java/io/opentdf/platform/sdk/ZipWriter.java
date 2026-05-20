@@ -13,7 +13,7 @@ import java.util.zip.CRC32;
  * The ZipWriter class provides functionalities to create ZIP archive files.
  * It writes files and data to an underlying output stream in the ZIP file format.
  */
-class ZipWriter {
+public class ZipWriter {
 
     private static final int ZIP_VERSION = 0x2D;
     private static final int ZIP_64_MAGIC_VAL = 0xFFFFFFFF;

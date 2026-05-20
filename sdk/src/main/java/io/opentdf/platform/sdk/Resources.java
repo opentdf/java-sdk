@@ -24,7 +24,7 @@ import java.util.Objects;
  * Resources.forAttributeValues("https://example.com/attr/department/value/finance");
  * }</pre>
  */
-final class Resources {
+public final class Resources {
 
     private Resources() {}
 

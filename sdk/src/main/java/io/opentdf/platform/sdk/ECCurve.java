@@ -10,7 +10,7 @@ import java.util.Optional;
 /**
  * Elliptic curve definitions for EC key operations.
  */
-enum ECCurve {
+public enum ECCurve {
     SECP256R1("secp256r1", 32, 33, 0x00),
     SECP384R1("secp384r1", 48, 49, 0x01),
     SECP521R1("secp521r1", 66, 67, 0x02),

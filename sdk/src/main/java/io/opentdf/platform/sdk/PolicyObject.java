@@ -6,7 +6,7 @@ import java.util.List;
  * The PolicyObject class represents a policy with a unique identifier and a body containing data attributes.
  */
 public class PolicyObject {
-    static class AttributeObject {
+    static public class AttributeObject {
         public String attribute;
         public String displayName;
         public boolean isDefault;

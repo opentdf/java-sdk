@@ -39,7 +39,7 @@ public class Fuzzing {
             Reader reader = tdf.loadTDF(new SeekableInMemoryByteChannel(fuzzBytes), readerConfig);
 
             reader.readPayload(IGNORE_OUTPUT_STREAM);
-        } catch (SDKException | JsonParseException | IOException | IllegalArgumentException e) {
+        } catch (SDKException | InvalidZipException | JsonParseException | IOException | IllegalArgumentException e) {
             // expected failure cases
         }
     }

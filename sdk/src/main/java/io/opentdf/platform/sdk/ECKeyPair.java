@@ -27,7 +27,7 @@ import java.security.spec.*;
 import java.util.Objects;
 // https://www.bouncycastle.org/latest_releases.html
 
-class ECKeyPair {
+public class ECKeyPair {
 
     private static final int SHA256_BYTES = 32;
 
@@ -37,7 +37,7 @@ class ECKeyPair {
 
     private final ECCurve curve;
 
-    enum ECAlgorithm {
+    public enum ECAlgorithm {
         ECDH,
         ECDSA
     }

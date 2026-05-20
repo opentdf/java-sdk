@@ -19,7 +19,7 @@ import java.util.List;
  * Local File Header. This class supports standard ZIP archives as well
  * as ZIP64 format.
  */
-class ZipReader {
+public class ZipReader {
 
     public static final Logger logger = LoggerFactory.getLogger(ZipReader.class);
     public static final int END_OF_CENTRAL_DIRECTORY_SIZE = 22;
@@ -148,7 +148,7 @@ class ZipReader {
         return new CentralDirectoryRecord(totalNumCDEntries, cdOffset);
     }
 
-    class Entry {
+    public class Entry {
         private final long fileSize;
         private final String fileName;
         final long offsetToLocalHeader;

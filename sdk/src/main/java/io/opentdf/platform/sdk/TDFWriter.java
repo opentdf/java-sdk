@@ -8,7 +8,7 @@ import java.nio.charset.StandardCharsets;
  * The TDFWriter class provides functionalities for creating a TDF (Trusted Data Format) archive.
  * This includes appending a manifest file and appending payload data to the archive.
  */
-class TDFWriter {
+public class TDFWriter {
     public static final String TDF_PAYLOAD_FILE_NAME = "0.payload";
     public static final String TDF_MANIFEST_FILE_NAME = "0.manifest.json";
     private final ZipWriter archiveWriter;
