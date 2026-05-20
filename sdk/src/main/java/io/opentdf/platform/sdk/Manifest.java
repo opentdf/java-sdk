@@ -96,7 +96,7 @@ public class Manifest {
         }
     }
 
-    static public class Segment {
+    static class Segment {
         public String hash;
         public long segmentSize;
         public long encryptedSegmentSize;
@@ -167,7 +167,7 @@ public class Manifest {
         }
     }
 
-    static public class PolicyBinding {
+    static class PolicyBinding {
         public String alg;
         public String hash;
 
@@ -298,7 +298,7 @@ public class Manifest {
         }
     }
 
-    static public class Binding {
+    static class Binding {
         public String method;
         public String signature;
 
@@ -318,14 +318,14 @@ public class Manifest {
         }
     }
 
-    static public class Assertion {
+    static class Assertion {
         public String id;
         public String type;
         public String scope;
         public String appliesToState;
         public AssertionConfig.Statement statement;
         public Binding binding;
-        static public class HashValues {
+        static class HashValues {
             private final String assertionHash;
             private final String signature;
 
@@ -528,7 +528,7 @@ public class Manifest {
         }
     }
 
-    public static class AssertionValueAdapter implements JsonDeserializer<AssertionConfig.Statement> {
+    static class AssertionValueAdapter implements JsonDeserializer<AssertionConfig.Statement> {
         @Override
         public AssertionConfig.Statement deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
             if (!json.isJsonObject()) {
