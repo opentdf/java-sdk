@@ -82,7 +82,7 @@ class PublicApiSurfaceTest {
     }
 
     @Test
-    public void allReachableTypesAreExposed() {
+    void allReachableTypesAreExposed() {
         Set<String> reachableButNotPublic = apiClasses.stream()
                 .filter(c -> SDK_PACKAGE.equals(c.getPackageName()))
                 .filter(c -> !isExposed(c.getModifiers()))
