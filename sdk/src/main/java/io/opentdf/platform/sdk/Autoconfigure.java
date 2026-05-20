@@ -54,7 +54,7 @@ class RuleType {
  * This class includes functionality to create granter instances based on
  * attributes either from a list of attribute values or from a service.
  */
-class Autoconfigure {
+public class Autoconfigure {
 
     private static Logger logger = LoggerFactory.getLogger(Autoconfigure.class);
 

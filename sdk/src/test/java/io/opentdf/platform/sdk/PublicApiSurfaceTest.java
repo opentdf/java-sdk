@@ -114,8 +114,11 @@ class PublicApiSurfaceTest {
             if (!reachable.add(c)) continue;
 
             // Superclass and interfaces are part of the API surface of c.
-            c.getRawSuperclass().ifPresent(work::push);
+            c.getRawSuperclass().ifPresent(ec -> addAllRawTypes(c, work, queued));
             work.addAll(c.getRawInterfaces());
+
+            // if you are exposed then your enclosing class should be as well
+            c.getEnclosingClass().ifPresent(ec -> addAllRawTypes(ec, work, queued));
 
             for (JavaMethod m : c.getMethods()) {
                 if (!isExposed(m.getModifiers())) continue;
