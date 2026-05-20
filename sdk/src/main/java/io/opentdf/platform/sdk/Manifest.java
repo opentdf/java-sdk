@@ -96,7 +96,7 @@ public class Manifest {
         }
     }
 
-    static class Segment {
+    public static class Segment {
         public String hash;
         public long segmentSize;
         public long encryptedSegmentSize;
@@ -118,7 +118,7 @@ public class Manifest {
         }
     }
 
-    static public class RootSignature {
+    public static class RootSignature {
         @SerializedName(value = "alg")
         public String algorithm;
         @SerializedName(value = "sig")
@@ -140,7 +140,7 @@ public class Manifest {
         }
     }
 
-    static public class IntegrityInformation {
+    public static class IntegrityInformation {
         public RootSignature rootSignature;
         public String segmentHashAlg;
         public int segmentSizeDefault;
@@ -298,7 +298,7 @@ public class Manifest {
         }
     }
 
-    static class Binding {
+    public static class Binding {
         public String method;
         public String signature;
 
@@ -318,14 +318,14 @@ public class Manifest {
         }
     }
 
-    static class Assertion {
+    public static class Assertion {
         public String id;
         public String type;
         public String scope;
         public String appliesToState;
         public AssertionConfig.Statement statement;
         public Binding binding;
-        static class HashValues {
+        public static class HashValues {
             private final String assertionHash;
             private final String signature;
 

@@ -98,7 +98,7 @@ class Autoconfigure {
         }
     }
 
-    static class KeySplitStep {
+    public static class KeySplitStep {
         final String kas;
         final String splitID;
 
@@ -192,7 +192,7 @@ class Autoconfigure {
     }
 
     // Utility class for an attribute value FQN.
-    static class AttributeValueFQN {
+    public static class AttributeValueFQN {
         private final String url;
         private final String key;
 
