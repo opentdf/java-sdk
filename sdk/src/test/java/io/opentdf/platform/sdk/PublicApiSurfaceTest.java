@@ -1,0 +1,110 @@
+package io.opentdf.platform.sdk;
+
+import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaConstructor;
+import com.tngtech.archunit.core.domain.JavaField;
+import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.core.domain.JavaModifier;
+import com.tngtech.archunit.core.importer.ClassFileImporter;
+import com.tngtech.archunit.core.importer.ImportOption;
+import org.junit.jupiter.api.Test;
+
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Enforces that every public type in {@code io.opentdf.platform.sdk} is reachable
+ * from the SDK's published API surface (the {@link #API_ROOTS}). A type that is
+ * not reachable should either be made package-private or wired through one of
+ * the roots so callers can actually use it.
+ *
+ * <p>Reachability follows the declared API surface only — superclass and
+ * interfaces, public/protected methods (return type, parameters, declared
+ * exceptions), public/protected constructors, public/protected fields, and
+ * public/protected nested classes. Method bodies are NOT traversed; internal
+ * implementation references do not count as exposure.
+ */
+class PublicApiSurfaceTest {
+
+    private static final String SDK_PACKAGE = "io.opentdf.platform.sdk";
+
+    private static final Set<String> API_ROOTS = Set.of(
+            SDK.class.getName(),
+            SDKBuilder.class.getName(),
+            AssertionConfig.class.getName(),
+            Config.class.getName()
+    );
+
+    @Test
+    void onlyReachableTypesAreExposed() {
+        JavaClasses classes = new ClassFileImporter()
+                .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+                .importPackages(SDK_PACKAGE);
+
+        Set<JavaClass> reachable = computeReachable(classes);
+
+        Set<String> violations = classes.stream()
+                .filter(c -> SDK_PACKAGE.equals(c.getPackageName()))
+                .filter(c -> !c.isAssignableTo(SDKException.class))
+                .filter(c -> isExposed(c.getModifiers()))
+                .filter(c -> !c.isAnonymousClass() && !c.isLocalClass())
+                .filter(c -> !c.getSimpleName().equals("package-info"))
+                .filter(c -> !reachable.contains(c))
+
+                .map(JavaClass::getName)
+                .collect(Collectors.toCollection(TreeSet::new));
+
+        assertThat(violations)
+                .as("Only types reachable from %s should be public. "
+                                + "Either reduce visibility (package-private) or expose them via an API root.",
+                        API_ROOTS)
+                .isEmpty();
+    }
+
+    private static Set<JavaClass> computeReachable(JavaClasses classes) {
+        Set<JavaClass> reachable = new HashSet<>();
+        Deque<JavaClass> work = new ArrayDeque<>();
+        for (String root : API_ROOTS) {
+            work.push(classes.get(root));
+        }
+
+        while (!work.isEmpty()) {
+            JavaClass c = work.pop();
+            if (!reachable.add(c)) continue;
+
+            // Superclass and interfaces are part of the API surface of c.
+            c.getRawSuperclass().ifPresent(work::push);
+            work.addAll(c.getRawInterfaces());
+
+            for (JavaMethod m : c.getMethods()) {
+                if (!isExposed(m.getModifiers())) continue;
+                for (JavaClass r : m.getReturnType().getAllInvolvedRawTypes()) {
+                    if (!work.contains(r)) work.push(r);
+                }
+                work.addAll(m.getRawParameterTypes());
+                work.addAll(m.getExceptionTypes());
+            }
+            for (JavaConstructor ctor : c.getConstructors()) {
+                if (!isExposed(ctor.getModifiers())) continue;
+                work.addAll(ctor.getRawParameterTypes());
+                work.addAll(ctor.getExceptionTypes());
+            }
+            for (JavaField f : c.getFields()) {
+                if (!isExposed(f.getModifiers())) continue;
+                work.push(f.getRawType());
+            }
+        }
+        return reachable;
+    }
+
+    private static boolean isExposed(Set<JavaModifier> mods) {
+        return mods.contains(JavaModifier.PUBLIC) || mods.contains(JavaModifier.PROTECTED);
+    }
+}
