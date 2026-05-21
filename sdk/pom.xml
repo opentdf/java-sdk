@@ -482,6 +482,13 @@
                 <activeByDefault>true</activeByDefault>
             </activation>
             <dependencies>
+                <!-- Required for hybrid post-quantum key wrapping (ML-KEM, X-Wing).
+                     No JDK 11 stdlib equivalent exists; provider-agnostic JCA
+                     APIs for KEM are JDK 21+. See adr/0001 for context. -->
+                <dependency>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcprov-jdk18on</artifactId>
+                </dependency>
                 <dependency>
                     <groupId>org.bouncycastle</groupId>
                     <artifactId>bcpkix-jdk18on</artifactId>

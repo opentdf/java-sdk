@@ -1,26 +1,12 @@
 package io.opentdf.platform.sdk;
 
-import org.bouncycastle.asn1.ASN1EncodableVector;
-import org.bouncycastle.asn1.ASN1InputStream;
-import org.bouncycastle.asn1.ASN1Primitive;
-import org.bouncycastle.asn1.ASN1Sequence;
-import org.bouncycastle.asn1.ASN1TaggedObject;
-import org.bouncycastle.asn1.DEROctetString;
-import org.bouncycastle.asn1.DERSequence;
-import org.bouncycastle.asn1.DERTaggedObject;
-import org.bouncycastle.crypto.digests.SHA256Digest;
-import org.bouncycastle.crypto.generators.HKDFBytesGenerator;
-import org.bouncycastle.crypto.params.HKDFParameters;
-
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 
 /**
  * Dispatcher and shared helpers for hybrid post-quantum key wrapping
- * (X-Wing and NIST EC + ML-KEM). Mirrors the lib/ocrypto Go package.
+ * (X-Wing and NIST EC + ML-KEM).
  *
  * Wire format: ASN.1 DER SEQUENCE with two IMPLICIT context-tagged OCTET STRINGs
  *   SEQUENCE { [0] IMPLICIT OCTET STRING ciphertext, [1] IMPLICIT OCTET STRING encryptedDEK }
@@ -31,6 +17,11 @@ import java.util.Base64;
 final class HybridCrypto {
 
     static final int WRAP_KEY_SIZE = 32;
+
+    // ASN.1 tag bytes used by the envelope.
+    private static final int TAG_SEQUENCE = 0x30;
+    private static final int TAG_CONTEXT_PRIMITIVE_0 = 0x80;
+    private static final int TAG_CONTEXT_PRIMITIVE_1 = 0x81;
 
     private HybridCrypto() {}
 
@@ -57,14 +48,10 @@ final class HybridCrypto {
      * Build the ASN.1 envelope from a hybrid KEM ciphertext and the AES-GCM(iv||ct) encrypted DEK.
      */
     static byte[] marshalEnvelope(byte[] hybridCiphertext, byte[] encryptedDEK) {
-        ASN1EncodableVector v = new ASN1EncodableVector();
-        v.add(new DERTaggedObject(false, 0, new DEROctetString(hybridCiphertext)));
-        v.add(new DERTaggedObject(false, 1, new DEROctetString(encryptedDEK)));
-        try {
-            return new DERSequence(v).getEncoded("DER");
-        } catch (IOException e) {
-            throw new SDKException("failed to encode hybrid wrapped key envelope", e);
-        }
+        byte[] body = concat(
+                encodeTLV(TAG_CONTEXT_PRIMITIVE_0, hybridCiphertext),
+                encodeTLV(TAG_CONTEXT_PRIMITIVE_1, encryptedDEK));
+        return encodeTLV(TAG_SEQUENCE, body);
     }
 
     /**
@@ -72,44 +59,120 @@ final class HybridCrypto {
      * Rejects trailing bytes (matches the Go {@code asn1.Unmarshal} strict behaviour).
      */
     static byte[][] unmarshalEnvelope(byte[] der) {
-        try (ASN1InputStream in = new ASN1InputStream(new ByteArrayInputStream(der))) {
-            ASN1Primitive prim = in.readObject();
-            if (prim == null) {
-                throw new SDKException("hybrid wrapped key envelope is empty");
+        Cursor c = new Cursor(der, 0);
+        int tag = c.readByte();
+        if (tag != TAG_SEQUENCE) {
+            throw new SDKException("expected ASN.1 SEQUENCE (0x30), got 0x" + Integer.toHexString(tag));
+        }
+        int seqLen = readLength(c);
+        int seqEnd = c.pos + seqLen;
+        if (seqEnd > der.length) {
+            throw new SDKException("hybrid wrapped key envelope length exceeds buffer");
+        }
+        if (seqEnd != der.length) {
+            throw new SDKException("hybrid wrapped key envelope has trailing bytes");
+        }
+        byte[] hybridCt = readImplicitOctetString(c, 0);
+        byte[] encDek = readImplicitOctetString(c, 1);
+        if (c.pos != seqEnd) {
+            throw new SDKException("hybrid wrapped key envelope SEQUENCE has trailing bytes");
+        }
+        return new byte[][] { hybridCt, encDek };
+    }
+
+    private static byte[] readImplicitOctetString(Cursor c, int expectedTagNo) {
+        int expectedTag = TAG_CONTEXT_PRIMITIVE_0 | expectedTagNo;
+        int tag = c.readByte();
+        if (tag != expectedTag) {
+            throw new SDKException("expected context tag " + expectedTagNo
+                    + " (0x" + Integer.toHexString(expectedTag) + ") but got 0x" + Integer.toHexString(tag));
+        }
+        int len = readLength(c);
+        if (c.pos + len > c.buf.length) {
+            throw new SDKException("context-tagged element length exceeds buffer");
+        }
+        byte[] out = new byte[len];
+        System.arraycopy(c.buf, c.pos, out, 0, len);
+        c.pos += len;
+        return out;
+    }
+
+    private static byte[] encodeTLV(int tag, byte[] content) {
+        byte[] lenBytes = encodeLength(content.length);
+        byte[] out = new byte[1 + lenBytes.length + content.length];
+        out[0] = (byte) tag;
+        System.arraycopy(lenBytes, 0, out, 1, lenBytes.length);
+        System.arraycopy(content, 0, out, 1 + lenBytes.length, content.length);
+        return out;
+    }
+
+    private static byte[] encodeLength(int len) {
+        if (len < 0) {
+            throw new SDKException("negative ASN.1 length: " + len);
+        }
+        if (len < 0x80) {
+            return new byte[] { (byte) len };
+        }
+        // Long form: 0x80 | numBytes, then big-endian length bytes.
+        int numBytes = 0;
+        int tmp = len;
+        while (tmp > 0) { numBytes++; tmp >>>= 8; }
+        byte[] out = new byte[1 + numBytes];
+        out[0] = (byte) (0x80 | numBytes);
+        for (int i = numBytes; i > 0; i--) {
+            out[i] = (byte) (len & 0xFF);
+            len >>>= 8;
+        }
+        return out;
+    }
+
+    private static int readLength(Cursor c) {
+        int first = c.readByte();
+        if ((first & 0x80) == 0) {
+            return first;
+        }
+        int numBytes = first & 0x7F;
+        if (numBytes == 0 || numBytes > 4) {
+            // indefinite-length (numBytes == 0) is BER-only; DER rejects it.
+            // > 4 would overflow a positive 32-bit int and is implausible for our envelope.
+            throw new SDKException("invalid ASN.1 length encoding: numBytes=" + numBytes);
+        }
+        int len = 0;
+        for (int i = 0; i < numBytes; i++) {
+            len = (len << 8) | c.readByte();
+        }
+        if (len < 0) {
+            throw new SDKException("ASN.1 length overflowed signed int");
+        }
+        return len;
+    }
+
+    private static final class Cursor {
+        final byte[] buf;
+        int pos;
+        Cursor(byte[] buf, int pos) { this.buf = buf; this.pos = pos; }
+        int readByte() {
+            if (pos >= buf.length) {
+                throw new SDKException("unexpected end of ASN.1 input at offset " + pos);
             }
-            if (in.readObject() != null) {
-                throw new SDKException("hybrid wrapped key envelope has trailing bytes");
-            }
-            ASN1Sequence seq = ASN1Sequence.getInstance(prim);
-            if (seq.size() != 2) {
-                throw new SDKException("hybrid wrapped key envelope must have 2 elements, got " + seq.size());
-            }
-            byte[] hybridCt = readImplicitOctetString(seq.getObjectAt(0), 0);
-            byte[] encDek = readImplicitOctetString(seq.getObjectAt(1), 1);
-            return new byte[][] { hybridCt, encDek };
-        } catch (IOException e) {
-            throw new SDKException("failed to decode hybrid wrapped key envelope", e);
+            return buf[pos++] & 0xFF;
         }
     }
 
-    private static byte[] readImplicitOctetString(org.bouncycastle.asn1.ASN1Encodable enc, int expectedTag) {
-        ASN1TaggedObject tagged = ASN1TaggedObject.getInstance(enc);
-        if (tagged.getTagNo() != expectedTag) {
-            throw new SDKException("expected context tag " + expectedTag + " but got " + tagged.getTagNo());
-        }
-        return org.bouncycastle.asn1.ASN1OctetString.getInstance(tagged, false).getOctets();
+    private static byte[] concat(byte[] a, byte[] b) {
+        byte[] out = new byte[a.length + b.length];
+        System.arraycopy(a, 0, out, 0, a.length);
+        System.arraycopy(b, 0, out, a.length, b.length);
+        return out;
     }
 
     /**
-     * HKDF-SHA256 → 32-byte AES wrap key. {@code salt=null} substitutes the default TDF salt.
+     * HKDF-SHA256 → 32-byte AES wrap key. Delegates to
+     * {@link ECKeyPair#calculateHKDF(byte[], byte[])} (HKDF-Extract + Expand,
+     * empty info, L = 32 — the parameters all three hybrid algorithms use).
      */
-    static byte[] deriveWrapKey(byte[] combinedSecret, byte[] salt, byte[] info) {
-        byte[] effSalt = (salt == null || salt.length == 0) ? defaultTDFSalt() : salt;
-        HKDFBytesGenerator hkdf = new HKDFBytesGenerator(new SHA256Digest());
-        hkdf.init(new HKDFParameters(combinedSecret, effSalt, info));
-        byte[] out = new byte[WRAP_KEY_SIZE];
-        hkdf.generateBytes(out, 0, out.length);
-        return out;
+    static byte[] deriveWrapKey(byte[] combinedSecret) {
+        return ECKeyPair.calculateHKDF(defaultTDFSalt(), combinedSecret);
     }
 
     /**

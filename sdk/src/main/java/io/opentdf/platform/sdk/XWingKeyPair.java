@@ -68,7 +68,7 @@ final class XWingKeyPair {
         byte[] sharedSecret = enc.getSecret();
         byte[] ciphertext = enc.getEncapsulation();
 
-        byte[] wrapKey = HybridCrypto.deriveWrapKey(sharedSecret, null, null);
+        byte[] wrapKey = HybridCrypto.deriveWrapKey(sharedSecret);
         byte[] encryptedDek = new AesGcm(wrapKey).encrypt(dek).asBytes();
         return HybridCrypto.marshalEnvelope(ciphertext, encryptedDek);
     }
@@ -86,7 +86,7 @@ final class XWingKeyPair {
 
         XWingPrivateKeyParameters priv = new XWingPrivateKeyParameters(rawPriv);
         byte[] sharedSecret = new XWingKEMExtractor(priv).extractSecret(ciphertext);
-        byte[] wrapKey = HybridCrypto.deriveWrapKey(sharedSecret, null, null);
+        byte[] wrapKey = HybridCrypto.deriveWrapKey(sharedSecret);
         return new AesGcm(wrapKey).decrypt(new AesGcm.Encrypted(encryptedDek));
     }
 }
