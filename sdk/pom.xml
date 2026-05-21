@@ -17,6 +17,10 @@
         <connect.version>0.7.2</connect.version>
         <okhttp.version>4.12.0</okhttp.version>
         <platform.branch>protocol/go/v0.16.0</platform.branch>
+        <!-- in the non-FIPS case we don't need to pass anything to the jvm -->
+        <java.security.properties.test></java.security.properties.test>
+        <!-- Default empty argLine; overridden by jacoco:prepare-agent when the `coverage` profile is active -->
+        <argLine></argLine>
     </properties>
     <dependencies>
         <!-- Logging Dependencies -->
@@ -30,18 +34,6 @@
             <groupId>com.nimbusds</groupId>
             <artifactId>oauth2-oidc-sdk</artifactId>
             <version>11.10.1</version>
-        </dependency>
-        <dependency>
-            <groupId>io.github.hakky54</groupId>
-            <artifactId>ayza-for-pem</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.github.hakky54</groupId>
-            <artifactId>ayza</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.github.hakky54</groupId>
-            <artifactId>ayza-for-netty</artifactId>
         </dependency>
         <!-- Serialization and Deserialization Dependencies -->
         <dependency>
@@ -160,15 +152,7 @@
             <version>6.0.53</version>
             <scope>provided</scope>
         </dependency>
-        <!-- Crypto Dependencies -->
-        <dependency>
-            <groupId>org.bouncycastle</groupId>
-            <artifactId>bcpkix-jdk18on</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.bouncycastle</groupId>
-            <artifactId>bcprov-jdk18on</artifactId>
-        </dependency>
+        <!-- Crypto Dependencies are pulled in via the `non-fips` (default) or `fips` profile -->
         <!-- Testing Dependencies -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -483,11 +467,56 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>@{argLine} ${java.security.properties.test}</argLine>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
-    <!--profile
-    to execute fuzz test -->
     <profiles>
+        <profile>
+            <id>non-fips</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcpkix-jdk18on</artifactId>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>fips</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <properties>
+                <java.security.properties.test>-Djava.security.properties=${project.basedir}/src/test/resources/java.security.fips.test</java.security.properties.test>
+            </properties>
+            <dependencies>
+                <dependency>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bc-fips</artifactId>
+                    <scope>runtime</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bctls-fips</artifactId>
+                    <scope>runtime</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcpkix-fips</artifactId>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+        <!-- profile to execute fuzz test -->
         <profile>
             <id>fuzz</id>
             <activation>

@@ -10,6 +10,7 @@ import com.nimbusds.jose.jwk.JWK;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 
+import java.security.cert.X509Certificate;
 import java.text.ParseException;
 import com.google.gson.JsonSyntaxException;
 import io.opentdf.platform.sdk.AssertionConfig;
@@ -18,11 +19,11 @@ import io.opentdf.platform.sdk.Config;
 import io.opentdf.platform.sdk.KeyType;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
-import nl.altindag.ssl.SSLFactory;
 import picocli.CommandLine;
 import picocli.CommandLine.HelpCommand;
 import picocli.CommandLine.Option;
 
+import javax.net.ssl.X509TrustManager;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -262,10 +263,7 @@ class Command {
     private SDK buildSDK() {
         SDKBuilder builder = new SDKBuilder();
         if (insecure) {
-            SSLFactory sslFactory = SSLFactory.builder()
-                    .withUnsafeTrustMaterial() // Trust all certificates
-                    .build();
-            builder.sslFactory(sslFactory);
+            builder.insecureSslFactory();
         }
 
         return builder.platformEndpoint(platformEndpoint)

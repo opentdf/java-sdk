@@ -11,7 +11,6 @@ import io.opentdf.platform.sdk.Config.KASInfo;
 
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
-import org.bouncycastle.jce.interfaces.ECPublicKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,6 +21,8 @@ import java.io.OutputStream;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
+import java.security.interfaces.ECPublicKey;
+import java.security.spec.InvalidKeySpecException;
 import java.text.ParseException;
 import java.util.*;
 
@@ -97,8 +98,6 @@ class TDF {
     private static final String kTDFAsZip = "zip";
     private static final String kTDFZipReference = "reference";
 
-    private static final SecureRandom sRandom = new SecureRandom();
-
     private static final Gson gson = new GsonBuilder().create();
 
     static class EncryptedMetadata {
@@ -161,8 +160,7 @@ class TDF {
                 String splitID = split.getKey();
 
                 // Symmetric key
-                byte[] symKey = new byte[GCM_KEY_SIZE];
-                sRandom.nextBytes(symKey);
+                byte[] symKey = AesGcm.generateKey();
                 symKeys.add(symKey);
 
                 // Add policyBinding
@@ -243,9 +241,14 @@ class TDF {
         private ECKeyWrappedKeyInfo createECWrappedKey(Config.KASInfo kasInfo,
                 byte[] symKey, KeyType keyType) {
             var curveName = keyType.getECCurve();
-            var keyPair = new ECKeyPair(curveName, ECKeyPair.ECAlgorithm.ECDH);
+            var keyPair = new ECKeyPair(curveName);
 
-            ECPublicKey kasPubKey = ECKeyPair.publicKeyFromPem(kasInfo.PublicKey);
+            ECPublicKey kasPubKey;
+            try {
+                kasPubKey = ECKeyPair.publicKeyFromPem(kasInfo.PublicKey);
+            } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+                throw new SDKException("error decoding KAS EC public key", e);
+            }
             byte[] symmetricKey = ECKeyPair.computeECDHKey(kasPubKey, keyPair.getPrivateKey());
 
             var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symmetricKey);

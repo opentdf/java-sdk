@@ -1,7 +1,7 @@
 package io.opentdf.platform.sdk;
 
-import org.bouncycastle.jce.interfaces.ECPrivateKey;
-import org.bouncycastle.jce.interfaces.ECPublicKey;
+import java.security.interfaces.ECPrivateKey;
+import java.security.interfaces.ECPublicKey;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -54,17 +54,17 @@ public class ECKeyPairTest {
         String keypairAPubicKey = keyPairA.publicKeyInPEMFormat();
         String keypairAPrivateKey = keyPairA.privateKeyInPEMFormat();
 
-        ECPublicKey publicKeyA = ECKeyPair.publicKeyFromPem(keypairAPubicKey);
-        ECPrivateKey privateKeyA = ECKeyPair.privateKeyFromPem(keypairAPrivateKey);
+        ECPublicKey publicKeyA = PemTestUtils.publicKeyFromPem(keypairAPubicKey);
+        ECPrivateKey privateKeyA = PemTestUtils.privateKeyFromPem(keypairAPrivateKey);
 
         System.out.println(keypairAPubicKey);
         System.out.println(keypairAPrivateKey);
 
         byte[] compressedKey1 = keyPairA.compressECPublickey();
-        byte[] compressedKey2 = ECKeyPair.compressECPublickey(keyPairA.publicKeyInPEMFormat());
+        byte[] compressedKey2 = PemTestUtils.compressECPublickey(keyPairA.publicKeyInPEMFormat());
         assertArrayEquals(compressedKey1, compressedKey2);
 
-        String publicKey = ECKeyPair.publicKeyFromECPoint(compressedKey1, SECP256R1.getCurveName());
+        String publicKey = PemTestUtils.publicKeyFromECPoint(compressedKey1, SECP256R1.getCurveName());
         assertEquals(keyPairA.publicKeyInPEMFormat(), publicKey);
 
         ECKeyPair keyPairB = new ECKeyPair();
@@ -74,8 +74,8 @@ public class ECKeyPairTest {
         System.out.println(keypairBPubicKey);
         System.out.println(keypairBPrivateKey);
 
-        ECPublicKey publicKeyB = ECKeyPair.publicKeyFromPem(keypairBPubicKey);
-        ECPrivateKey privateKeyB = ECKeyPair.privateKeyFromPem(keypairBPrivateKey);
+        ECPublicKey publicKeyB = PemTestUtils.publicKeyFromPem(keypairBPubicKey);
+        ECPrivateKey privateKeyB = PemTestUtils.privateKeyFromPem(keypairBPrivateKey);
 
         byte[] symmetricKey1 = ECKeyPair.computeECDHKey(publicKeyA, privateKeyB);
         byte[] symmetricKey2 = ECKeyPair.computeECDHKey(publicKeyB, privateKeyA);
@@ -94,14 +94,14 @@ public class ECKeyPairTest {
                 "zj0EAwIDSAAwRQIhAItk5SmcWSg06tnOCEqTa6UsChaycX/cmAT8PTDRnaRcAiAl\n" +
                 "Vr2EvlA2x5mWFE/+nDdxxzljYjLZuSDQMEI/J6u0/Q==\n" +
                 "-----END CERTIFICATE-----";
-        String pubKey = ECKeyPair.getPEMPublicKeyFromX509Cert(x509ECPubKey);
+        String pubKey = PemTestUtils.getPEMPublicKeyFromX509Cert(x509ECPubKey);
         System.out.println(pubKey);
 
-        ECPublicKey publicKey = ECKeyPair.publicKeyFromPem(pubKey);
-        byte[] compressedKey = publicKey.getQ().getEncoded(true);
+        ECPublicKey publicKey = PemTestUtils.publicKeyFromPem(pubKey);
+        byte[] compressedKey = PemTestUtils.compressECPublickey(pubKey);
         System.out.println(Arrays.toString(compressedKey));
 
-        compressedKey = ECKeyPair.compressECPublickey(pubKey);
+        compressedKey = PemTestUtils.compressECPublickey(pubKey);
         System.out.println(Arrays.toString(compressedKey));
         System.out.println(compressedKey.length);
 
@@ -112,7 +112,7 @@ public class ECKeyPairTest {
         System.out.println(keypairPubicKey);
         System.out.println(keypairPrivateKey);
 
-        byte[] symmetricKey = ECKeyPair.computeECDHKey(publicKey, ECKeyPair.privateKeyFromPem(keypairPrivateKey));
+        byte[] symmetricKey = ECKeyPair.computeECDHKey(publicKey, PemTestUtils.privateKeyFromPem(keypairPrivateKey));
         System.out.println(Arrays.toString(symmetricKey));
 
         byte[] key = ECKeyPair.calculateHKDF(ECKeys.salt.getBytes(StandardCharsets.UTF_8), symmetricKey);
@@ -124,8 +124,8 @@ public class ECKeyPairTest {
 
     @Test
     void createSymmetricKeysWithOtherCurves() {
-        ECKeyPair pubPair = new ECKeyPair(ECCurve.SECP384R1, ECKeyPair.ECAlgorithm.ECDH);
-        ECKeyPair keyPair = new ECKeyPair(ECCurve.SECP384R1, ECKeyPair.ECAlgorithm.ECDH);
+        ECKeyPair pubPair = new ECKeyPair(ECCurve.SECP384R1);
+        ECKeyPair keyPair = new ECKeyPair(ECCurve.SECP384R1);
 
         byte[] sharedSecret = ECKeyPair.computeECDHKey(pubPair.getPublicKey(), keyPair.getPrivateKey());
         byte[] encryptionKey = ECKeyPair.calculateHKDF(ECKeys.salt.getBytes(StandardCharsets.UTF_8), sharedSecret);
@@ -138,11 +138,11 @@ public class ECKeyPairTest {
         String expectedKey = "3KGgsptHbTsbxJtql6sHUcx255KcUhxdeJWKjmPMlcc=";
 
         // SDK side
-        ECPublicKey kasPubKey = ECKeyPair.publicKeyFromPem(ECKeys.kasPublicKey);
-        ECPrivateKey kasPriKey = ECKeyPair.privateKeyFromPem(ECKeys.kasPrivateKey);
+        ECPublicKey kasPubKey = PemTestUtils.publicKeyFromPem(ECKeys.kasPublicKey);
+        ECPrivateKey kasPriKey = PemTestUtils.privateKeyFromPem(ECKeys.kasPrivateKey);
 
-        ECPublicKey sdkPubKey = ECKeyPair.publicKeyFromPem(ECKeys.sdkPublicKey);
-        ECPrivateKey sdkPriKey = ECKeyPair.privateKeyFromPem(ECKeys.sdkPrivateKey);
+        ECPublicKey sdkPubKey = PemTestUtils.publicKeyFromPem(ECKeys.sdkPublicKey);
+        ECPrivateKey sdkPriKey = PemTestUtils.privateKeyFromPem(ECKeys.sdkPrivateKey);
 
         byte[] symmetricKey = ECKeyPair.computeECDHKey(kasPubKey, sdkPriKey);
         byte[] key = ECKeyPair.calculateHKDF(ECKeys.salt.getBytes(StandardCharsets.UTF_8), symmetricKey);
@@ -155,12 +155,12 @@ public class ECKeyPairTest {
         encodedKey = Base64.getEncoder().encodeToString(key);
         assertEquals(encodedKey, expectedKey);
 
-        byte[] ecPoint = ECKeyPair.compressECPublickey(ECKeys.sdkPublicKey);
+        byte[] ecPoint = PemTestUtils.compressECPublickey(ECKeys.sdkPublicKey);
         String encodeECPoint = Base64.getEncoder().encodeToString(ecPoint);
         assertEquals(encodeECPoint, "Al3vx59pBnP8tRxuUFw18aK9ym6rFrxZRhpVQytUQ+Kg");
 
-        String publicKey = ECKeyPair.publicKeyFromECPoint(ecPoint,
-                SECP256R1.name());
+        String publicKey = PemTestUtils.publicKeyFromECPoint(ecPoint,
+                SECP256R1.getCurveName());
         assertArrayEquals(ECKeys.sdkPublicKey.toCharArray(), publicKey.toCharArray());
     }
 
@@ -169,7 +169,10 @@ public class ECKeyPairTest {
 
         String plainText = "Virtru!";
         for (var curve: ECCurve.values()) {
-            ECKeyPair keyPair = new ECKeyPair(curve, ECKeyPair.ECAlgorithm.ECDSA);
+            if (!curve.isSupported()) {
+                continue;
+            }
+            ECKeyPair keyPair = new ECKeyPair(curve);
             byte[] signature = ECKeyPair.computeECDSASig(plainText.getBytes(), keyPair.getPrivateKey());
             boolean verify = ECKeyPair.verifyECDSAig(plainText.getBytes(), signature, keyPair.getPublicKey());
             assertEquals(verify, true);
