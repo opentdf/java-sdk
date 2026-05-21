@@ -46,7 +46,8 @@ class PublicApiSurfaceTest {
             AssertionConfig.class.getName(),
             Config.class.getName(),
             RequestHelper.class.getName(),
-            PolicyEnums.class.getName()
+            PolicyEnums.class.getName(),
+            EntityIdentifiers.class.getName()
     );
     static Set<JavaClass> reachableClasses;
     static JavaClasses apiClasses;
@@ -111,7 +112,9 @@ class PublicApiSurfaceTest {
 
         while (!work.isEmpty()) {
             JavaClass c = work.pop();
-            if (!reachable.add(c)) continue;
+            if (!reachable.add(c)) {
+                continue;
+            }
 
             // Superclass and interfaces are part of the API surface of c.
             c.getRawSuperclass().ifPresent(ec -> addAllRawTypes(c, work, queued));
