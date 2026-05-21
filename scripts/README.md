@@ -33,6 +33,7 @@ artifacts.
 | **JDK 17** | The project's Kotlin compiler can't parse newer JDK version strings. Use Corretto/Temurin/etc. 17. On macOS: `export JAVA_HOME=$(/usr/libexec/java_home -v 17)`. |
 | **Maven 3.9+** | Project uses standard `mvn clean install`. |
 | **Buf token** | Proto generation requires auth. Either `buf registry login` once, or export `BUF_INPUT_HTTPS_USERNAME` / `BUF_INPUT_HTTPS_PASSWORD`. |
+| **`non-fips` Maven profile (default)** | Hybrid PQC needs `bcprov-jdk18on` at compile/runtime scope for the ML-KEM and X-Wing primitives (no JDK 11 stdlib equivalent). The default `non-fips` profile pulls it in automatically. The `fips` profile does not yet support hybrid PQC — follow-up. |
 | **Local platform with PQC support** | `opentdf/platform` checked out on a branch that implements `hpqt:*` KAS keys + the `hybrid-wrapped` rewrap path. See the platform repo for bring-up (`docker compose` / `make start`). |
 | **Hybrid KAS keys registered** | The local platform must have a KAS key registered for each `hpqt:*` algorithm you intend to test. Use `otdfctl` (or platform tooling) to register them. |
 | **CLI tools** | `java`, `mvn`, `unzip`, `jq` on `PATH`. `grpcurl` optional but recommended (drives the pre-flight check). |

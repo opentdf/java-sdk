@@ -2,12 +2,6 @@ package io.opentdf.platform.sdk;
 
 import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
 import org.bouncycastle.crypto.SecretWithEncapsulation;
-import org.bouncycastle.jce.ECNamedCurveTable;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec;
-import org.bouncycastle.jce.spec.ECPrivateKeySpec;
-import org.bouncycastle.jce.spec.ECPublicKeySpec;
-import org.bouncycastle.math.ec.ECPoint;
 import org.bouncycastle.pqc.crypto.mlkem.MLKEMExtractor;
 import org.bouncycastle.pqc.crypto.mlkem.MLKEMGenerator;
 import org.bouncycastle.pqc.crypto.mlkem.MLKEMKeyGenerationParameters;
@@ -18,16 +12,22 @@ import org.bouncycastle.pqc.crypto.mlkem.MLKEMPublicKeyParameters;
 
 import javax.crypto.KeyAgreement;
 import java.math.BigInteger;
+import java.security.AlgorithmParameters;
 import java.security.KeyFactory;
-import java.security.PrivateKey;
-import java.security.PublicKey;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.SecureRandom;
-import java.security.Security;
+import java.security.interfaces.ECPrivateKey;
+import java.security.interfaces.ECPublicKey;
+import java.security.spec.ECGenParameterSpec;
+import java.security.spec.ECParameterSpec;
+import java.security.spec.ECPoint;
+import java.security.spec.ECPrivateKeySpec;
+import java.security.spec.ECPublicKeySpec;
 import java.util.Arrays;
 
 /**
  * NIST hybrid post-quantum key wrapping (P-256 + ML-KEM-768 and P-384 + ML-KEM-1024).
- * Mirrors {@code lib/ocrypto/hybrid_nist.go}.
  *
  * Wire layout of the wrapped DEK:
  * <pre>
@@ -43,14 +43,11 @@ import java.util.Arrays;
  *   <li>Public key: {@code uncompressedECPoint || mlkemEncapsulationKey}</li>
  *   <li>Private key: {@code paddedECScalar || mlkemSeed(64B)}</li>
  * </ul>
+ *
+ * EC operations use only stdlib JCA. ML-KEM operations use BouncyCastle's
+ * low-level API because no JDK 11 stdlib KEM API exists (added in JDK 21).
  */
 final class HybridNISTKeyPair {
-
-    static {
-        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
-            Security.addProvider(new BouncyCastleProvider());
-        }
-    }
 
     static final HybridNISTKeyPair P256_MLKEM768 = new HybridNISTKeyPair(
             "secp256r1",
@@ -86,7 +83,8 @@ final class HybridNISTKeyPair {
     private final String pubPemBlock;
     private final String privPemBlock;
     private final KeyType keyType;
-    private final ECNamedCurveParameterSpec curveSpec;
+    private final ECParameterSpec ecParams;
+    private final int ecFieldByteSize;
 
     private final byte[] publicKey;
     private final byte[] privateKey;
@@ -102,7 +100,8 @@ final class HybridNISTKeyPair {
         this.pubPemBlock = pubPemBlock;
         this.privPemBlock = privPemBlock;
         this.keyType = keyType;
-        this.curveSpec = ECNamedCurveTable.getParameterSpec(curveName);
+        this.ecParams = ecParamsFor(curveName);
+        this.ecFieldByteSize = (this.ecParams.getCurve().getField().getFieldSize() + 7) / 8;
         this.publicKey = null;
         this.privateKey = null;
     }
@@ -117,7 +116,8 @@ final class HybridNISTKeyPair {
         this.pubPemBlock = params.pubPemBlock;
         this.privPemBlock = params.privPemBlock;
         this.keyType = params.keyType;
-        this.curveSpec = params.curveSpec;
+        this.ecParams = params.ecParams;
+        this.ecFieldByteSize = params.ecFieldByteSize;
         this.publicKey = publicKey;
         this.privateKey = privateKey;
     }
@@ -130,22 +130,16 @@ final class HybridNISTKeyPair {
     HybridNISTKeyPair generate() {
         SecureRandom random = new SecureRandom();
 
-        // EC half — generate ephemeral scalar, derive uncompressed point.
-        BigInteger ecScalar = generateEcScalar(random);
-        ECPoint ecPoint = curveSpec.getG().multiply(ecScalar).normalize();
-        byte[] ecPubBytes = ecPoint.getEncoded(/* compressed */ false);
-        byte[] ecPrivBytes = leftPad(ecScalar.toByteArray(), ecPrivSize);
+        // EC half — stdlib KeyPairGenerator gives us scalar + point in one call.
+        EcKeypairBytes ec = generateEcKeypairBytes(random);
 
-        // ML-KEM half.
+        // ML-KEM half — BC's low-level API; no JDK 11 stdlib alternative.
         MLKEMKeyPairGenerator mlGen = new MLKEMKeyPairGenerator();
         mlGen.init(new MLKEMKeyGenerationParameters(random, mlkemParams));
         AsymmetricCipherKeyPair mkp = mlGen.generateKeyPair();
         byte[] mlPubBytes = ((MLKEMPublicKeyParameters) mkp.getPublic()).getEncoded();
         byte[] mlSeed = ((MLKEMPrivateKeyParameters) mkp.getPrivate()).getSeed();
 
-        if (ecPubBytes.length != ecPubSize) {
-            throw new SDKException("EC public key size " + ecPubBytes.length + " != expected " + ecPubSize);
-        }
         if (mlPubBytes.length != mlkemPubSize) {
             throw new SDKException("ML-KEM public key size " + mlPubBytes.length + " != expected " + mlkemPubSize);
         }
@@ -153,8 +147,8 @@ final class HybridNISTKeyPair {
             throw new SDKException("ML-KEM seed size " + mlSeed.length + " != expected " + MLKEM_SEED_SIZE);
         }
 
-        byte[] pub = concat(ecPubBytes, mlPubBytes);
-        byte[] priv = concat(ecPrivBytes, mlSeed);
+        byte[] pub = concat(ec.publicPoint, mlPubBytes);
+        byte[] priv = concat(ec.scalar, mlSeed);
         return new HybridNISTKeyPair(this, pub, priv);
     }
 
@@ -186,9 +180,9 @@ final class HybridNISTKeyPair {
 
         SecureRandom random = new SecureRandom();
 
-        // ECDH: generate ephemeral, compute shared secret, capture ephemeral point.
-        BigInteger ephemeralScalar = generateEcScalar(random);
-        byte[] ephemeralEcPub = curveSpec.getG().multiply(ephemeralScalar).normalize().getEncoded(false);
+        // ECDH: generate ephemeral keypair, compute shared secret, ship the ephemeral point.
+        EcKeypairBytes ephemeral = generateEcKeypairBytes(random);
+        BigInteger ephemeralScalar = new BigInteger(1, ephemeral.scalar);
         byte[] ecdhSecret = computeEcdhSecret(ephemeralScalar, recipientEcPub);
 
         // ML-KEM encapsulate.
@@ -201,8 +195,8 @@ final class HybridNISTKeyPair {
         }
 
         byte[] combinedSecret = concat(ecdhSecret, mlSecret);
-        byte[] hybridCt = concat(ephemeralEcPub, mlCiphertext);
-        byte[] wrapKey = HybridCrypto.deriveWrapKey(combinedSecret, null, null);
+        byte[] hybridCt = concat(ephemeral.publicPoint, mlCiphertext);
+        byte[] wrapKey = HybridCrypto.deriveWrapKey(combinedSecret);
         byte[] encryptedDek = new AesGcm(wrapKey).encrypt(dek).asBytes();
         return HybridCrypto.marshalEnvelope(hybridCt, encryptedDek);
     }
@@ -231,38 +225,57 @@ final class HybridNISTKeyPair {
         byte[] mlSecret = new MLKEMExtractor(mlPriv).extractSecret(mlCiphertext);
 
         byte[] combinedSecret = concat(ecdhSecret, mlSecret);
-        byte[] wrapKey = HybridCrypto.deriveWrapKey(combinedSecret, null, null);
+        byte[] wrapKey = HybridCrypto.deriveWrapKey(combinedSecret);
         return new AesGcm(wrapKey).decrypt(new AesGcm.Encrypted(encryptedDek));
     }
 
-    /** Generate a uniformly random scalar in [1, n-1] using rejection sampling. */
-    private BigInteger generateEcScalar(SecureRandom random) {
-        BigInteger n = curveSpec.getN();
-        int nBitLength = n.bitLength();
-        BigInteger d;
-        do {
-            d = new BigInteger(nBitLength, random);
-        } while (d.signum() <= 0 || d.compareTo(n) >= 0);
-        return d;
+    /** Resolve a named-curve {@link ECParameterSpec} via stdlib JCA. */
+    private static ECParameterSpec ecParamsFor(String curveName) {
+        try {
+            AlgorithmParameters ap = AlgorithmParameters.getInstance("EC");
+            ap.init(new ECGenParameterSpec(curveName));
+            return ap.getParameterSpec(ECParameterSpec.class);
+        } catch (Exception e) {
+            throw new SDKException("EC parameters not available for curve " + curveName, e);
+        }
     }
 
-    /** Standard ECDH: x-coordinate of {@code scalar * peerPoint}, fixed-size big-endian. */
+    /**
+     * Generate an EC keypair via stdlib and return scalar (padded) and uncompressed-point bytes.
+     */
+    private EcKeypairBytes generateEcKeypairBytes(SecureRandom random) {
+        try {
+            KeyPairGenerator kpg = KeyPairGenerator.getInstance("EC");
+            kpg.initialize(new ECGenParameterSpec(curveName), random);
+            KeyPair kp = kpg.generateKeyPair();
+            ECPrivateKey priv = (ECPrivateKey) kp.getPrivate();
+            ECPublicKey pub = (ECPublicKey) kp.getPublic();
+            byte[] scalar = toFixedLength(priv.getS(), ecPrivSize);
+            byte[] point = encodeUncompressedPoint(pub.getW(), ecFieldByteSize);
+            if (point.length != ecPubSize) {
+                throw new SDKException("encoded EC point size " + point.length + " != expected " + ecPubSize);
+            }
+            return new EcKeypairBytes(scalar, point);
+        } catch (Exception e) {
+            throw new SDKException("failed to generate EC keypair on " + curveName, e);
+        }
+    }
+
+    /** Standard ECDH via JCA: x-coordinate of {@code scalar * peerPoint}, fixed-size big-endian. */
     private byte[] computeEcdhSecret(BigInteger scalar, byte[] peerUncompressedPoint) {
         try {
-            ECPoint peer = curveSpec.getCurve().decodePoint(peerUncompressedPoint);
-            ECPublicKeySpec peerSpec = new ECPublicKeySpec(peer, curveSpec);
-            ECPrivateKeySpec mySpec = new ECPrivateKeySpec(scalar, curveSpec);
-            KeyFactory kf = KeyFactory.getInstance("EC", BouncyCastleProvider.PROVIDER_NAME);
-            PublicKey peerPub = kf.generatePublic(peerSpec);
-            PrivateKey myPriv = kf.generatePrivate(mySpec);
+            ECPoint peerPoint = decodeUncompressedPoint(peerUncompressedPoint, ecFieldByteSize);
+            ECPublicKeySpec peerSpec = new ECPublicKeySpec(peerPoint, ecParams);
+            ECPrivateKeySpec mySpec = new ECPrivateKeySpec(scalar, ecParams);
+            KeyFactory kf = KeyFactory.getInstance("EC");
 
-            KeyAgreement ka = KeyAgreement.getInstance("ECDH", BouncyCastleProvider.PROVIDER_NAME);
-            ka.init(myPriv);
-            ka.doPhase(peerPub, /* lastPhase */ true);
+            KeyAgreement ka = KeyAgreement.getInstance("ECDH");
+            ka.init(kf.generatePrivate(mySpec));
+            ka.doPhase(kf.generatePublic(peerSpec), /* lastPhase */ true);
             byte[] raw = ka.generateSecret();
             // JCA may strip leading zeros; left-pad to the field size to match Go's crypto/ecdh ECDH output.
-            if (raw.length != ecPrivSize) {
-                raw = leftPad(raw, ecPrivSize);
+            if (raw.length != ecFieldByteSize) {
+                raw = leftPad(raw, ecFieldByteSize);
             }
             return raw;
         } catch (Exception e) {
@@ -270,18 +283,46 @@ final class HybridNISTKeyPair {
         }
     }
 
-    private static byte[] leftPad(byte[] src, int width) {
-        if (src.length == width) return src;
-        if (src.length > width) {
-            // Strip leading 0x00 sign byte from BigInteger.toByteArray() if present.
-            int excess = src.length - width;
+    private static byte[] encodeUncompressedPoint(ECPoint w, int byteSize) {
+        byte[] x = toFixedLength(w.getAffineX(), byteSize);
+        byte[] y = toFixedLength(w.getAffineY(), byteSize);
+        byte[] out = new byte[1 + 2 * byteSize];
+        out[0] = 0x04;
+        System.arraycopy(x, 0, out, 1, byteSize);
+        System.arraycopy(y, 0, out, 1 + byteSize, byteSize);
+        return out;
+    }
+
+    private static ECPoint decodeUncompressedPoint(byte[] encoded, int byteSize) {
+        if (encoded.length != 1 + 2 * byteSize || encoded[0] != 0x04) {
+            throw new SDKException("invalid uncompressed EC point encoding (length=" + encoded.length
+                    + ", lead=0x" + Integer.toHexString(encoded[0] & 0xFF) + ")");
+        }
+        BigInteger x = new BigInteger(1, Arrays.copyOfRange(encoded, 1, 1 + byteSize));
+        BigInteger y = new BigInteger(1, Arrays.copyOfRange(encoded, 1 + byteSize, 1 + 2 * byteSize));
+        return new ECPoint(x, y);
+    }
+
+    /** Convert a non-negative {@link BigInteger} to a fixed-length big-endian byte array. */
+    private static byte[] toFixedLength(BigInteger value, int length) {
+        byte[] bytes = value.toByteArray();
+        if (bytes.length == length) return bytes;
+        if (bytes.length > length) {
+            int excess = bytes.length - length;
             for (int i = 0; i < excess; i++) {
-                if (src[i] != 0) {
-                    throw new SDKException("scalar/secret too large for width " + width);
+                if (bytes[i] != 0) {
+                    throw new SDKException("value too large for width " + length);
                 }
             }
-            return Arrays.copyOfRange(src, excess, src.length);
+            return Arrays.copyOfRange(bytes, excess, bytes.length);
         }
+        byte[] out = new byte[length];
+        System.arraycopy(bytes, 0, out, length - bytes.length, bytes.length);
+        return out;
+    }
+
+    private static byte[] leftPad(byte[] src, int width) {
+        if (src.length >= width) return src;
         byte[] out = new byte[width];
         System.arraycopy(src, 0, out, width - src.length, src.length);
         return out;
@@ -292,5 +333,14 @@ final class HybridNISTKeyPair {
         System.arraycopy(a, 0, out, 0, a.length);
         System.arraycopy(b, 0, out, a.length, b.length);
         return out;
+    }
+
+    private static final class EcKeypairBytes {
+        final byte[] scalar;
+        final byte[] publicPoint;
+        EcKeypairBytes(byte[] scalar, byte[] publicPoint) {
+            this.scalar = scalar;
+            this.publicPoint = publicPoint;
+        }
     }
 }
