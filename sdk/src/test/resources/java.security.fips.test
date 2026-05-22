@@ -1,0 +1,24 @@
+# the default for these is usually SunX509 but BC doesn't
+# support them. tell it to use PKIX instead which is supported by BC
+ssl.KeyManagerFactory.algorithm=PKIX
+ssl.TrustManagerFactory.algorithm=PKIX
+
+# the SUN provider is required so that we can get the NativePRNGBlocking algorithm
+securerandom.strongAlgorithms=NativePRNGBlocking:SUN
+
+security.provider.1=org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider
+security.provider.2=org.bouncycastle.jsse.provider.BouncyCastleJsseProvider fips:BCFIPS
+security.provider.3=SUN
+
+# since this file is appended we need to make sure that we remove the other providers
+security.provider.4=
+security.provider.5=
+security.provider.6=
+security.provider.7=
+security.provider.8=
+security.provider.9=
+security.provider.10=
+security.provider.11=
+security.provider.12=
+security.provider.13=
+security.provider.14=

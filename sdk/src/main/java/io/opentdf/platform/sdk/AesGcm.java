@@ -3,6 +3,7 @@ package io.opentdf.platform.sdk;
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.KeyGenerator;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
@@ -20,9 +21,26 @@ import java.security.SecureRandom;
 class AesGcm {
     public static final int GCM_NONCE_LENGTH = 12; // in bytes
     public static final int GCM_TAG_LENGTH = 16; // in bytes
+    public static final int GCM_KEY_SIZE_BITS = 256;
+    private static final String KEY_ALGORITHM = "AES";
     private static final String CIPHER_TRANSFORM = "AES/GCM/NoPadding";
 
     private final SecretKey key;
+
+    /**
+     * <p>Generate a fresh 256-bit AES key using the JCA {@link KeyGenerator}.</p>
+     *
+     * @return the encoded key bytes
+     */
+    static byte[] generateKey() {
+        try {
+            KeyGenerator keyGenerator = KeyGenerator.getInstance(KEY_ALGORITHM);
+            keyGenerator.init(GCM_KEY_SIZE_BITS);
+            return keyGenerator.generateKey().getEncoded();
+        } catch (NoSuchAlgorithmException e) {
+            throw new SDKException("error generating AES key", e);
+        }
+    }
 
 
     /**

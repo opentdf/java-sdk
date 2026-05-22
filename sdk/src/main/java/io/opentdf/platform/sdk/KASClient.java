@@ -17,13 +17,15 @@ import io.opentdf.platform.kas.PublicKeyRequest;
 import io.opentdf.platform.kas.PublicKeyResponse;
 import io.opentdf.platform.kas.RewrapRequest;
 import io.opentdf.platform.kas.RewrapResponse;
-import io.opentdf.platform.sdk.Config.KASInfo;
 import io.opentdf.platform.sdk.SDK.KasBadRequestException;
 
 import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.security.NoSuchAlgorithmException;
+import java.security.interfaces.ECPublicKey;
+import java.security.spec.InvalidKeySpecException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
@@ -121,7 +123,7 @@ class KASClient implements SDK.KAS {
         ECKeyPair ecKeyPair = null;
         if (sessionKeyType.isEc()) {
             var curve = sessionKeyType.getECCurve();
-            ecKeyPair = new ECKeyPair(curve, ECKeyPair.ECAlgorithm.ECDH);
+            ecKeyPair = new ECKeyPair(curve);
             clientPublicKey = ecKeyPair.publicKeyInPEMFormat();
         } else {
             // Initialize the RSA key pair only once and reuse it for future unwrap operations
@@ -176,7 +178,12 @@ class KASClient implements SDK.KAS {
             }
 
             var kasEphemeralPublicKey = response.getSessionPublicKey();
-            var publicKey = ECKeyPair.publicKeyFromPem(kasEphemeralPublicKey);
+            ECPublicKey publicKey;
+            try {
+                publicKey = ECKeyPair.publicKeyFromPem(kasEphemeralPublicKey);
+            } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+                throw new SDKException("error decoding KAS session public key", e);
+            }
             byte[] symKey = ECKeyPair.computeECDHKey(publicKey, ecKeyPair.getPrivateKey());
 
             var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symKey);
