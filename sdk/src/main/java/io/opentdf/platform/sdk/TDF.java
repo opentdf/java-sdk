@@ -32,7 +32,7 @@ import java.util.*;
  * TDF objects, as well as utility functions to handle cryptographic
  * operations and configurations.
  */
-class TDF {
+public class TDF {
 
     private static byte[] tdfECKeySaltCompute() {
         byte[] salt;
