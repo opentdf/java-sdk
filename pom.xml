@@ -16,7 +16,7 @@
         <log4j.version>2.20.0</log4j.version>
         <grpc.version>1.75.0</grpc.version>
         <protobuf.version>4.29.2</protobuf.version>
-        <bouncycastle.version>1.82</bouncycastle.version>
+        <bouncycastle.version>1.84</bouncycastle.version>
         <bc-fips.version>2.1.2</bc-fips.version>
         <bcpkix-fips.version>2.1.11</bcpkix-fips.version>
         <bctls-fips.version>2.1.23</bctls-fips.version>
