@@ -14,7 +14,10 @@ public enum KeyType {
     RSA4096Key("rsa:4096"),
     EC256Key("ec:secp256r1", SECP256R1),
     EC384Key("ec:secp384r1", SECP384R1),
-    EC521Key("ec:secp521r1", SECP521R1);
+    EC521Key("ec:secp521r1", SECP521R1),
+    HybridXWingKey("hpqt:xwing"),
+    HybridSecp256r1MLKEM768Key("hpqt:secp256r1-mlkem768"),
+    HybridSecp384r1MLKEM1024Key("hpqt:secp384r1-mlkem1024");
 
     private final String keyType;
     private final ECCurve curve;
@@ -92,5 +95,16 @@ public enum KeyType {
 
     public boolean isEc() {
         return this.curve != null;
+    }
+
+    public boolean isHybrid() {
+        switch (this) {
+            case HybridXWingKey:
+            case HybridSecp256r1MLKEM768Key:
+            case HybridSecp384r1MLKEM1024Key:
+                return true;
+            default:
+                return false;
+        }
     }
 }
