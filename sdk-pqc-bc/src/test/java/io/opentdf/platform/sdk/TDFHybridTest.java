@@ -4,6 +4,8 @@ import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
+import io.opentdf.platform.sdk.pqc.bc.HybridNISTKeyPair;
+import io.opentdf.platform.sdk.pqc.bc.XWingKeyPair;
 import com.connectrpc.ResponseMessage;
 import com.connectrpc.UnaryBlockingCall;
 import org.junit.jupiter.api.BeforeAll;

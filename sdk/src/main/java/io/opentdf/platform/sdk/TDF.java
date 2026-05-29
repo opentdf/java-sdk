@@ -8,6 +8,7 @@ import com.nimbusds.jose.*;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.sdk.Config.KASInfo;
+import io.opentdf.platform.sdk.spi.KemProviders;
 
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
@@ -228,7 +229,10 @@ class TDF {
 
             var keyType = KeyType.fromString(algorithm);
             if (keyType.isHybrid()) {
-                byte[] wrapped = HybridCrypto.wrapDEK(keyType, kasInfo.PublicKey, symKey);
+                // Dispatch to whichever KemProvider claims this KeyType (typically the
+                // BouncyCastle-backed impl in sdk-pqc-bc). Keeps the core sdk jar free
+                // of BC compile-time references so the fips Maven profile stays clean.
+                byte[] wrapped = KemProviders.get(keyType).wrapDEK(keyType, kasInfo.PublicKey, symKey);
                 keyAccess.wrappedKey = Base64.getEncoder().encodeToString(wrapped);
                 keyAccess.keyType = kHybridWrapped;
                 // ephemeralPublicKey intentionally left null — the ephemeral material is

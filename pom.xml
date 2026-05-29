@@ -287,6 +287,7 @@
             <modules>
                 <module>sdk</module>
                 <module>sdk-fips-bouncycastle</module>
+                <module>sdk-pqc-bc</module>
                 <module>cmdline</module>
                 <module>examples</module>
             </modules>
