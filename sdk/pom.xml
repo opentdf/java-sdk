@@ -483,6 +483,12 @@
                 <activeByDefault>true</activeByDefault>
             </activation>
             <dependencies>
+                <!-- Required for ML-KEM (FIPS 203) post-quantum key encapsulation.
+                     No JDK 11 stdlib equivalent exists; the JCA KEM API is JDK 21+. -->
+                <dependency>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcprov-jdk18on</artifactId>
+                </dependency>
                 <dependency>
                     <groupId>org.bouncycastle</groupId>
                     <artifactId>bcpkix-jdk18on</artifactId>

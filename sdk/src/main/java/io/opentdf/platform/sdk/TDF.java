@@ -226,7 +226,15 @@ class TDF {
                     : kasInfo.Algorithm;
 
             var keyType = KeyType.fromString(algorithm);
-            if (keyType.isEc()) {
+            if (keyType.isMLKEM()) {
+                // Pure ML-KEM: ct(1088/1568) || AES-GCM(nonce(12)||ct||tag(16)),
+                // base64'd into wrappedKey. KAO type stays "wrapped"; KAS
+                // disambiguates from RSA by the registered key's algorithm.
+                var mlkem = MLKEMKeyPair.forKeyType(keyType);
+                byte[] wrapped = mlkem.wrapDEK(mlkem.pubKeyFromPem(kasInfo.PublicKey), symKey);
+                keyAccess.wrappedKey = Base64.getEncoder().encodeToString(wrapped);
+                keyAccess.keyType = kWrapped;
+            } else if (keyType.isEc()) {
                 var ecKeyWrappedKeyInfo = createECWrappedKey(kasInfo, symKey, keyType);
                 keyAccess.wrappedKey = ecKeyWrappedKeyInfo.wrappedKey;
                 keyAccess.ephemeralPublicKey = ecKeyWrappedKeyInfo.publicKey;
