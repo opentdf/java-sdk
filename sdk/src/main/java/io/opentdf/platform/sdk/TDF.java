@@ -228,7 +228,7 @@ class TDF {
 
             var keyType = KeyType.fromString(algorithm);
             if (keyType.isHybrid()) {
-                byte[] wrapped = HybridCrypto.wrapDEK(keyType, kasInfo.PublicKey, symKey);
+                byte[] wrapped = HybridKeyWrapResolver.get(keyType).wrapDEK(keyType, kasInfo.PublicKey, symKey);
                 keyAccess.wrappedKey = Base64.getEncoder().encodeToString(wrapped);
                 keyAccess.keyType = kHybridWrapped;
                 // ephemeralPublicKey intentionally left null — the ephemeral material is

@@ -1,4 +1,7 @@
-package io.opentdf.platform.sdk;
+package io.opentdf.platform.sdk.hybrid.bouncycastle;
+
+import io.opentdf.platform.sdk.AesGcm;
+import io.opentdf.platform.sdk.SDKException;
 
 import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
 import org.bouncycastle.crypto.SecretWithEncapsulation;
@@ -44,19 +47,19 @@ final class XWingKeyPair {
     }
 
     String publicKeyInPemFormat() {
-        return HybridCrypto.rawToPem(PEM_BLOCK_PUBLIC_KEY, publicKey, PUBLIC_KEY_SIZE);
+        return HybridEnvelope.rawToPem(PEM_BLOCK_PUBLIC_KEY, publicKey, PUBLIC_KEY_SIZE);
     }
 
     String privateKeyInPemFormat() {
-        return HybridCrypto.rawToPem(PEM_BLOCK_PRIVATE_KEY, privateKey, PRIVATE_KEY_SIZE);
+        return HybridEnvelope.rawToPem(PEM_BLOCK_PRIVATE_KEY, privateKey, PRIVATE_KEY_SIZE);
     }
 
     static byte[] pubKeyFromPem(String pem) {
-        return HybridCrypto.decodeSizedPemBlock(pem, PEM_BLOCK_PUBLIC_KEY, PUBLIC_KEY_SIZE);
+        return HybridEnvelope.decodeSizedPemBlock(pem, PEM_BLOCK_PUBLIC_KEY, PUBLIC_KEY_SIZE);
     }
 
     static byte[] privateKeyFromPem(String pem) {
-        return HybridCrypto.decodeSizedPemBlock(pem, PEM_BLOCK_PRIVATE_KEY, PRIVATE_KEY_SIZE);
+        return HybridEnvelope.decodeSizedPemBlock(pem, PEM_BLOCK_PRIVATE_KEY, PRIVATE_KEY_SIZE);
     }
 
     static byte[] wrapDEK(byte[] rawPub, byte[] dek) {
@@ -68,16 +71,16 @@ final class XWingKeyPair {
         byte[] sharedSecret = enc.getSecret();
         byte[] ciphertext = enc.getEncapsulation();
 
-        byte[] wrapKey = HybridCrypto.deriveWrapKey(sharedSecret);
+        byte[] wrapKey = HybridEnvelope.deriveWrapKey(sharedSecret);
         byte[] encryptedDek = new AesGcm(wrapKey).encrypt(dek).asBytes();
-        return HybridCrypto.marshalEnvelope(ciphertext, encryptedDek);
+        return HybridEnvelope.marshalEnvelope(ciphertext, encryptedDek);
     }
 
     static byte[] unwrapDEK(byte[] rawPriv, byte[] wrappedDer) {
         if (rawPriv.length != PRIVATE_KEY_SIZE) {
             throw new SDKException("invalid X-Wing private key size: got " + rawPriv.length + " want " + PRIVATE_KEY_SIZE);
         }
-        byte[][] parts = HybridCrypto.unmarshalEnvelope(wrappedDer);
+        byte[][] parts = HybridEnvelope.unmarshalEnvelope(wrappedDer);
         byte[] ciphertext = parts[0];
         byte[] encryptedDek = parts[1];
         if (ciphertext.length != CIPHERTEXT_SIZE) {
@@ -86,7 +89,7 @@ final class XWingKeyPair {
 
         XWingPrivateKeyParameters priv = new XWingPrivateKeyParameters(rawPriv);
         byte[] sharedSecret = new XWingKEMExtractor(priv).extractSecret(ciphertext);
-        byte[] wrapKey = HybridCrypto.deriveWrapKey(sharedSecret);
+        byte[] wrapKey = HybridEnvelope.deriveWrapKey(sharedSecret);
         return new AesGcm(wrapKey).decrypt(new AesGcm.Encrypted(encryptedDek));
     }
 }

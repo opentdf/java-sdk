@@ -1,4 +1,8 @@
-package io.opentdf.platform.sdk;
+package io.opentdf.platform.sdk.hybrid.bouncycastle;
+
+import io.opentdf.platform.sdk.AesGcm;
+import io.opentdf.platform.sdk.KeyType;
+import io.opentdf.platform.sdk.SDKException;
 
 import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
 import org.bouncycastle.crypto.SecretWithEncapsulation;
@@ -130,10 +134,8 @@ final class HybridNISTKeyPair {
     HybridNISTKeyPair generate() {
         SecureRandom random = new SecureRandom();
 
-        // EC half — stdlib KeyPairGenerator gives us scalar + point in one call.
         EcKeypairBytes ec = generateEcKeypairBytes(random);
 
-        // ML-KEM half — BC's low-level API; no JDK 11 stdlib alternative.
         MLKEMKeyPairGenerator mlGen = new MLKEMKeyPairGenerator();
         mlGen.init(new MLKEMKeyGenerationParameters(random, mlkemParams));
         AsymmetricCipherKeyPair mkp = mlGen.generateKeyPair();
@@ -153,22 +155,22 @@ final class HybridNISTKeyPair {
     }
 
     String publicKeyInPemFormat() {
-        return HybridCrypto.rawToPem(pubPemBlock, publicKey, publicKeySize());
+        return HybridEnvelope.rawToPem(pubPemBlock, publicKey, publicKeySize());
     }
 
     String privateKeyInPemFormat() {
-        return HybridCrypto.rawToPem(privPemBlock, privateKey, privateKeySize());
+        return HybridEnvelope.rawToPem(privPemBlock, privateKey, privateKeySize());
     }
 
     byte[] getPublicKey() { return publicKey == null ? null : publicKey.clone(); }
     byte[] getPrivateKey() { return privateKey == null ? null : privateKey.clone(); }
 
     byte[] pubKeyFromPem(String pem) {
-        return HybridCrypto.decodeSizedPemBlock(pem, pubPemBlock, publicKeySize());
+        return HybridEnvelope.decodeSizedPemBlock(pem, pubPemBlock, publicKeySize());
     }
 
     byte[] privateKeyFromPem(String pem) {
-        return HybridCrypto.decodeSizedPemBlock(pem, privPemBlock, privateKeySize());
+        return HybridEnvelope.decodeSizedPemBlock(pem, privPemBlock, privateKeySize());
     }
 
     byte[] wrapDEK(byte[] rawPub, byte[] dek) {
@@ -180,12 +182,10 @@ final class HybridNISTKeyPair {
 
         SecureRandom random = new SecureRandom();
 
-        // ECDH: generate ephemeral keypair, compute shared secret, ship the ephemeral point.
         EcKeypairBytes ephemeral = generateEcKeypairBytes(random);
         BigInteger ephemeralScalar = new BigInteger(1, ephemeral.scalar);
         byte[] ecdhSecret = computeEcdhSecret(ephemeralScalar, recipientEcPub);
 
-        // ML-KEM encapsulate.
         MLKEMPublicKeyParameters mlPub = new MLKEMPublicKeyParameters(mlkemParams, recipientMlPub);
         SecretWithEncapsulation kemEnc = new MLKEMGenerator(random).generateEncapsulated(mlPub);
         byte[] mlSecret = kemEnc.getSecret();
@@ -196,16 +196,16 @@ final class HybridNISTKeyPair {
 
         byte[] combinedSecret = concat(ecdhSecret, mlSecret);
         byte[] hybridCt = concat(ephemeral.publicPoint, mlCiphertext);
-        byte[] wrapKey = HybridCrypto.deriveWrapKey(combinedSecret);
+        byte[] wrapKey = HybridEnvelope.deriveWrapKey(combinedSecret);
         byte[] encryptedDek = new AesGcm(wrapKey).encrypt(dek).asBytes();
-        return HybridCrypto.marshalEnvelope(hybridCt, encryptedDek);
+        return HybridEnvelope.marshalEnvelope(hybridCt, encryptedDek);
     }
 
     byte[] unwrapDEK(byte[] rawPriv, byte[] wrappedDer) {
         if (rawPriv.length != privateKeySize()) {
             throw new SDKException("invalid " + keyType + " private key size: got " + rawPriv.length + " want " + privateKeySize());
         }
-        byte[][] parts = HybridCrypto.unmarshalEnvelope(wrappedDer);
+        byte[][] parts = HybridEnvelope.unmarshalEnvelope(wrappedDer);
         byte[] hybridCt = parts[0];
         byte[] encryptedDek = parts[1];
         if (hybridCt.length != ciphertextSize()) {
@@ -225,7 +225,7 @@ final class HybridNISTKeyPair {
         byte[] mlSecret = new MLKEMExtractor(mlPriv).extractSecret(mlCiphertext);
 
         byte[] combinedSecret = concat(ecdhSecret, mlSecret);
-        byte[] wrapKey = HybridCrypto.deriveWrapKey(combinedSecret);
+        byte[] wrapKey = HybridEnvelope.deriveWrapKey(combinedSecret);
         return new AesGcm(wrapKey).decrypt(new AesGcm.Encrypted(encryptedDek));
     }
 
@@ -273,7 +273,6 @@ final class HybridNISTKeyPair {
             ka.init(kf.generatePrivate(mySpec));
             ka.doPhase(kf.generatePublic(peerSpec), /* lastPhase */ true);
             byte[] raw = ka.generateSecret();
-            // JCA may strip leading zeros; left-pad to the field size to match Go's crypto/ecdh ECDH output.
             if (raw.length != ecFieldByteSize) {
                 raw = leftPad(raw, ecFieldByteSize);
             }

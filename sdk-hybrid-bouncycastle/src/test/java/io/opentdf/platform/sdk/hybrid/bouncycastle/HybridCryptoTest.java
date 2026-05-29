@@ -1,5 +1,8 @@
-package io.opentdf.platform.sdk;
+package io.opentdf.platform.sdk.hybrid.bouncycastle;
 
+import io.opentdf.platform.sdk.HybridKeyWrapProvider;
+import io.opentdf.platform.sdk.KeyType;
+import io.opentdf.platform.sdk.SDKException;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -11,15 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * Unit tests for hybrid post-quantum key wrapping. Mirrors
- * {@code lib/ocrypto/xwing_test.go} and {@code lib/ocrypto/hybrid_nist_test.go}.
- *
- * Each scheme is exercised through a full round-trip: generate keypair → PEM
- * round-trip → wrap DEK → unwrap DEK → assert equal. The unwrap path is
- * also used as a wire-format guard: if marshal/unmarshal drift, the round-trip
- * fails.
- */
 class HybridCryptoTest {
 
     private static final byte[] DEK = "0123456789abcdef0123456789abcdef".getBytes();
@@ -40,7 +34,6 @@ class HybridCryptoTest {
 
         byte[] wrapped = XWingKeyPair.wrapDEK(rawPub, DEK);
         assertNotNull(wrapped);
-        // ASN.1 SEQUENCE header byte
         assertEquals((byte) 0x30, wrapped[0]);
 
         byte[] unwrapped = XWingKeyPair.unwrapDEK(rawPriv, wrapped);
@@ -121,37 +114,55 @@ class HybridCryptoTest {
     void pemBodySizeMismatchRejected() {
         XWingKeyPair kp = XWingKeyPair.generate();
         String pem = kp.publicKeyInPemFormat();
-        // Truncate one base64 char inside the body — yields wrong byte length after decode.
         int headerEnd = pem.indexOf('\n') + 1;
         String truncated = pem.substring(0, headerEnd) + pem.substring(headerEnd + 4);
         assertThrows(SDKException.class, () -> XWingKeyPair.pubKeyFromPem(truncated));
     }
 
     @Test
-    void dispatcherSelectsCorrectScheme() {
-        // Round-trip via the public HybridCrypto.wrapDEK dispatcher for each key type.
+    void providerDispatcherSelectsCorrectScheme() {
+        HybridKeyWrapProvider provider = new BouncyCastleHybridKeyWrapProvider();
+
         XWingKeyPair xw = XWingKeyPair.generate();
-        byte[] xwWrapped = HybridCrypto.wrapDEK(KeyType.HybridXWingKey, xw.publicKeyInPemFormat(), DEK);
-        byte[] xwPriv = XWingKeyPair.privateKeyFromPem(xw.privateKeyInPemFormat());
-        assertArrayEquals(DEK, XWingKeyPair.unwrapDEK(xwPriv, xwWrapped));
+        byte[] xwWrapped = provider.wrapDEK(KeyType.HybridXWingKey, xw.publicKeyInPemFormat(), DEK);
+        byte[] xwUnwrapped = provider.unwrapDEK(KeyType.HybridXWingKey, xw.privateKeyInPemFormat(), xwWrapped);
+        assertArrayEquals(DEK, xwUnwrapped);
 
         HybridNISTKeyPair p256 = HybridNISTKeyPair.P256_MLKEM768.generate();
-        byte[] p256Wrapped = HybridCrypto.wrapDEK(KeyType.HybridSecp256r1MLKEM768Key,
+        byte[] p256Wrapped = provider.wrapDEK(KeyType.HybridSecp256r1MLKEM768Key,
                 p256.publicKeyInPemFormat(), DEK);
-        byte[] p256Priv = HybridNISTKeyPair.P256_MLKEM768.privateKeyFromPem(p256.privateKeyInPemFormat());
-        assertArrayEquals(DEK, HybridNISTKeyPair.P256_MLKEM768.unwrapDEK(p256Priv, p256Wrapped));
+        byte[] p256Unwrapped = provider.unwrapDEK(KeyType.HybridSecp256r1MLKEM768Key,
+                p256.privateKeyInPemFormat(), p256Wrapped);
+        assertArrayEquals(DEK, p256Unwrapped);
 
         HybridNISTKeyPair p384 = HybridNISTKeyPair.P384_MLKEM1024.generate();
-        byte[] p384Wrapped = HybridCrypto.wrapDEK(KeyType.HybridSecp384r1MLKEM1024Key,
+        byte[] p384Wrapped = provider.wrapDEK(KeyType.HybridSecp384r1MLKEM1024Key,
                 p384.publicKeyInPemFormat(), DEK);
-        byte[] p384Priv = HybridNISTKeyPair.P384_MLKEM1024.privateKeyFromPem(p384.privateKeyInPemFormat());
-        assertArrayEquals(DEK, HybridNISTKeyPair.P384_MLKEM1024.unwrapDEK(p384Priv, p384Wrapped));
+        byte[] p384Unwrapped = provider.unwrapDEK(KeyType.HybridSecp384r1MLKEM1024Key,
+                p384.privateKeyInPemFormat(), p384Wrapped);
+        assertArrayEquals(DEK, p384Unwrapped);
     }
 
     @Test
-    void dispatcherRejectsNonHybridKeyType() {
+    void providerRejectsNonHybridKeyType() {
+        HybridKeyWrapProvider provider = new BouncyCastleHybridKeyWrapProvider();
         assertThrows(SDKException.class,
-                () -> HybridCrypto.wrapDEK(KeyType.RSA2048Key, "not-a-real-pem", DEK));
+                () -> provider.wrapDEK(KeyType.RSA2048Key, "not-a-real-pem", DEK));
+    }
+
+    @Test
+    void providerSupportsReturnsTrueForHybridTypesOnly() {
+        HybridKeyWrapProvider provider = new BouncyCastleHybridKeyWrapProvider();
+        assertTrue(provider.supports(KeyType.HybridXWingKey));
+        assertTrue(provider.supports(KeyType.HybridSecp256r1MLKEM768Key));
+        assertTrue(provider.supports(KeyType.HybridSecp384r1MLKEM1024Key));
+        for (KeyType kt : KeyType.values()) {
+            if (kt != KeyType.HybridXWingKey
+                    && kt != KeyType.HybridSecp256r1MLKEM768Key
+                    && kt != KeyType.HybridSecp384r1MLKEM1024Key) {
+                assertEquals(false, provider.supports(kt), "supports() should be false for " + kt);
+            }
+        }
     }
 
     @Test

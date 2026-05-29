@@ -77,5 +77,13 @@
             <artifactId>sdk</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- BouncyCastle-backed HybridKeyWrapProvider SPI implementation.
+             Discovered at runtime via ServiceLoader; required for the
+             cmdline tool to wrap DEKs against hybrid PQ KAS keys. -->
+        <dependency>
+            <groupId>io.opentdf.platform</groupId>
+            <artifactId>sdk-hybrid-bouncycastle</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
 </project>

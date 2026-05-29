@@ -286,6 +286,7 @@
             <id>develop</id>
             <modules>
                 <module>sdk</module>
+                <module>sdk-hybrid-bouncycastle</module>
                 <module>cmdline</module>
                 <module>examples</module>
             </modules>
@@ -297,6 +298,7 @@
             <id>stage</id>
             <modules>
                 <module>sdk</module>
+                <module>sdk-hybrid-bouncycastle</module>
             </modules>
             <activation>
                 <activeByDefault>false</activeByDefault>
@@ -329,6 +331,7 @@
             <id>release</id>
             <modules>
                 <module>sdk</module>
+                <module>sdk-hybrid-bouncycastle</module>
             </modules>
             <activation>
                 <activeByDefault>false</activeByDefault>
@@ -367,6 +370,7 @@
             <id>coverage</id>
             <modules>
                 <module>sdk</module>
+                <module>sdk-hybrid-bouncycastle</module>
             </modules>
             <properties>
                 <sonar.organization>opentdf</sonar.organization>

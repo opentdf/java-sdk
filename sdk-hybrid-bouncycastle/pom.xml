@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.opentdf.platform</groupId>
+        <artifactId>sdk-pom</artifactId>
+        <version>0.15.0</version>
+    </parent>
+    <artifactId>sdk-hybrid-bouncycastle</artifactId>
+    <name>io.opentdf.platform:sdk-hybrid-bouncycastle</name>
+    <description>BouncyCastle-backed HybridKeyWrapProvider SPI implementation
+        (X-Wing and NIST EC + ML-KEM hybrid post-quantum key wrapping).</description>
+    <packaging>jar</packaging>
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+    <dependencies>
+        <dependency>
+            <groupId>io.opentdf.platform</groupId>
+            <artifactId>sdk</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Hybrid PQ key wrapping requires BC's low-level X-Wing and ML-KEM APIs
+             (no JDK 11 stdlib equivalent; provider-agnostic JCA APIs for KEM
+             are JDK 21+). See adr/0001 for context. -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+        </dependency>
+        <!-- Testing -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>3.27.7</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Test-jar from sdk exposes FakeServicesBuilder and other package-private
+             test helpers needed by TDFHybridTest (which lives in package
+             io.opentdf.platform.sdk to keep access to the package-private TDF class). -->
+        <dependency>
+            <groupId>io.opentdf.platform</groupId>
+            <artifactId>sdk</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>5.2.0</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

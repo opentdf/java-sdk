@@ -474,6 +474,18 @@
                     <argLine>@{argLine} ${java.security.properties.test}</argLine>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>test-jar</id>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
     <profiles>
@@ -483,13 +495,10 @@
                 <activeByDefault>true</activeByDefault>
             </activation>
             <dependencies>
-                <!-- Required for hybrid post-quantum key wrapping (ML-KEM, X-Wing).
-                     No JDK 11 stdlib equivalent exists; provider-agnostic JCA
-                     APIs for KEM are JDK 21+. See adr/0001 for context. -->
-                <dependency>
-                    <groupId>org.bouncycastle</groupId>
-                    <artifactId>bcprov-jdk18on</artifactId>
-                </dependency>
+                <!-- bcpkix is used only by tests (TestUtil builds X.509 certs via BC
+                     APIs). The hybrid PQ compile-time dependency on bcprov was moved
+                     to sdk-hybrid-bouncycastle when the HybridKeyWrapProvider SPI
+                     was extracted. See adr/0001. -->
                 <dependency>
                     <groupId>org.bouncycastle</groupId>
                     <artifactId>bcpkix-jdk18on</artifactId>

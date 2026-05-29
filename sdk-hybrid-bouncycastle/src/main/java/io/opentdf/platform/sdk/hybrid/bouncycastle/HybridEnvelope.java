@@ -1,12 +1,15 @@
-package io.opentdf.platform.sdk;
+package io.opentdf.platform.sdk.hybrid.bouncycastle;
+
+import io.opentdf.platform.sdk.ECKeyPair;
+import io.opentdf.platform.sdk.SDKException;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 
 /**
- * Dispatcher and shared helpers for hybrid post-quantum key wrapping
- * (X-Wing and NIST EC + ML-KEM).
+ * Shared envelope codec and key-derivation helpers for hybrid post-quantum
+ * key wrapping (X-Wing and NIST EC + ML-KEM).
  *
  * Wire format: ASN.1 DER SEQUENCE with two IMPLICIT context-tagged OCTET STRINGs
  *   SEQUENCE { [0] IMPLICIT OCTET STRING ciphertext, [1] IMPLICIT OCTET STRING encryptedDEK }
@@ -14,35 +17,15 @@ import java.util.Base64;
  * Derived AES-256 wrap key: HKDF-SHA256(combinedSecret, salt=SHA-256("TDF"), info=empty).
  * EncryptedDEK: AES-256-GCM(wrapKey).encrypt(DEK) with 12-byte IV prefix + 16-byte tag.
  */
-final class HybridCrypto {
+final class HybridEnvelope {
 
     static final int WRAP_KEY_SIZE = 32;
 
-    // ASN.1 tag bytes used by the envelope.
     private static final int TAG_SEQUENCE = 0x30;
     private static final int TAG_CONTEXT_PRIMITIVE_0 = 0x80;
     private static final int TAG_CONTEXT_PRIMITIVE_1 = 0x81;
 
-    private HybridCrypto() {}
-
-    /**
-     * Wrap a DEK against a hybrid public-key PEM. Dispatches across X-Wing and NIST hybrid types.
-     * Returns the ASN.1-encoded envelope used in {@code wrappedKey} for {@code hybrid-wrapped} key access.
-     */
-    static byte[] wrapDEK(KeyType keyType, String publicKeyPEM, byte[] dek) {
-        switch (keyType) {
-            case HybridXWingKey:
-                return XWingKeyPair.wrapDEK(XWingKeyPair.pubKeyFromPem(publicKeyPEM), dek);
-            case HybridSecp256r1MLKEM768Key:
-                return HybridNISTKeyPair.P256_MLKEM768.wrapDEK(
-                        HybridNISTKeyPair.P256_MLKEM768.pubKeyFromPem(publicKeyPEM), dek);
-            case HybridSecp384r1MLKEM1024Key:
-                return HybridNISTKeyPair.P384_MLKEM1024.wrapDEK(
-                        HybridNISTKeyPair.P384_MLKEM1024.pubKeyFromPem(publicKeyPEM), dek);
-            default:
-                throw new SDKException("unsupported hybrid key type: " + keyType);
-        }
-    }
+    private HybridEnvelope() {}
 
     /**
      * Build the ASN.1 envelope from a hybrid KEM ciphertext and the AES-GCM(iv||ct) encrypted DEK.
@@ -113,7 +96,6 @@ final class HybridCrypto {
         if (len < 0x80) {
             return new byte[] { (byte) len };
         }
-        // Long form: 0x80 | numBytes, then big-endian length bytes.
         int numBytes = 0;
         int tmp = len;
         while (tmp > 0) { numBytes++; tmp >>>= 8; }
@@ -133,8 +115,6 @@ final class HybridCrypto {
         }
         int numBytes = first & 0x7F;
         if (numBytes == 0 || numBytes > 4) {
-            // indefinite-length (numBytes == 0) is BER-only; DER rejects it.
-            // > 4 would overflow a positive 32-bit int and is implausible for our envelope.
             throw new SDKException("invalid ASN.1 length encoding: numBytes=" + numBytes);
         }
         int len = 0;

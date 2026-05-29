@@ -4,6 +4,7 @@ import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
+import io.opentdf.platform.sdk.hybrid.bouncycastle.HybridTestKeys;
 import com.connectrpc.ResponseMessage;
 import com.connectrpc.UnaryBlockingCall;
 import org.junit.jupiter.api.BeforeAll;
@@ -22,14 +23,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * Mirrors {@code sdk/tdf_hybrid_test.go}. Creates a TDF using each hybrid KAS key type,
- * then asserts the resulting manifest's KeyAccess object has:
- * <ul>
- *   <li>{@code keyType == "hybrid-wrapped"}</li>
- *   <li>{@code ephemeralPublicKey == null} (ephemeral material lives in the wrappedKey envelope)</li>
- *   <li>a {@code wrappedKey} that round-trips back to the original payload key via the matching
- *       private key.</li>
- * </ul>
+ * Lives in package {@code io.opentdf.platform.sdk} so it can construct the
+ * package-private {@link TDF} class directly and use {@code FakeServicesBuilder}
+ * from the sdk test-jar. Keypair material and unwrap are routed through the
+ * {@link HybridKeyWrapProvider} SPI (resolved via {@link HybridKeyWrapResolver})
+ * so this test doesn't import BouncyCastle types itself.
  */
 class TDFHybridTest {
 
@@ -56,55 +54,33 @@ class TDFHybridTest {
 
     @Test
     void createKeyAccessWithXWingKey() throws Exception {
-        XWingKeyPair kp = XWingKeyPair.generate();
-        Manifest.KeyAccess ka = createTDFAndGetFirstKeyAccess(
-                KeyType.HybridXWingKey, kp.publicKeyInPemFormat(), "xwing-kid");
-        assertThat(ka.keyType).isEqualTo("hybrid-wrapped");
-        assertThat(ka.ephemeralPublicKey).isNull();
-        assertThat(ka.wrappedKey).isNotEmpty();
-
-        // Round-trip: unwrap with the matching private key — confirms wire format is valid.
-        byte[] wrappedDer = Base64.getDecoder().decode(ka.wrappedKey);
-        byte[] privRaw = XWingKeyPair.privateKeyFromPem(kp.privateKeyInPemFormat());
-        byte[] symKey = XWingKeyPair.unwrapDEK(privRaw, wrappedDer);
-        assertThat(symKey).hasSize(32);
+        roundTripThroughSPI(KeyType.HybridXWingKey, "xwing-kid");
     }
 
     @Test
     void createKeyAccessWithP256MLKEM768Key() throws Exception {
-        HybridNISTKeyPair kp = HybridNISTKeyPair.P256_MLKEM768.generate();
-        Manifest.KeyAccess ka = createTDFAndGetFirstKeyAccess(
-                KeyType.HybridSecp256r1MLKEM768Key, kp.publicKeyInPemFormat(), "p256mlkem768-kid");
-        assertThat(ka.keyType).isEqualTo("hybrid-wrapped");
-        assertThat(ka.ephemeralPublicKey).isNull();
-        assertThat(ka.wrappedKey).isNotEmpty();
-
-        byte[] wrappedDer = Base64.getDecoder().decode(ka.wrappedKey);
-        byte[] privRaw = HybridNISTKeyPair.P256_MLKEM768.privateKeyFromPem(kp.privateKeyInPemFormat());
-        byte[] symKey = HybridNISTKeyPair.P256_MLKEM768.unwrapDEK(privRaw, wrappedDer);
-        assertThat(symKey).hasSize(32);
+        roundTripThroughSPI(KeyType.HybridSecp256r1MLKEM768Key, "p256mlkem768-kid");
     }
 
     @Test
     void createKeyAccessWithP384MLKEM1024Key() throws Exception {
-        HybridNISTKeyPair kp = HybridNISTKeyPair.P384_MLKEM1024.generate();
-        Manifest.KeyAccess ka = createTDFAndGetFirstKeyAccess(
-                KeyType.HybridSecp384r1MLKEM1024Key, kp.publicKeyInPemFormat(), "p384mlkem1024-kid");
+        roundTripThroughSPI(KeyType.HybridSecp384r1MLKEM1024Key, "p384mlkem1024-kid");
+    }
+
+    private void roundTripThroughSPI(KeyType keyType, String kid) throws Exception {
+        HybridTestKeys.PemPair kp = HybridTestKeys.generate(keyType);
+
+        Manifest.KeyAccess ka = createTDFAndGetFirstKeyAccess(keyType, kp.publicKeyPem, kid);
         assertThat(ka.keyType).isEqualTo("hybrid-wrapped");
         assertThat(ka.ephemeralPublicKey).isNull();
         assertThat(ka.wrappedKey).isNotEmpty();
 
         byte[] wrappedDer = Base64.getDecoder().decode(ka.wrappedKey);
-        byte[] privRaw = HybridNISTKeyPair.P384_MLKEM1024.privateKeyFromPem(kp.privateKeyInPemFormat());
-        byte[] symKey = HybridNISTKeyPair.P384_MLKEM1024.unwrapDEK(privRaw, wrappedDer);
+        HybridKeyWrapProvider provider = HybridKeyWrapResolver.get(keyType);
+        byte[] symKey = provider.unwrapDEK(keyType, kp.privateKeyPem, wrappedDer);
         assertThat(symKey).hasSize(32);
     }
 
-    /**
-     * Build a fake KAS that returns {@code (algorithm, publicKeyPem)} as its public key, then
-     * call {@code TDF.createTDF} on a 32-byte plaintext and return the single KeyAccess produced
-     * in the manifest.
-     */
     private Manifest.KeyAccess createTDFAndGetFirstKeyAccess(KeyType keyType, String publicKeyPem, String kid)
             throws Exception {
         Config.KASInfo kasInfo = new Config.KASInfo();
