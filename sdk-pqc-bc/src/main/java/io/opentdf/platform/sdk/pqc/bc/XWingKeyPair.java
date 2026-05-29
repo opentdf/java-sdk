@@ -1,5 +1,7 @@
-package io.opentdf.platform.sdk;
+package io.opentdf.platform.sdk.pqc.bc;
 
+import io.opentdf.platform.sdk.AesGcm;
+import io.opentdf.platform.sdk.SDKException;
 import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
 import org.bouncycastle.crypto.SecretWithEncapsulation;
 import org.bouncycastle.pqc.crypto.xwing.XWingKEMExtractor;
@@ -15,7 +17,7 @@ import java.security.SecureRandom;
  * X-Wing (X25519 + ML-KEM-768) KEM with the ASN.1 envelope format used by TDF
  * {@code hybrid-wrapped} key access objects. Mirrors {@code lib/ocrypto/xwing.go}.
  */
-final class XWingKeyPair {
+public final class XWingKeyPair {
 
     static final String PEM_BLOCK_PUBLIC_KEY = "XWING PUBLIC KEY";
     static final String PEM_BLOCK_PRIVATE_KEY = "XWING PRIVATE KEY";
@@ -34,7 +36,7 @@ final class XWingKeyPair {
         this.privateKey = privateKey;
     }
 
-    static XWingKeyPair generate() {
+    public static XWingKeyPair generate() {
         XWingKeyPairGenerator gen = new XWingKeyPairGenerator();
         gen.init(new XWingKeyGenerationParameters(new SecureRandom()));
         AsymmetricCipherKeyPair kp = gen.generateKeyPair();
@@ -43,23 +45,23 @@ final class XWingKeyPair {
         return new XWingKeyPair(pub.getEncoded(), priv.getEncoded());
     }
 
-    String publicKeyInPemFormat() {
+    public String publicKeyInPemFormat() {
         return HybridCrypto.rawToPem(PEM_BLOCK_PUBLIC_KEY, publicKey, PUBLIC_KEY_SIZE);
     }
 
-    String privateKeyInPemFormat() {
+    public String privateKeyInPemFormat() {
         return HybridCrypto.rawToPem(PEM_BLOCK_PRIVATE_KEY, privateKey, PRIVATE_KEY_SIZE);
     }
 
-    static byte[] pubKeyFromPem(String pem) {
+    public static byte[] pubKeyFromPem(String pem) {
         return HybridCrypto.decodeSizedPemBlock(pem, PEM_BLOCK_PUBLIC_KEY, PUBLIC_KEY_SIZE);
     }
 
-    static byte[] privateKeyFromPem(String pem) {
+    public static byte[] privateKeyFromPem(String pem) {
         return HybridCrypto.decodeSizedPemBlock(pem, PEM_BLOCK_PRIVATE_KEY, PRIVATE_KEY_SIZE);
     }
 
-    static byte[] wrapDEK(byte[] rawPub, byte[] dek) {
+    public static byte[] wrapDEK(byte[] rawPub, byte[] dek) {
         if (rawPub.length != PUBLIC_KEY_SIZE) {
             throw new SDKException("invalid X-Wing public key size: got " + rawPub.length + " want " + PUBLIC_KEY_SIZE);
         }
@@ -73,7 +75,7 @@ final class XWingKeyPair {
         return HybridCrypto.marshalEnvelope(ciphertext, encryptedDek);
     }
 
-    static byte[] unwrapDEK(byte[] rawPriv, byte[] wrappedDer) {
+    public static byte[] unwrapDEK(byte[] rawPriv, byte[] wrappedDer) {
         if (rawPriv.length != PRIVATE_KEY_SIZE) {
             throw new SDKException("invalid X-Wing private key size: got " + rawPriv.length + " want " + PRIVATE_KEY_SIZE);
         }

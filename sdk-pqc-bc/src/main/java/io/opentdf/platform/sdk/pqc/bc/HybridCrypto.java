@@ -1,4 +1,8 @@
-package io.opentdf.platform.sdk;
+package io.opentdf.platform.sdk.pqc.bc;
+
+import io.opentdf.platform.sdk.ECKeyPair;
+import io.opentdf.platform.sdk.KeyType;
+import io.opentdf.platform.sdk.SDKException;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;

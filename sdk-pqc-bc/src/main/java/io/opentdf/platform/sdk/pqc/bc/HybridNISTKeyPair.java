@@ -1,5 +1,8 @@
-package io.opentdf.platform.sdk;
+package io.opentdf.platform.sdk.pqc.bc;
 
+import io.opentdf.platform.sdk.AesGcm;
+import io.opentdf.platform.sdk.KeyType;
+import io.opentdf.platform.sdk.SDKException;
 import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
 import org.bouncycastle.crypto.SecretWithEncapsulation;
 import org.bouncycastle.pqc.crypto.mlkem.MLKEMExtractor;
@@ -47,9 +50,9 @@ import java.util.Arrays;
  * EC operations use only stdlib JCA. ML-KEM operations use BouncyCastle's
  * low-level API because no JDK 11 stdlib KEM API exists (added in JDK 21).
  */
-final class HybridNISTKeyPair {
+public final class HybridNISTKeyPair {
 
-    static final HybridNISTKeyPair P256_MLKEM768 = new HybridNISTKeyPair(
+    public static final HybridNISTKeyPair P256_MLKEM768 = new HybridNISTKeyPair(
             "secp256r1",
             /* ecPubSize */ 65,
             /* ecPrivSize */ 32,
@@ -60,7 +63,7 @@ final class HybridNISTKeyPair {
             "SECP256R1 MLKEM768 PRIVATE KEY",
             KeyType.HybridSecp256r1MLKEM768Key);
 
-    static final HybridNISTKeyPair P384_MLKEM1024 = new HybridNISTKeyPair(
+    public static final HybridNISTKeyPair P384_MLKEM1024 = new HybridNISTKeyPair(
             "secp384r1",
             /* ecPubSize */ 97,
             /* ecPrivSize */ 48,
@@ -127,7 +130,7 @@ final class HybridNISTKeyPair {
     int ciphertextSize() { return ecPubSize + mlkemCtSize; }
     KeyType keyType() { return keyType; }
 
-    HybridNISTKeyPair generate() {
+    public HybridNISTKeyPair generate() {
         SecureRandom random = new SecureRandom();
 
         // EC half — stdlib KeyPairGenerator gives us scalar + point in one call.
@@ -152,26 +155,26 @@ final class HybridNISTKeyPair {
         return new HybridNISTKeyPair(this, pub, priv);
     }
 
-    String publicKeyInPemFormat() {
+    public String publicKeyInPemFormat() {
         return HybridCrypto.rawToPem(pubPemBlock, publicKey, publicKeySize());
     }
 
-    String privateKeyInPemFormat() {
+    public String privateKeyInPemFormat() {
         return HybridCrypto.rawToPem(privPemBlock, privateKey, privateKeySize());
     }
 
-    byte[] getPublicKey() { return publicKey == null ? null : publicKey.clone(); }
-    byte[] getPrivateKey() { return privateKey == null ? null : privateKey.clone(); }
+    public byte[] getPublicKey() { return publicKey == null ? null : publicKey.clone(); }
+    public byte[] getPrivateKey() { return privateKey == null ? null : privateKey.clone(); }
 
-    byte[] pubKeyFromPem(String pem) {
+    public byte[] pubKeyFromPem(String pem) {
         return HybridCrypto.decodeSizedPemBlock(pem, pubPemBlock, publicKeySize());
     }
 
-    byte[] privateKeyFromPem(String pem) {
+    public byte[] privateKeyFromPem(String pem) {
         return HybridCrypto.decodeSizedPemBlock(pem, privPemBlock, privateKeySize());
     }
 
-    byte[] wrapDEK(byte[] rawPub, byte[] dek) {
+    public byte[] wrapDEK(byte[] rawPub, byte[] dek) {
         if (rawPub.length != publicKeySize()) {
             throw new SDKException("invalid " + keyType + " public key size: got " + rawPub.length + " want " + publicKeySize());
         }
@@ -201,7 +204,7 @@ final class HybridNISTKeyPair {
         return HybridCrypto.marshalEnvelope(hybridCt, encryptedDek);
     }
 
-    byte[] unwrapDEK(byte[] rawPriv, byte[] wrappedDer) {
+    public byte[] unwrapDEK(byte[] rawPriv, byte[] wrappedDer) {
         if (rawPriv.length != privateKeySize()) {
             throw new SDKException("invalid " + keyType + " private key size: got " + rawPriv.length + " want " + privateKeySize());
         }

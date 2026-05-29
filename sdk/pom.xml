@@ -296,6 +296,20 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- Test-jar for shared test fixtures (FakeServicesBuilder, etc.)
+                 consumed by sibling modules like sdk-pqc-bc. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>attach-test-jar</id>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <!-- Plugin to create Javadoc JAR -->
             <plugin>
                 <groupId>org.jetbrains.dokka</groupId>
@@ -483,13 +497,9 @@
                 <activeByDefault>true</activeByDefault>
             </activation>
             <dependencies>
-                <!-- Required for hybrid post-quantum key wrapping (ML-KEM, X-Wing).
-                     No JDK 11 stdlib equivalent exists; provider-agnostic JCA
-                     APIs for KEM are JDK 21+. See adr/0001 for context. -->
-                <dependency>
-                    <groupId>org.bouncycastle</groupId>
-                    <artifactId>bcprov-jdk18on</artifactId>
-                </dependency>
+                <!-- BouncyCastle stays out of the core sdk compile path. PQC primitives
+                     that require BC live in the sibling sdk-pqc-bc module, discovered
+                     at runtime via java.util.ServiceLoader (see KemProvider SPI). -->
                 <dependency>
                     <groupId>org.bouncycastle</groupId>
                     <artifactId>bcpkix-jdk18on</artifactId>

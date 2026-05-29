@@ -1,5 +1,7 @@
-package io.opentdf.platform.sdk;
+package io.opentdf.platform.sdk.pqc.bc;
 
+import io.opentdf.platform.sdk.KeyType;
+import io.opentdf.platform.sdk.SDKException;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
