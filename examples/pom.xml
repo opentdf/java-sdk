@@ -69,6 +69,21 @@
           <version>1.4</version>
       </dependency>
     <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-compress</artifactId>
+        <version>1.26.1</version>
+    </dependency>
+    <dependency>
+        <groupId>com.dylibso.chicory</groupId>
+        <artifactId>runtime</artifactId>
+        <version>1.5.3</version>
+    </dependency>
+    <dependency>
+        <groupId>com.dylibso.chicory</groupId>
+        <artifactId>wasi</artifactId>
+        <version>1.5.3</version>
+    </dependency>
+    <dependency>
         <groupId>org.apache.logging.log4j</groupId>
         <artifactId>log4j-api</artifactId>
     </dependency>
@@ -205,6 +220,12 @@
                   <id>ListSubjectMappings</id>
                   <configuration>
                       <mainClass>io.opentdf.platform.ListSubjectMappings</mainClass>
+                  </configuration>
+              </execution>
+              <execution>
+                  <id>BenchmarkCrossSDK</id>
+                  <configuration>
+                      <mainClass>io.opentdf.platform.BenchmarkCrossSDK</mainClass>
                   </configuration>
               </execution>
           </executions>
