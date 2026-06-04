@@ -1,7 +1,6 @@
 package io.opentdf.platform.sdk.pqc.bc;
 
 import io.opentdf.platform.sdk.KeyType;
-import io.opentdf.platform.sdk.SDKException;
 import io.opentdf.platform.sdk.spi.KemProvider;
 
 import java.util.EnumSet;
@@ -38,33 +37,11 @@ public final class BouncyCastleKemProvider implements KemProvider {
 
     @Override
     public byte[] wrapDEK(KeyType keyType, String publicKeyPEM, byte[] dek) {
-        switch (keyType) {
-            case HybridXWingKey:
-                return XWingKeyPair.wrapDEK(XWingKeyPair.pubKeyFromPem(publicKeyPEM), dek);
-            case HybridSecp256r1MLKEM768Key:
-                return HybridNISTKeyPair.P256_MLKEM768.wrapDEK(
-                        HybridNISTKeyPair.P256_MLKEM768.pubKeyFromPem(publicKeyPEM), dek);
-            case HybridSecp384r1MLKEM1024Key:
-                return HybridNISTKeyPair.P384_MLKEM1024.wrapDEK(
-                        HybridNISTKeyPair.P384_MLKEM1024.pubKeyFromPem(publicKeyPEM), dek);
-            default:
-                throw new SDKException("BouncyCastleKemProvider does not handle: " + keyType);
-        }
+        return HybridCrypto.wrapDEK(keyType, publicKeyPEM, dek);
     }
 
     @Override
     public byte[] unwrapDEK(KeyType keyType, String privateKeyPEM, byte[] wrapped) {
-        switch (keyType) {
-            case HybridXWingKey:
-                return XWingKeyPair.unwrapDEK(XWingKeyPair.privateKeyFromPem(privateKeyPEM), wrapped);
-            case HybridSecp256r1MLKEM768Key:
-                return HybridNISTKeyPair.P256_MLKEM768.unwrapDEK(
-                        HybridNISTKeyPair.P256_MLKEM768.privateKeyFromPem(privateKeyPEM), wrapped);
-            case HybridSecp384r1MLKEM1024Key:
-                return HybridNISTKeyPair.P384_MLKEM1024.unwrapDEK(
-                        HybridNISTKeyPair.P384_MLKEM1024.privateKeyFromPem(privateKeyPEM), wrapped);
-            default:
-                throw new SDKException("BouncyCastleKemProvider does not handle: " + keyType);
-        }
+        return HybridCrypto.unwrapDEK(keyType, privateKeyPEM, wrapped);
     }
 }

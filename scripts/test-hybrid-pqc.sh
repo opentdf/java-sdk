@@ -61,6 +61,19 @@ alg_to_string() {
     esac
 }
 
+# Map KeyType enum name → expected SPKI OID inside the standard PUBLIC KEY PEM
+# (per opentdf/platform PR #3563: draft-ietf-lamps-pq-composite-kem-14 +
+# draft-connolly-cfrg-xwing-kem-10). The pre-flight check below extracts the
+# SPKI AlgorithmIdentifier OID via openssl asn1parse and compares it here.
+alg_to_oid() {
+    case "$1" in
+        HybridXWingKey)              echo "1.3.6.1.4.1.62253.25722" ;;
+        HybridSecp256r1MLKEM768Key)  echo "1.3.6.1.5.5.7.6.59" ;;
+        HybridSecp384r1MLKEM1024Key) echo "1.3.6.1.5.5.7.6.63" ;;
+        *) return 1 ;;
+    esac
+}
+
 WORK_DIR="$(mktemp -d -t hybrid-pqc-XXXXXX)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
@@ -120,14 +133,31 @@ if [[ $SKIP_KAS_CHECK -eq 0 ]] && command -v grpcurl >/dev/null 2>&1; then
             fail "Is the platform running with the PQC-capable KAS branch and the key registered?"
             exit 1
         fi
-        # Hybrid PEMs have XWING or MLKEM markers; RSA/EC PEMs don't.
+        # Post-PR-3563: all hybrid PEMs are standard "-----BEGIN PUBLIC KEY-----"
+        # (SPKI). Algorithm is identified by the OID inside, not the block name.
+        # Verify with openssl asn1parse when available; otherwise just confirm
+        # the block type is correct.
         first_line=$(echo "$pem" | head -1)
-        if [[ "$first_line" != *"XWING"* && "$first_line" != *"MLKEM"* && "$first_line" != *"HPQT"* && "$first_line" != *"HYBRID"* ]]; then
-            fail "$alg: KAS returned a non-hybrid PEM (first line: $first_line)"
-            fail "The KAS doesn't appear to have a hybrid key registered for $alg"
+        if [[ "$first_line" != *"BEGIN PUBLIC KEY"* ]]; then
+            fail "$alg: KAS returned a non-SPKI PEM (first line: $first_line)"
             exit 1
         fi
-        pass "$alg: KAS returns hybrid PEM ($first_line)"
+        expected_oid=$(alg_to_oid "$alg_name")
+        if command -v openssl >/dev/null 2>&1; then
+            actual_oid=$(printf '%s\n' "$pem" | openssl asn1parse 2>/dev/null \
+                | awk '/OBJECT/ {sub(/^:/, "", $NF); print $NF; exit}')
+            if [[ -z "$actual_oid" ]]; then
+                fail "$alg: could not extract SPKI OID via openssl asn1parse"
+                exit 1
+            fi
+            if [[ "$actual_oid" != "$expected_oid" ]]; then
+                fail "$alg: SPKI OID mismatch — expected $expected_oid, got $actual_oid"
+                exit 1
+            fi
+            pass "$alg: KAS returns SPKI PEM with OID $actual_oid"
+        else
+            pass "$alg: KAS returns SPKI PEM (openssl not available; OID not verified)"
+        fi
     done
 else
     info "Skipping KAS pre-flight check"

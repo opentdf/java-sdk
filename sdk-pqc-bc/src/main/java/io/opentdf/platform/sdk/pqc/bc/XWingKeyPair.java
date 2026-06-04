@@ -16,15 +16,21 @@ import java.security.SecureRandom;
 /**
  * X-Wing (X25519 + ML-KEM-768) KEM with the ASN.1 envelope format used by TDF
  * {@code hybrid-wrapped} key access objects. Mirrors {@code lib/ocrypto/xwing.go}.
+ *
+ * <p>PEM is now standard SPKI/PKCS#8 with OID {@link HybridSpki#OID_XWING}
+ * ({@code 1.3.6.1.4.1.62253.25722}); custom {@code XWING PUBLIC KEY} block
+ * names are gone (per platform PR #3563, draft-connolly-cfrg-xwing-kem-10).
+ * The raw 1216-byte public key and 32-byte private seed are unchanged —
+ * they're just wrapped in SPKI/PKCS#8.
+ *
+ * <p>The KEM combiner is unchanged (delegated to BC's X-Wing primitive); the
+ * TDF DEK wrap step still uses HKDF-SHA256 with the standard TDF salt.
  */
 public final class XWingKeyPair {
 
-    static final String PEM_BLOCK_PUBLIC_KEY = "XWING PUBLIC KEY";
-    static final String PEM_BLOCK_PRIVATE_KEY = "XWING PRIVATE KEY";
-
     static final int PUBLIC_KEY_SIZE = 1216;
     /** X-Wing private key is a 32-byte seed; full X25519 + ML-KEM-768 components are derived at runtime. */
-    static final int PRIVATE_KEY_SIZE = 32;
+    static final int PRIVATE_KEY_SEED_SIZE = 32;
     static final int CIPHERTEXT_SIZE = 1120;
     static final int SHARED_SECRET_SIZE = 32;
 
@@ -46,19 +52,27 @@ public final class XWingKeyPair {
     }
 
     public String publicKeyInPemFormat() {
-        return HybridCrypto.rawToPem(PEM_BLOCK_PUBLIC_KEY, publicKey, PUBLIC_KEY_SIZE);
+        return HybridSpki.encodeSpkiPem(HybridSpki.OID_XWING, publicKey);
     }
 
     public String privateKeyInPemFormat() {
-        return HybridCrypto.rawToPem(PEM_BLOCK_PRIVATE_KEY, privateKey, PRIVATE_KEY_SIZE);
+        return HybridSpki.encodePkcs8Pem(HybridSpki.OID_XWING, privateKey);
     }
 
     public static byte[] pubKeyFromPem(String pem) {
-        return HybridCrypto.decodeSizedPemBlock(pem, PEM_BLOCK_PUBLIC_KEY, PUBLIC_KEY_SIZE);
+        byte[] raw = HybridSpki.decodeSpkiPem(pem, HybridSpki.OID_XWING);
+        if (raw.length != PUBLIC_KEY_SIZE) {
+            throw new SDKException("invalid X-Wing public key size: got " + raw.length + " want " + PUBLIC_KEY_SIZE);
+        }
+        return raw;
     }
 
     public static byte[] privateKeyFromPem(String pem) {
-        return HybridCrypto.decodeSizedPemBlock(pem, PEM_BLOCK_PRIVATE_KEY, PRIVATE_KEY_SIZE);
+        byte[] raw = HybridSpki.decodePkcs8Pem(pem, HybridSpki.OID_XWING);
+        if (raw.length != PRIVATE_KEY_SEED_SIZE) {
+            throw new SDKException("invalid X-Wing private key seed size: got " + raw.length + " want " + PRIVATE_KEY_SEED_SIZE);
+        }
+        return raw;
     }
 
     public static byte[] wrapDEK(byte[] rawPub, byte[] dek) {
@@ -76,8 +90,8 @@ public final class XWingKeyPair {
     }
 
     public static byte[] unwrapDEK(byte[] rawPriv, byte[] wrappedDer) {
-        if (rawPriv.length != PRIVATE_KEY_SIZE) {
-            throw new SDKException("invalid X-Wing private key size: got " + rawPriv.length + " want " + PRIVATE_KEY_SIZE);
+        if (rawPriv.length != PRIVATE_KEY_SEED_SIZE) {
+            throw new SDKException("invalid X-Wing private key size: got " + rawPriv.length + " want " + PRIVATE_KEY_SEED_SIZE);
         }
         byte[][] parts = HybridCrypto.unmarshalEnvelope(wrappedDer);
         byte[] ciphertext = parts[0];

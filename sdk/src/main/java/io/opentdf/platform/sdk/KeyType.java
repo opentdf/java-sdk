@@ -89,7 +89,16 @@ public enum KeyType {
             case KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP521R1:
                 return KeyType.EC521Key;
             default:
-                throw new IllegalArgumentException("Unsupported algorithm: " + algorithm);
+                // Hybrid PQC algorithms (HybridXWingKey, HybridSecp256r1MLKEM768Key,
+                // HybridSecp384r1MLKEM1024Key) are not yet mapped here — the platform's
+                // KasPublicKeyAlgEnum proto definitions don't include them at the time
+                // of writing. When they do, add cases above. Callers can work around
+                // this gap by setting --encap-key-type (cmdline) or
+                // Config.WithWrappingKeyAlg (SDK), both of which bypass this mapping.
+                throw new IllegalArgumentException(
+                        "Unsupported KAS public-key algorithm: " + algorithm
+                        + " — this may be a PQC algorithm not yet mapped by the SDK. "
+                        + "See KeyType.java for currently-supported algorithms.");
         }
     }
 

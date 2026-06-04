@@ -6,7 +6,6 @@ import io.opentdf.platform.sdk.SDKException;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Base64;
 
 /**
  * Dispatcher and shared helpers for hybrid post-quantum key wrapping
@@ -30,7 +29,9 @@ final class HybridCrypto {
     private HybridCrypto() {}
 
     /**
-     * Wrap a DEK against a hybrid public-key PEM. Dispatches across X-Wing and NIST hybrid types.
+     * Wrap a DEK against a hybrid public-key PEM. Single dispatch site for all
+     * hybrid algorithms — {@link BouncyCastleKemProvider} delegates here so a
+     * new hybrid algorithm only needs one switch update.
      * Returns the ASN.1-encoded envelope used in {@code wrappedKey} for {@code hybrid-wrapped} key access.
      */
     static byte[] wrapDEK(KeyType keyType, String publicKeyPEM, byte[] dek) {
@@ -38,11 +39,30 @@ final class HybridCrypto {
             case HybridXWingKey:
                 return XWingKeyPair.wrapDEK(XWingKeyPair.pubKeyFromPem(publicKeyPEM), dek);
             case HybridSecp256r1MLKEM768Key:
-                return HybridNISTKeyPair.P256_MLKEM768.wrapDEK(
-                        HybridNISTKeyPair.P256_MLKEM768.pubKeyFromPem(publicKeyPEM), dek);
+                return HybridNISTAlgorithm.P256_MLKEM768.wrapDEK(
+                        HybridNISTAlgorithm.P256_MLKEM768.pubKeyFromPem(publicKeyPEM), dek);
             case HybridSecp384r1MLKEM1024Key:
-                return HybridNISTKeyPair.P384_MLKEM1024.wrapDEK(
-                        HybridNISTKeyPair.P384_MLKEM1024.pubKeyFromPem(publicKeyPEM), dek);
+                return HybridNISTAlgorithm.P384_MLKEM1024.wrapDEK(
+                        HybridNISTAlgorithm.P384_MLKEM1024.pubKeyFromPem(publicKeyPEM), dek);
+            default:
+                throw new SDKException("unsupported hybrid key type: " + keyType);
+        }
+    }
+
+    /**
+     * Inverse of {@link #wrapDEK}; same dispatch table. Used by
+     * {@link BouncyCastleKemProvider#unwrapDEK} and by unit tests.
+     */
+    static byte[] unwrapDEK(KeyType keyType, String privateKeyPEM, byte[] wrapped) {
+        switch (keyType) {
+            case HybridXWingKey:
+                return XWingKeyPair.unwrapDEK(XWingKeyPair.privateKeyFromPem(privateKeyPEM), wrapped);
+            case HybridSecp256r1MLKEM768Key:
+                return HybridNISTAlgorithm.P256_MLKEM768.unwrapDEK(
+                        HybridNISTAlgorithm.P256_MLKEM768.privateKeyFromPem(privateKeyPEM), wrapped);
+            case HybridSecp384r1MLKEM1024Key:
+                return HybridNISTAlgorithm.P384_MLKEM1024.unwrapDEK(
+                        HybridNISTAlgorithm.P384_MLKEM1024.privateKeyFromPem(privateKeyPEM), wrapped);
             default:
                 throw new SDKException("unsupported hybrid key type: " + keyType);
         }
@@ -163,7 +183,8 @@ final class HybridCrypto {
         }
     }
 
-    private static byte[] concat(byte[] a, byte[] b) {
+    /** Single concat helper for the {@code pqc.bc} package. */
+    static byte[] concat(byte[] a, byte[] b) {
         byte[] out = new byte[a.length + b.length];
         System.arraycopy(a, 0, out, 0, a.length);
         System.arraycopy(b, 0, out, a.length, b.length);
@@ -181,8 +202,19 @@ final class HybridCrypto {
 
     /**
      * SHA-256("TDF") — matches the Go {@code defaultTDFSalt()} and Java {@code TDF.GLOBAL_KEY_SALT}.
+     *
+     * <p>Duplicated rather than reusing {@code TDF.GLOBAL_KEY_SALT} because the
+     * {@code TDF} class is package-private to {@code io.opentdf.platform.sdk}
+     * and unreachable from this {@code pqc.bc} package. Computed once at class
+     * load and returned as a defensive clone (HKDF input must not mutate).
      */
     static byte[] defaultTDFSalt() {
+        return DEFAULT_TDF_SALT.clone();
+    }
+
+    private static final byte[] DEFAULT_TDF_SALT = computeDefaultTDFSalt();
+
+    private static byte[] computeDefaultTDFSalt() {
         try {
             MessageDigest d = MessageDigest.getInstance("SHA-256");
             d.update("TDF".getBytes());
@@ -192,38 +224,4 @@ final class HybridCrypto {
         }
     }
 
-    /**
-     * Encode a raw key into a PEM block with the given header type.
-     */
-    static String rawToPem(String blockType, byte[] raw, int expectedSize) {
-        if (raw.length != expectedSize) {
-            throw new SDKException("invalid " + blockType + " size: got " + raw.length + " want " + expectedSize);
-        }
-        String b64 = Base64.getMimeEncoder(64, new byte[] { '\n' }).encodeToString(raw);
-        return "-----BEGIN " + blockType + "-----\n" + b64 + "\n-----END " + blockType + "-----\n";
-    }
-
-    /**
-     * Decode a PEM block of the expected type and content size. Strict on header type and size.
-     */
-    static byte[] decodeSizedPemBlock(String pem, String expectedType, int expectedSize) {
-        String header = "-----BEGIN " + expectedType + "-----";
-        String footer = "-----END " + expectedType + "-----";
-        int headerIdx = pem.indexOf(header);
-        int footerIdx = pem.indexOf(footer);
-        if (headerIdx < 0 || footerIdx < 0 || footerIdx <= headerIdx) {
-            throw new SDKException("failed to parse PEM formatted " + expectedType);
-        }
-        String body = pem.substring(headerIdx + header.length(), footerIdx).replaceAll("\\s", "");
-        byte[] raw;
-        try {
-            raw = Base64.getDecoder().decode(body);
-        } catch (IllegalArgumentException e) {
-            throw new SDKException("failed to base64-decode " + expectedType + " PEM body", e);
-        }
-        if (raw.length != expectedSize) {
-            throw new SDKException("invalid " + expectedType + " size: got " + raw.length + " want " + expectedSize);
-        }
-        return raw;
-    }
 }

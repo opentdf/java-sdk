@@ -4,6 +4,7 @@ import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
+import io.opentdf.platform.sdk.pqc.bc.HybridNISTAlgorithm;
 import io.opentdf.platform.sdk.pqc.bc.HybridNISTKeyPair;
 import io.opentdf.platform.sdk.pqc.bc.XWingKeyPair;
 import com.connectrpc.ResponseMessage;
@@ -74,7 +75,7 @@ class TDFHybridTest {
 
     @Test
     void createKeyAccessWithP256MLKEM768Key() throws Exception {
-        HybridNISTKeyPair kp = HybridNISTKeyPair.P256_MLKEM768.generate();
+        HybridNISTKeyPair kp = HybridNISTAlgorithm.P256_MLKEM768.generate();
         Manifest.KeyAccess ka = createTDFAndGetFirstKeyAccess(
                 KeyType.HybridSecp256r1MLKEM768Key, kp.publicKeyInPemFormat(), "p256mlkem768-kid");
         assertThat(ka.keyType).isEqualTo("hybrid-wrapped");
@@ -82,14 +83,14 @@ class TDFHybridTest {
         assertThat(ka.wrappedKey).isNotEmpty();
 
         byte[] wrappedDer = Base64.getDecoder().decode(ka.wrappedKey);
-        byte[] privRaw = HybridNISTKeyPair.P256_MLKEM768.privateKeyFromPem(kp.privateKeyInPemFormat());
-        byte[] symKey = HybridNISTKeyPair.P256_MLKEM768.unwrapDEK(privRaw, wrappedDer);
+        byte[] privRaw = HybridNISTAlgorithm.P256_MLKEM768.privateKeyFromPem(kp.privateKeyInPemFormat());
+        byte[] symKey = HybridNISTAlgorithm.P256_MLKEM768.unwrapDEK(privRaw, wrappedDer);
         assertThat(symKey).hasSize(32);
     }
 
     @Test
     void createKeyAccessWithP384MLKEM1024Key() throws Exception {
-        HybridNISTKeyPair kp = HybridNISTKeyPair.P384_MLKEM1024.generate();
+        HybridNISTKeyPair kp = HybridNISTAlgorithm.P384_MLKEM1024.generate();
         Manifest.KeyAccess ka = createTDFAndGetFirstKeyAccess(
                 KeyType.HybridSecp384r1MLKEM1024Key, kp.publicKeyInPemFormat(), "p384mlkem1024-kid");
         assertThat(ka.keyType).isEqualTo("hybrid-wrapped");
@@ -97,8 +98,8 @@ class TDFHybridTest {
         assertThat(ka.wrappedKey).isNotEmpty();
 
         byte[] wrappedDer = Base64.getDecoder().decode(ka.wrappedKey);
-        byte[] privRaw = HybridNISTKeyPair.P384_MLKEM1024.privateKeyFromPem(kp.privateKeyInPemFormat());
-        byte[] symKey = HybridNISTKeyPair.P384_MLKEM1024.unwrapDEK(privRaw, wrappedDer);
+        byte[] privRaw = HybridNISTAlgorithm.P384_MLKEM1024.privateKeyFromPem(kp.privateKeyInPemFormat());
+        byte[] symKey = HybridNISTAlgorithm.P384_MLKEM1024.unwrapDEK(privRaw, wrappedDer);
         assertThat(symKey).hasSize(32);
     }
 

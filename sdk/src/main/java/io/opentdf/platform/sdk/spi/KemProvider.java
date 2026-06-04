@@ -24,7 +24,11 @@ public interface KemProvider {
     /**
      * @return the {@link KeyType}s this provider can wrap and unwrap.
      *         Used by {@link KemProviders} to build the dispatch table at
-     *         registration time.
+     *         registration time. The returned set must be non-null and should
+     *         be unmodifiable and safe for concurrent iteration —
+     *         {@link KemProviders} reads it once at registration and may
+     *         retain a reference. {@link java.util.EnumSet#of} or
+     *         {@link java.util.Collections#unmodifiableSet} are both fine.
      */
     Set<KeyType> supportedKeyTypes();
 
