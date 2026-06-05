@@ -287,13 +287,26 @@
             <modules>
                 <module>sdk</module>
                 <module>sdk-fips-bouncycastle</module>
-                <module>sdk-pqc-bc</module>
                 <module>cmdline</module>
                 <module>examples</module>
             </modules>
             <activation>
                 <activeByDefault>true</activeByDefault>
             </activation>
+        </profile>
+        <profile>
+            <!-- sdk-pqc-bc is gated behind the non-fips profile because its
+                 BC compile dependency (bcprov-jdk18on) collides with bc-fips
+                 on the same package namespace. A FIPS build (mvn -P fips,!non-fips)
+                 must omit sdk-pqc-bc from the reactor entirely; consumers who
+                 want hybrid PQC opt in via the non-fips profile. -->
+            <id>non-fips</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <modules>
+                <module>sdk-pqc-bc</module>
+            </modules>
         </profile>
         <profile>
             <id>stage</id>
