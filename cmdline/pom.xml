@@ -77,17 +77,8 @@
             <artifactId>sdk</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <!-- Pulls the BouncyCastle KemProvider onto the classpath at runtime
-             so cmdline supports hybrid PQC (X-Wing, ECDH+ML-KEM). Discovered
-             via ServiceLoader; cmdline has no compile-time reference to BC.
-             FIPS deployments should omit this dep. -->
-        <dependency>
-            <groupId>io.opentdf.platform</groupId>
-            <artifactId>sdk-pqc-bc</artifactId>
-            <version>${project.version}</version>
-            <scope>runtime</scope>
-        </dependency>
     </dependencies>
+
     <profiles>
         <profile>
             <id>fips</id>
@@ -99,6 +90,25 @@
                     <groupId>io.opentdf.platform</groupId>
                     <artifactId>sdk-fips-bouncycastle</artifactId>
                     <version>${project.version}</version>
+                </dependency>
+            </dependencies>
+        </profile>
+        <!-- Pulls the BouncyCastle KemProvider onto the classpath at runtime so
+             cmdline supports hybrid PQC (X-Wing, ECDH+ML-KEM). Gated behind
+             non-fips to mirror the reactor gating in the root pom: a fips
+             build does NOT include sdk-pqc-bc, so cmdline must not declare
+             a hard dep on it under fips either. -->
+        <profile>
+            <id>non-fips</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>io.opentdf.platform</groupId>
+                    <artifactId>sdk-pqc-bc</artifactId>
+                    <version>${project.version}</version>
+                    <scope>runtime</scope>
                 </dependency>
             </dependencies>
         </profile>
