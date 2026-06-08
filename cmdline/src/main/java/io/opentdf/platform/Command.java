@@ -58,11 +58,29 @@ class Versions {
     public static final String TDF_SPEC = "4.3.0";
 }
 
-@CommandLine.Command(name = "tdf", subcommands = { HelpCommand.class }, version = "{\"version\":\"" + Versions.SDK
+@CommandLine.Command(name = "tdf", subcommands = { HelpCommand.class, Command.Supports.class }, version = "{\"version\":\"" + Versions.SDK
         + "\",\"tdfSpecVersion\":\"" + Versions.TDF_SPEC + "\"}")
 class Command {
     @Option(names = { "-V", "--version" }, versionHelp = true, description = "display version info")
     boolean versionInfoRequested;
+
+    @CommandLine.Command(name = "supports", description = "Check if a feature is supported")
+    static class Supports implements Runnable {
+        @CommandLine.Parameters(index = "0", description = "Feature to check (e.g., dpop)")
+        private String feature;
+
+        @Override
+        public void run() {
+            // Check if the requested feature is supported
+            if ("dpop".equalsIgnoreCase(feature)) {
+                // DPoP (RFC 9449) is supported
+                System.exit(0);
+            } else {
+                // Unknown or unsupported feature
+                System.exit(1);
+            }
+        }
+    }
 
     private static class AssertionKeyDeserializer implements JsonDeserializer<AssertionConfig.AssertionKey> {
         @Override
