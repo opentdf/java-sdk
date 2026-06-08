@@ -64,6 +64,7 @@ public class SDKBuilder {
     private AuthorizationGrant authzGrant;
     private ProtocolType protocolType = ProtocolType.CONNECT;
     private SrtSigner srtSigner;
+    private RSAKey dpopKey;
 
     private static final Logger logger = LoggerFactory.getLogger(SDKBuilder.class);
 
@@ -213,6 +214,18 @@ public class SDKBuilder {
         return this;
     }
 
+    /**
+     * Configure a custom RSA key for DPoP (RFC 9449) proof generation.
+     * If not provided, the SDK will auto-generate an ephemeral RSA-2048 key.
+     *
+     * @param dpopKey RSA key to use for DPoP proofs
+     * @return this builder instance for method chaining
+     */
+    public SDKBuilder dpopKey(RSAKey dpopKey) {
+        this.dpopKey = dpopKey;
+        return this;
+    }
+
     private Interceptor getAuthInterceptor(RSAKey rsaKey) {
         if (platformEndpoint == null) {
             throw new SDKException("cannot build an SDK without specifying the platform endpoint");
@@ -305,20 +318,25 @@ public class SDKBuilder {
                     "gRPC-Web is designed for web browsers and typically operates over HTTP/1.1, " +
                     "while plaintext connections force HTTP/2 prior knowledge.");
         }
-        
-        RSAKey dpopKey;
-        try {
-            dpopKey = new RSAKeyGenerator(2048)
-                    .keyUse(KeyUse.SIGNATURE)
-                    .keyID(UUID.randomUUID().toString())
-                    .generate();
-        } catch (JOSEException e) {
-            throw new SDKException("Error generating DPoP key", e);
+
+        // Use provided DPoP key or generate an ephemeral one
+        RSAKey effectiveDpopKey;
+        if (this.dpopKey != null) {
+            effectiveDpopKey = this.dpopKey;
+        } else {
+            try {
+                effectiveDpopKey = new RSAKeyGenerator(2048)
+                        .keyUse(KeyUse.SIGNATURE)
+                        .keyID(UUID.randomUUID().toString())
+                        .generate();
+            } catch (JOSEException e) {
+                throw new SDKException("Error generating DPoP key", e);
+            }
         }
 
         this.platformEndpoint = AddressNormalizer.normalizeAddress(this.platformEndpoint, this.usePlainText);
-        var authInterceptor = getAuthInterceptor(dpopKey);
-        var srtSignerToUse = this.srtSigner == null ? new DefaultSrtSigner(dpopKey) : this.srtSigner;
+        var authInterceptor = getAuthInterceptor(effectiveDpopKey);
+        var srtSignerToUse = this.srtSigner == null ? new DefaultSrtSigner(effectiveDpopKey) : this.srtSigner;
         var kasClient = getKASClient(srtSignerToUse, authInterceptor);
         var httpClient = getHttpClient();
         var client = getProtocolClient(platformEndpoint, httpClient, authInterceptor);

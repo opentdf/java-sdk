@@ -47,6 +47,12 @@ private class AuthInterceptor(private val ts: TokenSource) : Interceptor{
                 )
             },
             responseFunction = { resp ->
+                // Check for DPoP-Nonce in successful responses and cache it
+                val dpopNonce = resp.headers["dpop-nonce"]?.firstOrNull()
+                    ?: resp.headers["DPoP-Nonce"]?.firstOrNull()
+                if (dpopNonce != null && resp.code == 200) {
+                    ts.cacheNonce(resp.message.request().url().toUrl(), dpopNonce)
+                }
                 resp
             },
         )

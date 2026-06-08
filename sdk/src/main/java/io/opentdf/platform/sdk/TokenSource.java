@@ -22,6 +22,8 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.time.Instant;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The TokenSource class is responsible for providing authorization tokens. It handles
@@ -35,6 +37,8 @@ class TokenSource {
     private final URI tokenEndpointURI;
     private final AuthorizationGrant authzGrant;
     private final SSLSocketFactory sslSocketFactory;
+    // Cache for server-issued nonces, keyed by origin (scheme://host:port)
+    private final Map<String, String> nonceCache = new ConcurrentHashMap<>();
     private static final Logger logger = LoggerFactory.getLogger(TokenSource.class);
 
 
@@ -73,6 +77,18 @@ class TokenSource {
     }
 
     public AuthHeaders getAuthHeaders(URL url, String method) {
+        return getAuthHeaders(url, method, null);
+    }
+
+    /**
+     * Get authorization headers for a request, including DPoP proof.
+     *
+     * @param url The URL being accessed
+     * @param method The HTTP method
+     * @param nonce Optional server-issued nonce to include in the proof
+     * @return AuthHeaders containing Authorization and DPoP headers
+     */
+    public AuthHeaders getAuthHeaders(URL url, String method, String nonce) {
         // Get the access token
         AccessToken t = getToken();
 
@@ -80,7 +96,19 @@ class TokenSource {
         String dpopProof;
         try {
             DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(rsaKey, JWSAlgorithm.RS256);
-            SignedJWT proof = dpopFactory.createDPoPJWT(method, url.toURI(), t);
+
+            // Get cached nonce if not explicitly provided
+            if (nonce == null) {
+                String origin = getOrigin(url);
+                nonce = nonceCache.get(origin);
+            }
+
+            SignedJWT proof;
+            if (nonce != null) {
+                proof = dpopFactory.createDPoPJWT(method, url.toURI(), t, nonce);
+            } else {
+                proof = dpopFactory.createDPoPJWT(method, url.toURI(), t);
+            }
             dpopProof = proof.serialize();
         } catch (URISyntaxException e) {
             throw new SDKException("Invalid URI syntax for DPoP proof creation", e);
@@ -91,6 +119,34 @@ class TokenSource {
         return new AuthHeaders(
                 "DPoP " + t.getValue(),
                 dpopProof);
+    }
+
+    /**
+     * Cache a server-issued nonce for the given URL's origin.
+     *
+     * @param url The URL from which the nonce was received
+     * @param nonce The nonce value to cache
+     */
+    public void cacheNonce(URL url, String nonce) {
+        if (nonce != null && !nonce.isEmpty()) {
+            String origin = getOrigin(url);
+            nonceCache.put(origin, nonce);
+            logger.trace("Cached DPoP nonce for origin: {}", origin);
+        }
+    }
+
+    /**
+     * Get the origin (scheme://host:port) from a URL for nonce caching.
+     *
+     * @param url The URL to extract origin from
+     * @return The origin string
+     */
+    private String getOrigin(URL url) {
+        int port = url.getPort();
+        if (port == -1) {
+            port = url.getDefaultPort();
+        }
+        return url.getProtocol() + "://" + url.getHost() + ":" + port;
     }
 
     /**
