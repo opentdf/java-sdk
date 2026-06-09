@@ -2,6 +2,7 @@ package io.opentdf.platform.sdk;
 
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.SignedJWT;
 import com.nimbusds.oauth2.sdk.AuthorizationGrant;
@@ -14,6 +15,8 @@ import com.nimbusds.oauth2.sdk.dpop.DefaultDPoPProofFactory;
 import com.nimbusds.oauth2.sdk.http.HTTPRequest;
 import com.nimbusds.oauth2.sdk.http.HTTPResponse;
 import com.nimbusds.oauth2.sdk.token.AccessToken;
+import com.nimbusds.openid.connect.sdk.Nonce;
+import nl.altindag.ssl.SSLFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,7 +36,8 @@ class TokenSource {
     private Instant tokenExpiryTime;
     private AccessToken token;
     private final ClientAuthentication clientAuth;
-    private final RSAKey rsaKey;
+    private final JWK dpopJwk;
+    private final JWSAlgorithm dpopAlg;
     private final URI tokenEndpointURI;
     private final AuthorizationGrant authzGrant;
     private final SSLSocketFactory sslSocketFactory;
@@ -43,15 +47,17 @@ class TokenSource {
 
 
     /**
-     * Constructs a new TokenSource with the specified client authentication and RSA key.
+     * Constructs a new TokenSource with the specified client authentication and DPoP key.
      *
      * @param clientAuth        the client authentication to be used by the interceptor
-     * @param rsaKey            the RSA key to be used by the interceptor
+     * @param dpopJwk    the JWK (RSA or EC) to use for DPoP proof generation
+     * @param dpopAlg    the JWS algorithm matching the key type
      * @param sslSocketFactory  Optional SSLSocketFactory for token endpoint requests
      */
-    public TokenSource(ClientAuthentication clientAuth, RSAKey rsaKey, URI tokenEndpointURI, AuthorizationGrant authzGrant, SSLSocketFactory sslSocketFactory) {
+    public TokenSource(ClientAuthentication clientAuth, JWK dpopJwk, JWSAlgorithm dpopAlg, URI tokenEndpointURI, AuthorizationGrant authzGrant, SSLSocketFactory sslSocketFactory) {
         this.clientAuth = clientAuth;
-        this.rsaKey = rsaKey;
+        this.dpopJwk = dpopJwk;
+        this.dpopAlg = dpopAlg;
         this.tokenEndpointURI = tokenEndpointURI;
         this.sslSocketFactory = sslSocketFactory;
         this.authzGrant = authzGrant;
@@ -95,7 +101,7 @@ class TokenSource {
         // Build the DPoP proof for each request
         String dpopProof;
         try {
-            DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(rsaKey, JWSAlgorithm.RS256);
+            DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(dpopJwk, dpopAlg);
 
             // Get cached nonce if not explicitly provided
             if (nonce == null) {
@@ -105,7 +111,7 @@ class TokenSource {
 
             SignedJWT proof;
             if (nonce != null) {
-                proof = dpopFactory.createDPoPJWT(method, url.toURI(), t, nonce);
+                proof = dpopFactory.createDPoPJWT(method, url.toURI(), t, new Nonce(nonce));
             } else {
                 proof = dpopFactory.createDPoPJWT(method, url.toURI(), t);
             }
@@ -169,7 +175,7 @@ class TokenSource {
                     httpRequest.setSSLSocketFactory(sslSocketFactory);
                 }
 
-                DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(rsaKey, JWSAlgorithm.RS256);
+                DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(dpopJwk, dpopAlg);
 
                 SignedJWT proof = dpopFactory.createDPoPJWT(httpRequest.getMethod().name(), httpRequest.getURI());
 

@@ -1,15 +1,19 @@
 package io.opentdf.platform.sdk;
 
 import com.connectrpc.ConnectException;
-import com.connectrpc.Interceptor;
 import com.connectrpc.ProtocolClientConfig;
 import com.connectrpc.extensions.GoogleJavaProtobufStrategy;
 import com.connectrpc.impl.ProtocolClient;
 import com.connectrpc.okhttp.ConnectOkHttpClient;
 import com.connectrpc.protocols.GETConfiguration;
 import com.nimbusds.jose.JOSEException;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.jwk.Curve;
+import com.nimbusds.jose.jwk.ECKey;
+import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.RSAKey;
+import com.nimbusds.jose.jwk.gen.ECKeyGenerator;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.oauth2.sdk.AuthorizationGrant;
 import com.nimbusds.oauth2.sdk.ClientCredentialsGrant;
@@ -33,6 +37,9 @@ import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationReque
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClient;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClientInterface;
+import nl.altindag.ssl.SSLFactory;
+import nl.altindag.ssl.pem.util.PemUtils;
+import nl.altindag.ssl.util.KeyStoreUtils;
 import okhttp3.OkHttpClient;
 import okhttp3.Protocol;
 import org.slf4j.Logger;
@@ -64,7 +71,8 @@ public class SDKBuilder {
     private AuthorizationGrant authzGrant;
     private ProtocolType protocolType = ProtocolType.CONNECT;
     private SrtSigner srtSigner;
-    private RSAKey dpopKey;
+    private JWK dpopKey;
+    private JWSAlgorithm dpopAlg;
 
     private static final Logger logger = LoggerFactory.getLogger(SDKBuilder.class);
 
@@ -195,7 +203,7 @@ public class SDKBuilder {
 
     /**
      * Set the network protocol to use for communication with platform services.
-     * 
+     *
      * @param protocolType the protocol type to use (CONNECT, GRPC, or GRPC_WEB)
      * @return this builder instance for method chaining
      * @throws IllegalArgumentException if protocolType is null
@@ -215,18 +223,31 @@ public class SDKBuilder {
     }
 
     /**
-     * Configure a custom RSA key for DPoP (RFC 9449) proof generation.
+     * Configure a custom JWK (RSA or EC) for DPoP (RFC 9449) proof generation.
      * If not provided, the SDK will auto-generate an ephemeral RSA-2048 key.
+     * RSA keys also serve as the SRT signing key; EC keys use a separate auto-generated RSA key for SRT.
      *
-     * @param dpopKey RSA key to use for DPoP proofs
+     * @param dpopKey JWK (RSA or EC) to use for DPoP proofs
      * @return this builder instance for method chaining
      */
-    public SDKBuilder dpopKey(RSAKey dpopKey) {
+    public SDKBuilder dpopKey(JWK dpopKey) {
         this.dpopKey = dpopKey;
         return this;
     }
 
-    private Interceptor getAuthInterceptor(RSAKey rsaKey) {
+    /**
+     * Set the JWS algorithm to use for DPoP proofs. If omitted, defaults to RS256 for RSA keys
+     * or the curve-appropriate algorithm for EC keys.
+     *
+     * @param dpopAlg JWS algorithm (e.g. RS256, ES256)
+     * @return this builder instance for method chaining
+     */
+    public SDKBuilder dpopAlgorithm(JWSAlgorithm dpopAlg) {
+        this.dpopAlg = dpopAlg;
+        return this;
+    }
+
+    private AuthInterceptor getAuthInterceptor(JWK dpopJwk, JWSAlgorithm dpopAlgorithm) {
         if (platformEndpoint == null) {
             throw new SDKException("cannot build an SDK without specifying the platform endpoint");
         }
@@ -277,7 +298,7 @@ public class SDKBuilder {
         if (this.authzGrant == null) {
             this.authzGrant = new ClientCredentialsGrant();
         }
-        var ts = new TokenSource(clientAuth, rsaKey, providerMetadata.getTokenEndpointURI(), this.authzGrant, sslSocketFactory);
+        var ts = new TokenSource(clientAuth, dpopJwk, dpopAlgorithm, providerMetadata.getTokenEndpointURI(), this.authzGrant, sslSocketFactory);
         return new AuthInterceptor(ts);
     }
 
@@ -295,14 +316,14 @@ public class SDKBuilder {
     }
 
     static class ServicesAndInternals {
-        final Interceptor interceptor;
+        final AuthInterceptor interceptor;
         final TrustManager trustManager;
         final ProtocolClient protocolClient;
         final SrtSigner srtSigner;
 
         final SDK.Services services;
 
-        ServicesAndInternals(Interceptor interceptor, TrustManager trustManager, SDK.Services services, ProtocolClient protocolClient, SrtSigner srtSigner) {
+        ServicesAndInternals(AuthInterceptor interceptor, TrustManager trustManager, SDK.Services services, ProtocolClient protocolClient, SrtSigner srtSigner) {
             this.interceptor = interceptor;
             this.trustManager = trustManager;
             this.services = services;
@@ -319,26 +340,54 @@ public class SDKBuilder {
                     "while plaintext connections force HTTP/2 prior knowledge.");
         }
 
-        // Use provided DPoP key or generate an ephemeral one
-        RSAKey effectiveDpopKey;
+        // Resolve the DPoP JWK and algorithm
+        JWK effectiveDpopJwk;
+        JWSAlgorithm effectiveDpopAlg;
+        RSAKey srtKey; // SRT signing always uses RSA
+
         if (this.dpopKey != null) {
-            effectiveDpopKey = this.dpopKey;
+            effectiveDpopJwk = this.dpopKey;
+            if (this.dpopAlg != null) {
+                effectiveDpopAlg = this.dpopAlg;
+            } else if (effectiveDpopJwk instanceof ECKey) {
+                effectiveDpopAlg = inferEcAlgorithm((ECKey) effectiveDpopJwk);
+            } else {
+                effectiveDpopAlg = JWSAlgorithm.RS256;
+            }
+            if (effectiveDpopJwk instanceof RSAKey) {
+                srtKey = (RSAKey) effectiveDpopJwk;
+            } else {
+                // EC DPoP key: generate a separate RSA key for SRT signing
+                try {
+                    srtKey = new RSAKeyGenerator(2048)
+                            .keyUse(KeyUse.SIGNATURE)
+                            .keyID(UUID.randomUUID().toString())
+                            .generate();
+                } catch (JOSEException e) {
+                    throw new SDKException("Error generating SRT RSA key", e);
+                }
+            }
         } else {
+            // Auto-generate RSA-2048 for both DPoP and SRT
             try {
-                effectiveDpopKey = new RSAKeyGenerator(2048)
+                srtKey = new RSAKeyGenerator(2048)
                         .keyUse(KeyUse.SIGNATURE)
                         .keyID(UUID.randomUUID().toString())
                         .generate();
             } catch (JOSEException e) {
                 throw new SDKException("Error generating DPoP key", e);
             }
+            effectiveDpopJwk = srtKey;
+            effectiveDpopAlg = this.dpopAlg != null ? this.dpopAlg : JWSAlgorithm.RS256;
         }
 
         this.platformEndpoint = AddressNormalizer.normalizeAddress(this.platformEndpoint, this.usePlainText);
-        var authInterceptor = getAuthInterceptor(effectiveDpopKey);
-        var srtSignerToUse = this.srtSigner == null ? new DefaultSrtSigner(effectiveDpopKey) : this.srtSigner;
-        var kasClient = getKASClient(srtSignerToUse, authInterceptor);
-        var httpClient = getHttpClient();
+        var authInterceptor = getAuthInterceptor(effectiveDpopJwk, effectiveDpopAlg);
+        var srtSignerToUse = this.srtSigner == null ? new DefaultSrtSigner(srtKey) : this.srtSigner;
+
+        okhttp3.Interceptor dpopRetry = authInterceptor != null ? authInterceptor.dpopRetryInterceptor() : null;
+        var kasClient = getKASClient(srtSignerToUse, authInterceptor, dpopRetry);
+        var httpClient = getHttpClient(dpopRetry);
         var client = getProtocolClient(platformEndpoint, httpClient, authInterceptor);
         var attributeService = new AttributesServiceClient(client);
         var namespaceService = new NamespaceServiceClient(client);
@@ -412,9 +461,9 @@ public class SDKBuilder {
     }
 
     @Nonnull
-    private KASClient getKASClient(SrtSigner srtSigner, Interceptor interceptor) {
+    private KASClient getKASClient(SrtSigner srtSigner, AuthInterceptor interceptor, okhttp3.Interceptor dpopRetry) {
         BiFunction<OkHttpClient, String, ProtocolClient> protocolClientFactory = (OkHttpClient client, String address) -> getProtocolClient(address, client, interceptor);
-        return new KASClient(getHttpClient(), protocolClientFactory, srtSigner, usePlainText);
+        return new KASClient(getHttpClient(dpopRetry), protocolClientFactory, srtSigner, usePlainText);
     }
 
     public SDK build() {
@@ -426,7 +475,7 @@ public class SDKBuilder {
         return getProtocolClient(endpoint, httpClient, null);
     }
 
-    private ProtocolClient getProtocolClient(String endpoint, OkHttpClient httpClient, Interceptor authInterceptor) {
+    private ProtocolClient getProtocolClient(String endpoint, OkHttpClient httpClient, AuthInterceptor authInterceptor) {
         var protocolClientConfig = new ProtocolClientConfig(
                 endpoint,
                 new GoogleJavaProtobufStrategy(),
@@ -441,9 +490,14 @@ public class SDKBuilder {
 
     @SuppressWarnings("deprecation")
     private OkHttpClient getHttpClient() {
-        // using a single http client is apparently the best practice, subject to everyone wanting to
-        // have the same protocols
+        return getHttpClient((okhttp3.Interceptor) null);
+    }
+
+    private OkHttpClient getHttpClient(okhttp3.Interceptor additionalInterceptor) {
         var httpClient = new OkHttpClient.Builder();
+        if (additionalInterceptor != null) {
+            httpClient.addInterceptor(additionalInterceptor);
+        }
         if (usePlainText) {
             // For plaintext connections, we need HTTP/2 prior knowledge because gRPC servers
             // expect HTTP/2, and Connect protocol can communicate with gRPC servers over HTTP/2
@@ -468,5 +522,13 @@ public class SDKBuilder {
 
     X509TrustManager getTrustManager() {
         return this.trustManager;
+    }
+
+    private static JWSAlgorithm inferEcAlgorithm(ECKey ecKey) {
+        Curve curve = ecKey.getCurve();
+        if (Curve.P_256.equals(curve)) return JWSAlgorithm.ES256;
+        if (Curve.P_384.equals(curve)) return JWSAlgorithm.ES384;
+        if (Curve.P_521.equals(curve)) return JWSAlgorithm.ES512;
+        throw new SDKException("Unsupported EC curve for DPoP: " + curve);
     }
 }
