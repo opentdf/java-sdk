@@ -92,7 +92,10 @@ jobs:
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
         run: mvn clean --batch-mode clean generate-sources
       - name: Tests and enforcer (fips)
-        run: mvn --batch-mode test enforcer:enforce -P 'fips,!non-fips' -Dmaven.antrun.skip
+        run: |
+          mvn --batch-mode test enforcer:enforce -P 'fips,!non-fips' \
+            -Dmaven.antrun.skip \
+            -Dorg.bouncycastle.fips.approved_only=true
       - name: Tests with coverage and javadoc (non-fips)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
