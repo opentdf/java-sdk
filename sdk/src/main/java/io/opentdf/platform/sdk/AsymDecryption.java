@@ -1,8 +1,6 @@
 package io.opentdf.platform.sdk;
 
-import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
-import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import java.security.*;
 import java.security.spec.InvalidKeySpecException;
@@ -67,13 +65,14 @@ public class AsymDecryption {
             throw new SDKException("error getting instance of cipher", e);
         }
         try {
-            cipher.init(Cipher.DECRYPT_MODE, this.privateKey);
+            cipher.init(Cipher.UNWRAP_MODE, this.privateKey);
         } catch (InvalidKeyException e) {
             throw new SDKException("error initializing cipher", e);
         }
         try {
-            return cipher.doFinal(data);
-        } catch (IllegalBlockSizeException | BadPaddingException e) {
+            Key key = cipher.unwrap(data, "AES", Cipher.SECRET_KEY);
+            return key.getEncoded();
+        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
             throw new SDKException("error performing decryption", e);
         }
     }

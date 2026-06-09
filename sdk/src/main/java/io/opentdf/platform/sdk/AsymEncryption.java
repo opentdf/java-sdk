@@ -1,9 +1,9 @@
 package io.opentdf.platform.sdk;
 
-import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.SecretKeySpec;
 
 import java.io.ByteArrayInputStream;
 import java.security.*;
@@ -99,13 +99,13 @@ public class AsymEncryption {
             throw new SDKException("error getting instance of cipher during encryption", e);
         }
         try {
-            cipher.init(Cipher.ENCRYPT_MODE, this.publicKey);
+            cipher.init(Cipher.WRAP_MODE, this.publicKey);
         } catch (InvalidKeyException e) {
             throw new SDKException("error encrypting with private key", e);
         }
         try {
-            return cipher.doFinal(data);
-        } catch (IllegalBlockSizeException | BadPaddingException e) {
+            return cipher.wrap(new SecretKeySpec(data, "AES"));
+        } catch (IllegalBlockSizeException | InvalidKeyException e) {
             throw new SDKException("error performing encryption", e);
         }
     }
