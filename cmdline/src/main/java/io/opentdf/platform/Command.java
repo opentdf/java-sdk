@@ -143,10 +143,12 @@ class Command {
     private String platformEndpoint;
 
     @Option(names = { "--dpop" }, arity = "0..1", fallbackValue = "",
+            scope = CommandLine.ScopeType.INHERIT,
             description = "Enable DPoP (RFC 9449). Optional: specify algorithm (RS256, RS384, RS512, ES256, ES384, ES512). Default: RS256.")
     private String dpopAlg;
 
     @Option(names = { "--dpop-key" },
+            scope = CommandLine.ScopeType.INHERIT,
             description = "Enable DPoP using a PEM-encoded private key at <path>. Algorithm inferred from key type. Combinable with --dpop=<alg>.")
     private Path dpopKeyPath;
 
