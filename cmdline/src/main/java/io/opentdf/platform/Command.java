@@ -6,7 +6,13 @@ import com.google.gson.JsonDeserializer;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.jwk.Curve;
 import com.nimbusds.jose.jwk.JWK;
+import com.nimbusds.jose.jwk.KeyUse;
+import com.nimbusds.jose.jwk.RSAKey;
+import com.nimbusds.jose.jwk.gen.ECKeyGenerator;
+import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 
@@ -44,6 +50,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 /**
@@ -96,7 +103,7 @@ class Command {
             }
             if (jsonObject.has("jwk")) {
                 try {
-                    assertionKey.jwk = JWK.parse(jsonObject.get("jwk").toString());
+                    assertionKey.jwk = com.nimbusds.jose.jwk.JWK.parse(jsonObject.get("jwk").toString());
                 } catch (ParseException e) {
                     throw new JsonParseException("Failed to parse jwk", e);
                 }
@@ -134,6 +141,14 @@ class Command {
 
     @Option(names = { "-p", "--platform-endpoint" }, required = true)
     private String platformEndpoint;
+
+    @Option(names = { "--dpop" }, arity = "0..1", fallbackValue = "",
+            description = "Enable DPoP (RFC 9449). Optional: specify algorithm (RS256, RS384, RS512, ES256, ES384, ES512). Default: RS256.")
+    private String dpopAlg;
+
+    @Option(names = { "--dpop-key" },
+            description = "Enable DPoP using a PEM-encoded private key at <path>. Algorithm inferred from key type. Combinable with --dpop=<alg>.")
+    private Path dpopKeyPath;
 
     private Object correctKeyType(AssertionConfig.AssertionKeyAlg alg, Object key, boolean publicKey)
             throws RuntimeException {
@@ -281,9 +296,73 @@ class Command {
             builder.insecureSslFactory();
         }
 
+        applyDPoPOptions(builder);
+
         return builder.platformEndpoint(platformEndpoint)
                 .clientSecret(clientId, clientSecret).useInsecurePlaintextConnection(plaintext)
                 .build();
+    }
+
+    /**
+     * Apply --dpop and --dpop-key options to the SDK builder.
+     * --dpop-key loads a PEM private key; --dpop specifies the algorithm (default RS256).
+     * If neither flag is set, the SDK auto-generates an ephemeral RSA-2048 DPoP key.
+     */
+    private void applyDPoPOptions(SDKBuilder builder) {
+        try {
+            if (dpopKeyPath != null) {
+                String pem = Files.readString(dpopKeyPath);
+                JWK jwk = JWK.parseFromPEMEncodedObjects(pem);
+                builder.dpopKey(jwk);
+                if (dpopAlg != null && !dpopAlg.isEmpty()) {
+                    builder.dpopAlgorithm(parseAlgorithm(dpopAlg));
+                }
+            } else if (dpopAlg != null) {
+                JWSAlgorithm alg = dpopAlg.isEmpty() ? JWSAlgorithm.RS256 : parseAlgorithm(dpopAlg);
+                JWK jwk = generateKeyForAlgorithm(alg);
+                builder.dpopKey(jwk).dpopAlgorithm(alg);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to configure DPoP: " + e.getMessage(), e);
+        }
+    }
+
+    private static JWSAlgorithm parseAlgorithm(String alg) {
+        switch (alg.toUpperCase()) {
+            case "RS256": return JWSAlgorithm.RS256;
+            case "RS384": return JWSAlgorithm.RS384;
+            case "RS512": return JWSAlgorithm.RS512;
+            case "ES256": return JWSAlgorithm.ES256;
+            case "ES384": return JWSAlgorithm.ES384;
+            case "ES512": return JWSAlgorithm.ES512;
+            default: throw new RuntimeException("Unsupported DPoP algorithm: " + alg
+                    + ". Supported: RS256, RS384, RS512, ES256, ES384, ES512");
+        }
+    }
+
+    private static JWK generateKeyForAlgorithm(JWSAlgorithm alg) throws Exception {
+        if (JWSAlgorithm.RS256.equals(alg) || JWSAlgorithm.RS384.equals(alg) || JWSAlgorithm.RS512.equals(alg)) {
+            return new RSAKeyGenerator(2048)
+                    .keyUse(KeyUse.SIGNATURE)
+                    .keyID(UUID.randomUUID().toString())
+                    .generate();
+        } else if (JWSAlgorithm.ES256.equals(alg)) {
+            return new ECKeyGenerator(Curve.P_256)
+                    .keyUse(KeyUse.SIGNATURE)
+                    .keyID(UUID.randomUUID().toString())
+                    .generate();
+        } else if (JWSAlgorithm.ES384.equals(alg)) {
+            return new ECKeyGenerator(Curve.P_384)
+                    .keyUse(KeyUse.SIGNATURE)
+                    .keyID(UUID.randomUUID().toString())
+                    .generate();
+        } else if (JWSAlgorithm.ES512.equals(alg)) {
+            return new ECKeyGenerator(Curve.P_521)
+                    .keyUse(KeyUse.SIGNATURE)
+                    .keyID(UUID.randomUUID().toString())
+                    .generate();
+        }
+        throw new RuntimeException("Cannot generate key for algorithm: " + alg);
     }
 
     @CommandLine.Command(name = "decrypt")
