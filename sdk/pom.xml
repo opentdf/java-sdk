@@ -496,7 +496,7 @@
                 <activeByDefault>false</activeByDefault>
             </activation>
             <properties>
-                <java.security.properties.test>-Djava.security.properties=${project.basedir}/src/test/resources/java.security.fips.test</java.security.properties.test>
+                <java.security.properties.test>-Djava.security.properties==${project.basedir}/src/test/resources/java.security.fips.test -Dorg.bouncycastle.fips.approved_only=true -Djavax.net.ssl.trustStore=${project.basedir}/src/test/resources/empty-fips-truststore.bcfks -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=BCFKS</java.security.properties.test>
             </properties>
             <dependencies>
                 <dependency>
