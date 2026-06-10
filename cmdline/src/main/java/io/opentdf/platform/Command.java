@@ -1,32 +1,20 @@
 package io.opentdf.platform;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonDeserializer;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
+import com.google.gson.JsonSyntaxException;
+import com.google.gson.reflect.TypeToken;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.jwk.Curve;
 import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.KeyUse;
-import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.gen.ECKeyGenerator;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
-import com.google.gson.GsonBuilder;
-import com.google.gson.reflect.TypeToken;
-
-import java.text.ParseException;
-import com.google.gson.JsonSyntaxException;
-import io.opentdf.platform.sdk.AssertionConfig;
-import io.opentdf.platform.sdk.AutoConfigureException;
-import io.opentdf.platform.sdk.Config;
-import io.opentdf.platform.sdk.KeyType;
-import io.opentdf.platform.sdk.SDK;
-import io.opentdf.platform.sdk.SDKBuilder;
-import picocli.CommandLine;
-import picocli.CommandLine.HelpCommand;
-import picocli.CommandLine.Option;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -45,14 +33,25 @@ import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 
+import io.opentdf.platform.sdk.AssertionConfig;
+import io.opentdf.platform.sdk.AutoConfigureException;
+import io.opentdf.platform.sdk.Config;
+import io.opentdf.platform.sdk.KeyType;
+import io.opentdf.platform.sdk.SDK;
+import io.opentdf.platform.sdk.SDKBuilder;
+import picocli.CommandLine;
+import picocli.CommandLine.HelpCommand;
+import picocli.CommandLine.Option;
 /**
  * Constants for the TDF command line tool.
  * These must be compile-time constants to appear in annotations.
@@ -65,35 +64,31 @@ class Versions {
     public static final String TDF_SPEC = "4.3.0";
 }
 
-@CommandLine.Command(name = "tdf", subcommands = { HelpCommand.class, Command.Supports.class }, version = "{\"version\":\"" + Versions.SDK
-        + "\",\"tdfSpecVersion\":\"" + Versions.TDF_SPEC + "\"}")
+@CommandLine.Command(name = "tdf", subcommands = { HelpCommand.class,
+        Command.Supports.class }, version = "{\"version\":\"" + Versions.SDK
+                + "\",\"tdfSpecVersion\":\"" + Versions.TDF_SPEC + "\"}")
 class Command {
     @Option(names = { "-V", "--version" }, versionHelp = true, description = "display version info")
     boolean versionInfoRequested;
 
     @CommandLine.Command(name = "supports", description = "Check if a feature is supported")
-    static class Supports implements Runnable {
+    static class Supports implements Callable<Integer> {
         @CommandLine.Parameters(index = "0", description = "Feature to check (e.g., dpop)")
         private String feature;
 
         @Override
-        public void run() {
-            // Check if the requested feature is supported
-            if ("dpop".equalsIgnoreCase(feature)) {
-                // DPoP (RFC 9449) is supported
-                System.exit(0);
-            } else {
-                // Unknown or unsupported feature
-                System.exit(1);
-            }
+        public Integer call() {
+            return "dpop".equalsIgnoreCase(feature) ? 0 : 1;
         }
     }
 
     private static class AssertionKeyDeserializer implements JsonDeserializer<AssertionConfig.AssertionKey> {
         @Override
-        public AssertionConfig.AssertionKey deserialize(JsonElement json, java.lang.reflect.Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+        public AssertionConfig.AssertionKey deserialize(JsonElement json, java.lang.reflect.Type typeOfT,
+                JsonDeserializationContext context) throws JsonParseException {
             JsonObject jsonObject = json.getAsJsonObject();
-            AssertionConfig.AssertionKey assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.NotDefined, null);
+            AssertionConfig.AssertionKey assertionKey = new AssertionConfig.AssertionKey(
+                    AssertionConfig.AssertionKeyAlg.NotDefined, null);
 
             if (jsonObject.has("alg")) {
                 assertionKey.alg = context.deserialize(jsonObject.get("alg"), AssertionConfig.AssertionKeyAlg.class);
@@ -109,7 +104,9 @@ class Command {
                 }
             }
             if (jsonObject.has("x5c")) {
-                assertionKey.x5c = context.deserialize(jsonObject.get("x5c"), new TypeToken<List<com.nimbusds.jose.util.Base64>>() {}.getType());
+                assertionKey.x5c = context.deserialize(jsonObject.get("x5c"),
+                        new TypeToken<List<com.nimbusds.jose.util.Base64>>() {
+                        }.getType());
             }
 
             return assertionKey;
@@ -127,7 +124,7 @@ class Command {
     private static final String PEM_HEADER = "-----BEGIN (.*)-----";
     private static final String PEM_FOOTER = "-----END (.*)-----";
 
-    @Option(names = { "--client-secret" }, required = true)
+    @Option(names = { "--client-secret" })
     private String clientSecret;
 
     @Option(names = { "-h", "--plaintext" }, defaultValue = "false")
@@ -136,20 +133,18 @@ class Command {
     @Option(names = { "-i", "--insecure" }, defaultValue = "false")
     private boolean insecure;
 
-    @Option(names = { "--client-id" }, required = true)
+    @Option(names = { "--client-id" })
     private String clientId;
 
-    @Option(names = { "-p", "--platform-endpoint" }, required = true)
+    @Option(names = { "-p", "--platform-endpoint" })
     private String platformEndpoint;
 
-    @Option(names = { "--dpop" }, arity = "0..1", fallbackValue = "",
-            scope = CommandLine.ScopeType.INHERIT,
-            description = "Enable DPoP (RFC 9449). Optional: specify algorithm (RS256, RS384, RS512, ES256, ES384, ES512). Default: RS256.")
+    @Option(names = {
+            "--dpop" }, arity = "0..1", fallbackValue = "", scope = CommandLine.ScopeType.INHERIT, description = "Enable DPoP (RFC 9449). Optional: specify algorithm (RS256, RS384, RS512, ES256, ES384, ES512). Default: RS256.")
     private String dpopAlg;
 
-    @Option(names = { "--dpop-key" },
-            scope = CommandLine.ScopeType.INHERIT,
-            description = "Enable DPoP using a PEM-encoded private key at <path>. Algorithm inferred from key type. Combinable with --dpop=<alg>.")
+    @Option(names = {
+            "--dpop-key" }, scope = CommandLine.ScopeType.INHERIT, description = "Enable DPoP using a PEM-encoded private key at <path>. Algorithm inferred from key type. Combinable with --dpop=<alg>.")
     private Path dpopKeyPath;
 
     private Object correctKeyType(AssertionConfig.AssertionKeyAlg alg, Object key, boolean publicKey)
@@ -307,8 +302,10 @@ class Command {
 
     /**
      * Apply --dpop and --dpop-key options to the SDK builder.
-     * --dpop-key loads a PEM private key; --dpop specifies the algorithm (default RS256).
-     * If neither flag is set, the SDK auto-generates an ephemeral RSA-2048 DPoP key.
+     * --dpop-key loads a PEM private key; --dpop specifies the algorithm (default
+     * RS256).
+     * If neither flag is set, the SDK auto-generates an ephemeral RSA-2048 DPoP
+     * key.
      */
     private void applyDPoPOptions(SDKBuilder builder) {
         try {
@@ -331,14 +328,21 @@ class Command {
 
     private static JWSAlgorithm parseAlgorithm(String alg) {
         switch (alg.toUpperCase()) {
-            case "RS256": return JWSAlgorithm.RS256;
-            case "RS384": return JWSAlgorithm.RS384;
-            case "RS512": return JWSAlgorithm.RS512;
-            case "ES256": return JWSAlgorithm.ES256;
-            case "ES384": return JWSAlgorithm.ES384;
-            case "ES512": return JWSAlgorithm.ES512;
-            default: throw new RuntimeException("Unsupported DPoP algorithm: " + alg
-                    + ". Supported: RS256, RS384, RS512, ES256, ES384, ES512");
+            case "RS256":
+                return JWSAlgorithm.RS256;
+            case "RS384":
+                return JWSAlgorithm.RS384;
+            case "RS512":
+                return JWSAlgorithm.RS512;
+            case "ES256":
+                return JWSAlgorithm.ES256;
+            case "ES384":
+                return JWSAlgorithm.ES384;
+            case "ES512":
+                return JWSAlgorithm.ES512;
+            default:
+                throw new RuntimeException("Unsupported DPoP algorithm: " + alg
+                        + ". Supported: RS256, RS384, RS512, ES256, ES384, ES512");
         }
     }
 
@@ -396,7 +400,8 @@ class Command {
                             // try it as a file path
                             try {
                                 String fileJson = new String(Files.readAllBytes(Paths.get(assertionVerificationInput)));
-                                assertionVerificationKeys = gson.fromJson(fileJson, Config.AssertionVerificationKeys.class);
+                                assertionVerificationKeys = gson.fromJson(fileJson,
+                                        Config.AssertionVerificationKeys.class);
                             } catch (JsonSyntaxException e2) {
                                 throw new RuntimeException("Failed to parse assertion verification keys from file", e2);
                             } catch (Exception e3) {
