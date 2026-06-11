@@ -165,7 +165,7 @@ jobs:
             --client-secret=secret \
             --platform-endpoint=http://localhost:8080 \
             -h\
-            encrypt --kas-url=http://localhost:8080 --mime-type=text/plain --attr https://example.com/attr/attr1/value/value1 --autoconfigure=false -f data -m 'here is some metadata'
+            encrypt --kas-url=http://localhost:8080 --mime-type=text/plain --attr https://example.com/attr/attr1/value/value1 --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
 
           java \
             ${SECURITY_PROPERTIES} \

@@ -10,8 +10,6 @@ import com.nimbusds.jose.jwk.JWK;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 
-import java.security.Security;
-import java.security.cert.X509Certificate;
 import java.text.ParseException;
 import com.google.gson.JsonSyntaxException;
 import io.opentdf.platform.sdk.AssertionConfig;
@@ -24,7 +22,6 @@ import picocli.CommandLine;
 import picocli.CommandLine.HelpCommand;
 import picocli.CommandLine.Option;
 
-import javax.net.ssl.X509TrustManager;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -200,8 +197,6 @@ class Command {
             @Option(names = { "--with-target-mode" }, defaultValue = Option.NULL_VALUE) Optional<String> targetMode)
 
             throws IOException, AutoConfigureException {
-
-        System.out.println("here are the providers" + List.of(Security.getProviders()));
 
         var sdk = buildSDK();
         var kasInfos = kas.stream().map(k -> {
