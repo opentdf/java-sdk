@@ -6,7 +6,7 @@
         </Console>
     </appenders>
     <loggers>
-        <root level="trace">
+        <root level="Warning">
             <appender-ref ref="Console"/>
         </root>
         <Logger name="io.grpc.netty" level="error" additivity="false">
