@@ -2,7 +2,10 @@ package io.opentdf.platform.sdk;
 
 import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
+
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -84,8 +87,8 @@ public class ECKeyPairTest {
     }
 
     @Test
-    void extractPemPubKeyFromX509() throws CertificateException, IOException, NoSuchAlgorithmException,
-            InvalidKeySpecException, NoSuchProviderException, InvalidAlgorithmParameterException, InvalidKeyException {
+    @DisabledIfSystemProperty(named = "org.bouncycastle.fips.approved_only", matches = "true")
+    void extractPemPubKeyFromX509() {
         String x509ECPubKey = "-----BEGIN CERTIFICATE-----\n" +
                 "MIIBCzCBsgIJAK3Uxk7fP5oWMAoGCCqGSM49BAMCMA4xDDAKBgNVBAMMA2thczAe\n" +
                 "Fw0yMzA0MjQxNzQ2MTVaFw0yNDA0MjMxNzQ2MTVaMA4xDDAKBgNVBAMMA2thczBZ\n" +
@@ -123,6 +126,7 @@ public class ECKeyPairTest {
     }
 
     @Test
+    @DisabledIfSystemProperty(named = "org.bouncycastle.fips.approved_only", matches = "true")
     void createSymmetricKeysWithOtherCurves() {
         ECKeyPair pubPair = new ECKeyPair(ECCurve.SECP384R1);
         ECKeyPair keyPair = new ECKeyPair(ECCurve.SECP384R1);
@@ -134,6 +138,7 @@ public class ECKeyPairTest {
     }
 
     @Test
+    @DisabledIfSystemProperty(named = "org.bouncycastle.fips.approved_only", matches = "true")
     void testECDH()  {
         String expectedKey = "3KGgsptHbTsbxJtql6sHUcx255KcUhxdeJWKjmPMlcc=";
 

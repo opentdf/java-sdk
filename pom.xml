@@ -286,6 +286,7 @@
             <id>develop</id>
             <modules>
                 <module>sdk</module>
+                <module>sdk-fips-bouncycastle</module>
                 <module>cmdline</module>
                 <module>examples</module>
             </modules>

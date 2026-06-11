@@ -106,8 +106,16 @@ public class ECKeyPair {
     /**
      * Returns a HKDF key derived from the provided salt and secret
      * that is 32 bytes (256 bits) long.
+     *
+     * Delegates to a registered {@link HkdfProvider} when one is available on the
+     * classpath (e.g. {@code sdk-fips-bouncycastle}); otherwise falls back to the
+     * JDK-native HmacSHA256 implementation.
      */
     public static byte[] calculateHKDF(byte[] salt, byte[] secret) {
+        HkdfProvider provider = HkdfResolver.get();
+        if (provider != null) {
+            return provider.computeHKDF(salt, secret);
+        }
         try {
             // RFC 5869: if salt is absent, substitute a zero-filled buffer of Hash output size.
             byte[] effectiveSalt = (salt == null || salt.length == 0) ? new byte[SHA256_BYTES] : salt;

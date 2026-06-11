@@ -176,6 +176,52 @@ jobs:
           fi
         working-directory: cmdline
 
+      - name: Validate the SDK through the command line interface (FIPS)
+        run: |
+          printf 'here is some data to encrypt' > data
+
+          CP="$(mvn -pl sdk-fips-bouncycastle dependency:build-classpath -DincludeScope=compile)"
+
+          java \
+            -Djava.security.properties==${project.basedir}/sdk/src/test/resources/java.security.fips.test -Dorg.bouncycastle.fips.approved_only=true -Djavax.net.ssl.trustStore=${project.basedir}/src/test/resources/empty-fips-truststore.bcfks -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=BCFKS \
+            -cp ${CP}" \
+            -jar cmdline/target/cmdline.jar \
+            --client-id=opentdf-sdk \
+            --client-secret=secret \
+            --platform-endpoint=http://localhost:8080 \
+            -h\
+            encrypt --kas-url=http://localhost:8080 --mime-type=text/plain --attr https://example.com/attr/attr1/value/value1 --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
+
+          java \
+            -Djava.security.properties==${project.basedir}/sdk/src/test/resources/java.security.fips.test -Dorg.bouncycastle.fips.approved_only=true -Djavax.net.ssl.trustStore=${project.basedir}/src/test/resources/empty-fips-truststore.bcfks -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=BCFKS \
+            -cp ${CP}" \
+            -jar cmdline/target/cmdline.jar \
+            --client-id=opentdf-sdk \
+            --client-secret=secret \
+            --platform-endpoint=http://localhost:8080 \
+            -h\
+            decrypt -f test.tdf > decrypted
+
+          java \
+            -Djava.security.properties==${project.basedir}/sdk/src/test/resources/java.security.fips.test -Dorg.bouncycastle.fips.approved_only=true -Djavax.net.ssl.trustStore=${project.basedir}/src/test/resources/empty-fips-truststore.bcfks -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=BCFKS \
+            -cp ${CP}" \
+            -jar cmdline/target/cmdline.jar \
+            --client-id=opentdf-sdk \
+            --client-secret=secret \
+            --platform-endpoint=http://localhost:8080 \
+            -h\
+            metadata -f test.tdf > metadata
+
+          if ! diff -q data decrypted; then
+            printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
+            exit 1
+          fi
+
+          if [ "$(< metadata)" != 'here is some metadata' ]; then
+            printf 'metadata is incorrect [%s]\n' "$(< metadata)"
+            exit 1
+          fi
+
       - name: Encrypt/Decrypt Assertions
         run: |
           echo "basic assertions"
