@@ -298,7 +298,6 @@ class TDF {
         }
 
         public void readPayload(OutputStream outputStream) throws SDK.SegmentSignatureMismatch, IOException {
-            LOG.info("about to read payload");
 
             MessageDigest digest = null;
             try {
@@ -650,6 +649,7 @@ class TDF {
             }
         }
 
+
         String rootSigValue;
         boolean isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
         if (manifest.payload.isEncrypted) {
@@ -673,6 +673,8 @@ class TDF {
 
             rootSigValue = Base64.getEncoder().encodeToString(digest.digest(aggregateHash.toString().getBytes()));
         }
+
+        LOG.info("validated the signature");
 
         if (rootSignature.compareTo(rootSigValue) != 0) {
             throw new SDK.RootSignatureValidationException("root signature validation failed");
@@ -735,6 +737,8 @@ class TDF {
                 throw new SDK.AssertionException("failed integrity check on assertion signature", assertion.id);
             }
         }
+
+        LOG.info("returning payload reader");
 
         return new Reader(tdfReader, manifest, payloadKey, unencryptedMetadata);
     }

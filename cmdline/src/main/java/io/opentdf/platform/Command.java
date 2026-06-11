@@ -18,6 +18,8 @@ import io.opentdf.platform.sdk.Config;
 import io.opentdf.platform.sdk.KeyType;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
 import picocli.CommandLine.HelpCommand;
 import picocli.CommandLine.Option;
@@ -61,7 +63,7 @@ class Versions {
 @CommandLine.Command(name = "tdf", subcommands = { HelpCommand.class }, version = "{\"version\":\"" + Versions.SDK
         + "\",\"tdfSpecVersion\":\"" + Versions.TDF_SPEC + "\"}")
 class Command {
-
+    private static final Logger LOG = LoggerFactory.getLogger(Command.class);
     @Option(names = { "-V", "--version" }, versionHelp = true, description = "display version info")
     boolean versionInfoRequested;
 
@@ -332,6 +334,7 @@ class Command {
 
                     var readerConfig = Config.newTDFReaderConfig(opts.toArray(new Consumer[0]));
                     var reader = sdk.loadTDF(in, readerConfig);
+                    LOG.info("loaded the tdf");
                     reader.readPayload(stdout);
                 }
             }
