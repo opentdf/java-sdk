@@ -180,7 +180,8 @@ jobs:
         run: |
           printf 'here is some data to encrypt' > data
 
-          CP="$(mvn -pl sdk-fips-bouncycastle dependency:build-classpath -DincludeScope=compile)"
+          mvn -pl sdk-fips-bouncycastle dependency:build-classpath -DincludeScope=compile -Dmdep.outputFile="${GITHUB_WORKSPACE}/cp.txt"
+          CP="$(< "${GITHUB_WORKSPACE}/cp.txt")"
 
           java \
             -D"java.security.properties==${GITHUB_WORKSPACE}/sdk/src/test/resources/java.security.fips.test" -Dorg.bouncycastle.fips.approved_only=true -D"javax.net.ssl.trustStore=${GITHUB_WORKSPACE}/src/test/resources/empty-fips-truststore.bcfks" -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=BCFKS \
