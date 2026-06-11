@@ -149,7 +149,7 @@ jobs:
 
           echo "this is the CP ${CP}"
 
-          java \
+          java ${SECURITY_PROPERTIES} \
             -cp "${CP}" \
             io.opentdf.platform.TDF \
             --client-id=opentdf-sdk \
