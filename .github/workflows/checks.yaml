@@ -144,9 +144,12 @@ jobs:
           CP="${CP}:bcutil-fips.jar"
           CP="${CP}:bctls-fips.jar"
 
+
           SECURITY_PROPERTIES="-Djava.security.properties==${GITHUB_WORKSPACE}/sdk/src/test/resources/java.security.fips.test -Dorg.bouncycastle.fips.approved_only=true -Djavax.net.ssl.trustStore=${GITHUB_WORKSPACE}/src/test/resources/empty-fips-truststore.bcfks -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=BCFKS"
- 
-          java "${SECURITY_PROPERTIES}" \ 
+
+          echo "this is the CP ${CP}"
+
+          java \
             -cp "${CP}" \
             io.opentdf.platform.TDF \
             --client-id=opentdf-sdk \
