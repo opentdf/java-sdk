@@ -183,7 +183,7 @@ jobs:
           CP="$(mvn -pl sdk-fips-bouncycastle dependency:build-classpath -DincludeScope=compile)"
 
           java \
-            -Djava.security.properties==${project.basedir}/sdk/src/test/resources/java.security.fips.test -Dorg.bouncycastle.fips.approved_only=true -Djavax.net.ssl.trustStore=${project.basedir}/src/test/resources/empty-fips-truststore.bcfks -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=BCFKS \
+            -D"java.security.properties==${GITHUB_WORKSPACE}/sdk/src/test/resources/java.security.fips.test" -Dorg.bouncycastle.fips.approved_only=true -D"javax.net.ssl.trustStore=${GITHUB_WORKSPACE}/src/test/resources/empty-fips-truststore.bcfks" -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=BCFKS \
             -cp ${CP}" \
             -jar cmdline/target/cmdline.jar \
             --client-id=opentdf-sdk \
@@ -193,7 +193,7 @@ jobs:
             encrypt --kas-url=http://localhost:8080 --mime-type=text/plain --attr https://example.com/attr/attr1/value/value1 --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
 
           java \
-            -Djava.security.properties==${project.basedir}/sdk/src/test/resources/java.security.fips.test -Dorg.bouncycastle.fips.approved_only=true -Djavax.net.ssl.trustStore=${project.basedir}/src/test/resources/empty-fips-truststore.bcfks -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=BCFKS \
+            -D"java.security.properties==${GITHUB_WORKSPACE}/sdk/src/test/resources/java.security.fips.test" -Dorg.bouncycastle.fips.approved_only=true -D"javax.net.ssl.trustStore=${GITHUB_WORKSPACE}/src/test/resources/empty-fips-truststore.bcfks" -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=BCFKS \
             -cp ${CP}" \
             -jar cmdline/target/cmdline.jar \
             --client-id=opentdf-sdk \
@@ -203,7 +203,7 @@ jobs:
             decrypt -f test.tdf > decrypted
 
           java \
-            -Djava.security.properties==${project.basedir}/sdk/src/test/resources/java.security.fips.test -Dorg.bouncycastle.fips.approved_only=true -Djavax.net.ssl.trustStore=${project.basedir}/src/test/resources/empty-fips-truststore.bcfks -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=BCFKS \
+            -D"java.security.properties==${GITHUB_WORKSPACE}/sdk/src/test/resources/java.security.fips.test" -Dorg.bouncycastle.fips.approved_only=true -D"javax.net.ssl.trustStore=${GITHUB_WORKSPACE}/src/test/resources/empty-fips-truststore.bcfks" -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=BCFKS \
             -cp ${CP}" \
             -jar cmdline/target/cmdline.jar \
             --client-id=opentdf-sdk \
