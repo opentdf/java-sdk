@@ -138,8 +138,9 @@ jobs:
 
           find . -name 'cmdline.jar'
           pwd
+          jar tf cmdline/target/cmdline.jar
 
-          CP="${GITHUB_WORKSPACE}/sdk-fips-bouncycastle/target/*:${GITHUB_WORKSPACE}/cmdline/target/cmdline.jar"
+          CP="sdk-fips-bouncycastle/target/*:cmdline/target/cmdline.jar"
           CP="${CP}:${GITHUB_WORKSPACE}/bc-fips.jar"
           CP="${CP}:${GITHUB_WORKSPACE}/bcutil-fips.jar"
           CP="${CP}:${GITHUB_WORKSPACE}/bctls-fips.jar"
