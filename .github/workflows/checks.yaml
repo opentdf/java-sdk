@@ -145,6 +145,7 @@ jobs:
  
           java "${SECURITY_PROPERTIES}" \ 
             -cp "${CP}" \
+            io.opentdf.platform.TDF \
             --client-id=opentdf-sdk \
             --client-secret=secret \
             --platform-endpoint=http://localhost:8080 \
@@ -154,6 +155,7 @@ jobs:
           java \
             "${SECURITY_PROPERTIES}" \
             -cp ${CP}" \
+            io.opentdf.platform.TDF \
             -jar cmdline/target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
@@ -164,6 +166,7 @@ jobs:
           java \
             "${SECURITY_PROPERTIES}" \
             -cp ${CP}" \
+            io.opentdf.platform.TDF \
             -jar cmdline/target/cmdline.jar \
             --client-id=opentdf-sdk \
             --client-secret=secret \
