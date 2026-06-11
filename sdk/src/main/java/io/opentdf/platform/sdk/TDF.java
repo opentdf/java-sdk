@@ -58,6 +58,8 @@ class TDF {
 
     private final SDK.Services services;
 
+    private static final Logger LOG = LoggerFactory.getLogger(TDF.class);
+
     /**
      * Constructs a new TDF instance using the default maximum input size defined by
      * MAX_TDF_INPUT_SIZE.
@@ -296,6 +298,7 @@ class TDF {
         }
 
         public void readPayload(OutputStream outputStream) throws SDK.SegmentSignatureMismatch, IOException {
+            LOG.info("about to read payload");
 
             MessageDigest digest = null;
             try {
@@ -320,6 +323,8 @@ class TDF {
                 }
 
                 var isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
+
+                LOG.info("reading a segment");
 
                 if (manifest.payload.isEncrypted) {
                     String segHashAlg = manifest.encryptionInformation.integrityInformation.segmentHashAlg;
@@ -349,6 +354,7 @@ class TDF {
                     outputStream.write(readBuf);
                 }
             }
+            LOG.info("finished reading payload");
         }
 
         public PolicyObject readPolicyObject() {
