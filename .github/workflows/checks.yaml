@@ -145,7 +145,7 @@ jobs:
 
       - name: Validate the SDK through the command line interface (FIPS)
         run: |
-          set -exuo pipefail
+          set -euo pipefail
 
           mvn dependency:copy -Dartifact=org.bouncycastle:bc-fips:2.1.2:jar -Dmdep.stripVersion=true -DoutputDirectory="${GITHUB_WORKSPACE}"
           mvn dependency:copy -Dartifact=org.bouncycastle:bcutil-fips:2.1.6:jar -Dmdep.stripVersion=true -DoutputDirectory="${GITHUB_WORKSPACE}"
