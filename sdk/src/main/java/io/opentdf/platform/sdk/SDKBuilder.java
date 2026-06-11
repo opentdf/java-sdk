@@ -37,9 +37,6 @@ import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationReque
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClient;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClientInterface;
-import nl.altindag.ssl.SSLFactory;
-import nl.altindag.ssl.pem.util.PemUtils;
-import nl.altindag.ssl.util.KeyStoreUtils;
 import okhttp3.OkHttpClient;
 import okhttp3.Protocol;
 import org.slf4j.Logger;
