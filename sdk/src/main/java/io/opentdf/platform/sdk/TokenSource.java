@@ -16,7 +16,6 @@ import com.nimbusds.oauth2.sdk.http.HTTPRequest;
 import com.nimbusds.oauth2.sdk.http.HTTPResponse;
 import com.nimbusds.oauth2.sdk.token.AccessToken;
 import com.nimbusds.openid.connect.sdk.Nonce;
-import nl.altindag.ssl.SSLFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

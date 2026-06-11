@@ -1,8 +1,11 @@
 package io.opentdf.platform.sdk;
 
 import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.jwk.Curve;
+import com.nimbusds.jose.jwk.ECKey;
 import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.RSAKey;
+import com.nimbusds.jose.jwk.gen.ECKeyGenerator;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jwt.SignedJWT;
 import com.nimbusds.oauth2.sdk.ClientCredentialsGrant;
@@ -112,6 +115,97 @@ class TokenSourceTest {
             TokenSource.AuthHeaders headers = ts.getAuthHeaders(testUrl, "POST");
             SignedJWT dpopJwt = SignedJWT.parse(headers.getDpopHeader());
             String nonceClaim = dpopJwt.getJWTClaimsSet().getStringClaim("nonce");
+
+            assertThat(nonceClaim).isNull();
+        }
+    }
+
+    @Test
+    void ecKeyGeneratesDPoPProof() throws Exception {
+        ECKey ecKey = new ECKeyGenerator(Curve.P_256)
+                .keyUse(KeyUse.SIGNATURE)
+                .keyID(UUID.randomUUID().toString())
+                .generate();
+        try (MockWebServer tokenServer = new MockWebServer()) {
+            tokenServer.enqueue(new MockResponse()
+                    .setBody(FAKE_TOKEN_RESPONSE)
+                    .setHeader("Content-Type", "application/json"));
+            tokenServer.start();
+
+            TokenSource ts = new TokenSource(
+                    new ClientSecretBasic(new ClientID("test-client"), new Secret("test-secret")),
+                    ecKey,
+                    JWSAlgorithm.ES256,
+                    tokenServer.url("/token").uri(),
+                    new ClientCredentialsGrant(),
+                    null
+            );
+            URL testUrl = new URL("https://kas.example.com/kas");
+            ts.cacheNonce(testUrl, "ec-nonce");
+
+            TokenSource.AuthHeaders headers = ts.getAuthHeaders(testUrl, "POST");
+            assertThat(headers.getAuthHeader()).startsWith("DPoP ");
+
+            SignedJWT dpopJwt = SignedJWT.parse(headers.getDpopHeader());
+            assertThat(dpopJwt.getHeader().getAlgorithm()).isEqualTo(JWSAlgorithm.ES256);
+            assertThat(dpopJwt.getJWTClaimsSet().getStringClaim("nonce")).isEqualTo("ec-nonce");
+        }
+    }
+
+    @Test
+    void noncesAreIsolatedByOrigin() throws Exception {
+        RSAKey rsaKey = new RSAKeyGenerator(2048)
+                .keyUse(KeyUse.SIGNATURE)
+                .keyID(UUID.randomUUID().toString())
+                .generate();
+        try (MockWebServer tokenServer = new MockWebServer()) {
+            for (int i = 0; i < 4; i++) {
+                tokenServer.enqueue(new MockResponse()
+                        .setBody(FAKE_TOKEN_RESPONSE)
+                        .setHeader("Content-Type", "application/json"));
+            }
+            tokenServer.start();
+
+            TokenSource ts = buildTokenSource(tokenServer, rsaKey);
+            URL kasUrl = new URL("https://kas.example.com/kas");
+            URL otherUrl = new URL("https://other.example.com/kas");
+
+            ts.cacheNonce(kasUrl, "kas-nonce");
+
+            TokenSource.AuthHeaders headersForKas = ts.getAuthHeaders(kasUrl, "POST");
+            TokenSource.AuthHeaders headersForOther = ts.getAuthHeaders(otherUrl, "POST");
+
+            String kasNonce = SignedJWT.parse(headersForKas.getDpopHeader())
+                    .getJWTClaimsSet().getStringClaim("nonce");
+            String otherNonce = SignedJWT.parse(headersForOther.getDpopHeader())
+                    .getJWTClaimsSet().getStringClaim("nonce");
+
+            assertThat(kasNonce).isEqualTo("kas-nonce");
+            assertThat(otherNonce).isNull();
+        }
+    }
+
+    @Test
+    void emptyNonceIsNotCached() throws Exception {
+        RSAKey rsaKey = new RSAKeyGenerator(2048)
+                .keyUse(KeyUse.SIGNATURE)
+                .keyID(UUID.randomUUID().toString())
+                .generate();
+        try (MockWebServer tokenServer = new MockWebServer()) {
+            tokenServer.enqueue(new MockResponse()
+                    .setBody(FAKE_TOKEN_RESPONSE)
+                    .setHeader("Content-Type", "application/json"));
+            tokenServer.start();
+
+            TokenSource ts = buildTokenSource(tokenServer, rsaKey);
+            URL testUrl = new URL("https://kas.example.com/kas");
+
+            ts.cacheNonce(testUrl, "");
+            ts.cacheNonce(testUrl, null);
+
+            TokenSource.AuthHeaders headers = ts.getAuthHeaders(testUrl, "POST");
+            String nonceClaim = SignedJWT.parse(headers.getDpopHeader())
+                    .getJWTClaimsSet().getStringClaim("nonce");
 
             assertThat(nonceClaim).isNull();
         }
