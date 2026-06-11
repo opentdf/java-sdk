@@ -299,6 +299,7 @@ class TDF {
 
         public void readPayload(OutputStream outputStream) throws SDK.SegmentSignatureMismatch, IOException {
 
+            LOG.info("Reading payload");
             MessageDigest digest = null;
             try {
                 digest = MessageDigest.getInstance("SHA-256");
@@ -307,6 +308,7 @@ class TDF {
             }
 
             for (Manifest.Segment segment : manifest.encryptionInformation.integrityInformation.segments) {
+                LOG.info("reading a segment");
                 if (segment.encryptedSegmentSize > Config.MAX_SEGMENT_SIZE) {
                     throw new IllegalStateException("Segment size " + segment.encryptedSegmentSize + " exceeded limit "
                             + Config.MAX_SEGMENT_SIZE);
@@ -323,7 +325,6 @@ class TDF {
 
                 var isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
 
-                LOG.info("reading a segment");
 
                 if (manifest.payload.isEncrypted) {
                     String segHashAlg = manifest.encryptionInformation.integrityInformation.segmentHashAlg;
@@ -352,6 +353,7 @@ class TDF {
 
                     outputStream.write(readBuf);
                 }
+                LOG.info("read a segment");
             }
             LOG.info("finished reading payload");
         }
