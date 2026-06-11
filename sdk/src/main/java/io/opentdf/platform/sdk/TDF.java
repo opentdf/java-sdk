@@ -551,7 +551,9 @@ class TDF {
     Reader loadTDF(SeekableByteChannel tdf, Config.TDFReaderConfig tdfReaderConfig) throws SDKException, IOException {
 
         TDFReader tdfReader = new TDFReader(tdf);
+        LOG.info("loaded the tdf reader");
         String manifestJson = tdfReader.manifest();
+        LOG.info("here is the manifest json {}", manifestJson);
         // use Manifest.readManifest in order to validate the Manifest input
         Manifest manifest = Manifest.readManifest(manifestJson);
 

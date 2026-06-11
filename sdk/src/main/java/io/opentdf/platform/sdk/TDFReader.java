@@ -1,5 +1,8 @@
 package io.opentdf.platform.sdk;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -20,6 +23,7 @@ public class TDFReader {
 
     private final ZipReader.Entry manifestEntry;
     private final InputStream payload;
+    private static final Logger LOG = LoggerFactory.getLogger(TDFReader.class);
 
     public TDFReader(SeekableByteChannel tdf) throws SDKException, IOException {
         Map<String, ZipReader.Entry> entries = new ZipReader(tdf).getEntries()
@@ -35,6 +39,8 @@ public class TDFReader {
 
         manifestEntry = entries.get(TDF_MANIFEST_FILE_NAME);
         payload = entries.get(TDF_PAYLOAD_FILE_NAME).getData();
+
+        LOG.info("Manifest found: {}", manifestEntry.getName());
     }
 
     String manifest() {
