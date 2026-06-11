@@ -10,6 +10,7 @@ import com.nimbusds.jose.jwk.JWK;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 
+import java.security.Security;
 import java.security.cert.X509Certificate;
 import java.text.ParseException;
 import com.google.gson.JsonSyntaxException;
@@ -200,12 +201,15 @@ class Command {
 
             throws IOException, AutoConfigureException {
 
+        System.out.println("here are the providers" + List.of(Security.getProviders()));
+
         var sdk = buildSDK();
         var kasInfos = kas.stream().map(k -> {
             var ki = new Config.KASInfo();
             ki.URL = k;
             return ki;
         }).toArray(Config.KASInfo[]::new);
+
 
         List<Consumer<Config.TDFConfig>> configs = new ArrayList<>();
         configs.add(Config.withKasInformation(kasInfos));
