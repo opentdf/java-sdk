@@ -145,6 +145,8 @@ jobs:
 
       - name: Validate the SDK through the command line interface (FIPS)
         run: |
+          set -e
+
           mvn dependency:copy -Dartifact=org.bouncycastle:bc-fips:2.1.2:jar -Dmdep.stripVersion=true -DoutputDirectory="${GITHUB_WORKSPACE}"
           mvn dependency:copy -Dartifact=org.bouncycastle:bcutil-fips:2.1.6:jar -Dmdep.stripVersion=true -DoutputDirectory="${GITHUB_WORKSPACE}"
           mvn dependency:copy -Dartifact=org.bouncycastle:bctls-fips:2.1.23:jar -Dmdep.stripVersion=true -DoutputDirectory="${GITHUB_WORKSPACE}"
@@ -167,6 +169,8 @@ jobs:
             -h\
             encrypt --kas-url=http://localhost:8080 --mime-type=text/plain --attr https://example.com/attr/attr1/value/value1 --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
 
+          echo 'we encrypted it'
+
           java \
             ${SECURITY_PROPERTIES} \
             -cp ${CP}" \
@@ -176,6 +180,9 @@ jobs:
             --platform-endpoint=http://localhost:8080 \
             -h\
             decrypt -f test.tdf > decrypted
+
+          echo 'we decrypted it'
+          ls -l
 
           java \
             ${SECURITY_PROPERTIES} \
