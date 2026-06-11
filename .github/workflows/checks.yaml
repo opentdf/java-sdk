@@ -136,7 +136,7 @@ jobs:
           mvn dependency:copy -Dartifact=org.bouncycastle:bcutil-fips:2.1.6:jar -Dmdep.stripVersion=true -DoutputDirectory="${GITHUB_WORKSPACE}"
           mvn dependency:copy -Dartifact=org.bouncycastle:bctls-fips:2.1.23:jar -Dmdep.stripVersion=true -DoutputDirectory="${GITHUB_WORKSPACE}"
 
-          CP="${GITHUB_WORKSPACE}/sdk-fips-bouncycastle/target/*:${GITHUB_WORKSPACE}/cmdline/target/cmdline.jar"
+          CP="${GITHUB_WORKSPACE}/java-sdk/sdk-fips-bouncycastle/target/*:${GITHUB_WORKSPACE}/java-sdk/cmdline/target/cmdline.jar"
           CP="${CP}:${GITHUB_WORKSPACE}/bc-fips.jar"
           CP="${CP}:${GITHUB_WORKSPACE}/bcutil-fips.jar"
           CP="${CP}:${GITHUB_WORKSPACE}/bctls-fips.jar"
