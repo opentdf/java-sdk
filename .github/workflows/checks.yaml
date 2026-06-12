@@ -185,7 +185,7 @@ jobs:
 
           java \
             ${SECURITY_PROPERTIES} \
-            -cp ${CP}" \
+            -cp "${CP}" \
             io.opentdf.platform.TDF \
             --client-id=opentdf-sdk \
             --client-secret=secret \
