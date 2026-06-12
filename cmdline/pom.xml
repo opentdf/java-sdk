@@ -76,16 +76,21 @@
             <groupId>io.opentdf.platform</groupId>
             <artifactId>sdk</artifactId>
             <version>${project.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.bouncycastle</groupId>
-                    <artifactId>bc-fips</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.bouncycastle</groupId>
-                    <artifactId>bctls-fips</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
     </dependencies>
+    <profiles>
+        <profile>
+            <id>fips</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>io.opentdf.platform</groupId>
+                    <artifactId>sdk-fips-bouncycastle</artifactId>
+                    <version>${project.version}</version>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
 </project>

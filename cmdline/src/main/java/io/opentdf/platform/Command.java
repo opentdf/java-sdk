@@ -333,9 +333,7 @@ class Command {
                     kasAllowlistStr.ifPresent(s -> opts.add(Config.WithKasAllowlist(s.split(","))));
 
                     var readerConfig = Config.newTDFReaderConfig(opts.toArray(new Consumer[0]));
-                    System.err.println("about to do it");
                     var reader = sdk.loadTDF(in, readerConfig);
-                    System.err.println("aboud to load the tdf");
                     reader.readPayload(stdout);
                 }
             }

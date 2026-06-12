@@ -1,5 +1,8 @@
 package io.opentdf.platform.sdk;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.crypto.KeyAgreement;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -26,6 +29,7 @@ public class ECKeyPair {
 
     private static final int SHA256_BYTES = 32;
     private static final String EC_ALGORITHM = "EC";
+    private static final Logger log = LoggerFactory.getLogger(ECKeyPair.class);
 
     private final ECCurve curve;
 
@@ -114,8 +118,13 @@ public class ECKeyPair {
     public static byte[] calculateHKDF(byte[] salt, byte[] secret) {
         HkdfProvider provider = HkdfResolver.get();
         if (provider != null) {
+            if (log.isDebugEnabled()) {
+                log.debug("Using resolved HKDF provider of type {}", provider.getClass().getName());
+            }
             return provider.computeHKDF(salt, secret);
         }
+
+        log.debug("using SDK HKDF implementation");
         try {
             // RFC 5869: if salt is absent, substitute a zero-filled buffer of Hash output size.
             byte[] effectiveSalt = (salt == null || salt.length == 0) ? new byte[SHA256_BYTES] : salt;
