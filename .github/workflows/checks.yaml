@@ -111,6 +111,7 @@ jobs:
             -P 'coverage,non-fips,!fips'
 
   platform-integration:
+    name: "Platform Integration ${{ matrix.label }}"
     runs-on: ubuntu-22.04
     strategy:
       matrix:
