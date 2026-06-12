@@ -5,7 +5,7 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import java.security.Security;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Verifies that the java.security.fips.test properties file was actually loaded when running
@@ -18,28 +18,41 @@ class FipsProviderVerificationTest {
     @Test
     void bcFipsIsFirstProvider() {
         var providers = Security.getProviders();
-        assertNotNull(providers, "No security providers registered");
-        assertTrue(providers.length > 0, "Provider list is empty");
-        assertEquals("BCFIPS", providers[0].getName(),
-                "Expected BCFIPS as the first security provider but got: " + providers[0].getName()
-                + " — the java.security.fips.test file was likely not loaded");
+        assertThat(providers)
+                .as("No security providers registered")
+                .isNotNull()
+                .isNotEmpty();
+        assertThat(providers[0].getName())
+                .as("Expected BCFIPS as the first security provider but got: %s - the java.security.fips.test file was likely not loaded",
+                        providers[0].getName())
+                .isEqualTo("BCFIPS");
     }
 
     @Test
     void bcJsseIsRegistered() {
-        assertNotNull(Security.getProvider("BCJSSE"),
-                "BCJSSE provider is not registered — the java.security.fips.test file was likely not loaded");
+        assertThat(Security.getProvider("BCJSSE"))
+                .as("BCJSSE provider is not registered - the java.security.fips.test file was likely not loaded")
+                .isNotNull();
     }
 
     @Test
     void sunJceIsNotRegistered() {
-        assertNull(Security.getProvider("SunJCE"),
-                "SunJCE provider is still registered — it should have been removed by java.security.fips.test");
+        assertThat(Security.getProvider("SunJCE"))
+                .as("SunJCE provider is still registered - it should have been removed by java.security.fips.test")
+                .isNull();
     }
 
     @Test
     void keyManagerFactoryAlgorithmIsPkix() {
-        assertEquals("PKIX", Security.getProperty("ssl.KeyManagerFactory.algorithm"),
-                "ssl.KeyManagerFactory.algorithm was not overridden to PKIX — the java.security.fips.test file was likely not loaded");
+        assertThat(Security.getProperty("ssl.KeyManagerFactory.algorithm"))
+                .as("ssl.KeyManagerFactory.algorithm was not overridden to PKIX - the java.security.fips.test file was likely not loaded")
+                .isEqualTo("PKIX");
+    }
+
+    @Test
+    void providerResolves() {
+        assertThat(HkdfResolver.get())
+                .as("the sdk-fips-bouncycastle library must be on the path so that the Hkdf provider resolves. this is configured in the surefire plugin and the sdk-fips-bouncycastle project must be packaged")
+                .isNotNull();
     }
 }

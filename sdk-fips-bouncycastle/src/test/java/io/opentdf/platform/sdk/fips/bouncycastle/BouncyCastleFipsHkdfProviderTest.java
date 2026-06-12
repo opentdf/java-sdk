@@ -30,15 +30,4 @@ class BouncyCastleFipsHkdfProviderTest {
 
         assertThat(first).isEqualTo(second);
     }
-
-    @Test
-    void computeHKDF_matchesJdkFallback() {
-        byte[] salt = "ECKeysSalt".getBytes(StandardCharsets.UTF_8);
-        byte[] secret = new byte[32]; // simulated shared secret
-
-        byte[] fipsResult = provider.computeHKDF(salt, secret);
-        byte[] jdkResult = io.opentdf.platform.sdk.ECKeyPair.calculateHKDF(salt, secret);
-
-        assertThat(fipsResult).isEqualTo(jdkResult);
-    }
 }

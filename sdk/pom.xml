@@ -498,6 +498,21 @@
             <properties>
                 <java.security.properties.test>-Djava.security.properties==${project.basedir}/src/test/resources/java.security.fips.test -Dorg.bouncycastle.fips.approved_only=true -Djavax.net.ssl.trustStore=${project.basedir}/src/test/resources/empty-fips-truststore.bcfks -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=BCFKS</java.security.properties.test>
             </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <!-- we want to test that we resolve the hkdf provider correctly but adding it as a
+                                 test dependency to SDK causes a circular dependency -->
+                            <additionalClasspathElements>
+                                <additionalClasspathElement>${project.basedir}/../sdk-fips-bouncycastle/target/sdk-fips-bouncycastle-${project.version}jar</additionalClasspathElement>
+                            </additionalClasspathElements>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
             <dependencies>
                 <dependency>
                     <groupId>org.bouncycastle</groupId>

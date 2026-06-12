@@ -83,7 +83,6 @@ public class ECKeyPairTest {
     }
 
     @Test
-    @DisabledIfSystemProperty(named = "org.bouncycastle.fips.approved_only", matches = "true")
     void extractPemPubKeyFromX509() {
         String x509ECPubKey = "-----BEGIN CERTIFICATE-----\n" +
                 "MIIBCzCBsgIJAK3Uxk7fP5oWMAoGCCqGSM49BAMCMA4xDDAKBgNVBAMMA2thczAe\n" +
@@ -122,7 +121,6 @@ public class ECKeyPairTest {
     }
 
     @Test
-    @DisabledIfSystemProperty(named = "org.bouncycastle.fips.approved_only", matches = "true")
     void createSymmetricKeysWithOtherCurves() {
         ECKeyPair pubPair = new ECKeyPair(ECCurve.SECP384R1);
         ECKeyPair keyPair = new ECKeyPair(ECCurve.SECP384R1);
@@ -134,7 +132,6 @@ public class ECKeyPairTest {
     }
 
     @Test
-    @DisabledIfSystemProperty(named = "org.bouncycastle.fips.approved_only", matches = "true")
     void testECDH()  {
         String expectedKey = "3KGgsptHbTsbxJtql6sHUcx255KcUhxdeJWKjmPMlcc=";
 
