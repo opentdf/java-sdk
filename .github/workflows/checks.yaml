@@ -112,6 +112,13 @@ jobs:
 
   platform-integration:
     runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        include:
+          - label: ""
+            maven_profile: ""
+          - label: " (FIPS)"
+            maven_profile: "-P 'fips,!non-fips'"
     steps:
       - name: Checkout Java SDK
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -124,13 +131,6 @@ jobs:
           java-version: "17"
           distribution: "temurin"
           server-id: github
-
-      - name: Build java SDK
-        run: |
-          mvn --batch-mode clean install -pl cmdline -am -P 'fips,!non-fips' -DskipTests
-        env:
-          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
-          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
 
       - name: Check out and start up platform with deps/containers
         id: run-platform
@@ -145,120 +145,25 @@ jobs:
           grpcurl -plaintext localhost:8080 list && \
           grpcurl -plaintext localhost:8080 kas.AccessService/PublicKey
 
-      - name: Validate the SDK through the command line interface
+      - name: Build java SDK${{ matrix.label }}
         run: |
-          printf 'here is some data to encrypt' > data
+          mvn --batch-mode clean install -pl cmdline -am ${{ matrix.maven_profile }} -DskipTests
+        env:
+          BUF_INPUT_HTTPS_USERNAME: opentdf-bot
+          BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
 
-          java -jar target/cmdline.jar \
-            --client-id=opentdf-sdk \
-            --client-secret=secret \
-            --platform-endpoint=http://localhost:8080 \
-            -h\
-            encrypt --kas-url=http://localhost:8080 --mime-type=text/plain --attr https://example.com/attr/attr1/value/value1 --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
-
-          java -jar target/cmdline.jar \
-            --client-id=opentdf-sdk \
-            --client-secret=secret \
-            --platform-endpoint=http://localhost:8080 \
-            -h\
-            decrypt -f test.tdf > decrypted
-
-          java -jar target/cmdline.jar \
-            --client-id=opentdf-sdk \
-            --client-secret=secret \
-            --platform-endpoint=http://localhost:8080 \
-            -h\
-            metadata -f test.tdf > metadata
-
-          if ! diff -q data decrypted; then
-            printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
-            exit 1
-          fi
-
-          if [ "$(< metadata)" != 'here is some metadata' ]; then
-            printf 'metadata is incorrect [%s]\n' "$(< metadata)"
-            exit 1
-          fi
+      - name: Validate the SDK through the command line interface${{ matrix.label }}
+        run: |
+          ../.github/scripts/verify_cmdline_roundtrip.sh
         working-directory: cmdline
 
-      - name: Encrypt/Decrypt Assertions
+      - name: Encrypt/Decrypt Assertions${{ matrix.label }}
         run: |
-          echo "basic assertions"
-          echo 'here is some data to encrypt' > data
-
-          ASSERTIONS='[{"id":"assertion1","type":"handling","scope":"tdo","appliesToState":"encrypted","statement":{"format":"json+stanag5636","schema":"urn:nato:stanag:5636:A:1:elements:json","value":"{\"ocl\":\"2024-10-21T20:47:36Z\"}"}}]'
-
-          java -jar target/cmdline.jar \
-            --client-id=opentdf-sdk \
-            --client-secret=secret \
-            --platform-endpoint=http://localhost:8080 \
-            -h\
-            encrypt --kas-url=http://localhost:8080 --mime-type=text/plain --with-assertions=$ASSERTIONS --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
-
-          java -jar target/cmdline.jar \
-            --client-id=opentdf-sdk \
-            --client-secret=secret \
-            --platform-endpoint=http://localhost:8080 \
-            -h\
-            decrypt -f test.tdf > decrypted
-
-          if ! diff -q data decrypted; then
-            printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
-            exit 1
-          fi
-
-          HS256_KEY=$(openssl rand -base64 32)
-          openssl genpkey -algorithm RSA -out rs_private_key.pem -pkeyopt rsa_keygen_bits:2048
-          openssl rsa -pubout -in rs_private_key.pem -out rs_public_key.pem
-          RS256_PRIVATE_KEY=$(awk '{printf "%s\\n", $0}' rs_private_key.pem)
-          RS256_PUBLIC_KEY=$(awk '{printf "%s\\n", $0}' rs_public_key.pem)
-          SIGNED_ASSERTIONS_HS256='[{"id":"assertion1","type":"handling","scope":"tdo","appliesToState":"encrypted","statement":{"format":"json+stanag5636","schema":"urn:nato:stanag:5636:A:1:elements:json","value":"{\"ocl\":\"2024-10-21T20:47:36Z\"}"},"signingKey":{"alg":"HS256","key":"'$HS256_KEY'"}}]'
-          SIGNED_ASSERTION_VERIFICATON_HS256='{"keys":{"assertion1":{"alg":"HS256","key":"'$HS256_KEY'"}}}'
-          SIGNED_ASSERTIONS_RS256='[{"id":"assertion1","type":"handling","scope":"tdo","appliesToState":"encrypted","statement":{"format":"json+stanag5636","schema":"urn:nato:stanag:5636:A:1:elements:json","value":"{\"ocl\":\"2024-10-21T20:47:36Z\"}"},"signingKey":{"alg":"RS256","key":"'$RS256_PRIVATE_KEY'"}}]'
-          SIGNED_ASSERTION_VERIFICATON_RS256='{"keys":{"assertion1":{"alg":"RS256","key":"'$RS256_PUBLIC_KEY'"}}}'
-
-          echo "hs256 assertions"
-
-          java -jar target/cmdline.jar \
-            --client-id=opentdf-sdk \
-            --client-secret=secret \
-            --platform-endpoint=http://localhost:8080 \
-            -h\
-            encrypt --kas-url=http://localhost:8080 --mime-type=text/plain --with-assertions="$SIGNED_ASSERTIONS_HS256" --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
-
-          java -jar target/cmdline.jar \
-            --client-id=opentdf-sdk \
-            --client-secret=secret \
-            --platform-endpoint=http://localhost:8080 \
-            -h\
-            decrypt --with-assertion-verification-keys="$SIGNED_ASSERTION_VERIFICATON_HS256" -f test.tdf > decrypted
-
-          if ! diff -q data decrypted; then
-            printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
-            exit 1
-          fi
-
-          echo "rs256 assertions"
-
-          java -jar target/cmdline.jar \
-            --client-id=opentdf-sdk \
-            --client-secret=secret \
-            --platform-endpoint=http://localhost:8080 \
-            -h\
-            encrypt --kas-url=http://localhost:8080 --mime-type=text/plain --with-assertions "$SIGNED_ASSERTIONS_RS256" --autoconfigure=false -f data -m 'here is some metadata' > test.tdf
-
-          java -jar target/cmdline.jar \
-            --client-id=opentdf-sdk \
-            --client-secret=secret \
-            --platform-endpoint=http://localhost:8080 \
-            -h\
-            decrypt --with-assertion-verification-keys "$SIGNED_ASSERTION_VERIFICATON_RS256" -f test.tdf > decrypted
-
-          if ! diff -q data decrypted; then
-            printf 'decrypted data is incorrect [%s]' "$(< decrypted)"
-            exit 1
-          fi
+          ../.github/scripts/verify_assertions_basic.sh
+          ../.github/scripts/verify_assertions_hs256.sh
+          ../.github/scripts/verify_assertions_rs256.sh
         working-directory: cmdline
+
 
   platform-xtest:
     permissions:
