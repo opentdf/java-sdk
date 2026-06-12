@@ -9,6 +9,9 @@
         <Root level="trace">
             <AppenderRef ref="Console"/>
         </Root>
+        <Logger name="io.opentdf.platform" level="trace" additivity="false">
+            <AppenderRef ref="Console" />
+        </Logger>
         <Logger name="io.grpc.netty" level="error" additivity="false">
             <AppenderRef ref="Console" />
         </Logger>
