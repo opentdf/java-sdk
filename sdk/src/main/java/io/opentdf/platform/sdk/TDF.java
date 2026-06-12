@@ -321,7 +321,6 @@ class TDF {
 
                 var isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
 
-
                 if (manifest.payload.isEncrypted) {
                     String segHashAlg = manifest.encryptionInformation.integrityInformation.segmentHashAlg;
                     Config.IntegrityAlgorithm sigAlg = Config.IntegrityAlgorithm.HS256;
@@ -642,7 +641,6 @@ class TDF {
                 aggregateHash.write(segment.hash.getBytes());
             }
         }
-
 
         String rootSigValue;
         boolean isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
