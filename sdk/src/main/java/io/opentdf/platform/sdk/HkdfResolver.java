@@ -15,12 +15,9 @@ final class HkdfResolver {
         static final HkdfProvider PROVIDER = load();
 
         private static HkdfProvider load() {
-            for (HkdfProvider p : ServiceLoader.load(
-                    HkdfProvider.class,
-                    HkdfResolver.class.getClassLoader())) {
-                return p;
-            }
-            return null;
+            return ServiceLoader.load(HkdfProvider.class, HkdfResolver.class.getClassLoader())
+                    .findFirst()
+                    .orElse(null);
         }
     }
 
