@@ -20,7 +20,6 @@ public class TDFReader {
 
     private final ZipReader.Entry manifestEntry;
     private final InputStream payload;
-    private static final Logger LOG = LoggerFactory.getLogger(TDFReader.class);
 
     public TDFReader(SeekableByteChannel tdf) throws SDKException, IOException {
         Map<String, ZipReader.Entry> entries = new ZipReader(tdf).getEntries()
