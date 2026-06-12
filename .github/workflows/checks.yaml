@@ -94,7 +94,7 @@ jobs:
       - name: Tests and enforcer (fips)
         run: |
           # install the the sdk-fips-bouncycastle jar so that FIPS mode tests work
-          mvn --batch mode install -pl sdk-fips-bouncycastle -am \
+          mvn --batch-mode install -pl sdk-fips-bouncycastle -am \
             -Dmaven.antrun.skip \
             -Dmaven.test.skip
           mvn --batch-mode test enforcer:enforce -P 'fips,!non-fips' \

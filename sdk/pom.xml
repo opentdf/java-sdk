@@ -506,9 +506,13 @@
                         <configuration>
                             <!-- we want to test that we resolve the hkdf provider correctly but adding it as a
                                  test dependency to SDK causes a circular dependency -->
-                            <additionalClasspathElements>
-                                <additionalClasspathElement>${project.basedir}/../sdk-fips-bouncycastle/target/sdk-fips-bouncycastle-${project.version}jar</additionalClasspathElement>
-                            </additionalClasspathElements>
+                            <additionalClasspathDependencies>
+                                <dependency>
+                                    <groupId>io.opentdf.platform</groupId>
+                                    <artifactId>sdk-fips-bouncycastle</artifactId>
+                                    <version>${project.version}</version>
+                                </dependency>
+                            </additionalClasspathDependencies>
                         </configuration>
                     </plugin>
                 </plugins>
