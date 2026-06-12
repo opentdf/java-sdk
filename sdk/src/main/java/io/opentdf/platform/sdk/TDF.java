@@ -58,8 +58,6 @@ class TDF {
 
     private final SDK.Services services;
 
-    private static final Logger LOG = LoggerFactory.getLogger(TDF.class);
-
     /**
      * Constructs a new TDF instance using the default maximum input size defined by
      * MAX_TDF_INPUT_SIZE.
@@ -299,7 +297,6 @@ class TDF {
 
         public void readPayload(OutputStream outputStream) throws SDK.SegmentSignatureMismatch, IOException {
 
-            LOG.info("Reading payload");
             MessageDigest digest = null;
             try {
                 digest = MessageDigest.getInstance("SHA-256");
@@ -308,7 +305,6 @@ class TDF {
             }
 
             for (Manifest.Segment segment : manifest.encryptionInformation.integrityInformation.segments) {
-                LOG.info("reading a segment");
                 if (segment.encryptedSegmentSize > Config.MAX_SEGMENT_SIZE) {
                     throw new IllegalStateException("Segment size " + segment.encryptedSegmentSize + " exceeded limit "
                             + Config.MAX_SEGMENT_SIZE);
@@ -324,7 +320,6 @@ class TDF {
                 }
 
                 var isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
-
 
                 if (manifest.payload.isEncrypted) {
                     String segHashAlg = manifest.encryptionInformation.integrityInformation.segmentHashAlg;
@@ -353,9 +348,7 @@ class TDF {
 
                     outputStream.write(readBuf);
                 }
-                LOG.info("read a segment");
             }
-            LOG.info("finished reading payload");
         }
 
         public PolicyObject readPolicyObject() {
@@ -552,9 +545,7 @@ class TDF {
     Reader loadTDF(SeekableByteChannel tdf, Config.TDFReaderConfig tdfReaderConfig) throws SDKException, IOException {
 
         TDFReader tdfReader = new TDFReader(tdf);
-        LOG.info("loaded the tdf reader");
         String manifestJson = tdfReader.manifest();
-        LOG.info("here is the manifest json {}", manifestJson);
         // use Manifest.readManifest in order to validate the Manifest input
         Manifest manifest = Manifest.readManifest(manifestJson);
 
@@ -651,7 +642,6 @@ class TDF {
             }
         }
 
-
         String rootSigValue;
         boolean isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
         if (manifest.payload.isEncrypted) {
@@ -675,8 +665,6 @@ class TDF {
 
             rootSigValue = Base64.getEncoder().encodeToString(digest.digest(aggregateHash.toString().getBytes()));
         }
-
-        LOG.info("validated the signature");
 
         if (rootSignature.compareTo(rootSigValue) != 0) {
             throw new SDK.RootSignatureValidationException("root signature validation failed");
@@ -739,8 +727,6 @@ class TDF {
                 throw new SDK.AssertionException("failed integrity check on assertion signature", assertion.id);
             }
         }
-
-        LOG.info("returning payload reader");
 
         return new Reader(tdfReader, manifest, payloadKey, unencryptedMetadata);
     }
