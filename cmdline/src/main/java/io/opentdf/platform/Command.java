@@ -78,7 +78,7 @@ class Command {
 
         @Override
         public Integer call() {
-            return "dpop".equalsIgnoreCase(feature) ? 0 : 1;
+            return ("dpop".equalsIgnoreCase(feature) || "dpop_nonce_challenge".equalsIgnoreCase(feature)) ? 0 : 1;
         }
     }
 
