@@ -20,6 +20,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.SSLSocketFactory;
+import java.io.IOException;
+import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -54,6 +56,7 @@ class TokenSource {
      * @param sslSocketFactory  Optional SSLSocketFactory for token endpoint requests
      */
     public TokenSource(ClientAuthentication clientAuth, JWK dpopJwk, JWSAlgorithm dpopAlg, URI tokenEndpointURI, AuthorizationGrant authzGrant, SSLSocketFactory sslSocketFactory) {
+        DpopKeyValidation.validate(dpopJwk, dpopAlg);
         this.clientAuth = clientAuth;
         this.dpopJwk = dpopJwk;
         this.dpopAlg = dpopAlg;
@@ -211,7 +214,8 @@ class TokenSource {
                                 cacheNonce(tokenEndpointUrl, rotatedNonce);
                             }
                         } else {
-                            logger.warn("server returned use_dpop_nonce but did not supply a DPoP-Nonce response header");
+                            logger.warn("token endpoint {} returned use_dpop_nonce but did not supply a DPoP-Nonce response header",
+                                    tokenEndpointURI);
                         }
                     }
                     if (!tokenResponse.indicatesSuccess()) {
@@ -228,10 +232,15 @@ class TokenSource {
                 } else if (tokens.getAccessToken() != null) {
                     logger.trace("retrieved a new access token");
                 } else {
-                    logger.trace("got an access token of unknown type");
+                    logger.warn("token endpoint {} returned a success response with an unknown access token type",
+                            tokenEndpointURI);
                 }
 
                 this.token = tokens.getAccessToken();
+                if (this.token == null) {
+                    throw new SDKException("token endpoint " + tokenEndpointURI
+                            + " returned a success response with no access token");
+                }
 
                 if (token.getLifetime() != 0) {
                     this.tokenExpiryTime = Instant.now().plusSeconds(token.getLifetime() / 3);
@@ -242,8 +251,19 @@ class TokenSource {
                 return this.token;
             }
 
-        } catch (Exception e) {
-            throw new SDKException("failed to get token", e);
+        } catch (SDKException e) {
+            // Already shaped for the caller — don't double-wrap.
+            throw e;
+        } catch (MalformedURLException e) {
+            throw new SDKException("invalid token endpoint URL: " + tokenEndpointURI, e);
+        } catch (IOException e) {
+            throw new SDKException("network error contacting token endpoint " + tokenEndpointURI, e);
+        } catch (JOSEException e) {
+            throw new SDKException("DPoP proof generation failed for token endpoint " + tokenEndpointURI, e);
+        } catch (com.nimbusds.oauth2.sdk.ParseException e) {
+            throw new SDKException("malformed token response from " + tokenEndpointURI, e);
+        } catch (RuntimeException e) {
+            throw new SDKException("unexpected error fetching token from " + tokenEndpointURI, e);
         }
         return this.token;
     }

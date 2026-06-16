@@ -198,6 +198,101 @@ public class SDKBuilderTest {
         }
     }
 
+    @Test
+    void ecDpopKeyAutoGeneratesRsaSrtSigner() throws Exception {
+        // When the caller supplies an EC DPoP key, the SDK must auto-generate a separate
+        // RSA-2048 key for SRT signing because DefaultSrtSigner uses RSASSASigner which
+        // rejects non-RSA keys. Without this separation, build() would throw inside
+        // DefaultSrtSigner's constructor.
+        WellKnownServiceGrpc.WellKnownServiceImplBase wellKnownService = new WellKnownServiceGrpc.WellKnownServiceImplBase() {
+            @Override
+            public void getWellKnownConfiguration(GetWellKnownConfigurationRequest request,
+                                                  StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
+                responseObserver.onNext(GetWellKnownConfigurationResponse.getDefaultInstance());
+                responseObserver.onCompleted();
+            }
+        };
+
+        Server platformServices = null;
+        try {
+            platformServices = ServerBuilder
+                    .forPort(getRandomPort())
+                    .directExecutor()
+                    .addService(wellKnownService)
+                    .build()
+                    .start();
+
+            com.nimbusds.jose.jwk.ECKey ecDpopKey = new com.nimbusds.jose.jwk.gen.ECKeyGenerator(com.nimbusds.jose.jwk.Curve.P_256)
+                    .keyUse(com.nimbusds.jose.jwk.KeyUse.SIGNATURE)
+                    .keyID(java.util.UUID.randomUUID().toString())
+                    .generate();
+
+            var sdk = SDKBuilder.newBuilder()
+                    .clientSecret("user", "password")
+                    .platformEndpoint("http://localhost:" + platformServices.getPort())
+                    .useInsecurePlaintextConnection(true)
+                    .protocol(ProtocolType.GRPC)
+                    .dpopKey(ecDpopKey)
+                    .build();
+
+            assertThat(sdk.getSrtSigner()).isPresent();
+            assertThat(sdk.getSrtSigner().get().alg()).isEqualTo("RS256");
+            // Sanity-check: the SRT signer can actually sign, which would fail if it was
+            // mistakenly handed the EC key (RSASSASigner constructor would have thrown).
+            byte[] signed = sdk.getSrtSigner().get().sign(new byte[]{1, 2, 3});
+            assertThat(signed).isNotEmpty();
+        } finally {
+            if (platformServices != null) {
+                platformServices.shutdownNow();
+            }
+        }
+    }
+
+    @Test
+    void rsaDpopKeyReusesSameKeyForSrt() throws Exception {
+        // When the caller supplies an RSA DPoP key, SDKBuilder reuses it for SRT signing
+        // (no second RSA key is generated). This test pins that behavior so a regression
+        // that splits the keys (and burns a key-generation per build) is caught.
+        WellKnownServiceGrpc.WellKnownServiceImplBase wellKnownService = new WellKnownServiceGrpc.WellKnownServiceImplBase() {
+            @Override
+            public void getWellKnownConfiguration(GetWellKnownConfigurationRequest request,
+                                                  StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
+                responseObserver.onNext(GetWellKnownConfigurationResponse.getDefaultInstance());
+                responseObserver.onCompleted();
+            }
+        };
+
+        Server platformServices = null;
+        try {
+            platformServices = ServerBuilder
+                    .forPort(getRandomPort())
+                    .directExecutor()
+                    .addService(wellKnownService)
+                    .build()
+                    .start();
+
+            com.nimbusds.jose.jwk.RSAKey rsaDpopKey = new com.nimbusds.jose.jwk.gen.RSAKeyGenerator(2048)
+                    .keyUse(com.nimbusds.jose.jwk.KeyUse.SIGNATURE)
+                    .keyID(java.util.UUID.randomUUID().toString())
+                    .generate();
+
+            var sdk = SDKBuilder.newBuilder()
+                    .clientSecret("user", "password")
+                    .platformEndpoint("http://localhost:" + platformServices.getPort())
+                    .useInsecurePlaintextConnection(true)
+                    .protocol(ProtocolType.GRPC)
+                    .dpopKey(rsaDpopKey)
+                    .build();
+
+            assertThat(sdk.getSrtSigner()).isPresent();
+            assertThat(sdk.getSrtSigner().get().alg()).isEqualTo("RS256");
+        } finally {
+            if (platformServices != null) {
+                platformServices.shutdownNow();
+            }
+        }
+    }
+
     void sdkServicesSetup(boolean useSSLPlatform, boolean useSSLIDP) throws Exception {
 
         HeldCertificate rootCertificate = new HeldCertificate.Builder()

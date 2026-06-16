@@ -522,10 +522,10 @@ public class SDKBuilder {
     }
 
     private static JWSAlgorithm inferEcAlgorithm(ECKey ecKey) {
-        Curve curve = ecKey.getCurve();
-        if (Curve.P_256.equals(curve)) return JWSAlgorithm.ES256;
-        if (Curve.P_384.equals(curve)) return JWSAlgorithm.ES384;
-        if (Curve.P_521.equals(curve)) return JWSAlgorithm.ES512;
-        throw new SDKException("Unsupported EC curve for DPoP: " + curve);
+        try {
+            return DpopKeyValidation.inferEcAlgorithm(ecKey.getCurve());
+        } catch (IllegalArgumentException e) {
+            throw new SDKException(e.getMessage(), e);
+        }
     }
 }
