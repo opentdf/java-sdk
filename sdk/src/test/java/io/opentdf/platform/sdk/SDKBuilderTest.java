@@ -204,45 +204,30 @@ public class SDKBuilderTest {
         // RSA-2048 key for SRT signing because DefaultSrtSigner uses RSASSASigner which
         // rejects non-RSA keys. Without this separation, build() would throw inside
         // DefaultSrtSigner's constructor.
-        WellKnownServiceGrpc.WellKnownServiceImplBase wellKnownService = new WellKnownServiceGrpc.WellKnownServiceImplBase() {
-            @Override
-            public void getWellKnownConfiguration(GetWellKnownConfigurationRequest request,
-                                                  StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
-                responseObserver.onNext(GetWellKnownConfigurationResponse.getDefaultInstance());
-                responseObserver.onCompleted();
-            }
-        };
+        try (MockWebServer oidcServer = startMockOidcServer()) {
+            String issuer = oidcServer.url("my_realm").toString();
+            Server platformServices = startWellKnownGrpcServer(issuer);
+            try {
+                com.nimbusds.jose.jwk.ECKey ecDpopKey = new com.nimbusds.jose.jwk.gen.ECKeyGenerator(com.nimbusds.jose.jwk.Curve.P_256)
+                        .keyUse(com.nimbusds.jose.jwk.KeyUse.SIGNATURE)
+                        .keyID(java.util.UUID.randomUUID().toString())
+                        .generate();
 
-        Server platformServices = null;
-        try {
-            platformServices = ServerBuilder
-                    .forPort(getRandomPort())
-                    .directExecutor()
-                    .addService(wellKnownService)
-                    .build()
-                    .start();
+                var sdk = SDKBuilder.newBuilder()
+                        .clientSecret("user", "password")
+                        .platformEndpoint("http://localhost:" + platformServices.getPort())
+                        .useInsecurePlaintextConnection(true)
+                        .protocol(ProtocolType.GRPC)
+                        .dpopKey(ecDpopKey)
+                        .build();
 
-            com.nimbusds.jose.jwk.ECKey ecDpopKey = new com.nimbusds.jose.jwk.gen.ECKeyGenerator(com.nimbusds.jose.jwk.Curve.P_256)
-                    .keyUse(com.nimbusds.jose.jwk.KeyUse.SIGNATURE)
-                    .keyID(java.util.UUID.randomUUID().toString())
-                    .generate();
-
-            var sdk = SDKBuilder.newBuilder()
-                    .clientSecret("user", "password")
-                    .platformEndpoint("http://localhost:" + platformServices.getPort())
-                    .useInsecurePlaintextConnection(true)
-                    .protocol(ProtocolType.GRPC)
-                    .dpopKey(ecDpopKey)
-                    .build();
-
-            assertThat(sdk.getSrtSigner()).isPresent();
-            assertThat(sdk.getSrtSigner().get().alg()).isEqualTo("RS256");
-            // Sanity-check: the SRT signer can actually sign, which would fail if it was
-            // mistakenly handed the EC key (RSASSASigner constructor would have thrown).
-            byte[] signed = sdk.getSrtSigner().get().sign(new byte[]{1, 2, 3});
-            assertThat(signed).isNotEmpty();
-        } finally {
-            if (platformServices != null) {
+                assertThat(sdk.getSrtSigner()).isPresent();
+                assertThat(sdk.getSrtSigner().get().alg()).isEqualTo("RS256");
+                // Sanity-check: the SRT signer can actually sign, which would fail if it was
+                // mistakenly handed the EC key (RSASSASigner constructor would have thrown).
+                byte[] signed = sdk.getSrtSigner().get().sign(new byte[]{1, 2, 3});
+                assertThat(signed).isNotEmpty();
+            } finally {
                 platformServices.shutdownNow();
             }
         }
@@ -253,44 +238,62 @@ public class SDKBuilderTest {
         // When the caller supplies an RSA DPoP key, SDKBuilder reuses it for SRT signing
         // (no second RSA key is generated). This test pins that behavior so a regression
         // that splits the keys (and burns a key-generation per build) is caught.
+        try (MockWebServer oidcServer = startMockOidcServer()) {
+            String issuer = oidcServer.url("my_realm").toString();
+            Server platformServices = startWellKnownGrpcServer(issuer);
+            try {
+                com.nimbusds.jose.jwk.RSAKey rsaDpopKey = new com.nimbusds.jose.jwk.gen.RSAKeyGenerator(2048)
+                        .keyUse(com.nimbusds.jose.jwk.KeyUse.SIGNATURE)
+                        .keyID(java.util.UUID.randomUUID().toString())
+                        .generate();
+
+                var sdk = SDKBuilder.newBuilder()
+                        .clientSecret("user", "password")
+                        .platformEndpoint("http://localhost:" + platformServices.getPort())
+                        .useInsecurePlaintextConnection(true)
+                        .protocol(ProtocolType.GRPC)
+                        .dpopKey(rsaDpopKey)
+                        .build();
+
+                assertThat(sdk.getSrtSigner()).isPresent();
+                assertThat(sdk.getSrtSigner().get().alg()).isEqualTo("RS256");
+            } finally {
+                platformServices.shutdownNow();
+            }
+        }
+    }
+
+    private MockWebServer startMockOidcServer() throws IOException {
+        MockWebServer httpServer = new MockWebServer();
+        httpServer.start();
+        String issuer = httpServer.url("my_realm").toString();
+        String tokenEndpoint = httpServer.url("tokens").toString();
+        String oidcConfig;
+        try (var in = SDKBuilderTest.class.getResourceAsStream("/oidc-config.json")) {
+            oidcConfig = new String(in.readAllBytes(), StandardCharsets.UTF_8)
+                    .replace("<issuer>", issuer)
+                    .replace("<token_endpoint>", tokenEndpoint);
+        }
+        httpServer.enqueue(new MockResponse().setBody(oidcConfig).setHeader("Content-type", "application/json"));
+        return httpServer;
+    }
+
+    private Server startWellKnownGrpcServer(String issuer) throws IOException {
         WellKnownServiceGrpc.WellKnownServiceImplBase wellKnownService = new WellKnownServiceGrpc.WellKnownServiceImplBase() {
             @Override
             public void getWellKnownConfiguration(GetWellKnownConfigurationRequest request,
                                                   StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
-                responseObserver.onNext(GetWellKnownConfigurationResponse.getDefaultInstance());
+                var val = Value.newBuilder().setStringValue(issuer).build();
+                var config = Struct.newBuilder().putFields("platform_issuer", val).build();
+                responseObserver.onNext(GetWellKnownConfigurationResponse.newBuilder().setConfiguration(config).build());
                 responseObserver.onCompleted();
             }
         };
-
-        Server platformServices = null;
-        try {
-            platformServices = ServerBuilder
-                    .forPort(getRandomPort())
-                    .directExecutor()
-                    .addService(wellKnownService)
-                    .build()
-                    .start();
-
-            com.nimbusds.jose.jwk.RSAKey rsaDpopKey = new com.nimbusds.jose.jwk.gen.RSAKeyGenerator(2048)
-                    .keyUse(com.nimbusds.jose.jwk.KeyUse.SIGNATURE)
-                    .keyID(java.util.UUID.randomUUID().toString())
-                    .generate();
-
-            var sdk = SDKBuilder.newBuilder()
-                    .clientSecret("user", "password")
-                    .platformEndpoint("http://localhost:" + platformServices.getPort())
-                    .useInsecurePlaintextConnection(true)
-                    .protocol(ProtocolType.GRPC)
-                    .dpopKey(rsaDpopKey)
-                    .build();
-
-            assertThat(sdk.getSrtSigner()).isPresent();
-            assertThat(sdk.getSrtSigner().get().alg()).isEqualTo("RS256");
-        } finally {
-            if (platformServices != null) {
-                platformServices.shutdownNow();
-            }
-        }
+        return ServerBuilder.forPort(getRandomPort())
+                .directExecutor()
+                .addService(wellKnownService)
+                .build()
+                .start();
     }
 
     void sdkServicesSetup(boolean useSSLPlatform, boolean useSSLIDP) throws Exception {
@@ -601,6 +604,48 @@ public class SDKBuilderTest {
 
             assertThat(getNsCalled.get()).isTrue();
             assertThat(authHeader.get()).isNullOrEmpty();
+        } finally {
+            platformServices.shutdownNow();
+        }
+    }
+
+    @Test
+    public void dpopRequestedButPlatformIssuerMissingThrows() throws Exception {
+        // If the well-known config omits platform_issuer but the caller explicitly opted into
+        // DPoP via dpopKey(...), the builder must fail loudly — we cannot configure DPoP
+        // without a token endpoint, and silently dropping DPoP would surface as a confusing
+        // 401 from a DPoP-enforcing resource server.
+        WellKnownServiceGrpc.WellKnownServiceImplBase wellKnownService = new WellKnownServiceGrpc.WellKnownServiceImplBase() {
+            @Override
+            public void getWellKnownConfiguration(GetWellKnownConfigurationRequest request,
+                    StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
+                responseObserver.onNext(GetWellKnownConfigurationResponse.getDefaultInstance());
+                responseObserver.onCompleted();
+            }
+        };
+
+        Server platformServices = ServerBuilder
+                .forPort(getRandomPort())
+                .directExecutor()
+                .addService(wellKnownService)
+                .build();
+        try {
+            platformServices.start();
+
+            com.nimbusds.jose.jwk.RSAKey dpopKey = new com.nimbusds.jose.jwk.gen.RSAKeyGenerator(2048)
+                    .keyUse(com.nimbusds.jose.jwk.KeyUse.SIGNATURE)
+                    .keyID(java.util.UUID.randomUUID().toString())
+                    .generate();
+
+            SDKBuilder builder = SDKBuilder.newBuilder()
+                    .clientSecret("user", "password")
+                    .platformEndpoint("http://localhost:" + platformServices.getPort())
+                    .useInsecurePlaintextConnection(true)
+                    .protocol(ProtocolType.GRPC)
+                    .dpopKey(dpopKey);
+
+            SDKException ex = assertThrows(SDKException.class, builder::build);
+            assertThat(ex.getMessage()).contains("DPoP").contains("platform_issuer");
         } finally {
             platformServices.shutdownNow();
         }
