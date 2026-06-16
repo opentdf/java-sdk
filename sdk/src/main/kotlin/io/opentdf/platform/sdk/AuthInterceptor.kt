@@ -85,7 +85,8 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
     }
 
     /**
-     * Returns an OkHttp interceptor that retries on RFC 9449 §8 DPoP nonce challenges.
+     * Returns an OkHttp interceptor that retries on RFC 9449 §9 DPoP nonce challenges
+     * from resource servers (KAS and the platform-services Connect client).
      * A 401 is retried only when WWW-Authenticate carries scheme=DPoP and error=use_dpop_nonce;
      * any other 401 (or any 401 with only a stray DPoP-Nonce header) is passed through unchanged.
      * Rotated nonces are cached after every successful proceed so the next request picks them up.
@@ -94,7 +95,7 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
         val url = chain.request().url.toUrl()
         var response = chain.proceed(chain.request())
 
-        // RFC 9449 §8.1: cache any rotated nonce from the response, regardless of status.
+        // RFC 9449 §9: cache any rotated nonce from the response, regardless of status.
         cacheNonceIfPresent(url, response)
 
         if (response.code == 401 && isDpopNonceChallenge(response)) {

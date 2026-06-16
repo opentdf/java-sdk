@@ -353,7 +353,7 @@ class DPoPRetryInterceptorTest {
 
     @Test
     void noRetryOn401WithDpopErrorOtherThanUseDpopNonce() throws Exception {
-        // RFC 9449 §8 only signals retry on error=use_dpop_nonce. Other DPoP errors
+        // RFC 9449 §9 only signals retry on error=use_dpop_nonce. Other DPoP errors
         // (invalid_token, insufficient_scope, etc.) must surface to the caller.
         RSAKey rsaKey = new RSAKeyGenerator(2048)
                 .keyUse(KeyUse.SIGNATURE)
@@ -390,7 +390,7 @@ class DPoPRetryInterceptorTest {
 
     @Test
     void rotatedNonceFromSuccessfulResponseIsCachedForNextRequest() throws Exception {
-        // RFC 9449 §8.1: any response (including 200) may rotate the nonce. The retry
+        // RFC 9449 §9: any response (including 200) may rotate the nonce. The retry
         // interceptor must pick that up so the *next* request picks it from the cache.
         // Note: the retry interceptor itself does not stamp DPoP headers on the initial
         // request — those come from the auth path that builds the request — so we
