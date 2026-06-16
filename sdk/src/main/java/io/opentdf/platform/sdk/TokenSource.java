@@ -169,7 +169,8 @@ class TokenSource {
                 DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(dpopJwk, dpopAlg);
 
                 // Proactively use any cached nonce for the token endpoint origin (RFC 9449 §8)
-                String cachedNonce = nonceCache.get(getOrigin(tokenEndpointURI.toURL()));
+                URL tokenEndpointUrl = tokenEndpointURI.toURL();
+                String cachedNonce = nonceCache.get(getOrigin(tokenEndpointUrl));
 
                 TokenRequest tokenRequest = new TokenRequest(this.tokenEndpointURI, clientAuth, authzGrant, null);
                 HTTPRequest httpRequest = tokenRequest.toHTTPRequest();
@@ -191,7 +192,7 @@ class TokenSource {
                     if ("use_dpop_nonce".equals(error.getCode())) {
                         String dpopNonce = httpResponse.getHeaderValue("DPoP-Nonce");
                         if (dpopNonce != null) {
-                            cacheNonce(tokenEndpointURI.toURL(), dpopNonce);
+                            cacheNonce(tokenEndpointUrl, dpopNonce);
                             TokenRequest retryRequest = new TokenRequest(tokenEndpointURI, clientAuth, authzGrant, null);
                             HTTPRequest retryHttpRequest = retryRequest.toHTTPRequest();
                             if (sslSocketFactory != null) {
@@ -204,6 +205,13 @@ class TokenSource {
                             retryHttpRequest.setDPoP(retryProof);
                             httpResponse = retryHttpRequest.send();
                             tokenResponse = TokenResponse.parse(httpResponse);
+                            // Cache any nonce rotation from the AS (RFC 9449 §8.1)
+                            String rotatedNonce = httpResponse.getHeaderValue("DPoP-Nonce");
+                            if (rotatedNonce != null) {
+                                cacheNonce(tokenEndpointUrl, rotatedNonce);
+                            }
+                        } else {
+                            logger.warn("server returned use_dpop_nonce but did not supply a DPoP-Nonce response header");
                         }
                     }
                     if (!tokenResponse.indicatesSuccess()) {
