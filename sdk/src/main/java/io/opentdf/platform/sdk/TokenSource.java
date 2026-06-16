@@ -126,10 +126,11 @@ class TokenSource {
             }
 
             SignedJWT proof;
+            URI htu = htuOf(url.toURI());
             if (nonce != null) {
-                proof = dpopFactory.createDPoPJWT(method, url.toURI(), t, new Nonce(nonce));
+                proof = dpopFactory.createDPoPJWT(method, htu, t, new Nonce(nonce));
             } else {
-                proof = dpopFactory.createDPoPJWT(method, url.toURI(), t);
+                proof = dpopFactory.createDPoPJWT(method, htu, t);
             }
             dpopProof = proof.serialize();
         } catch (URISyntaxException e) {
@@ -154,6 +155,19 @@ class TokenSource {
             String origin = getOrigin(url);
             nonceCache.put(origin, nonce);
             logger.trace("Cached DPoP nonce for origin: {}", origin);
+        }
+    }
+
+    // RFC 9449 §4.2: the htu claim is the request URI with query and fragment removed.
+    // Nimbus rejects any URI carrying a query, so strip both before handing it off.
+    private static URI htuOf(URI uri) {
+        if (uri.getRawQuery() == null && uri.getRawFragment() == null) {
+            return uri;
+        }
+        try {
+            return new URI(uri.getScheme(), uri.getAuthority(), uri.getPath(), null, null);
+        } catch (URISyntaxException e) {
+            throw new SDKException("failed to normalize URI for DPoP htu claim: " + uri, e);
         }
     }
 
@@ -194,9 +208,10 @@ class TokenSource {
                 if (sslSocketFactory != null) {
                     httpRequest.setSSLSocketFactory(sslSocketFactory);
                 }
+                URI tokenHtu = htuOf(httpRequest.getURI());
                 SignedJWT proof = (cachedNonce != null)
-                        ? dpopFactory.createDPoPJWT(httpRequest.getMethod().name(), httpRequest.getURI(), new Nonce(cachedNonce))
-                        : dpopFactory.createDPoPJWT(httpRequest.getMethod().name(), httpRequest.getURI());
+                        ? dpopFactory.createDPoPJWT(httpRequest.getMethod().name(), tokenHtu, new Nonce(cachedNonce))
+                        : dpopFactory.createDPoPJWT(httpRequest.getMethod().name(), tokenHtu);
                 httpRequest.setDPoP(proof);
 
                 HTTPResponse httpResponse = httpRequest.send();
@@ -217,7 +232,7 @@ class TokenSource {
                             }
                             SignedJWT retryProof = dpopFactory.createDPoPJWT(
                                     retryHttpRequest.getMethod().name(),
-                                    retryHttpRequest.getURI(),
+                                    htuOf(retryHttpRequest.getURI()),
                                     new Nonce(dpopNonce));
                             retryHttpRequest.setDPoP(retryProof);
                             httpResponse = retryHttpRequest.send();

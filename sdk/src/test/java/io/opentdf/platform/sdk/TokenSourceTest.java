@@ -127,6 +127,31 @@ class TokenSourceTest {
     }
 
     @Test
+    void htuClaimStripsQueryAndFragment() throws Exception {
+        // RFC 9449 §4.2: htu must omit query and fragment, and Nimbus rejects
+        // anything else with IllegalArgumentException.
+        RSAKey rsaKey = new RSAKeyGenerator(2048)
+                .keyUse(KeyUse.SIGNATURE)
+                .keyID(UUID.randomUUID().toString())
+                .generate();
+        try (MockWebServer tokenServer = new MockWebServer()) {
+            tokenServer.enqueue(new MockResponse()
+                    .setBody(FAKE_TOKEN_RESPONSE)
+                    .setHeader("Content-Type", "application/json"));
+            tokenServer.start();
+
+            TokenSource ts = buildTokenSource(tokenServer, rsaKey);
+            URL urlWithQuery = new URL("https://kas.example.com/kas?foo=bar&baz=qux#frag");
+
+            TokenSource.AuthHeaders headers = ts.getAuthHeaders(urlWithQuery, "POST");
+            SignedJWT dpopJwt = SignedJWT.parse(headers.getDpopHeader());
+            String htu = dpopJwt.getJWTClaimsSet().getStringClaim("htu");
+
+            assertThat(htu).isEqualTo("https://kas.example.com/kas");
+        }
+    }
+
+    @Test
     void ecKeyGeneratesDPoPProof() throws Exception {
         ECKey ecKey = new ECKeyGenerator(Curve.P_256)
                 .keyUse(KeyUse.SIGNATURE)
