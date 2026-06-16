@@ -21,6 +21,7 @@ import java.net.URL;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class TokenSourceTest {
 
@@ -249,6 +250,29 @@ class TokenSourceTest {
             String secondNonce = SignedJWT.parse(second.getHeader("DPoP"))
                     .getJWTClaimsSet().getStringClaim("nonce");
             assertThat(secondNonce).isEqualTo("retry-nonce-abc");
+        }
+    }
+
+    @Test
+    void getToken_throwsDescriptiveErrorWhenUseDpopNonceLacksHeader() throws Exception {
+        RSAKey rsaKey = new RSAKeyGenerator(2048)
+                .keyUse(KeyUse.SIGNATURE)
+                .keyID(UUID.randomUUID().toString())
+                .generate();
+        try (MockWebServer tokenServer = new MockWebServer()) {
+            // 401 use_dpop_nonce but NO DPoP-Nonce header
+            tokenServer.enqueue(new MockResponse()
+                    .setResponseCode(401)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody("{\"error\":\"use_dpop_nonce\",\"error_description\":\"nonce required\"}"));
+            tokenServer.start();
+
+            TokenSource ts = buildTokenSource(tokenServer, rsaKey);
+
+            assertThatThrownBy(() -> ts.getAuthHeaders(new URL("https://kas.example.com/kas"), "POST"))
+                    .isInstanceOf(SDKException.class)
+                    .satisfies(e -> assertThat(e.getMessage() + (e.getCause() != null ? e.getCause().getMessage() : ""))
+                            .contains("use_dpop_nonce"));
         }
     }
 
