@@ -5,9 +5,11 @@ import com.connectrpc.StreamFunction
 import com.connectrpc.UnaryFunction
 import com.connectrpc.http.UnaryHTTPRequest
 import com.connectrpc.http.clone
+import org.slf4j.LoggerFactory
 import java.net.URL
 
 internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
+    private val logger = LoggerFactory.getLogger(AuthInterceptor::class.java)
     // The connect-kotlin Interceptor API exposes no per-call context to thread the
     // request URL into responseFunction. ThreadLocal is the workaround, relying on
     // connect-kotlin's contract that requestFunction and responseFunction for a single
@@ -105,7 +107,12 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
                     .header("Authorization", authHeaders.authHeader)
                     .header("DPoP", authHeaders.dpopHeader)
                     .build()
-                response = chain.proceed(newRequest)
+                response = try {
+                    chain.proceed(newRequest)
+                } catch (e: Exception) {
+                    logger.debug("DPoP retry request to {} failed", url, e)
+                    throw e
+                }
                 cacheNonceIfPresent(url, response)
             }
         }
