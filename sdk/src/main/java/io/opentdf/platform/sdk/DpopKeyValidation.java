@@ -6,11 +6,11 @@ import com.nimbusds.jose.jwk.ECKey;
 import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.RSAKey;
 
-final class DpopKeyValidation {
+public final class DpopKeyValidation {
     private DpopKeyValidation() {
     }
 
-    static void validate(JWK jwk, JWSAlgorithm alg) {
+    public static void validate(JWK jwk, JWSAlgorithm alg) {
         if (jwk == null) {
             throw new IllegalArgumentException("DPoP JWK cannot be null");
         }
@@ -35,7 +35,7 @@ final class DpopKeyValidation {
         }
     }
 
-    static JWSAlgorithm inferEcAlgorithm(Curve curve) {
+    public static JWSAlgorithm inferEcAlgorithm(Curve curve) {
         if (Curve.P_256.equals(curve)) {
             return JWSAlgorithm.ES256;
         }
