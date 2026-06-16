@@ -462,7 +462,7 @@ public class SDKBuilderTest {
             assertThat(authorizationServiceClientInterface).isNotNull();
 
             httpServer.enqueue(new MockResponse()
-                    .setBody("{\"access_token\": \"hereisthetoken\", \"token_type\": \"Bearer\"}")
+                    .setBody("{\"access_token\": \"hereisthetoken\", \"token_type\": \"DPoP\"}")
                     .setHeader("Content-Type", "application/json"));
 
             ResponseMessageKt.getOrThrow(services.namespaces().getNamespaceBlocking(GetNamespaceRequest.getDefaultInstance(), Collections.emptyMap()).execute());
