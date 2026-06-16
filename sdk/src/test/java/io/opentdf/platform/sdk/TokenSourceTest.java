@@ -27,7 +27,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class TokenSourceTest {
 
     private static final String FAKE_TOKEN_RESPONSE =
-            "{\"access_token\":\"test-access-token\",\"token_type\":\"Bearer\",\"expires_in\":3600}";
+            "{\"access_token\":\"test-access-token\",\"token_type\":\"DPoP\",\"expires_in\":3600}";
+
+    private static final String BEARER_TOKEN_RESPONSE =
+            "{\"access_token\":\"plain-bearer-token\",\"token_type\":\"Bearer\",\"expires_in\":3600}";
 
     private TokenSource buildTokenSource(MockWebServer tokenServer, RSAKey rsaKey) throws Exception {
         return new TokenSource(
@@ -455,6 +458,32 @@ class TokenSourceTest {
             String nonceClaim = SignedJWT.parse(request.getHeader("DPoP"))
                     .getJWTClaimsSet().getStringClaim("nonce");
             assertThat(nonceClaim).isEqualTo("proactive-nonce");
+        }
+    }
+
+    @Test
+    void getAuthHeaders_downgradesToBearerWhenTokenEndpointReturnsBearer() throws Exception {
+        // Keycloak realms with DPoP disabled return token_type=Bearer even when the client
+        // sent a DPoP proof. The SDK must not emit "Authorization: DPoP <bearer-token>" —
+        // that scheme is reserved for DPoP-bound tokens (RFC 9449 §7.1) and a DPoP-enforcing
+        // resource server will reject it. Downgrade to Bearer and omit the proof.
+        RSAKey rsaKey = new RSAKeyGenerator(2048)
+                .keyUse(KeyUse.SIGNATURE)
+                .keyID(UUID.randomUUID().toString())
+                .generate();
+        try (MockWebServer tokenServer = new MockWebServer()) {
+            tokenServer.enqueue(new MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody(BEARER_TOKEN_RESPONSE));
+            tokenServer.start();
+
+            TokenSource ts = buildTokenSource(tokenServer, rsaKey);
+
+            TokenSource.AuthHeaders headers = ts.getAuthHeaders(new URL("https://kas.example.com/kas"), "POST");
+
+            assertThat(headers.getAuthHeader()).isEqualTo("Bearer plain-bearer-token");
+            assertThat(headers.getDpopHeader()).isNull();
         }
     }
 }
