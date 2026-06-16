@@ -199,7 +199,7 @@ class TokenSource {
 
                 DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(dpopJwk, dpopAlg);
 
-                // Proactively use any cached nonce for the token endpoint origin (RFC 9449 §8)
+                // Proactively use any cached nonce for the token endpoint origin (RFC 9449 §8.2)
                 URL tokenEndpointUrl = tokenEndpointURI.toURL();
                 String cachedNonce = nonceCache.get(getOrigin(tokenEndpointUrl));
 
@@ -218,7 +218,7 @@ class TokenSource {
 
                 TokenResponse tokenResponse = TokenResponse.parse(httpResponse);
 
-                // RFC 9449 §8: if AS requires a nonce, cache it and retry once
+                // RFC 9449 §8.2: if AS requires a nonce, cache it and retry once
                 if (!tokenResponse.indicatesSuccess()) {
                     ErrorObject error = tokenResponse.toErrorResponse().getErrorObject();
                     if ("use_dpop_nonce".equals(error.getCode())) {
@@ -237,7 +237,7 @@ class TokenSource {
                             retryHttpRequest.setDPoP(retryProof);
                             httpResponse = retryHttpRequest.send();
                             tokenResponse = TokenResponse.parse(httpResponse);
-                            // Cache any nonce rotation from the AS (RFC 9449 §8.1)
+                            // Cache any nonce rotation from the AS (RFC 9449 §8.2)
                             String rotatedNonce = httpResponse.getHeaderValue("DPoP-Nonce");
                             if (rotatedNonce != null) {
                                 cacheNonce(tokenEndpointUrl, rotatedNonce);
