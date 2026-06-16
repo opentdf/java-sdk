@@ -274,6 +274,12 @@ public class SDKBuilder {
                     .getFieldsOrThrow(PLATFORM_ISSUER)
                     .getStringValue();
         } catch (IllegalArgumentException e) {
+            if (this.dpopKey != null || this.dpopAlg != null) {
+                throw new SDKException(
+                        "DPoP was requested but the platform_issuer is missing from the well-known "
+                                + "configuration at " + platformEndpoint
+                                + "; the SDK cannot configure DPoP without a token endpoint", e);
+            }
             logger.warn(
                     "no `platform_issuer` found in well known configuration. requests from the SDK will be unauthenticated",
                     e);
