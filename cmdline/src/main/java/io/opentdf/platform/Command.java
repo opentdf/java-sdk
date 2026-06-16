@@ -71,6 +71,12 @@ class Command {
     @Option(names = { "-V", "--version" }, versionHelp = true, description = "display version info")
     boolean versionInfoRequested;
 
+    // Picocli injects the parsed command spec here so buildSDK() can raise
+    // ParameterException with the right help context when required options
+    // are missing for encrypt/decrypt/metadata (which all call buildSDK()).
+    @CommandLine.Spec
+    CommandLine.Model.CommandSpec spec;
+
     @CommandLine.Command(name = "supports", description = "Check if a feature is supported")
     static class Supports implements Callable<Integer> {
         @CommandLine.Parameters(index = "0", description = "Feature to check (e.g., dpop)")
@@ -288,6 +294,24 @@ class Command {
     }
 
     private SDK buildSDK() {
+        // The picocli @Option annotations on platformEndpoint/clientId/clientSecret are
+        // intentionally NOT marked required = true so that `tdf supports <feature>` can
+        // run without credentials. Subcommands that actually build an SDK enforce them
+        // here so the failure surfaces as a normal picocli ParameterException (exit 2)
+        // rather than a deep SDK error.
+        if (platformEndpoint == null || platformEndpoint.isEmpty()) {
+            throw new CommandLine.ParameterException(spec.commandLine(),
+                    "Missing required option: '--platform-endpoint=<platformEndpoint>'");
+        }
+        if (clientId == null || clientId.isEmpty()) {
+            throw new CommandLine.ParameterException(spec.commandLine(),
+                    "Missing required option: '--client-id=<clientId>'");
+        }
+        if (clientSecret == null || clientSecret.isEmpty()) {
+            throw new CommandLine.ParameterException(spec.commandLine(),
+                    "Missing required option: '--client-secret=<clientSecret>'");
+        }
+
         SDKBuilder builder = new SDKBuilder();
         if (insecure) {
             builder.insecureSslFactory();
