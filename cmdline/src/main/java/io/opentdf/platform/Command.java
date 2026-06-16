@@ -49,6 +49,8 @@ import io.opentdf.platform.sdk.Config;
 import io.opentdf.platform.sdk.KeyType;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.core.config.Configurator;
 import picocli.CommandLine;
 import picocli.CommandLine.HelpCommand;
 import picocli.CommandLine.Option;
@@ -129,6 +131,18 @@ class Command {
     private static final String PRIVATE_KEY_FOOTER = "-----END PRIVATE KEY-----";
     private static final String PEM_HEADER = "-----BEGIN (.*)-----";
     private static final String PEM_FOOTER = "-----END (.*)-----";
+
+    @Option(names = { "-v", "--verbose" }, scope = CommandLine.ScopeType.INHERIT, defaultValue = "false", description = "Enable verbose output including stack traces on error")
+    void setVerbose(boolean verbose) {
+        this.verbose = verbose;
+        if (verbose) {
+            var root = org.apache.logging.log4j.LogManager.getRootLogger();
+            if (!root.getLevel().isLessSpecificThan(Level.DEBUG)) {
+                Configurator.setRootLevel(Level.DEBUG);
+            }
+        }
+    }
+    boolean verbose;
 
     @Option(names = { "--client-secret" })
     private String clientSecret;

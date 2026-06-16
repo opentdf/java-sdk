@@ -47,4 +47,23 @@ class CommandTest {
         int code = new CommandLine(new Command()).execute("supports", "dpop");
         assertThat(code).isEqualTo(0);
     }
+
+    @Test
+    void verbose_flag_accepted_by_supports() {
+        int code = new CommandLine(new Command()).execute("--verbose", "supports", "dpop");
+        assertThat(code).isEqualTo(0);
+    }
+
+    @Test
+    void verbose_short_flag_accepted_by_supports() {
+        int code = new CommandLine(new Command()).execute("-v", "supports", "dpop");
+        assertThat(code).isEqualTo(0);
+    }
+
+    @Test
+    void verbose_flag_sets_verbose_field() {
+        var command = new Command();
+        new CommandLine(command).parseArgs("--verbose", "supports", "dpop");
+        assertThat(command.verbose).isTrue();
+    }
 }
