@@ -166,27 +166,52 @@ class TokenSource {
 
                 logger.trace("The current access token is expired or empty, getting a new one");
 
-                // Make the token request
-                TokenRequest tokenRequest = new TokenRequest(this.tokenEndpointURI,
-                        clientAuth, authzGrant, null);
+                DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(dpopJwk, dpopAlg);
+
+                // Proactively use any cached nonce for the token endpoint origin (RFC 9449 §8)
+                String cachedNonce = nonceCache.get(getOrigin(tokenEndpointURI.toURL()));
+
+                TokenRequest tokenRequest = new TokenRequest(this.tokenEndpointURI, clientAuth, authzGrant, null);
                 HTTPRequest httpRequest = tokenRequest.toHTTPRequest();
                 if (sslSocketFactory != null) {
                     httpRequest.setSSLSocketFactory(sslSocketFactory);
                 }
-
-                DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(dpopJwk, dpopAlg);
-
-                SignedJWT proof = dpopFactory.createDPoPJWT(httpRequest.getMethod().name(), httpRequest.getURI());
-
+                SignedJWT proof = (cachedNonce != null)
+                        ? dpopFactory.createDPoPJWT(httpRequest.getMethod().name(), httpRequest.getURI(), new Nonce(cachedNonce))
+                        : dpopFactory.createDPoPJWT(httpRequest.getMethod().name(), httpRequest.getURI());
                 httpRequest.setDPoP(proof);
-                TokenResponse tokenResponse;
 
                 HTTPResponse httpResponse = httpRequest.send();
 
-                tokenResponse = TokenResponse.parse(httpResponse);
+                TokenResponse tokenResponse = TokenResponse.parse(httpResponse);
+
+                // RFC 9449 §8: if AS requires a nonce, cache it and retry once
                 if (!tokenResponse.indicatesSuccess()) {
                     ErrorObject error = tokenResponse.toErrorResponse().getErrorObject();
-                    throw new SDKException("failure to get token. description = [" + error.getDescription() + "] error code = [" + error.getCode() + "] error uri = [" + error.getURI() + "]");
+                    if ("use_dpop_nonce".equals(error.getCode())) {
+                        String dpopNonce = httpResponse.getHeaderValue("DPoP-Nonce");
+                        if (dpopNonce != null) {
+                            cacheNonce(tokenEndpointURI.toURL(), dpopNonce);
+                            TokenRequest retryRequest = new TokenRequest(tokenEndpointURI, clientAuth, authzGrant, null);
+                            HTTPRequest retryHttpRequest = retryRequest.toHTTPRequest();
+                            if (sslSocketFactory != null) {
+                                retryHttpRequest.setSSLSocketFactory(sslSocketFactory);
+                            }
+                            SignedJWT retryProof = dpopFactory.createDPoPJWT(
+                                    retryHttpRequest.getMethod().name(),
+                                    retryHttpRequest.getURI(),
+                                    new Nonce(dpopNonce));
+                            retryHttpRequest.setDPoP(retryProof);
+                            httpResponse = retryHttpRequest.send();
+                            tokenResponse = TokenResponse.parse(httpResponse);
+                        }
+                    }
+                    if (!tokenResponse.indicatesSuccess()) {
+                        ErrorObject finalError = tokenResponse.toErrorResponse().getErrorObject();
+                        throw new SDKException("failure to get token. description = [" + finalError.getDescription()
+                                + "] error code = [" + finalError.getCode()
+                                + "] error uri = [" + finalError.getURI() + "]");
+                    }
                 }
 
                 var tokens = tokenResponse.toSuccessResponse().getTokens();
@@ -201,7 +226,6 @@ class TokenSource {
                 this.token = tokens.getAccessToken();
 
                 if (token.getLifetime() != 0) {
-                    // Need some type of leeway but not sure whats best
                     this.tokenExpiryTime = Instant.now().plusSeconds(token.getLifetime() / 3);
                 }
 

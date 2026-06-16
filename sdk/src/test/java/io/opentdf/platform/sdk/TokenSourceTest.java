@@ -14,6 +14,7 @@ import com.nimbusds.oauth2.sdk.auth.Secret;
 import com.nimbusds.oauth2.sdk.id.ClientID;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
+import okhttp3.mockwebserver.RecordedRequest;
 import org.junit.jupiter.api.Test;
 
 import java.net.URL;
@@ -208,6 +209,74 @@ class TokenSourceTest {
                     .getJWTClaimsSet().getStringClaim("nonce");
 
             assertThat(nonceClaim).isNull();
+        }
+    }
+
+    @Test
+    void getToken_retriesWithNonceOnUseDpopNonce() throws Exception {
+        RSAKey rsaKey = new RSAKeyGenerator(2048)
+                .keyUse(KeyUse.SIGNATURE)
+                .keyID(UUID.randomUUID().toString())
+                .generate();
+        try (MockWebServer tokenServer = new MockWebServer()) {
+            // First: 401 use_dpop_nonce
+            tokenServer.enqueue(new MockResponse()
+                    .setResponseCode(401)
+                    .setHeader("Content-Type", "application/json")
+                    .addHeader("DPoP-Nonce", "retry-nonce-abc")
+                    .setBody("{\"error\":\"use_dpop_nonce\",\"error_description\":\"nonce required\"}"));
+            // Second: success
+            tokenServer.enqueue(new MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody("{\"access_token\":\"real-token\",\"token_type\":\"DPoP\",\"expires_in\":3600}"));
+            tokenServer.start();
+
+            TokenSource ts = buildTokenSource(tokenServer, rsaKey);
+            URL resourceUrl = new URL("https://kas.example.com/kas");
+
+            TokenSource.AuthHeaders headers = ts.getAuthHeaders(resourceUrl, "POST");
+
+            assertThat(headers.getAuthHeader()).isEqualTo("DPoP real-token");
+            assertThat(tokenServer.getRequestCount()).isEqualTo(2);
+
+            RecordedRequest first = tokenServer.takeRequest();
+            String firstNonce = SignedJWT.parse(first.getHeader("DPoP"))
+                    .getJWTClaimsSet().getStringClaim("nonce");
+            assertThat(firstNonce).isNull();
+
+            RecordedRequest second = tokenServer.takeRequest();
+            String secondNonce = SignedJWT.parse(second.getHeader("DPoP"))
+                    .getJWTClaimsSet().getStringClaim("nonce");
+            assertThat(secondNonce).isEqualTo("retry-nonce-abc");
+        }
+    }
+
+    @Test
+    void getToken_usesProactivelyCachedNonce() throws Exception {
+        RSAKey rsaKey = new RSAKeyGenerator(2048)
+                .keyUse(KeyUse.SIGNATURE)
+                .keyID(UUID.randomUUID().toString())
+                .generate();
+        try (MockWebServer tokenServer = new MockWebServer()) {
+            tokenServer.enqueue(new MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody("{\"access_token\":\"proactive-token\",\"token_type\":\"DPoP\",\"expires_in\":3600}"));
+            tokenServer.start();
+
+            TokenSource ts = buildTokenSource(tokenServer, rsaKey);
+            // Pre-seed the cache for the token endpoint origin
+            ts.cacheNonce(tokenServer.url("/token").url(), "proactive-nonce");
+
+            ts.getAuthHeaders(new URL("https://kas.example.com/kas"), "POST");
+
+            assertThat(tokenServer.getRequestCount()).isEqualTo(1);
+
+            RecordedRequest request = tokenServer.takeRequest();
+            String nonceClaim = SignedJWT.parse(request.getHeader("DPoP"))
+                    .getJWTClaimsSet().getStringClaim("nonce");
+            assertThat(nonceClaim).isEqualTo("proactive-nonce");
         }
     }
 }
