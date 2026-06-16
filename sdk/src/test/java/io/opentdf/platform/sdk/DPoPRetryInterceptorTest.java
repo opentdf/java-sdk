@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DPoPRetryInterceptorTest {
 
     private static final String FAKE_TOKEN_RESPONSE =
-            "{\"access_token\":\"test-token\",\"token_type\":\"Bearer\",\"expires_in\":3600}";
+            "{\"access_token\":\"test-token\",\"token_type\":\"DPoP\",\"expires_in\":3600}";
 
     private AuthInterceptor buildAuthInterceptor(MockWebServer tokenServer, RSAKey rsaKey) throws Exception {
         return new AuthInterceptor(buildTokenSource(tokenServer, rsaKey));

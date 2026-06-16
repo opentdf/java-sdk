@@ -19,6 +19,7 @@ import com.nimbusds.openid.connect.sdk.Nonce;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import javax.net.ssl.SSLSocketFactory;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -34,8 +35,12 @@ import java.util.concurrent.ConcurrentHashMap;
  * timeouts and creating OIDC calls. It is thread-safe.
  */
 class TokenSource {
+    static final String SCHEME_DPOP = "DPoP";
+    static final String SCHEME_BEARER = "Bearer";
+
     private Instant tokenExpiryTime;
     private AccessToken token;
+    private String tokenScheme;
     private final ClientAuthentication clientAuth;
     private final JWK dpopJwk;
     private final JWSAlgorithm dpopAlg;
@@ -68,9 +73,10 @@ class TokenSource {
 
     class AuthHeaders {
         private final String authHeader;
+        @Nullable
         private final String dpopHeader;
 
-        public AuthHeaders(String authHeader, String dpopHeader) {
+        public AuthHeaders(String authHeader, @Nullable String dpopHeader) {
             this.authHeader = authHeader;
             this.dpopHeader = dpopHeader;
         }
@@ -79,6 +85,7 @@ class TokenSource {
             return authHeader;
         }
 
+        @Nullable
         public String getDpopHeader() {
             return dpopHeader;
         }
@@ -99,6 +106,13 @@ class TokenSource {
     public AuthHeaders getAuthHeaders(URL url, String method, String nonce) {
         // Get the access token
         AccessToken t = getToken();
+
+        // If the AS returned a plain bearer token, send it as a bearer credential
+        // without a DPoP proof. Sending "Authorization: DPoP <bearer>" is a misuse
+        // of the scheme and resource servers that enforce DPoP will reject it.
+        if (SCHEME_BEARER.equals(tokenScheme)) {
+            return new AuthHeaders("Bearer " + t.getValue(), null);
+        }
 
         // Build the DPoP proof for each request
         String dpopProof;
@@ -227,7 +241,8 @@ class TokenSource {
                 }
 
                 var tokens = tokenResponse.toSuccessResponse().getTokens();
-                if (tokens.getDPoPAccessToken() != null) {
+                boolean asAssertsDpop = tokens.getDPoPAccessToken() != null;
+                if (asAssertsDpop) {
                     logger.trace("retrieved a new DPoP access token");
                 } else if (tokens.getAccessToken() != null) {
                     logger.trace("retrieved a new access token");
@@ -240,6 +255,12 @@ class TokenSource {
                 if (this.token == null) {
                     throw new SDKException("token endpoint " + tokenEndpointURI
                             + " returned a success response with no access token");
+                }
+                this.tokenScheme = asAssertsDpop ? SCHEME_DPOP : SCHEME_BEARER;
+                if (!asAssertsDpop) {
+                    logger.warn("token endpoint {} returned a non-DPoP-bound access token (token_type=Bearer) despite"
+                            + " DPoP proof — falling back to Bearer scheme. Check the IdP DPoP configuration.",
+                            tokenEndpointURI);
                 }
 
                 if (token.getLifetime() != 0) {

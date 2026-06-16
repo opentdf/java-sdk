@@ -25,7 +25,7 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
                 val requestHeaders = mutableMapOf<String, List<String>>()
                 val authHeaders = ts.getAuthHeaders(request.url, "POST")
                 requestHeaders["Authorization"] = listOf(authHeaders.authHeader)
-                requestHeaders["DPoP"] = listOf(authHeaders.dpopHeader)
+                authHeaders.dpopHeader?.let { requestHeaders["DPoP"] = listOf(it) }
 
                 return@StreamFunction request.clone(
                     url = request.url,
@@ -51,7 +51,7 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
                     val requestHeaders = mutableMapOf<String, List<String>>()
                     val authHeaders = ts.getAuthHeaders(request.url, request.httpMethod.name)
                     requestHeaders["Authorization"] = listOf(authHeaders.authHeader)
-                    requestHeaders["DPoP"] = listOf(authHeaders.dpopHeader)
+                    authHeaders.dpopHeader?.let { requestHeaders["DPoP"] = listOf(it) }
 
                     UnaryHTTPRequest(
                         url = request.url,
@@ -103,10 +103,10 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
                 response.close()
                 ts.cacheNonce(url, dpopNonce)
                 val authHeaders = ts.getAuthHeaders(url, chain.request().method)
-                val newRequest = chain.request().newBuilder()
+                val newRequestBuilder = chain.request().newBuilder()
                     .header("Authorization", authHeaders.authHeader)
-                    .header("DPoP", authHeaders.dpopHeader)
-                    .build()
+                authHeaders.dpopHeader?.let { newRequestBuilder.header("DPoP", it) }
+                val newRequest = newRequestBuilder.build()
                 response = try {
                     chain.proceed(newRequest)
                 } catch (e: Exception) {
