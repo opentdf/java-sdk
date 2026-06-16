@@ -9,12 +9,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
-import com.nimbusds.jose.JWSAlgorithm;
-import com.nimbusds.jose.jwk.Curve;
-import com.nimbusds.jose.jwk.JWK;
-import com.nimbusds.jose.jwk.KeyUse;
-import com.nimbusds.jose.jwk.gen.ECKeyGenerator;
-import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -39,7 +33,6 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 
@@ -338,75 +331,15 @@ class Command {
                 .build();
     }
 
-    /**
-     * Apply --dpop and --dpop-key options to the SDK builder.
-     * --dpop-key loads a PEM private key; --dpop specifies the algorithm (default
-     * RS256).
-     * If neither flag is set, the SDK auto-generates an ephemeral RSA-2048 DPoP
-     * key.
-     */
     private void applyDPoPOptions(SDKBuilder builder) {
         try {
-            if (dpopKeyPath != null) {
-                String pem = Files.readString(dpopKeyPath);
-                JWK jwk = JWK.parseFromPEMEncodedObjects(pem);
-                builder.dpopKey(jwk);
-                if (dpopAlg != null && !dpopAlg.isEmpty()) {
-                    builder.dpopAlgorithm(parseAlgorithm(dpopAlg));
-                }
-            } else if (dpopAlg != null) {
-                JWSAlgorithm alg = dpopAlg.isEmpty() ? JWSAlgorithm.RS256 : parseAlgorithm(dpopAlg);
-                JWK jwk = generateKeyForAlgorithm(alg);
-                builder.dpopKey(jwk).dpopAlgorithm(alg);
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to configure DPoP: " + e.getMessage(), e);
+            CliDpopOptions.parse(dpopAlg, dpopKeyPath).ifPresent(m -> {
+                builder.dpopKey(m.jwk);
+                builder.dpopAlgorithm(m.alg);
+            });
+        } catch (IllegalArgumentException e) {
+            throw new CommandLine.ParameterException(spec.commandLine(), e.getMessage());
         }
-    }
-
-    private static JWSAlgorithm parseAlgorithm(String alg) {
-        switch (alg.toUpperCase()) {
-            case "RS256":
-                return JWSAlgorithm.RS256;
-            case "RS384":
-                return JWSAlgorithm.RS384;
-            case "RS512":
-                return JWSAlgorithm.RS512;
-            case "ES256":
-                return JWSAlgorithm.ES256;
-            case "ES384":
-                return JWSAlgorithm.ES384;
-            case "ES512":
-                return JWSAlgorithm.ES512;
-            default:
-                throw new RuntimeException("Unsupported DPoP algorithm: " + alg
-                        + ". Supported: RS256, RS384, RS512, ES256, ES384, ES512");
-        }
-    }
-
-    private static JWK generateKeyForAlgorithm(JWSAlgorithm alg) throws Exception {
-        if (JWSAlgorithm.RS256.equals(alg) || JWSAlgorithm.RS384.equals(alg) || JWSAlgorithm.RS512.equals(alg)) {
-            return new RSAKeyGenerator(2048)
-                    .keyUse(KeyUse.SIGNATURE)
-                    .keyID(UUID.randomUUID().toString())
-                    .generate();
-        } else if (JWSAlgorithm.ES256.equals(alg)) {
-            return new ECKeyGenerator(Curve.P_256)
-                    .keyUse(KeyUse.SIGNATURE)
-                    .keyID(UUID.randomUUID().toString())
-                    .generate();
-        } else if (JWSAlgorithm.ES384.equals(alg)) {
-            return new ECKeyGenerator(Curve.P_384)
-                    .keyUse(KeyUse.SIGNATURE)
-                    .keyID(UUID.randomUUID().toString())
-                    .generate();
-        } else if (JWSAlgorithm.ES512.equals(alg)) {
-            return new ECKeyGenerator(Curve.P_521)
-                    .keyUse(KeyUse.SIGNATURE)
-                    .keyID(UUID.randomUUID().toString())
-                    .generate();
-        }
-        throw new RuntimeException("Cannot generate key for algorithm: " + alg);
     }
 
     @CommandLine.Command(name = "decrypt")
