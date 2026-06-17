@@ -5,6 +5,7 @@ import com.connectrpc.StreamFunction
 import com.connectrpc.UnaryFunction
 import com.connectrpc.http.UnaryHTTPRequest
 import com.connectrpc.http.clone
+import com.nimbusds.jwt.SignedJWT
 import org.slf4j.LoggerFactory
 import java.net.URL
 
@@ -26,6 +27,9 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
                 val authHeaders = ts.getAuthHeaders(request.url, "POST")
                 requestHeaders["Authorization"] = listOf(authHeaders.authHeader)
                 authHeaders.dpopHeader?.let { requestHeaders["DPoP"] = listOf(it) }
+
+                logger.debug("DPoP path=stream url={} method=POST authScheme={} {}",
+                        request.url, authScheme(authHeaders.authHeader), dpopSummary(authHeaders.dpopHeader))
 
                 return@StreamFunction request.clone(
                     url = request.url,
@@ -53,6 +57,10 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
                     requestHeaders["Authorization"] = listOf(authHeaders.authHeader)
                     authHeaders.dpopHeader?.let { requestHeaders["DPoP"] = listOf(it) }
 
+                    logger.debug("DPoP path=unary url={} method={} authScheme={} {}",
+                            request.url, request.httpMethod.name,
+                            authScheme(authHeaders.authHeader), dpopSummary(authHeaders.dpopHeader))
+
                     UnaryHTTPRequest(
                         url = request.url,
                         contentType = request.contentType,
@@ -79,6 +87,8 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
                 if (dpopNonce != null && url != null) {
                     ts.cacheNonce(url, dpopNonce)
                 }
+                logger.debug("DPoP path=unary-response url={} nonceCached={} status={}",
+                        url, dpopNonce != null && url != null, resp.status)
                 resp
             },
         )
@@ -93,10 +103,16 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
      */
     fun dpopRetryInterceptor(): okhttp3.Interceptor = okhttp3.Interceptor { chain ->
         val url = chain.request().url.toUrl()
+        val outgoingMethod = chain.request().method
         var response = chain.proceed(chain.request())
 
         // RFC 9449 §9: cache any rotated nonce from the response, regardless of status.
         cacheNonceIfPresent(url, response)
+
+        logger.debug("DPoP path=okhttp url={} method={} status={} authScheme={} {}",
+                url, outgoingMethod, response.code,
+                authScheme(chain.request().header("Authorization")),
+                dpopSummary(chain.request().header("DPoP")))
 
         if (response.code == 401 && isDpopNonceChallenge(response)) {
             val dpopNonce = response.header("dpop-nonce") ?: response.header("DPoP-Nonce")
@@ -108,6 +124,9 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
                     .header("Authorization", authHeaders.authHeader)
                 authHeaders.dpopHeader?.let { newRequestBuilder.header("DPoP", it) }
                 val newRequest = newRequestBuilder.build()
+                logger.debug("DPoP path=okhttp-retry url={} method={} nonce={} authScheme={} {}",
+                        url, chain.request().method, dpopNonce,
+                        authScheme(authHeaders.authHeader), dpopSummary(authHeaders.dpopHeader))
                 response = try {
                     chain.proceed(newRequest)
                 } catch (e: Exception) {
@@ -115,6 +134,7 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
                     throw e
                 }
                 cacheNonceIfPresent(url, response)
+                logger.debug("DPoP path=okhttp-retry-response url={} status={}", url, response.code)
             }
         }
         response
@@ -131,6 +151,23 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
         return response.challenges().any { challenge ->
             challenge.scheme.equals("DPoP", ignoreCase = true) &&
                 challenge.authParams["error"].equals("use_dpop_nonce", ignoreCase = true)
+        }
+    }
+
+    private fun authScheme(authHeader: String?): String {
+        if (authHeader == null) return "<none>"
+        val idx = authHeader.indexOf(' ')
+        return if (idx > 0) authHeader.substring(0, idx) else "?"
+    }
+
+    private fun dpopSummary(dpopProof: String?): String {
+        if (dpopProof == null) return "dpop=<absent>"
+        return try {
+            val claims = SignedJWT.parse(dpopProof).jwtClaimsSet
+            "dpop[htm=${claims.getStringClaim("htm")} htu=${claims.getStringClaim("htu")}" +
+                " jti=${claims.getStringClaim("jti")} nonce=${claims.getStringClaim("nonce")}]"
+        } catch (e: Exception) {
+            "dpop=<unparseable: ${e.message}>"
         }
     }
 }
