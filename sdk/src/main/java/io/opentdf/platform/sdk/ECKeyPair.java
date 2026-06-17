@@ -23,6 +23,7 @@ import java.security.spec.ECPoint;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
+import java.util.Locale;
 import java.util.Objects;
 
 public class ECKeyPair {
@@ -136,8 +137,14 @@ public class ECKeyPair {
             hmac.init(new SecretKeySpec(prk, HMAC_SHA_256));
             hmac.update((byte) 0x01);
             return hmac.doFinal();
-        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
-            throw new RuntimeException(e);
+        } catch (NoSuchAlgorithmException e) {
+            throw new SDKException("error computing HKDF", e) ;
+        } catch (Exception e) {
+            String className = e.getClass().getName();
+            if (className.contains("bouncycastle") && className.endsWith("IllegalKeyException")) {
+                throw new SDKException("if running bouncycastle FIPS in approved_only mode include the sdk-fips-bouncycastle jar to use HKDF", e);
+            }
+            throw new SDKException("error computing HKDF", e);
         }
     }
 

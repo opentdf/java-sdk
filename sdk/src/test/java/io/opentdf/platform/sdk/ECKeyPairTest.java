@@ -3,7 +3,9 @@ package io.opentdf.platform.sdk;
 import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -13,6 +15,7 @@ import static io.opentdf.platform.sdk.ECCurve.SECP256R1;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ECKeyPairTest {
 
@@ -173,5 +176,13 @@ public class ECKeyPairTest {
             boolean verify = ECKeyPair.verifyECDSAig(plainText.getBytes(), signature, keyPair.getPublicKey());
             assertEquals(verify, true);
         }
+    }
+
+    @Test
+    @Disabled("remove the additionalClassDependencies element in the FIPS profile to execute this test")
+    @EnabledIfSystemProperty(named = "org.bouncycastle.fips.approved_only", matches = "true")
+    void testInformativeException() {
+        var thrown = assertThrows(SDKException.class, () -> ECKeyPair.calculateHKDF(new byte[]{0}, new byte[]{1,2,3}));
+        assertThat(thrown).hasMessage("if running bouncycastle FIPS in approved_only mode include the sdk-fips-bouncycastle jar to use HKDF");
     }
 }
