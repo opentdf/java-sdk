@@ -479,12 +479,18 @@ public class SDKBuilder {
     }
 
     private ProtocolClient getProtocolClient(String endpoint, OkHttpClient httpClient, AuthInterceptor authInterceptor) {
+        // Connect-GET would rewrite idempotent POST RPCs to GET on the wire, which invalidates
+        // the DPoP proof's htm claim (stamped before the rewrite). Keep it enabled only on the
+        // unauthenticated bootstrap path where no DPoP proof is attached.
+        GETConfiguration getConfig = authInterceptor != null
+                ? GETConfiguration.Disabled.INSTANCE
+                : GETConfiguration.Enabled.INSTANCE;
         var protocolClientConfig = new ProtocolClientConfig(
                 endpoint,
                 new GoogleJavaProtobufStrategy(),
                 protocolType.getNetworkProtocol(),
                 null,
-                GETConfiguration.Enabled.INSTANCE,
+                getConfig,
                 authInterceptor == null ? Collections.emptyList() : List.of(ignoredConfig -> authInterceptor)
         );
 
