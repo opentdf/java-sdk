@@ -98,8 +98,7 @@ jobs:
             -Dmaven.antrun.skip \
             -Dmaven.test.skip
           mvn --batch-mode test enforcer:enforce -P 'fips,!non-fips' \
-            -Dmaven.antrun.skip \
-            -Dorg.bouncycastle.fips.approved_only=true
+            -Dmaven.antrun.skip
       - name: Tests with coverage and javadoc (non-fips)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
