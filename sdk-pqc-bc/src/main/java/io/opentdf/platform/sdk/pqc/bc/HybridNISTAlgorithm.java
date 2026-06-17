@@ -6,6 +6,8 @@ import io.opentdf.platform.sdk.SDKException;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
 import org.bouncycastle.crypto.SecretWithEncapsulation;
+import org.bouncycastle.jce.ECNamedCurveTable;
+import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec;
 import org.bouncycastle.pqc.crypto.mlkem.MLKEMExtractor;
 import org.bouncycastle.pqc.crypto.mlkem.MLKEMGenerator;
 import org.bouncycastle.pqc.crypto.mlkem.MLKEMKeyGenerationParameters;
@@ -317,78 +319,22 @@ public final class HybridNISTAlgorithm {
      * Recover an EC public point from a private scalar and emit it as uncompressed-point bytes.
      * Used during unwrap to reconstruct {@code tradPK} for the draft-14 combiner — the recipient's
      * static EC pub is not on the wire.
+     *
+     * <p>Uses BouncyCastle's {@link org.bouncycastle.math.ec.ECPoint#multiply} which is
+     * constant-time (window-NAF over a Montgomery-laddered fixed-base table). This matters
+     * because we're operating on a private scalar on the unwrap path — a naive double-and-add
+     * would leak the scalar's Hamming weight via instruction timing.
      */
     private byte[] derivePublicPointBytes(BigInteger scalar) {
         try {
-            // Build an ECPrivateKey from the scalar, then ask the JCA to derive the matching
-            // ECPublicKey by generating it from the same KeyFactory. Stdlib doesn't expose
-            // scalar*G directly, but BC's EC math is reachable via ECPrivateKey → public.
-            KeyFactory kf = KeyFactory.getInstance("EC");
-            java.security.interfaces.ECPrivateKey priv =
-                    (java.security.interfaces.ECPrivateKey) kf.generatePrivate(new ECPrivateKeySpec(scalar, ecParams));
-            // org.bouncycastle.jce.interfaces.ECPrivateKey would let us call .getQ() directly,
-            // but to avoid that BC dep here we use an ECDH self-trick: scalar * G yields the
-            // ephemeral public point, captured by encoding the matching public key.
-            // BC's JCE provider, if registered, would produce an ECPublicKey alongside; here we
-            // recover it via parameters.getGenerator() and stdlib BigInteger math.
-            BigInteger n = ecParams.getOrder();
-            BigInteger d = priv.getS().mod(n);
-            ECPoint w = scalarMultiplyGenerator(d);
-            return encodeUncompressedPoint(w, ecFieldByteSize);
+            ECNamedCurveParameterSpec bcSpec = ECNamedCurveTable.getParameterSpec(curveName);
+            org.bouncycastle.math.ec.ECPoint q = bcSpec.getG().multiply(scalar).normalize();
+            BigInteger x = q.getAffineXCoord().toBigInteger();
+            BigInteger y = q.getAffineYCoord().toBigInteger();
+            return encodeUncompressedPoint(new ECPoint(x, y), ecFieldByteSize);
         } catch (Exception e) {
             throw new SDKException("failed to recover EC public point on " + curveName, e);
         }
-    }
-
-    /** Plain double-and-add scalar multiplication of the curve generator. */
-    private ECPoint scalarMultiplyGenerator(BigInteger k) {
-        java.security.spec.EllipticCurve curve = ecParams.getCurve();
-        java.security.spec.ECFieldFp field = (java.security.spec.ECFieldFp) curve.getField();
-        BigInteger p = field.getP();
-        BigInteger a = curve.getA();
-        ECPoint G = ecParams.getGenerator();
-        ECPoint result = null;
-        ECPoint addend = G;
-        for (int i = 0; i < k.bitLength(); i++) {
-            if (k.testBit(i)) {
-                result = (result == null) ? addend : pointAdd(result, addend, p, a);
-            }
-            addend = pointDouble(addend, p, a);
-        }
-        if (result == null) {
-            throw new SDKException("scalar is zero");
-        }
-        return result;
-    }
-
-    private static ECPoint pointAdd(ECPoint P, ECPoint Q, BigInteger p, BigInteger a) {
-        BigInteger x1 = P.getAffineX(), y1 = P.getAffineY();
-        BigInteger x2 = Q.getAffineX(), y2 = Q.getAffineY();
-        if (x1.equals(x2)) {
-            if (y1.add(y2).mod(p).signum() == 0) {
-                throw new SDKException("point at infinity not supported");
-            }
-            return pointDouble(P, p, a);
-        }
-        BigInteger s = y2.subtract(y1).multiply(x2.subtract(x1).modInverse(p)).mod(p);
-        BigInteger xr = s.modPow(BigInteger.valueOf(2), p).subtract(x1).subtract(x2).mod(p);
-        BigInteger yr = s.multiply(x1.subtract(xr)).subtract(y1).mod(p);
-        return new ECPoint(xr, yr);
-    }
-
-    private static ECPoint pointDouble(ECPoint P, BigInteger p, BigInteger a) {
-        BigInteger x = P.getAffineX();
-        BigInteger y = P.getAffineY();
-        if (y.signum() == 0) {
-            throw new SDKException("point at infinity not supported");
-        }
-        BigInteger two = BigInteger.valueOf(2);
-        BigInteger three = BigInteger.valueOf(3);
-        BigInteger s = x.modPow(two, p).multiply(three).add(a).mod(p)
-                .multiply(two.multiply(y).modInverse(p)).mod(p);
-        BigInteger xr = s.modPow(two, p).subtract(two.multiply(x)).mod(p);
-        BigInteger yr = s.multiply(x.subtract(xr)).subtract(y).mod(p);
-        return new ECPoint(xr, yr);
     }
 
     private static byte[] encodeUncompressedPoint(ECPoint w, int byteSize) {

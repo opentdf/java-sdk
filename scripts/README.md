@@ -77,10 +77,10 @@ Override via flag or env var:
 
 ### Expected output
 
-```
-[OK]   hpqt:xwing: KAS returns hybrid PEM (-----BEGIN XWING PUBLIC KEY-----)
-[OK]   hpqt:secp256r1-mlkem768: KAS returns hybrid PEM (-----BEGIN SECP256R1 MLKEM768 PUBLIC KEY-----)
-[OK]   hpqt:secp384r1-mlkem1024: KAS returns hybrid PEM (-----BEGIN SECP384R1 MLKEM1024 PUBLIC KEY-----)
+```text
+[OK]   hpqt:xwing: KAS returns SPKI PEM with OID 1.3.6.1.4.1.62253.25722
+[OK]   hpqt:secp256r1-mlkem768: KAS returns SPKI PEM with OID 1.3.6.1.5.5.7.6.59
+[OK]   hpqt:secp384r1-mlkem1024: KAS returns SPKI PEM with OID 1.3.6.1.5.5.7.6.63
 ...
 [OK]   HybridXWingKey: manifest OK (hybrid-wrapped, ASN.1 envelope, no ephemeralPublicKey)
 [OK]   HybridXWingKey: round-trip OK

@@ -41,8 +41,14 @@ public final class KemProviders {
     public static KemProvider get(KeyType keyType) {
         KemProvider p = providers().get(keyType);
         if (p == null) {
+            // The FIPS qualifier is in the message unconditionally so a FIPS-mode user
+            // can't follow the "add sdk-pqc-bc" advice into the bcprov/bc-fips namespace
+            // collision the optional-module architecture is designed to avoid.
             throw new SDKException("no KemProvider registered for " + keyType
-                    + " — add sdk-pqc-bc (or another KemProvider module) to the classpath");
+                    + " — add sdk-pqc-bc (or another KemProvider module) to the classpath. "
+                    + "Note: hybrid PQC is not available under the fips Maven profile because "
+                    + "sdk-pqc-bc's BouncyCastle dependency collides with bc-fips on the same "
+                    + "package namespace; the fips build deliberately excludes sdk-pqc-bc.");
         }
         return p;
     }
@@ -82,6 +88,7 @@ public final class KemProviders {
                 }
             }
         }
-        return map;
+        // Cache is immutable post-init (matches the class Javadoc claim).
+        return java.util.Collections.unmodifiableMap(map);
     }
 }

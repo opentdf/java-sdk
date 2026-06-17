@@ -15,8 +15,23 @@ public enum KeyType {
     EC256Key("ec:secp256r1", SECP256R1),
     EC384Key("ec:secp384r1", SECP384R1),
     EC521Key("ec:secp521r1", SECP521R1),
+    /**
+     * Hybrid X-Wing (X25519 + ML-KEM-768). Requires {@code sdk-pqc-bc} (or another
+     * {@link io.opentdf.platform.sdk.spi.KemProvider} implementation) on the runtime
+     * classpath; not available under the fips Maven profile.
+     */
     HybridXWingKey("hpqt:xwing"),
+    /**
+     * Hybrid P-256 + ML-KEM-768 per draft-ietf-lamps-pq-composite-kem-14. Requires
+     * {@code sdk-pqc-bc} (or another {@link io.opentdf.platform.sdk.spi.KemProvider}
+     * implementation) on the runtime classpath; not available under the fips Maven profile.
+     */
     HybridSecp256r1MLKEM768Key("hpqt:secp256r1-mlkem768"),
+    /**
+     * Hybrid P-384 + ML-KEM-1024 per draft-ietf-lamps-pq-composite-kem-14. Requires
+     * {@code sdk-pqc-bc} (or another {@link io.opentdf.platform.sdk.spi.KemProvider}
+     * implementation) on the runtime classpath; not available under the fips Maven profile.
+     */
     HybridSecp384r1MLKEM1024Key("hpqt:secp384r1-mlkem1024");
 
     private final String keyType;

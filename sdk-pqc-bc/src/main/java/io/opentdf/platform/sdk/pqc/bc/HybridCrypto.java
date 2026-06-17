@@ -161,9 +161,18 @@ final class HybridCrypto {
             // > 4 would overflow a positive 32-bit int and is implausible for our envelope.
             throw new SDKException("invalid ASN.1 length encoding: numBytes=" + numBytes);
         }
-        int len = 0;
-        for (int i = 0; i < numBytes; i++) {
+        int firstLenByte = c.readByte();
+        // DER canonical encoding (X.690 §10.1): the minimum number of length bytes must be used,
+        // and the first content byte must not be zero (otherwise a shorter form would have sufficed).
+        if (firstLenByte == 0) {
+            throw new SDKException("non-canonical ASN.1 length: leading zero byte in long-form");
+        }
+        int len = firstLenByte;
+        for (int i = 1; i < numBytes; i++) {
             len = (len << 8) | c.readByte();
+        }
+        if (numBytes == 1 && len < 0x80) {
+            throw new SDKException("non-canonical ASN.1 length: long-form used for value < 128 (got " + len + ")");
         }
         if (len < 0) {
             throw new SDKException("ASN.1 length overflowed signed int");

@@ -181,4 +181,30 @@ class HybridCryptoTest {
         byte[] truncated = Arrays.copyOf(wrapped, wrapped.length - 10);
         assertThrows(SDKException.class, () -> XWingKeyPair.unwrapDEK(rawPriv, truncated));
     }
+
+    @Test
+    void nonCanonicalDerLengthRejected() {
+        // Hand-craft a SEQUENCE whose length uses BER long-form for a value that fits
+        // in short-form (5 < 128) — strict DER per X.690 §10.1 must reject this.
+        // Bytes: 0x30 (SEQUENCE) 0x81 (long-form, 1 length byte) 0x05 (length=5) + 5 dummy content bytes
+        byte[] badEnvelope = new byte[] {
+                (byte) 0x30, (byte) 0x81, (byte) 0x05,
+                0x01, 0x02, 0x03, 0x04, 0x05
+        };
+        assertThrows(SDKException.class,
+                () -> HybridCrypto.unmarshalEnvelope(badEnvelope),
+                "long-form length encoding for value < 128 must be rejected as non-canonical DER");
+    }
+
+    @Test
+    void derLengthWithLeadingZeroRejected() {
+        // 0x30 (SEQUENCE) 0x82 (long-form, 2 length bytes) 0x00 0x80 (= 128, but the leading
+        // zero is redundant — shorter form 0x81 0x80 would do). Strict DER rejects.
+        byte[] badEnvelope = new byte[] {
+                (byte) 0x30, (byte) 0x82, (byte) 0x00, (byte) 0x80
+        };
+        assertThrows(SDKException.class,
+                () -> HybridCrypto.unmarshalEnvelope(badEnvelope),
+                "leading-zero byte in long-form length must be rejected as non-canonical DER");
+    }
 }
