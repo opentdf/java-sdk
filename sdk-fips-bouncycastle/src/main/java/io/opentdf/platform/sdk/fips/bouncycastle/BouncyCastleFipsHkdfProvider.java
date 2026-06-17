@@ -12,9 +12,14 @@ public final class BouncyCastleFipsHkdfProvider implements HkdfProvider {
 
     @Override
     public byte[] computeHKDF(byte[] salt, byte[] secret) {
+        if (secret == null) {
+            throw new NullPointerException("secret must not be null");
+        }
+        // RFC 5869 §2.2: if salt is absent, use a zeroed buffer of HashLen bytes.
+        byte[] effectiveSalt = (salt == null || salt.length == 0) ? new byte[32] : salt;
         var key = FipsKDF.HKDF_KEY_BUILDER
                 .withPrf(FipsKDF.AgreementKDFPRF.SHA256_HMAC)
-                .withSalt(salt)
+                .withSalt(effectiveSalt)
                 .build(secret);
 
         var factory = new FipsKDF.AgreementOperatorFactory();
