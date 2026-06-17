@@ -83,6 +83,12 @@ public enum KeyType {
                 return KeyType.EC384Key;
             case ALGORITHM_EC_P521:
                 return KeyType.EC521Key;
+            case ALGORITHM_HPQT_XWING:
+                return KeyType.HybridXWingKey;
+            case ALGORITHM_HPQT_SECP256R1_MLKEM768:
+                return KeyType.HybridSecp256r1MLKEM768Key;
+            case ALGORITHM_HPQT_SECP384R1_MLKEM1024:
+                return KeyType.HybridSecp384r1MLKEM1024Key;
             default:
                 throw new IllegalArgumentException("Unsupported algorithm: " + algorithm);
         }
@@ -103,17 +109,16 @@ public enum KeyType {
                 return KeyType.EC384Key;
             case KAS_PUBLIC_KEY_ALG_ENUM_EC_SECP521R1:
                 return KeyType.EC521Key;
+            case KAS_PUBLIC_KEY_ALG_ENUM_HPQT_XWING:
+                return KeyType.HybridXWingKey;
+            case KAS_PUBLIC_KEY_ALG_ENUM_HPQT_SECP256R1_MLKEM768:
+                return KeyType.HybridSecp256r1MLKEM768Key;
+            case KAS_PUBLIC_KEY_ALG_ENUM_HPQT_SECP384R1_MLKEM1024:
+                return KeyType.HybridSecp384r1MLKEM1024Key;
             default:
-                // Hybrid PQC algorithms (HybridXWingKey, HybridSecp256r1MLKEM768Key,
-                // HybridSecp384r1MLKEM1024Key) are not yet mapped here — the platform's
-                // KasPublicKeyAlgEnum proto definitions don't include them at the time
-                // of writing. When they do, add cases above. Callers can work around
-                // this gap by setting --encap-key-type (cmdline) or
-                // Config.WithWrappingKeyAlg (SDK), both of which bypass this mapping.
                 throw new IllegalArgumentException(
                         "Unsupported KAS public-key algorithm: " + algorithm
-                        + " — this may be a PQC algorithm not yet mapped by the SDK. "
-                        + "See KeyType.java for currently-supported algorithms.");
+                        + ". See KeyType.java for currently-supported algorithms.");
         }
     }
 
