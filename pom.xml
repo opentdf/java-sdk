@@ -181,7 +181,7 @@
                 </plugin>
                 <plugin>
                     <artifactId>maven-surefire-plugin</artifactId>
-                    <version>3.0.0</version>
+                    <version>3.5.6</version>
                 </plugin>
                 <plugin>
                     <artifactId>maven-jar-plugin</artifactId>
@@ -286,6 +286,7 @@
             <id>develop</id>
             <modules>
                 <module>sdk</module>
+                <module>sdk-fips-bouncycastle</module>
                 <module>cmdline</module>
                 <module>examples</module>
             </modules>

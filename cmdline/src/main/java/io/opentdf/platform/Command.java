@@ -10,7 +10,6 @@ import com.nimbusds.jose.jwk.JWK;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 
-import java.security.cert.X509Certificate;
 import java.text.ParseException;
 import com.google.gson.JsonSyntaxException;
 import io.opentdf.platform.sdk.AssertionConfig;
@@ -23,7 +22,6 @@ import picocli.CommandLine;
 import picocli.CommandLine.HelpCommand;
 import picocli.CommandLine.Option;
 
-import javax.net.ssl.X509TrustManager;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -63,7 +61,6 @@ class Versions {
 @CommandLine.Command(name = "tdf", subcommands = { HelpCommand.class }, version = "{\"version\":\"" + Versions.SDK
         + "\",\"tdfSpecVersion\":\"" + Versions.TDF_SPEC + "\"}")
 class Command {
-
     @Option(names = { "-V", "--version" }, versionHelp = true, description = "display version info")
     boolean versionInfoRequested;
 

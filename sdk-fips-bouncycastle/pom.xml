@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.opentdf.platform</groupId>
+        <artifactId>sdk-pom</artifactId>
+        <version>0.15.0</version>
+    </parent>
+    <artifactId>sdk-fips-bouncycastle</artifactId>
+    <name>io.opentdf.platform:sdk-fips-bouncycastle</name>
+    <description>BouncyCastle FIPS-backed HkdfProvider SPI implementation (FIPS 140-approved HKDF via bc-fips).</description>
+    <packaging>jar</packaging>
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+    <dependencies>
+        <dependency>
+            <groupId>io.opentdf.platform</groupId>
+            <artifactId>sdk</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- FIPS-approved HKDF requires bc-fips KDF API; no JCA/JDK equivalent
+             that is guaranteed FIPS-approved across all configurations. -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bc-fips</artifactId>
+        </dependency>
+        <!-- Testing -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>3.27.7</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+    <build>
+        <plugins>
+            <!-- Publish to Maven Central Deploy -->
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <version>0.6.0</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <autoPublish>true</autoPublish>
+                    <waitUntil>published</waitUntil>
+                    <!-- defined in settings.xml -->
+                    <publishingServerId>central</publishingServerId>
+                </configuration>
+            </plugin>
+            <!-- Exclude from lifecycle, phase none -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <version>3.1.2</version>
+                <executions>
+                    <execution>
+                        <id>default-deploy</id>
+                        <phase>none</phase>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
