@@ -34,6 +34,9 @@ public final class XWingKeyPair {
     static final int CIPHERTEXT_SIZE = 1120;
     static final int SHARED_SECRET_SIZE = 32;
 
+    // SecureRandom is documented thread-safe; share one instance (java:S2119).
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
     private final byte[] publicKey;
     private final byte[] privateKey;
 
@@ -44,7 +47,7 @@ public final class XWingKeyPair {
 
     public static XWingKeyPair generate() {
         XWingKeyPairGenerator gen = new XWingKeyPairGenerator();
-        gen.init(new XWingKeyGenerationParameters(new SecureRandom()));
+        gen.init(new XWingKeyGenerationParameters(SECURE_RANDOM));
         AsymmetricCipherKeyPair kp = gen.generateKeyPair();
         XWingPublicKeyParameters pub = (XWingPublicKeyParameters) kp.getPublic();
         XWingPrivateKeyParameters priv = (XWingPrivateKeyParameters) kp.getPrivate();
@@ -80,7 +83,7 @@ public final class XWingKeyPair {
             throw new SDKException("invalid X-Wing public key size: got " + rawPub.length + " want " + PUBLIC_KEY_SIZE);
         }
         XWingPublicKeyParameters pub = new XWingPublicKeyParameters(rawPub);
-        SecretWithEncapsulation enc = new XWingKEMGenerator(new SecureRandom()).generateEncapsulated(pub);
+        SecretWithEncapsulation enc = new XWingKEMGenerator(SECURE_RANDOM).generateEncapsulated(pub);
         byte[] sharedSecret = enc.getSecret();
         byte[] ciphertext = enc.getEncapsulation();
 

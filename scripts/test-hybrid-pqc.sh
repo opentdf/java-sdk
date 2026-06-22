@@ -35,16 +35,27 @@ ALGORITHMS=(HybridXWingKey HybridSecp256r1MLKEM768Key HybridSecp384r1MLKEM1024Ke
 SKIP_BUILD=0
 SKIP_KAS_CHECK=0
 
+# With `set -u`, a bare `$2` for a value-taking flag with no argument would
+# crash with "unbound variable" instead of the documented exit 2 misuse path.
+require_opt_value() {
+    local opt="$1"
+    local val="${2-}"
+    if [[ -z "$val" || "$val" == --* ]]; then
+        echo "missing value for $opt" >&2
+        exit 2
+    fi
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --skip-build)        SKIP_BUILD=1; shift ;;
         --skip-kas-check)    SKIP_KAS_CHECK=1; shift ;;
-        --algorithms)        IFS=, read -r -a ALGORITHMS <<< "$2"; shift 2 ;;
-        --platform-endpoint) PLATFORM_ENDPOINT="$2"; shift 2 ;;
-        --kas-url)           KAS_URL="$2"; shift 2 ;;
-        --attr)              DATA_ATTR="$2"; shift 2 ;;
-        --client-id)         CLIENT_ID="$2"; shift 2 ;;
-        --client-secret)     CLIENT_SECRET="$2"; shift 2 ;;
+        --algorithms)        require_opt_value "$1" "${2-}"; IFS=, read -r -a ALGORITHMS <<< "$2"; shift 2 ;;
+        --platform-endpoint) require_opt_value "$1" "${2-}"; PLATFORM_ENDPOINT="$2"; shift 2 ;;
+        --kas-url)           require_opt_value "$1" "${2-}"; KAS_URL="$2"; shift 2 ;;
+        --attr)              require_opt_value "$1" "${2-}"; DATA_ATTR="$2"; shift 2 ;;
+        --client-id)         require_opt_value "$1" "${2-}"; CLIENT_ID="$2"; shift 2 ;;
+        --client-secret)     require_opt_value "$1" "${2-}"; CLIENT_SECRET="$2"; shift 2 ;;
         -h|--help)           sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *)                   echo "unknown option: $1" >&2; exit 2 ;;
     esac
@@ -89,6 +100,17 @@ info() { echo "${YELLOW}[..]${RESET}   $*"; }
 require() { command -v "$1" >/dev/null 2>&1 || { fail "missing required tool: $1"; exit 2; }; }
 require java; require unzip; require jq
 [[ $SKIP_BUILD -eq 1 ]] || require mvn
+
+# Portable base64 decode: GNU/BusyBox accept `-d`, BSD/macOS prior to 12 use `-D`.
+# Probe once and bind the working flag.
+if printf 'MA==\n' | base64 -d >/dev/null 2>&1; then
+    BASE64_DECODE_FLAG="-d"
+elif printf 'MA==\n' | base64 -D >/dev/null 2>&1; then
+    BASE64_DECODE_FLAG="-D"
+else
+    fail "neither 'base64 -d' nor 'base64 -D' works on this system"; exit 2
+fi
+b64decode() { base64 "$BASE64_DECODE_FLAG"; }
 
 run_cmdline() {
     java -jar "$JAR" \
@@ -224,7 +246,8 @@ for alg_name in "${ALGORITHMS[@]}"; do
         continue
     fi
     # ASN.1 SEQUENCE always starts with 0x30 — same invariant HybridCryptoTest checks.
-    first_byte=$(base64 -d <<<"$wrapped" 2>/dev/null | xxd -p -l 1 || true)
+    # `od` is in POSIX and present everywhere; `xxd` is not on minimal Linux images.
+    first_byte=$(b64decode <<<"$wrapped" 2>/dev/null | od -An -tx1 -N1 | tr -d ' \n' || true)
     if [[ "$first_byte" != "30" ]]; then
         fail "$alg_name: wrappedKey does not start with ASN.1 SEQUENCE (got 0x$first_byte)"
         failures+=("$alg_name (bad envelope)")

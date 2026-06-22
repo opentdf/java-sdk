@@ -94,6 +94,10 @@ public final class HybridNISTAlgorithm {
     /** Fixed 64-byte ML-KEM seed (d || z) per FIPS 203. */
     static final int MLKEM_SEED_SIZE = 64;
 
+    // SecureRandom is documented thread-safe; a single shared instance avoids the
+    // per-call seeding cost and silences SonarCloud java:S2119.
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
     private final String curveName;
     private final int ecPubSize;
     private final int ecPrivSize;
@@ -131,14 +135,12 @@ public final class HybridNISTAlgorithm {
 
     /** Generate a fresh keypair for this algorithm. */
     public HybridNISTKeyPair generate() {
-        SecureRandom random = new SecureRandom();
-
         // EC half — stdlib KeyPairGenerator gives us scalar + point in one call.
-        EcKeypairBytes ec = generateEcKeypairBytes(random);
+        EcKeypairBytes ec = generateEcKeypairBytes(SECURE_RANDOM);
 
         // ML-KEM half — BC's low-level API; no JDK 11 stdlib alternative.
         MLKEMKeyPairGenerator mlGen = new MLKEMKeyPairGenerator();
-        mlGen.init(new MLKEMKeyGenerationParameters(random, mlkemParams));
+        mlGen.init(new MLKEMKeyGenerationParameters(SECURE_RANDOM, mlkemParams));
         AsymmetricCipherKeyPair mkp = mlGen.generateKeyPair();
         byte[] mlPubBytes = ((MLKEMPublicKeyParameters) mkp.getPublic()).getEncoded();
         byte[] mlSeed = ((MLKEMPrivateKeyParameters) mkp.getPrivate()).getSeed();
@@ -182,10 +184,8 @@ public final class HybridNISTAlgorithm {
         byte[] recipientMlPub = Arrays.copyOfRange(rawPub, 0, mlkemPubSize);
         byte[] recipientEcPub = Arrays.copyOfRange(rawPub, mlkemPubSize, rawPub.length);
 
-        SecureRandom random = new SecureRandom();
-
         // ECDH: generate ephemeral keypair, compute shared secret, ship the ephemeral point.
-        EcKeypairBytes ephemeral = generateEcKeypairBytes(random);
+        EcKeypairBytes ephemeral = generateEcKeypairBytes(SECURE_RANDOM);
         BigInteger ephemeralScalar = new BigInteger(1, ephemeral.scalar);
         byte[] tradSS = computeEcdhSecret(ephemeralScalar, recipientEcPub);
         byte[] tradCT = ephemeral.publicPoint;       // ephemeral EC pub (the KEM ciphertext)
@@ -193,7 +193,7 @@ public final class HybridNISTAlgorithm {
 
         // ML-KEM encapsulate.
         MLKEMPublicKeyParameters mlPub = new MLKEMPublicKeyParameters(mlkemParams, recipientMlPub);
-        SecretWithEncapsulation kemEnc = new MLKEMGenerator(random).generateEncapsulated(mlPub);
+        SecretWithEncapsulation kemEnc = new MLKEMGenerator(SECURE_RANDOM).generateEncapsulated(mlPub);
         byte[] mlSS = kemEnc.getSecret();
         byte[] mlCT = kemEnc.getEncapsulation();
         if (mlCT.length != mlkemCtSize) {

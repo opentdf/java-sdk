@@ -5,6 +5,7 @@ import io.opentdf.platform.sdk.SDKException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -30,16 +31,24 @@ public final class KemProviders {
 
     private static final Logger logger = LoggerFactory.getLogger(KemProviders.class);
 
-    private static volatile Map<KeyType, KemProvider> cache;
-
     private KemProviders() {}
+
+    /**
+     * Initialization-on-demand holder. The JVM guarantees this class is loaded
+     * lazily on first access to {@link Holder#CACHE} and that the load happens
+     * under the class-init lock — no {@code volatile}, no synchronized block,
+     * and no SonarCloud java:S3077 (volatile-Map) warning.
+     */
+    private static final class Holder {
+        static final Map<KeyType, KemProvider> CACHE = load();
+    }
 
     /**
      * @return the provider registered for {@code keyType}.
      * @throws SDKException if no provider is registered. The message tells the user how to fix it.
      */
     public static KemProvider get(KeyType keyType) {
-        KemProvider p = providers().get(keyType);
+        KemProvider p = Holder.CACHE.get(keyType);
         if (p == null) {
             // The FIPS qualifier is in the message unconditionally so a FIPS-mode user
             // can't follow the "add sdk-pqc-bc" advice into the bcprov/bc-fips namespace
@@ -55,26 +64,12 @@ public final class KemProviders {
 
     /** Non-throwing variant; returns empty when no provider matches. */
     public static Optional<KemProvider> find(KeyType keyType) {
-        return Optional.ofNullable(providers().get(keyType));
+        return Optional.ofNullable(Holder.CACHE.get(keyType));
     }
 
     /** Set of {@link KeyType}s for which at least one provider is registered. Useful for diagnostics. */
     public static Set<KeyType> registered() {
-        return providers().keySet();
-    }
-
-    private static Map<KeyType, KemProvider> providers() {
-        Map<KeyType, KemProvider> local = cache;
-        if (local == null) {
-            synchronized (KemProviders.class) {
-                local = cache;
-                if (local == null) {
-                    local = load();
-                    cache = local;
-                }
-            }
-        }
-        return local;
+        return Holder.CACHE.keySet();
     }
 
     private static Map<KeyType, KemProvider> load() {
@@ -88,7 +83,6 @@ public final class KemProviders {
                 }
             }
         }
-        // Cache is immutable post-init (matches the class Javadoc claim).
-        return java.util.Collections.unmodifiableMap(map);
+        return Collections.unmodifiableMap(map);
     }
 }
