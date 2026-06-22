@@ -4,6 +4,7 @@ import io.opentdf.platform.sdk.ECKeyPair;
 import io.opentdf.platform.sdk.KeyType;
 import io.opentdf.platform.sdk.SDKException;
 
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
@@ -226,7 +227,7 @@ final class HybridCrypto {
     private static byte[] computeDefaultTDFSalt() {
         try {
             MessageDigest d = MessageDigest.getInstance("SHA-256");
-            d.update("TDF".getBytes());
+            d.update("TDF".getBytes(StandardCharsets.UTF_8));
             return d.digest();
         } catch (NoSuchAlgorithmException e) {
             throw new SDKException("SHA-256 not available", e);

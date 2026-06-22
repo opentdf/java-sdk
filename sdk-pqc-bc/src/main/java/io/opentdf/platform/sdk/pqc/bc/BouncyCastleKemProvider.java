@@ -28,7 +28,10 @@ public final class BouncyCastleKemProvider implements KemProvider {
             KeyType.HybridSecp384r1MLKEM1024Key);
 
     /** Public no-arg constructor required by {@link java.util.ServiceLoader}. */
-    public BouncyCastleKemProvider() {}
+    public BouncyCastleKemProvider() {
+        // Intentionally empty: ServiceLoader requires a public no-arg constructor;
+        // all state is the SUPPORTED static set above and the stateless HybridCrypto helpers.
+    }
 
     @Override
     public Set<KeyType> supportedKeyTypes() {

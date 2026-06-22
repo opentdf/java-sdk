@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
@@ -53,7 +54,10 @@ class TDFHybridTest {
                     }
 
                     @Override
-                    public void cancel() {}
+                    public void cancel() {
+                        // No-op: the mock call is synchronous and already complete by the time
+                        // the SDK could call cancel(); nothing to interrupt.
+                    }
                 });
     }
 
@@ -144,7 +148,7 @@ class TDFHybridTest {
                 Config.withAutoconfigure(false),
                 Config.withKasInformation(kasInfo));
 
-        InputStream plaintext = new ByteArrayInputStream("hybrid hello".getBytes());
+        InputStream plaintext = new ByteArrayInputStream("hybrid hello".getBytes(StandardCharsets.UTF_8));
         ByteArrayOutputStream tdfOut = new ByteArrayOutputStream();
 
         TDF tdf = new TDF(new FakeServicesBuilder()
