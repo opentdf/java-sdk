@@ -6,7 +6,7 @@
     <parent>
         <artifactId>sdk-pom</artifactId>
         <groupId>io.opentdf.platform</groupId>
-        <version>0.15.1-SNAPSHOT</version>
+        <version>0.16.0</version>
     </parent>
     <packaging>jar</packaging>
     <properties>
@@ -18,9 +18,9 @@
         <okhttp.version>4.12.0</okhttp.version>
         <platform.branch>protocol/go/v0.16.0</platform.branch>
         <!-- in the non-FIPS case we don't need to pass anything to the jvm -->
-        <java.security.properties.test></java.security.properties.test>
+        <java.security.properties.test/>
         <!-- Default empty argLine; overridden by jacoco:prepare-agent when the `coverage` profile is active -->
-        <argLine></argLine>
+        <argLine/>
     </properties>
     <dependencies>
         <!-- Logging Dependencies -->

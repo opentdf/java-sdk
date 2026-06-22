@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.16.0](https://github.com/opentdf/java-sdk/compare/v0.15.0...v0.16.0) (2026-06-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sdk:** remove bouncycastle and ayza libraries ([#367](https://github.com/opentdf/java-sdk/issues/367))
+
+### Features
+
+* **sdk:** remove bouncycastle and ayza libraries ([#367](https://github.com/opentdf/java-sdk/issues/367)) ([63b49af](https://github.com/opentdf/java-sdk/commit/63b49af858f5eb78ea3db72d2fe991abdb3fcec8))
+* verify that BC works with `approved_only` mode set ([#375](https://github.com/opentdf/java-sdk/issues/375)) ([36fd6cf](https://github.com/opentdf/java-sdk/commit/36fd6cf0f75f986f2d4e456f47ee83c55756d2f7))
+
+
+### Bug Fixes
+
+* **main:** Update bc module sdk version. ([#377](https://github.com/opentdf/java-sdk/issues/377)) ([9b38f82](https://github.com/opentdf/java-sdk/commit/9b38f82a5bc61284f844e9527ca34a206648e646))
+
 ## [0.15.0](https://github.com/opentdf/java-sdk/compare/v0.14.0...v0.15.0) (2026-04-29)
 
 
