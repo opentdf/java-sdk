@@ -16,7 +16,7 @@
         <kotlin.version>2.1.0</kotlin.version>
         <connect.version>0.7.2</connect.version>
         <okhttp.version>4.12.0</okhttp.version>
-        <platform.branch>protocol/go/v0.16.0</platform.branch>
+        <platform.branch>protocol/go/v0.34.0</platform.branch>
         <!-- in the non-FIPS case we don't need to pass anything to the jvm -->
         <java.security.properties.test/>
         <!-- Default empty argLine; overridden by jacoco:prepare-agent when the `coverage` profile is active -->
@@ -296,6 +296,20 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- Test-jar for shared test fixtures (FakeServicesBuilder, etc.)
+                 consumed by sibling modules like sdk-pqc-bc. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>attach-test-jar</id>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <!-- Plugin to create Javadoc JAR -->
             <plugin>
                 <groupId>org.jetbrains.dokka</groupId>
@@ -482,6 +496,9 @@
                 <activeByDefault>true</activeByDefault>
             </activation>
             <dependencies>
+                <!-- BouncyCastle stays out of the core sdk compile path. PQC primitives
+                     that require BC live in the sibling sdk-pqc-bc module, discovered
+                     at runtime via java.util.ServiceLoader (see KemProvider SPI). -->
                 <dependency>
                     <groupId>org.bouncycastle</groupId>
                     <artifactId>bcpkix-jdk18on</artifactId>

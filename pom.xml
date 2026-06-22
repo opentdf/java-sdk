@@ -16,7 +16,8 @@
         <log4j.version>2.20.0</log4j.version>
         <grpc.version>1.75.0</grpc.version>
         <protobuf.version>4.29.2</protobuf.version>
-        <bouncycastle.version>1.82</bouncycastle.version>
+        <!-- 1.84 patches GHSA-c3fc-8qff-9hwx and GHSA-p93r-85wp-75v3 (open in 1.82). -->
+        <bouncycastle.version>1.84</bouncycastle.version>
         <bc-fips.version>2.1.2</bc-fips.version>
         <bcpkix-fips.version>2.1.11</bcpkix-fips.version>
         <bctls-fips.version>2.1.23</bctls-fips.version>
@@ -293,6 +294,20 @@
             <activation>
                 <activeByDefault>true</activeByDefault>
             </activation>
+        </profile>
+        <profile>
+            <!-- sdk-pqc-bc is gated behind the non-fips profile because its
+                 BC compile dependency (bcprov-jdk18on) collides with bc-fips
+                 on the same package namespace. A FIPS build (mvn -P fips,!non-fips)
+                 must omit sdk-pqc-bc from the reactor entirely; consumers who
+                 want hybrid PQC opt in via the non-fips profile. -->
+            <id>non-fips</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <modules>
+                <module>sdk-pqc-bc</module>
+            </modules>
         </profile>
         <profile>
             <id>stage</id>
