@@ -330,6 +330,7 @@
             <id>release</id>
             <modules>
                 <module>sdk</module>
+                <module>sdk-fips-bouncycastle</module>
             </modules>
             <activation>
                 <activeByDefault>false</activeByDefault>
