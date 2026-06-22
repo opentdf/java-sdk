@@ -32,7 +32,19 @@ public enum KeyType {
      * {@code sdk-pqc-bc} (or another {@link io.opentdf.platform.sdk.spi.KemProvider}
      * implementation) on the runtime classpath; not available under the fips Maven profile.
      */
-    HybridSecp384r1MLKEM1024Key("hpqt:secp384r1-mlkem1024");
+    HybridSecp384r1MLKEM1024Key("hpqt:secp384r1-mlkem1024"),
+    /**
+     * Pure ML-KEM-768 (FIPS 203). Requires {@code sdk-pqc-bc} (or another
+     * {@link io.opentdf.platform.sdk.spi.KemProvider} implementation) on the runtime
+     * classpath; not available under the fips Maven profile.
+     */
+    MLKEM768Key("mlkem:768"),
+    /**
+     * Pure ML-KEM-1024 (FIPS 203). Requires {@code sdk-pqc-bc} (or another
+     * {@link io.opentdf.platform.sdk.spi.KemProvider} implementation) on the runtime
+     * classpath; not available under the fips Maven profile.
+     */
+    MLKEM1024Key("mlkem:1024");
 
     private final String keyType;
     private final ECCurve curve;
@@ -131,6 +143,16 @@ public enum KeyType {
             case HybridXWingKey:
             case HybridSecp256r1MLKEM768Key:
             case HybridSecp384r1MLKEM1024Key:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    public boolean isMLKEM() {
+        switch (this) {
+            case MLKEM768Key:
+            case MLKEM1024Key:
                 return true;
             default:
                 return false;

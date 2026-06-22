@@ -237,6 +237,14 @@ class TDF {
                 keyAccess.keyType = kHybridWrapped;
                 // ephemeralPublicKey intentionally left null — the ephemeral material is
                 // carried inside the ASN.1 envelope in wrappedKey.
+            } else if (keyType.isMLKEM()) {
+                // Pure ML-KEM (FIPS 203). Same KemProviders dispatch as hybrid, but
+                // keyAccess.type stays "wrapped" — reuses the RSA slot. KAS disambiguates
+                // from RSA via the registered key's algorithm. Wire format inside the
+                // base64'd wrappedKey: mlkem_ciphertext || AES-GCM(nonce||ct||tag).
+                byte[] wrapped = KemProviders.get(keyType).wrapDEK(keyType, kasInfo.PublicKey, symKey);
+                keyAccess.wrappedKey = Base64.getEncoder().encodeToString(wrapped);
+                keyAccess.keyType = kWrapped;
             } else if (keyType.isEc()) {
                 var ecKeyWrappedKeyInfo = createECWrappedKey(kasInfo, symKey, keyType);
                 keyAccess.wrappedKey = ecKeyWrappedKeyInfo.wrappedKey;

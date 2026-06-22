@@ -9,14 +9,21 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 /**
- * Dispatcher and shared helpers for hybrid post-quantum key wrapping
- * (X-Wing and NIST EC + ML-KEM).
+ * Dispatcher and shared helpers for post-quantum key wrapping. Serves the
+ * three hybrid algorithms (X-Wing, NIST EC + ML-KEM) AND pure ML-KEM-768 /
+ * ML-KEM-1024 via the same {@link BouncyCastleKemProvider}.
  *
- * Wire format: ASN.1 DER SEQUENCE with two IMPLICIT context-tagged OCTET STRINGs
- *   SEQUENCE { [0] IMPLICIT OCTET STRING ciphertext, [1] IMPLICIT OCTET STRING encryptedDEK }
+ * <p>Wire format differs by family. Hybrid algorithms use an ASN.1 DER
+ * SEQUENCE with two IMPLICIT context-tagged OCTET STRINGs (built via
+ * {@link #marshalEnvelope}). Pure ML-KEM uses a raw concat of
+ * {@code mlkemCiphertext || AES-GCM(nonce||ct||tag)} — the KAS knows the
+ * fixed ciphertext size from the registered key's algorithm, so no envelope
+ * framing is needed.
  *
- * Derived AES-256 wrap key: HKDF-SHA256(combinedSecret, salt=SHA-256("TDF"), info=empty).
- * EncryptedDEK: AES-256-GCM(wrapKey).encrypt(DEK) with 12-byte IV prefix + 16-byte tag.
+ * <p>The AES-256 wrap key derivation
+ * ({@code HKDF-SHA256(combinedSecret, salt=SHA-256("TDF"), info=empty)}) and
+ * the AES-256-GCM DEK encryption ({@code 12-byte IV || ciphertext || 16-byte tag})
+ * are shared across both families.
  */
 final class HybridCrypto {
 
@@ -30,10 +37,10 @@ final class HybridCrypto {
     private HybridCrypto() {}
 
     /**
-     * Wrap a DEK against a hybrid public-key PEM. Single dispatch site for all
-     * hybrid algorithms — {@link BouncyCastleKemProvider} delegates here so a
-     * new hybrid algorithm only needs one switch update.
-     * Returns the ASN.1-encoded envelope used in {@code wrappedKey} for {@code hybrid-wrapped} key access.
+     * Wrap a DEK against a PQC public-key PEM. Single dispatch site for all
+     * algorithms ({@link BouncyCastleKemProvider} delegates here) so adding
+     * a new algorithm is one switch case in each direction. Output bytes
+     * are the raw envelope; caller base64-encodes for {@code keyAccess.wrappedKey}.
      */
     static byte[] wrapDEK(KeyType keyType, String publicKeyPEM, byte[] dek) {
         switch (keyType) {
@@ -45,8 +52,14 @@ final class HybridCrypto {
             case HybridSecp384r1MLKEM1024Key:
                 return HybridNISTAlgorithm.P384_MLKEM1024.wrapDEK(
                         HybridNISTAlgorithm.P384_MLKEM1024.pubKeyFromPem(publicKeyPEM), dek);
+            case MLKEM768Key:
+                return MLKEMAlgorithm.MLKEM_768.wrapDEK(
+                        MLKEMAlgorithm.MLKEM_768.pubKeyFromPem(publicKeyPEM), dek);
+            case MLKEM1024Key:
+                return MLKEMAlgorithm.MLKEM_1024.wrapDEK(
+                        MLKEMAlgorithm.MLKEM_1024.pubKeyFromPem(publicKeyPEM), dek);
             default:
-                throw new SDKException("unsupported hybrid key type: " + keyType);
+                throw new SDKException("unsupported PQC key type: " + keyType);
         }
     }
 
@@ -64,8 +77,14 @@ final class HybridCrypto {
             case HybridSecp384r1MLKEM1024Key:
                 return HybridNISTAlgorithm.P384_MLKEM1024.unwrapDEK(
                         HybridNISTAlgorithm.P384_MLKEM1024.privateKeyFromPem(privateKeyPEM), wrapped);
+            case MLKEM768Key:
+                return MLKEMAlgorithm.MLKEM_768.unwrapDEK(
+                        MLKEMAlgorithm.MLKEM_768.privateKeyFromPem(privateKeyPEM), wrapped);
+            case MLKEM1024Key:
+                return MLKEMAlgorithm.MLKEM_1024.unwrapDEK(
+                        MLKEMAlgorithm.MLKEM_1024.privateKeyFromPem(privateKeyPEM), wrapped);
             default:
-                throw new SDKException("unsupported hybrid key type: " + keyType);
+                throw new SDKException("unsupported PQC key type: " + keyType);
         }
     }
 
