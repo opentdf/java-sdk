@@ -545,7 +545,7 @@
             </properties>
             <build>
                 <plugins>
-                    <!-- Plugin to download and unpack the Jazzer agent -->
+                    <!-- Plugin to download/unpack Jazzer agent and execute fuzzing -->
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-antrun-plugin</artifactId>
@@ -575,35 +575,6 @@
                                     <goal>run</goal>
                                 </goals>
                             </execution>
-                        </executions>
-                    </plugin>
-
-                    <!-- Copy dependencies to a directory for Jazzer to reference -->
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-dependency-plugin</artifactId>
-                        <version>3.4.0</version>
-                        <executions>
-                            <execution>
-                                <id>copy-dependencies</id>
-                                <phase>process-test-classes</phase>
-                                <goals>
-                                    <goal>copy-dependencies</goal>
-                                </goals>
-                                <configuration>
-                                    <outputDirectory>${project.build.directory}/dependency-jars</outputDirectory>
-                                    <includeScope>test</includeScope>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-
-                    <!-- Plugin to execute Jazzer -->
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-antrun-plugin</artifactId>
-                        <version>3.1.0</version>
-                        <executions>
                             <execution>
                                 <id>run-jazzer-fuzzing</id>
                                 <phase>verify</phase>
@@ -632,6 +603,26 @@
                                 <goals>
                                     <goal>run</goal>
                                 </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <!-- Copy dependencies to a directory for Jazzer to reference -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-dependency-plugin</artifactId>
+                        <version>3.4.0</version>
+                        <executions>
+                            <execution>
+                                <id>copy-dependencies</id>
+                                <phase>process-test-classes</phase>
+                                <goals>
+                                    <goal>copy-dependencies</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>${project.build.directory}/dependency-jars</outputDirectory>
+                                    <includeScope>test</includeScope>
+                                </configuration>
                             </execution>
                         </executions>
                     </plugin>
