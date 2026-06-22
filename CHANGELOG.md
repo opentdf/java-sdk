@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.17.0](https://github.com/opentdf/java-sdk/compare/v0.16.0...v0.17.0) (2026-06-22)
+
+
+### Features
+
+* **sdk:** DSPX-3309 add hybrid post-quantum key wrapping for KAS (X-Wing, ECDH+ML-KEM) ([#368](https://github.com/opentdf/java-sdk/issues/368)) ([faffa7d](https://github.com/opentdf/java-sdk/commit/faffa7ddc0111e91476e9bf05caea3a5dbc5e29d))
+
+
+### Bug Fixes
+
+* do not push snapshots ([#381](https://github.com/opentdf/java-sdk/issues/381)) ([b761453](https://github.com/opentdf/java-sdk/commit/b761453d1d2cb169ab831f2c86f32f20dbecd241))
+* we deploy from the root ([#379](https://github.com/opentdf/java-sdk/issues/379)) ([3b612dd](https://github.com/opentdf/java-sdk/commit/3b612ddc71f4f5ab32d09f9fde082e1bec54eeed))
+
 ## [0.16.0](https://github.com/opentdf/java-sdk/compare/v0.15.0...v0.16.0) (2026-06-22)
 
 
