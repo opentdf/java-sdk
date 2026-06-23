@@ -29,11 +29,13 @@ import static org.mockito.Mockito.when;
  * using each ML-KEM KAS key type, then asserts the manifest's KeyAccess
  * object has:
  * <ul>
- *   <li>{@code keyType == "wrapped"} (NOT "hybrid-wrapped"; pure ML-KEM
- *       reuses the RSA slot — the KAS disambiguates by registered algorithm)</li>
+ *   <li>{@code keyType == "mlkem-wrapped"} — its own KAO scheme, distinct
+ *       from RSA's {@code "wrapped"} and the hybrid {@code "hybrid-wrapped"}.
+ *       The KAS uses this to skip HKDF on the wrap key. See platform PR
+ *       #3562 and {@code adr/decisions/2026-06-16-mlkem-direct-key-wrap.md}.</li>
  *   <li>{@code ephemeralPublicKey == null}</li>
- *   <li>a {@code wrappedKey} that round-trips back to the 32-byte payload
- *       key via the matching private key.</li>
+ *   <li>a {@code wrappedKey} (ASN.1 envelope, base64'd) that round-trips
+ *       back to the 32-byte payload key via the matching private key.</li>
  * </ul>
  */
 class TDFMLKEMTest {
@@ -77,14 +79,13 @@ class TDFMLKEMTest {
         Manifest.KeyAccess ka = createTDFAndGetFirstKeyAccess(
                 keyType, kp.publicKeyInPemFormat(), kid);
 
-        // Pure ML-KEM reuses the RSA-style "wrapped" slot — KAS disambiguates by algorithm.
-        assertThat(ka.keyType).isEqualTo("wrapped");
+        assertThat(ka.keyType).isEqualTo("mlkem-wrapped");
         assertThat(ka.ephemeralPublicKey).isNull();
         assertThat(ka.wrappedKey).isNotEmpty();
 
         byte[] wrapped = Base64.getDecoder().decode(ka.wrappedKey);
-        // wrappedKey = mlkemCiphertext (fixed) || AES-GCM(iv(12) || dek(32) || tag(16))
-        assertThat(wrapped.length).isEqualTo(algo.ciphertextSize() + 12 + 32 + 16);
+        // ASN.1 SEQUENCE tag (same envelope as hybrid). Round-trip is the wire-format guard.
+        assertThat(wrapped[0]).isEqualTo((byte) 0x30);
 
         byte[] privRaw = algo.privateKeyFromPem(kp.privateKeyInPemFormat());
         byte[] symKey = algo.unwrapDEK(privRaw, wrapped);

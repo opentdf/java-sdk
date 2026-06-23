@@ -5,13 +5,14 @@
 #
 # Per algorithm: encrypt → assert manifest → KAS rewrap → decrypt → diff.
 #
-# Differs from test-hybrid-pqc.sh in three places:
-#   * Wire format: pure ML-KEM is raw concat (mlkem_ct || AES-GCM blob), not
-#     ASN.1 SEQUENCE. The manifest check below validates the wrappedKey
-#     length matches ciphertextSize + 28 bytes (IV(12) + tag(16) + DEK(?)).
-#   * keyAccess[0].type == "wrapped" (NOT "hybrid-wrapped"). Pure ML-KEM
-#     reuses the RSA slot; the KAS disambiguates by registered key algorithm.
+# Differs from test-hybrid-pqc.sh in two places:
+#   * keyAccess[0].type == "mlkem-wrapped" (its own KAO scheme — distinct
+#     from "hybrid-wrapped" and from RSA's "wrapped"). The KAS uses this
+#     to skip HKDF on the wrap key. See platform PR #3562 and the ADR at
+#     adr/decisions/2026-06-16-mlkem-direct-key-wrap.md.
 #   * SPKI OIDs are the NIST FIPS 203 ones (2.16.840.1.101.3.4.4.{2,3}).
+# Wire envelope (ASN.1 SEQUENCE of two implicit OCTET STRINGs) and the
+# 0x30-prefix invariant match the hybrid path byte-for-byte.
 #
 # Prereqs:
 #   * Local platform up at $PLATFORM_ENDPOINT with ML-KEM KAS keys registered
@@ -85,15 +86,6 @@ alg_to_oid() {
     case "$1" in
         MLKEM768Key)  echo "2.16.840.1.101.3.4.4.2" ;;
         MLKEM1024Key) echo "2.16.840.1.101.3.4.4.3" ;;
-        *) return 1 ;;
-    esac
-}
-
-# Map KeyType enum name → ML-KEM ciphertext size (FIPS 203).
-alg_to_ct_size() {
-    case "$1" in
-        MLKEM768Key)  echo 1088 ;;
-        MLKEM1024Key) echo 1568 ;;
         *) return 1 ;;
     esac
 }
@@ -236,8 +228,8 @@ for alg_name in "${ALGORITHMS[@]}"; do
     keyType=$(jq -r '.encryptionInformation.keyAccess[0].type' <<<"$manifest")
     ephem=$(jq -r '.encryptionInformation.keyAccess[0].ephemeralPublicKey // ""' <<<"$manifest")
     wrapped=$(jq -r '.encryptionInformation.keyAccess[0].wrappedKey // ""' <<<"$manifest")
-    if [[ "$keyType" != "wrapped" ]]; then
-        fail "$alg_name: type='$keyType' (expected 'wrapped')"
+    if [[ "$keyType" != "mlkem-wrapped" ]]; then
+        fail "$alg_name: type='$keyType' (expected 'mlkem-wrapped')"
         echo "    keyAccess[0]:"
         jq '.encryptionInformation.keyAccess[0]' <<<"$manifest" 2>/dev/null | sed 's/^/      /'
         failures+=("$alg_name (bad type: $keyType)")
@@ -253,17 +245,14 @@ for alg_name in "${ALGORITHMS[@]}"; do
         failures+=("$alg_name (empty wrappedKey)")
         continue
     fi
-    # Pure ML-KEM wire format: ML-KEM ciphertext (fixed size per variant)
-    # || AES-GCM(IV(12) || DEK(32) || tag(16)) = ciphertextSize + 60 bytes.
-    expected_ct_size=$(alg_to_ct_size "$alg_name")
-    expected_len=$((expected_ct_size + 12 + 32 + 16))
-    actual_len=$(b64decode <<<"$wrapped" 2>/dev/null | wc -c | tr -d ' ')
-    if [[ "$actual_len" != "$expected_len" ]]; then
-        fail "$alg_name: wrappedKey length $actual_len bytes != expected $expected_len (ct=$expected_ct_size + 60)"
-        failures+=("$alg_name (bad wrappedKey length)")
+    # ASN.1 SEQUENCE always starts with 0x30 — same invariant the hybrid path checks.
+    first_byte=$(b64decode <<<"$wrapped" 2>/dev/null | od -An -tx1 -N1 | tr -d ' \n' || true)
+    if [[ "$first_byte" != "30" ]]; then
+        fail "$alg_name: wrappedKey does not start with ASN.1 SEQUENCE (got 0x$first_byte)"
+        failures+=("$alg_name (bad envelope)")
         continue
     fi
-    pass "$alg_name: manifest OK (wrapped, $actual_len-byte envelope, no ephemeralPublicKey)"
+    pass "$alg_name: manifest OK (mlkem-wrapped, ASN.1 envelope, no ephemeralPublicKey)"
     echo "       --- keyAccess[0] (KAO) ---"
     jq '.encryptionInformation.keyAccess[0]' <<<"$manifest" | sed 's/^/       /'
     echo "       --- end keyAccess[0] ---"

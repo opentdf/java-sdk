@@ -15,13 +15,13 @@ import org.bouncycastle.pqc.crypto.mlkem.MLKEMPrivateKeyParameters;
 import org.bouncycastle.pqc.crypto.mlkem.MLKEMPublicKeyParameters;
 
 import java.security.SecureRandom;
-import java.util.Arrays;
 
 /**
  * Stateless parameters + operations for a pure ML-KEM (FIPS 203) algorithm
- * variant. The wire format and combiner are the bare ML-KEM KEM output run
- * through HKDF-SHA256, in contrast with {@link HybridNISTAlgorithm} (which
- * combines ML-KEM with an EC half per draft-ietf-lamps-pq-composite-kem-14).
+ * variant. Conforms to opentdf/platform PR #3562 (the open replacement for the
+ * closed PR #3491). The wire envelope is the same ASN.1 SEQUENCE the hybrid
+ * PQC path uses; the only thing that differs from {@link HybridNISTAlgorithm}
+ * is the AES wrap-key derivation — see {@link #wrapDEK(byte[], byte[])} below.
  *
  * <h2>Wire format</h2>
  *
@@ -31,18 +31,25 @@ import java.util.Arrays;
  * <p><b>Private key</b> (64 bytes inside the PKCS#8 OCTET STRING):
  * the ML-KEM seed {@code (d || z)} per FIPS 203 §6.
  *
- * <p><b>Wrapped DEK envelope</b> (no ASN.1 framing — the KAS knows the
- * algorithm from the registered key, so the {@link #ciphertextSize()} prefix
- * is unambiguous):
- * <pre>mlkemCiphertext ‖ AES-GCM(nonce(12) ‖ encryptedDEK ‖ tag(16))</pre>
+ * <p><b>Wrapped DEK envelope</b> — same ASN.1 SEQUENCE as
+ * {@link HybridCrypto#marshalEnvelope(byte[], byte[])}:
+ * <pre>SEQUENCE { [0] IMPLICIT OCTET STRING mlkemCiphertext,
+ *            [1] IMPLICIT OCTET STRING AES-GCM(iv(12) ‖ DEK ‖ tag(16)) }</pre>
  *
- * <p><b>KEM combiner:</b>
- * <pre>wrapKey = HKDF-SHA256(salt = SHA-256("TDF"), ikm = mlkemSharedSecret, L = 32)</pre>
- * The 32-byte output is used directly as the AES-256 key.
+ * <p><b>AES-256 wrap key:</b> the 32-byte ML-KEM Decaps shared secret is used
+ * <i>directly</i> as the AES key — <b>no HKDF</b>. Rationale (per platform ADR
+ * {@code adr/decisions/2026-06-16-mlkem-direct-key-wrap.md}): HSM-backed KAS
+ * providers (Thales Luna T-Series firmware 7.15.1, strict-FIPS) can only emit
+ * the Decaps output as a non-extractable {@code CKK_AES} object, so an HKDF
+ * step would block HSM unwrap. FIPS 203 §6.3/§7.3 guarantees the Decaps
+ * output is a uniformly-random 32-byte string; HKDF would not add entropy.
+ * The {@code "mlkem-wrapped"} KAO type itself is the domain-separation tag
+ * HKDF's {@code info} would have provided. Hybrid PQC schemes still need HKDF
+ * because there the KDF is the combiner for the two shared-secret halves.
  *
- * <p>The KAO field {@code type} stays {@code "wrapped"} (reuses the RSA slot;
- * the KAS disambiguates from RSA by looking up the registered key's
- * algorithm). {@code ephemeralPublicKey} is absent.
+ * <p>The KAO field {@code type} is {@code "mlkem-wrapped"} (its own scheme —
+ * distinct from {@code "wrapped"} which RSA uses and {@code "hybrid-wrapped"}
+ * which the hybrid schemes use). {@code ephemeralPublicKey} is absent.
  *
  * <p>ML-KEM primitives come from BouncyCastle's low-level API — JDK 11
  * stdlib has no KEM API (added in JDK 21).
@@ -131,8 +138,8 @@ public final class MLKEMAlgorithm {
 
     /**
      * Encapsulate against {@code rawPub} (an ML-KEM encapsulation key) and AES-256-GCM
-     * wrap the {@code dek}. Returns the raw wire bytes: {@code ciphertext || AES-GCM(nonce||ct||tag)}.
-     * Caller base64-encodes for {@code keyAccess.wrappedKey}.
+     * wrap the {@code dek} using the Decaps shared secret directly (no HKDF). Returns
+     * the ASN.1 envelope bytes; caller base64-encodes for {@code keyAccess.wrappedKey}.
      */
     public byte[] wrapDEK(byte[] rawPub, byte[] dek) {
         if (rawPub.length != publicKeySize) {
@@ -140,38 +147,36 @@ public final class MLKEMAlgorithm {
         }
         MLKEMPublicKeyParameters pub = new MLKEMPublicKeyParameters(mlkemParams, rawPub);
         SecretWithEncapsulation enc = new MLKEMGenerator(SECURE_RANDOM).generateEncapsulated(pub);
-        byte[] sharedSecret = enc.getSecret();
+        byte[] wrapKey = enc.getSecret();           // 32-byte AES key, used directly (no HKDF)
         byte[] ciphertext = enc.getEncapsulation();
         if (ciphertext.length != ciphertextSize) {
             throw new SDKException("ML-KEM ciphertext size " + ciphertext.length + " != expected " + ciphertextSize);
         }
-
-        byte[] wrapKey = HybridCrypto.deriveWrapKey(sharedSecret);
+        if (wrapKey.length != HybridCrypto.WRAP_KEY_SIZE) {
+            throw new SDKException("ML-KEM shared secret size " + wrapKey.length
+                    + " != expected " + HybridCrypto.WRAP_KEY_SIZE);
+        }
         byte[] encryptedDek = new AesGcm(wrapKey).encrypt(dek).asBytes();
-        byte[] out = new byte[ciphertextSize + encryptedDek.length];
-        System.arraycopy(ciphertext, 0, out, 0, ciphertextSize);
-        System.arraycopy(encryptedDek, 0, out, ciphertextSize, encryptedDek.length);
-        return out;
+        return HybridCrypto.marshalEnvelope(ciphertext, encryptedDek);
     }
 
     /**
      * Inverse of {@link #wrapDEK(byte[], byte[])}. Used by tests and any future
      * client-side decap path; production decrypt defers to the KAS rewrap.
      */
-    public byte[] unwrapDEK(byte[] rawPriv, byte[] wrappedBlob) {
+    public byte[] unwrapDEK(byte[] rawPriv, byte[] wrappedDer) {
         if (rawPriv.length != SEED_SIZE) {
             throw new SDKException("invalid " + keyType + " private key seed size: got " + rawPriv.length + " want " + SEED_SIZE);
         }
-        if (wrappedBlob.length <= ciphertextSize) {
-            throw new SDKException(keyType + " wrapped blob too short: got " + wrappedBlob.length
-                    + ", need > " + ciphertextSize);
+        byte[][] parts = HybridCrypto.unmarshalEnvelope(wrappedDer);
+        byte[] ciphertext = parts[0];
+        byte[] encryptedDek = parts[1];
+        if (ciphertext.length != ciphertextSize) {
+            throw new SDKException("invalid " + keyType + " ciphertext size: got " + ciphertext.length + " want " + ciphertextSize);
         }
-        byte[] ciphertext = Arrays.copyOfRange(wrappedBlob, 0, ciphertextSize);
-        byte[] encryptedDek = Arrays.copyOfRange(wrappedBlob, ciphertextSize, wrappedBlob.length);
 
         MLKEMPrivateKeyParameters priv = new MLKEMPrivateKeyParameters(mlkemParams, rawPriv);
-        byte[] sharedSecret = new MLKEMExtractor(priv).extractSecret(ciphertext);
-        byte[] wrapKey = HybridCrypto.deriveWrapKey(sharedSecret);
+        byte[] wrapKey = new MLKEMExtractor(priv).extractSecret(ciphertext);
         return new AesGcm(wrapKey).decrypt(new AesGcm.Encrypted(encryptedDek));
     }
 }

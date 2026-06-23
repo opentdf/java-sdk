@@ -13,17 +13,25 @@ import java.security.NoSuchAlgorithmException;
  * three hybrid algorithms (X-Wing, NIST EC + ML-KEM) AND pure ML-KEM-768 /
  * ML-KEM-1024 via the same {@link BouncyCastleKemProvider}.
  *
- * <p>Wire format differs by family. Hybrid algorithms use an ASN.1 DER
- * SEQUENCE with two IMPLICIT context-tagged OCTET STRINGs (built via
- * {@link #marshalEnvelope}). Pure ML-KEM uses a raw concat of
- * {@code mlkemCiphertext || AES-GCM(nonce||ct||tag)} — the KAS knows the
- * fixed ciphertext size from the registered key's algorithm, so no envelope
- * framing is needed.
+ * <p>Wire envelope is identical across both families — an ASN.1 DER SEQUENCE
+ * with two IMPLICIT context-tagged OCTET STRINGs (built via
+ * {@link #marshalEnvelope}):
+ * <pre>SEQUENCE { [0] IMPLICIT OCTET STRING ciphertext, [1] IMPLICIT OCTET STRING encryptedDEK }</pre>
  *
- * <p>The AES-256 wrap key derivation
- * ({@code HKDF-SHA256(combinedSecret, salt=SHA-256("TDF"), info=empty)}) and
- * the AES-256-GCM DEK encryption ({@code 12-byte IV || ciphertext || 16-byte tag})
- * are shared across both families.
+ * <p>The DEK is AES-256-GCM sealed (12-byte IV prefix + 16-byte tag suffix).
+ * What differs between the two families is the <b>AES-256 wrap key</b>:
+ * <ul>
+ *   <li><b>Hybrid:</b> HKDF-SHA256(combinedSecret, salt=SHA-256("TDF"),
+ *       info=empty) — the KDF is load-bearing as the combiner for the two
+ *       shared-secret halves.</li>
+ *   <li><b>Pure ML-KEM:</b> the 32-byte FIPS 203 Decaps shared secret is used
+ *       directly — no KDF. See
+ *       {@link MLKEMAlgorithm#wrapDEK(byte[], byte[])} and platform ADR
+ *       {@code 2026-06-16-mlkem-direct-key-wrap.md}.</li>
+ * </ul>
+ *
+ * <p>The KAO {@code type} field disambiguates the two on the wire:
+ * {@code "hybrid-wrapped"} for hybrid, {@code "mlkem-wrapped"} for pure ML-KEM.
  */
 final class HybridCrypto {
 

@@ -107,18 +107,22 @@ attempted), 2 on misuse.
 End-to-end test of the Java SDK's pure ML-KEM (FIPS 203) key wrapping
 (`mlkem:768`, `mlkem:1024`) against a locally running OpenTDF platform.
 Same shape as `test-hybrid-pqc.sh` (encrypt → assert manifest → KAS rewrap
-→ decrypt → diff) with three pure-ML-KEM specifics:
+→ decrypt → diff) with two pure-ML-KEM specifics:
 
-- `keyAccess[0].type` is `"wrapped"` (not `"hybrid-wrapped"`) — pure ML-KEM
-  reuses the RSA slot; the KAS disambiguates from RSA by the registered key
-  algorithm.
-- `wrappedKey` is a raw concat `mlkemCiphertext || AES-GCM(IV(12) || DEK(32)
-  || tag(16))` rather than an ASN.1 SEQUENCE. The script asserts the exact
-  byte length: `ciphertextSize + 60` (1088+60 = 1148 for ML-KEM-768;
-  1568+60 = 1628 for ML-KEM-1024).
+- `keyAccess[0].type` is `"mlkem-wrapped"` — its own KAO scheme, distinct
+  from `"hybrid-wrapped"` and from RSA's `"wrapped"`. The KAS uses this
+  to skip HKDF on the wrap key (pure ML-KEM uses the 32-byte FIPS 203
+  Decaps shared secret directly as the AES-256 key; HKDF is dropped per
+  the platform ADR
+  [`2026-06-16-mlkem-direct-key-wrap.md`](https://github.com/opentdf/platform/blob/main/adr/decisions/2026-06-16-mlkem-direct-key-wrap.md)).
 - Pre-flight OIDs are the NIST FIPS 203 OIDs:
   `2.16.840.1.101.3.4.4.2` for ML-KEM-768 and
   `2.16.840.1.101.3.4.4.3` for ML-KEM-1024.
+
+The wire envelope (ASN.1 SEQUENCE of two implicit OCTET STRINGs —
+`{ [0] kemCiphertext, [1] AES-GCM(IV ‖ DEK ‖ tag) }`) is byte-identical
+to the hybrid path; the script's 0x30-first-byte check is the same
+invariant `test-hybrid-pqc.sh` uses.
 
 ### Run it
 

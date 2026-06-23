@@ -6,12 +6,10 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -21,7 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * shape of {@code HybridCryptoTest} but for FIPS 203 standalone (no EC
  * combiner) — generate keypair → SPKI/PKCS#8 PEM round-trip → wrap DEK →
  * unwrap DEK → assert byte-equal. The unwrap path also acts as a wire-format
- * guard: if the raw-concat marshal/unmarshal drifts, the round-trip fails.
+ * guard: if the ASN.1 envelope marshal/unmarshal drifts, the round-trip
+ * fails.
  */
 class MLKEMKeyPairTest {
 
@@ -54,10 +53,8 @@ class MLKEMKeyPairTest {
 
         byte[] wrapped = algo.wrapDEK(rawPub, DEK);
         assertNotNull(wrapped);
-        // Pure ML-KEM uses raw concat — no ASN.1 SEQUENCE prefix. The blob is
-        // ciphertext (fixed) || AES-GCM(iv(12) || ct || tag(16)) = 12 + dek + 16 = dek + 28.
-        assertEquals(algo.ciphertextSize() + DEK.length + 12 + 16, wrapped.length,
-                "wrapped blob length");
+        // ASN.1 SEQUENCE — first byte is the SEQUENCE tag, same as the hybrid envelope.
+        assertEquals((byte) 0x30, wrapped[0], "ASN.1 SEQUENCE tag");
 
         byte[] unwrapped = algo.unwrapDEK(rawPriv, wrapped);
         assertArrayEquals(DEK, unwrapped, "DEK round-trip");
@@ -87,14 +84,13 @@ class MLKEMKeyPairTest {
 
     @ParameterizedTest
     @MethodSource("variants")
-    void rejectsTruncatedWrappedBlob(MLKEMAlgorithm algo) {
+    void rejectsMalformedEnvelope(MLKEMAlgorithm algo) {
         MLKEMKeyPair kp = algo.generate();
-        byte[] wrapped = algo.wrapDEK(kp.getPublicKey(), DEK);
-        // Cut off the AES-GCM tail entirely — leaves only the KEM ciphertext.
-        byte[] truncated = Arrays.copyOfRange(wrapped, 0, algo.ciphertextSize());
-        SDKException ex = assertThrows(SDKException.class,
-                () -> algo.unwrapDEK(kp.getPrivateKey(), truncated));
-        assertTrue(ex.getMessage().contains("too short"), ex.getMessage());
+        // A two-byte blob can't possibly be a valid SEQUENCE-of-two-OCTET-STRINGs envelope.
+        // HybridCrypto.unmarshalEnvelope should reject before we even reach AES-GCM.
+        byte[] malformed = new byte[] { (byte) 0x30, 0x00 };
+        assertThrows(SDKException.class,
+                () -> algo.unwrapDEK(kp.getPrivateKey(), malformed));
     }
 
     @ParameterizedTest
@@ -102,16 +98,13 @@ class MLKEMKeyPairTest {
     void rejectsTamperedCiphertext(MLKEMAlgorithm algo) {
         MLKEMKeyPair kp = algo.generate();
         byte[] wrapped = algo.wrapDEK(kp.getPublicKey(), DEK);
-        // Flip a bit in the ML-KEM ciphertext. ML-KEM is IND-CCA2: extracted secret
-        // becomes pseudorandom (different from the wrap key), so AES-GCM auth fails.
-        wrapped[0] ^= 0x01;
-        // Either AesGcm throws (auth fail) or unwrap produces wrong DEK; both acceptable.
-        // We assert the round-trip is broken: if no exception, the DEK must differ.
-        try {
-            byte[] result = algo.unwrapDEK(kp.getPrivateKey(), wrapped);
-            assertNotEquals(0, Arrays.compare(DEK, result), "tampering should not yield the original DEK");
-        } catch (Exception expected) {
-            // expected: AES-GCM tag verification failure surfaces as SDKException
-        }
+        // Flip a bit in the AES-GCM tag (last byte of the envelope) — the envelope
+        // still parses as valid ASN.1, but AES-GCM auth fails on unwrap. Avoids
+        // touching the ASN.1 headers (wrapped[0..~6]) which would surface as a
+        // parse error instead of the more interesting auth-failure path.
+        wrapped[wrapped.length - 1] ^= 0x01;
+        assertThrows(Exception.class,
+                () -> algo.unwrapDEK(kp.getPrivateKey(), wrapped),
+                "tampered AES-GCM tag must not unwrap");
     }
 }
