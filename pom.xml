@@ -348,7 +348,6 @@
             <id>develop</id>
             <modules>
                 <module>sdk</module>
-                <module>sdk-fips-bc</module>
                 <module>cmdline</module>
                 <module>examples</module>
             </modules>
@@ -368,6 +367,16 @@
             </activation>
             <modules>
                 <module>sdk-pqc-bc</module>
+            </modules>
+        </profile>
+        <profile>
+            <!-- only include the FIPS implementations of things if using the FIPS profile -->
+            <id>fips</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <modules>
+                <module>sdk-fips-bc</module>
             </modules>
         </profile>
         <profile>
