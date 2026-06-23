@@ -52,7 +52,7 @@ class FipsProviderVerificationTest {
     @Test
     void providerResolves() {
         assertThat(HkdfResolver.get())
-                .as("the sdk-fips-bouncycastle library must be on the path so that the Hkdf provider resolves. this is configured in the surefire plugin and the sdk-fips-bouncycastle project must be packaged")
+                .as("the sdk-fips-bc library must be on the path so that the Hkdf provider resolves. this is configured in the surefire plugin and the sdk-fips-bc project must be packaged")
                 .isNotNull();
     }
 }

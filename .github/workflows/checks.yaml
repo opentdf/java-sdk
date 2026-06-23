@@ -93,8 +93,8 @@ jobs:
         run: mvn clean --batch-mode clean generate-sources
       - name: Tests and enforcer (fips)
         run: |
-          # install the sdk-fips-bouncycastle jar so that FIPS mode tests work
-          mvn --batch-mode install -pl sdk-fips-bouncycastle -am \
+          # install the sdk-fips-bc jar so that FIPS mode tests work
+          mvn --batch-mode install -pl sdk-fips-bc -am \
             -Dmaven.antrun.skip \
             -Dmaven.test.skip
           mvn --batch-mode test enforcer:enforce -P 'fips,!non-fips' \

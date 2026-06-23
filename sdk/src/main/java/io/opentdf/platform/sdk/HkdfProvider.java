@@ -6,7 +6,7 @@ package io.opentdf.platform.sdk;
  * When no implementation is on the classpath, {@link ECKeyPair#calculateHKDF} falls
  * back to the JDK-native HmacSHA256 implementation.
  *
- * The FIPS-approved implementation is {@code io.opentdf.platform:sdk-fips-bouncycastle},
+ * The FIPS-approved implementation is {@code io.opentdf.platform:sdk-fips-bc},
  * which uses the BouncyCastle FIPS KDF API directly.
  */
 public interface HkdfProvider {
