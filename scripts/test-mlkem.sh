@@ -145,7 +145,7 @@ fi
 ##### 2. Pre-flight: confirm KAS publishes ML-KEM keys
 if [[ $SKIP_KAS_CHECK -eq 0 ]] && command -v grpcurl >/dev/null 2>&1; then
     info "Pre-flight: querying KAS for ML-KEM public keys"
-    host="${PLATFORM_ENDPOINT#http://}"; host="${host#https://}"
+    host="${PLATFORM_ENDPOINT#http://}"; host="${host#https://}"; host="${host%/}"
     for alg_name in "${ALGORITHMS[@]}"; do
         if ! alg=$(alg_to_string "$alg_name"); then
             fail "unknown algorithm: $alg_name"; exit 2
