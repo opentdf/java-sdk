@@ -90,6 +90,7 @@
                     <groupId>io.opentdf.platform</groupId>
                     <artifactId>sdk-fips-bc</artifactId>
                     <version>${project.version}</version>
+                    <scope>runtime</scope>
                 </dependency>
             </dependencies>
         </profile>
