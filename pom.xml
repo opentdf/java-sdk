@@ -348,7 +348,7 @@
             <id>develop</id>
             <modules>
                 <module>sdk</module>
-                <module>sdk-fips-bouncycastle</module>
+                <module>sdk-fips-bc</module>
                 <module>cmdline</module>
                 <module>examples</module>
             </modules>
@@ -407,7 +407,7 @@
             <modules>
                 <module>sdk</module>
                 <module>sdk-pqc-bc</module>
-                <module>sdk-fips-bouncycastle</module>
+                <module>sdk-fips-bc</module>
             </modules>
             <activation>
                 <activeByDefault>false</activeByDefault>
