@@ -89,6 +89,7 @@ class TDF {
     private static final String kWrapped = "wrapped";
     private static final String kECWrapped = "ec-wrapped";
     private static final String kHybridWrapped = "hybrid-wrapped";
+    private static final String kMlkemWrapped = "mlkem-wrapped";
     private static final String kKasProtocol = "kas";
     private static final int kGcmIvSize = 12;
     private static final int kAesBlockSize = 16;
@@ -237,6 +238,14 @@ class TDF {
                 keyAccess.keyType = kHybridWrapped;
                 // ephemeralPublicKey intentionally left null — the ephemeral material is
                 // carried inside the ASN.1 envelope in wrappedKey.
+            } else if (keyType.isMLKEM()) {
+                // Pure ML-KEM (FIPS 203). Same KemProviders dispatch and same ASN.1
+                // envelope as hybrid, but its own KAO scheme ("mlkem-wrapped") so the
+                // KAS knows to skip HKDF on the wrap-key derivation — see
+                // platform PR #3562 and adr/decisions/2026-06-16-mlkem-direct-key-wrap.md.
+                byte[] wrapped = KemProviders.get(keyType).wrapDEK(keyType, kasInfo.PublicKey, symKey);
+                keyAccess.wrappedKey = Base64.getEncoder().encodeToString(wrapped);
+                keyAccess.keyType = kMlkemWrapped;
             } else if (keyType.isEc()) {
                 var ecKeyWrappedKeyInfo = createECWrappedKey(kasInfo, symKey, keyType);
                 keyAccess.wrappedKey = ecKeyWrappedKeyInfo.wrappedKey;
