@@ -102,13 +102,59 @@ attempted), 2 on misuse.
 | `keyType='null'` (manifest assertion) | You're on an old branch where `TDF.java` doesn't yet route hybrid algorithms. Pull the latest branch HEAD. |
 | `decrypt failed` after manifest passes | KAS-side rewrap doesn't yet support the `hybrid-wrapped` keyType. Check the platform branch has the matching server change. |
 
-### Known SDK gap
+## `test-mlkem.sh`
 
-`KeyType.fromAlgorithm` and `KeyType.fromPublicKeyAlgorithm`
-(`sdk/src/main/java/io/opentdf/platform/sdk/KeyType.java`) don't yet map the
-hybrid algorithm protobuf enums. Auto-discovery via the KAS registry
-(`Config.KASInfo.fromKeyAccessServer`) will throw `IllegalArgumentException`
-once the platform's proto definitions include `KAS_PUBLIC_KEY_ALG_ENUM_HPQT_*`
-values. This script bypasses that path by using `--encap-key-type` explicitly;
-extending the script to also exercise registry-discovery should wait until the
-mapping is added.
+End-to-end test of the Java SDK's pure ML-KEM (FIPS 203) key wrapping
+(`mlkem:768`, `mlkem:1024`) against a locally running OpenTDF platform.
+Same shape as `test-hybrid-pqc.sh` (encrypt → assert manifest → KAS rewrap
+→ decrypt → diff) with two pure-ML-KEM specifics:
+
+- `keyAccess[0].type` is `"mlkem-wrapped"` — its own KAO scheme, distinct
+  from `"hybrid-wrapped"` and from RSA's `"wrapped"`. The KAS uses this
+  to skip HKDF on the wrap key (pure ML-KEM uses the 32-byte FIPS 203
+  Decaps shared secret directly as the AES-256 key; HKDF is dropped per
+  the platform ADR
+  [`2026-06-16-mlkem-direct-key-wrap.md`](https://github.com/opentdf/platform/blob/main/adr/decisions/2026-06-16-mlkem-direct-key-wrap.md)).
+- Pre-flight OIDs are the NIST FIPS 203 OIDs:
+  `2.16.840.1.101.3.4.4.2` for ML-KEM-768 and
+  `2.16.840.1.101.3.4.4.3` for ML-KEM-1024.
+
+The wire envelope (ASN.1 SEQUENCE of two implicit OCTET STRINGs —
+`{ [0] kemCiphertext, [1] AES-GCM(IV ‖ DEK ‖ tag) }`) is byte-identical
+to the hybrid path; the script's 0x30-first-byte check is the same
+invariant `test-hybrid-pqc.sh` uses.
+
+### Run it
+
+```bash
+# Full run — builds cmdline, pre-flight check, both variants
+PLATFORM_ENDPOINT=http://localhost:8080 scripts/test-mlkem.sh
+
+# One variant only
+scripts/test-mlkem.sh --algorithms MLKEM768Key
+
+# Reuse an already-built cmdline jar (much faster on iterative runs)
+scripts/test-mlkem.sh --skip-build
+```
+
+All other flags (`--platform-endpoint`, `--kas-url`, `--client-id`,
+`--client-secret`, `--attr`, `--skip-kas-check`) match
+`test-hybrid-pqc.sh` — see the configuration table above.
+
+### Prerequisites
+
+Same as `test-hybrid-pqc.sh`. The KAS-side requirement is that
+`mlkem:768` (and optionally `mlkem:1024`) public keys are registered.
+
+### Known SDK gap (pure ML-KEM)
+
+`KeyType.fromAlgorithm` / `fromPublicKeyAlgorithm` don't yet map the pure
+ML-KEM protobuf enums. The platform proto stubs we currently build against
+(`protocol/go/v0.34.0`) only have the hybrid `ALGORITHM_HPQT_*` set — no
+`ALGORITHM_MLKEM_768` / `_1024`. Until the platform release we depend on
+adds those values, registry-discovery via
+`Config.KASInfo.fromKeyAccessServer` will throw `IllegalArgumentException`
+for ML-KEM. This script sidesteps it by passing `--encap-key-type=MLKEM*Key`
+explicitly. When the proto bump lands, add two cases to each switch in
+`KeyType.java` and the script can also be extended to exercise the
+registry-discovery path.

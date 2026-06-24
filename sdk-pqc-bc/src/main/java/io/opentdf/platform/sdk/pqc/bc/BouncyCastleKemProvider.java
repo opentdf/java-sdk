@@ -7,12 +7,14 @@ import java.util.EnumSet;
 import java.util.Set;
 
 /**
- * BouncyCastle-backed {@link KemProvider}. Supports the three hybrid PQC
+ * BouncyCastle-backed {@link KemProvider}. Supports the post-quantum
  * {@link KeyType}s currently defined in the SDK:
  * <ul>
- *   <li>{@link KeyType#HybridXWingKey} (X-Wing)</li>
- *   <li>{@link KeyType#HybridSecp256r1MLKEM768Key}</li>
- *   <li>{@link KeyType#HybridSecp384r1MLKEM1024Key}</li>
+ *   <li><b>Hybrid:</b> {@link KeyType#HybridXWingKey},
+ *       {@link KeyType#HybridSecp256r1MLKEM768Key},
+ *       {@link KeyType#HybridSecp384r1MLKEM1024Key}</li>
+ *   <li><b>Pure ML-KEM (FIPS 203):</b> {@link KeyType#MLKEM768Key},
+ *       {@link KeyType#MLKEM1024Key}</li>
  * </ul>
  *
  * <p>Discovered by {@link io.opentdf.platform.sdk.spi.KemProviders} via
@@ -25,7 +27,9 @@ public final class BouncyCastleKemProvider implements KemProvider {
     private static final Set<KeyType> SUPPORTED = EnumSet.of(
             KeyType.HybridXWingKey,
             KeyType.HybridSecp256r1MLKEM768Key,
-            KeyType.HybridSecp384r1MLKEM1024Key);
+            KeyType.HybridSecp384r1MLKEM1024Key,
+            KeyType.MLKEM768Key,
+            KeyType.MLKEM1024Key);
 
     /** Public no-arg constructor required by {@link java.util.ServiceLoader}. */
     public BouncyCastleKemProvider() {

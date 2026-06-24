@@ -18,21 +18,28 @@ import java.util.Base64;
 
 /**
  * SPKI ({@code SubjectPublicKeyInfo}, X.509) and PKCS#8
- * ({@code OneAsymmetricKey}) encode/parse helpers for hybrid PQC keys, plus
- * RFC 5915 {@code ECPrivateKey} encode/parse for the EC half of NIST hybrid
- * private keys.
+ * ({@code OneAsymmetricKey}) encode/parse helpers for KEM public/private
+ * keys, plus RFC 5915 {@code ECPrivateKey} encode/parse for the EC half of
+ * NIST hybrid private keys. Despite the {@code Hybrid} in the class name,
+ * the encode/decode logic is algorithm-agnostic — it serves pure ML-KEM
+ * (FIPS 203) the same as the hybrid schemes.
  *
- * <p>The new (post-PR #3563) PEM format for all three hybrid algorithms is the
- * standard {@code -----BEGIN PUBLIC KEY-----} / {@code -----BEGIN PRIVATE KEY-----}
+ * <p>The PEM format for all supported algorithms is the standard
+ * {@code -----BEGIN PUBLIC KEY-----} / {@code -----BEGIN PRIVATE KEY-----}
  * envelope; the {@link AlgorithmIdentifier} OID inside dispatches to the
- * correct scheme. Custom block names like {@code SECP256R1 MLKEM768 PUBLIC KEY}
- * and {@code XWING PUBLIC KEY} are gone.
+ * correct scheme.
  *
- * <p>OIDs (params absent for all three):
+ * <p>Hybrid OIDs (params absent for all three):
  * <ul>
  *   <li>{@code 1.3.6.1.5.5.7.6.59} — P-256 + ML-KEM-768</li>
  *   <li>{@code 1.3.6.1.5.5.7.6.63} — P-384 + ML-KEM-1024</li>
  *   <li>{@code 1.3.6.1.4.1.62253.25722} — X-Wing</li>
+ * </ul>
+ *
+ * <p>Pure ML-KEM OIDs (NIST FIPS 203, params absent):
+ * <ul>
+ *   <li>{@code 2.16.840.1.101.3.4.4.2} — ML-KEM-768</li>
+ *   <li>{@code 2.16.840.1.101.3.4.4.3} — ML-KEM-1024</li>
  * </ul>
  *
  * <p>Uses BouncyCastle's ASN.1 helpers — already on the classpath via
@@ -43,6 +50,8 @@ final class HybridSpki {
     static final ASN1ObjectIdentifier OID_P256_MLKEM768 = new ASN1ObjectIdentifier("1.3.6.1.5.5.7.6.59");
     static final ASN1ObjectIdentifier OID_P384_MLKEM1024 = new ASN1ObjectIdentifier("1.3.6.1.5.5.7.6.63");
     static final ASN1ObjectIdentifier OID_XWING = new ASN1ObjectIdentifier("1.3.6.1.4.1.62253.25722");
+    static final ASN1ObjectIdentifier OID_MLKEM768 = new ASN1ObjectIdentifier("2.16.840.1.101.3.4.4.2");
+    static final ASN1ObjectIdentifier OID_MLKEM1024 = new ASN1ObjectIdentifier("2.16.840.1.101.3.4.4.3");
 
     private static final String PEM_TYPE_PUBLIC = "PUBLIC KEY";
     private static final String PEM_TYPE_PRIVATE = "PRIVATE KEY";

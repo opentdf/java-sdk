@@ -9,14 +9,29 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 /**
- * Dispatcher and shared helpers for hybrid post-quantum key wrapping
- * (X-Wing and NIST EC + ML-KEM).
+ * Dispatcher and shared helpers for post-quantum key wrapping. Serves the
+ * three hybrid algorithms (X-Wing, NIST EC + ML-KEM) AND pure ML-KEM-768 /
+ * ML-KEM-1024 via the same {@link BouncyCastleKemProvider}.
  *
- * Wire format: ASN.1 DER SEQUENCE with two IMPLICIT context-tagged OCTET STRINGs
- *   SEQUENCE { [0] IMPLICIT OCTET STRING ciphertext, [1] IMPLICIT OCTET STRING encryptedDEK }
+ * <p>Wire envelope is identical across both families — an ASN.1 DER SEQUENCE
+ * with two IMPLICIT context-tagged OCTET STRINGs (built via
+ * {@link #marshalEnvelope}):
+ * <pre>SEQUENCE { [0] IMPLICIT OCTET STRING ciphertext, [1] IMPLICIT OCTET STRING encryptedDEK }</pre>
  *
- * Derived AES-256 wrap key: HKDF-SHA256(combinedSecret, salt=SHA-256("TDF"), info=empty).
- * EncryptedDEK: AES-256-GCM(wrapKey).encrypt(DEK) with 12-byte IV prefix + 16-byte tag.
+ * <p>The DEK is AES-256-GCM sealed (12-byte IV prefix + 16-byte tag suffix).
+ * What differs between the two families is the <b>AES-256 wrap key</b>:
+ * <ul>
+ *   <li><b>Hybrid:</b> HKDF-SHA256(combinedSecret, salt=SHA-256("TDF"),
+ *       info=empty) — the KDF is load-bearing as the combiner for the two
+ *       shared-secret halves.</li>
+ *   <li><b>Pure ML-KEM:</b> the 32-byte FIPS 203 Decaps shared secret is used
+ *       directly — no KDF. See
+ *       {@link MLKEMAlgorithm#wrapDEK(byte[], byte[])} and platform ADR
+ *       {@code 2026-06-16-mlkem-direct-key-wrap.md}.</li>
+ * </ul>
+ *
+ * <p>The KAO {@code type} field disambiguates the two on the wire:
+ * {@code "hybrid-wrapped"} for hybrid, {@code "mlkem-wrapped"} for pure ML-KEM.
  */
 final class HybridCrypto {
 
@@ -30,10 +45,10 @@ final class HybridCrypto {
     private HybridCrypto() {}
 
     /**
-     * Wrap a DEK against a hybrid public-key PEM. Single dispatch site for all
-     * hybrid algorithms — {@link BouncyCastleKemProvider} delegates here so a
-     * new hybrid algorithm only needs one switch update.
-     * Returns the ASN.1-encoded envelope used in {@code wrappedKey} for {@code hybrid-wrapped} key access.
+     * Wrap a DEK against a PQC public-key PEM. Single dispatch site for all
+     * algorithms ({@link BouncyCastleKemProvider} delegates here) so adding
+     * a new algorithm is one switch case in each direction. Output bytes
+     * are the raw envelope; caller base64-encodes for {@code keyAccess.wrappedKey}.
      */
     static byte[] wrapDEK(KeyType keyType, String publicKeyPEM, byte[] dek) {
         switch (keyType) {
@@ -45,8 +60,14 @@ final class HybridCrypto {
             case HybridSecp384r1MLKEM1024Key:
                 return HybridNISTAlgorithm.P384_MLKEM1024.wrapDEK(
                         HybridNISTAlgorithm.P384_MLKEM1024.pubKeyFromPem(publicKeyPEM), dek);
+            case MLKEM768Key:
+                return MLKEMAlgorithm.MLKEM_768.wrapDEK(
+                        MLKEMAlgorithm.MLKEM_768.pubKeyFromPem(publicKeyPEM), dek);
+            case MLKEM1024Key:
+                return MLKEMAlgorithm.MLKEM_1024.wrapDEK(
+                        MLKEMAlgorithm.MLKEM_1024.pubKeyFromPem(publicKeyPEM), dek);
             default:
-                throw new SDKException("unsupported hybrid key type: " + keyType);
+                throw new SDKException("unsupported PQC key type: " + keyType);
         }
     }
 
@@ -64,8 +85,14 @@ final class HybridCrypto {
             case HybridSecp384r1MLKEM1024Key:
                 return HybridNISTAlgorithm.P384_MLKEM1024.unwrapDEK(
                         HybridNISTAlgorithm.P384_MLKEM1024.privateKeyFromPem(privateKeyPEM), wrapped);
+            case MLKEM768Key:
+                return MLKEMAlgorithm.MLKEM_768.unwrapDEK(
+                        MLKEMAlgorithm.MLKEM_768.privateKeyFromPem(privateKeyPEM), wrapped);
+            case MLKEM1024Key:
+                return MLKEMAlgorithm.MLKEM_1024.unwrapDEK(
+                        MLKEMAlgorithm.MLKEM_1024.privateKeyFromPem(privateKeyPEM), wrapped);
             default:
-                throw new SDKException("unsupported hybrid key type: " + keyType);
+                throw new SDKException("unsupported PQC key type: " + keyType);
         }
     }
 
