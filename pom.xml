@@ -218,6 +218,67 @@
                     <artifactId>maven-deploy-plugin</artifactId>
                     <version>3.1.2</version>
                 </plugin>
+                <!-- Plugin to create source JAR -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-source-plugin</artifactId>
+                    <version>3.3.1</version>
+                    <executions>
+                        <execution>
+                            <id>attach-sources</id>
+                            <goals>
+                                <goal>jar</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <!-- Plugin to create Javadoc JAR -->
+                <plugin>
+                    <groupId>org.jetbrains.dokka</groupId>
+                    <artifactId>dokka-maven-plugin</artifactId>
+                    <version>2.0.0</version>
+                    <executions>
+                        <execution>
+                            <id>javadoc</id>
+                            <phase>package</phase>
+                            <goals>
+                                <goal>javadocJar</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <!-- Plugin to generate checksum files -->
+                <plugin>
+                    <groupId>net.nicoulaj.maven.plugins</groupId>
+                    <artifactId>checksum-maven-plugin</artifactId>
+                    <version>1.11</version>
+                    <executions>
+                        <execution>
+                            <id>create-checksums</id>
+                            <phase>package</phase>
+                            <goals>
+                                <goal>files</goal>
+                            </goals>
+                            <configuration>
+                                <algorithms>
+                                    <algorithm>MD5</algorithm>
+                                    <algorithm>SHA-1</algorithm>
+                                    <algorithm>SHA-256</algorithm>
+                                    <algorithm>SHA-512</algorithm>
+                                </algorithms>
+                                <failOnError>true</failOnError>
+                                <fileSets>
+                                    <fileSet>
+                                        <directory>${project.build.directory}</directory>
+                                        <includes>
+                                            <include>*.jar</include>
+                                        </includes>
+                                    </fileSet>
+                                </fileSets>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
             </plugins>
         </pluginManagement>
         <plugins>
@@ -287,27 +348,14 @@
             <id>develop</id>
             <modules>
                 <module>sdk</module>
-                <module>sdk-fips-bouncycastle</module>
                 <module>cmdline</module>
+                <module>sdk-pqc-bc</module>
+                <module>sdk-fips-bc</module>
                 <module>examples</module>
             </modules>
             <activation>
                 <activeByDefault>true</activeByDefault>
             </activation>
-        </profile>
-        <profile>
-            <!-- sdk-pqc-bc is gated behind the non-fips profile because its
-                 BC compile dependency (bcprov-jdk18on) collides with bc-fips
-                 on the same package namespace. A FIPS build (mvn -P fips,!non-fips)
-                 must omit sdk-pqc-bc from the reactor entirely; consumers who
-                 want hybrid PQC opt in via the non-fips profile. -->
-            <id>non-fips</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
-            <modules>
-                <module>sdk-pqc-bc</module>
-            </modules>
         </profile>
         <profile>
             <id>stage</id>
@@ -345,7 +393,8 @@
             <id>release</id>
             <modules>
                 <module>sdk</module>
-                <module>sdk-fips-bouncycastle</module>
+                <module>sdk-pqc-bc</module>
+                <module>sdk-fips-bc</module>
             </modules>
             <activation>
                 <activeByDefault>false</activeByDefault>

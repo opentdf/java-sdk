@@ -112,7 +112,7 @@ public class ECKeyPair {
      * that is 32 bytes (256 bits) long.
      *
      * Delegates to a registered {@link HkdfProvider} when one is available on the
-     * classpath (e.g. {@code sdk-fips-bouncycastle}); otherwise falls back to the
+     * classpath (e.g. {@code sdk-fips-bc}); otherwise falls back to the
      * JDK-native HmacSHA256 implementation.
      */
     public static byte[] calculateHKDF(byte[] salt, byte[] secret) {
@@ -141,7 +141,7 @@ public class ECKeyPair {
         } catch (Exception e) {
             String className = e.getClass().getName();
             if (className.contains("bouncycastle") && className.endsWith("IllegalKeyException")) {
-                throw new SDKException("if running bouncycastle FIPS in approved_only mode include the sdk-fips-bouncycastle jar to use HKDF", e);
+                throw new SDKException("if running bouncycastle FIPS in approved_only mode include the sdk-fips-bc jar to use HKDF", e);
             }
             throw new SDKException("error computing HKDF", e);
         }

@@ -183,6 +183,6 @@ public class ECKeyPairTest {
     @EnabledIfSystemProperty(named = "org.bouncycastle.fips.approved_only", matches = "true")
     void testInformativeException() {
         var thrown = assertThrows(SDKException.class, () -> ECKeyPair.calculateHKDF(new byte[]{0}, new byte[]{1,2,3}));
-        assertThat(thrown).hasMessage("if running bouncycastle FIPS in approved_only mode include the sdk-fips-bouncycastle jar to use HKDF");
+        assertThat(thrown).hasMessage("if running bouncycastle FIPS in approved_only mode include the sdk-fips-bc jar to use HKDF");
     }
 }

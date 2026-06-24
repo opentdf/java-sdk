@@ -6,8 +6,8 @@
         <artifactId>sdk-pom</artifactId>
         <version>0.17.0</version>
     </parent>
-    <artifactId>sdk-fips-bouncycastle</artifactId>
-    <name>io.opentdf.platform:sdk-fips-bouncycastle</name>
+    <artifactId>sdk-fips-bc</artifactId>
+    <name>io.opentdf.platform:sdk-fips-bc</name>
     <description>BouncyCastle FIPS-backed HkdfProvider SPI implementation (FIPS 140-approved HKDF via bc-fips).</description>
     <packaging>jar</packaging>
     <properties>
@@ -38,4 +38,23 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+    <build>
+        <plugins>
+            <!-- Plugin to create source JAR -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+            </plugin>
+            <!-- Plugin to create Javadoc JAR -->
+            <plugin>
+                <groupId>org.jetbrains.dokka</groupId>
+                <artifactId>dokka-maven-plugin</artifactId>
+            </plugin>
+            <!-- Plugin to generate checksum files -->
+            <plugin>
+                <groupId>net.nicoulaj.maven.plugins</groupId>
+                <artifactId>checksum-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
 </project>

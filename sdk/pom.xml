@@ -286,15 +286,6 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-source-plugin</artifactId>
-                <version>3.3.1</version>
-                <executions>
-                    <execution>
-                        <id>attach-sources</id>
-                        <goals>
-                            <goal>jar</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
             <!-- Test-jar for shared test fixtures (FakeServicesBuilder, etc.)
                  consumed by sibling modules like sdk-pqc-bc. -->
@@ -314,48 +305,11 @@
             <plugin>
                 <groupId>org.jetbrains.dokka</groupId>
                 <artifactId>dokka-maven-plugin</artifactId>
-                <version>2.0.0</version>
-                <executions>
-                    <execution>
-                        <id>javadoc</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>javadocJar</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
             <!-- Plugin to generate checksum files -->
             <plugin>
                 <groupId>net.nicoulaj.maven.plugins</groupId>
                 <artifactId>checksum-maven-plugin</artifactId>
-                <version>1.11</version>
-                <executions>
-                    <execution>
-                        <id>create-checksums</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>files</goal>
-                        </goals>
-                        <configuration>
-                            <algorithms>
-                                <algorithm>MD5</algorithm>
-                                <algorithm>SHA-1</algorithm>
-                                <algorithm>SHA-256</algorithm>
-                                <algorithm>SHA-512</algorithm>
-                            </algorithms>
-                            <failOnError>true</failOnError>
-                            <fileSets>
-                                <fileSet>
-                                    <directory>${project.build.directory}</directory>
-                                    <includes>
-                                        <include>*.jar</include>
-                                    </includes>
-                                </fileSet>
-                            </fileSets>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -525,7 +479,7 @@
                             <additionalClasspathDependencies>
                                 <dependency>
                                     <groupId>io.opentdf.platform</groupId>
-                                    <artifactId>sdk-fips-bouncycastle</artifactId>
+                                    <artifactId>sdk-fips-bc</artifactId>
                                     <version>${project.version}</version>
                                 </dependency>
                             </additionalClasspathDependencies>
