@@ -10,7 +10,7 @@ import java.util.Base64;
 /**
  * Class providing functionality for asymmetric decryption using an RSA private key.
  */
-public class AsymDecryption {
+class AsymDecryption {
     private final PrivateKey privateKey;
     private static final String PRIVATE_KEY_HEADER = "-----BEGIN PRIVATE KEY-----";
     private static final String PRIVATE_KEY_FOOTER = "-----END PRIVATE KEY-----";
