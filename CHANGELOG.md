@@ -1,5 +1,119 @@
 # Changelog
 
+## [0.17.1](https://github.com/opentdf/java-sdk/compare/v0.17.0...v0.17.1) (2026-06-24)
+
+
+### Bug Fixes
+
+* we need to publish all three modules ([#382](https://github.com/opentdf/java-sdk/issues/382)) ([9a93140](https://github.com/opentdf/java-sdk/commit/9a93140d1d654801ac3f2d3937bb52bd4336a11d))
+
+## [0.17.0](https://github.com/opentdf/java-sdk/compare/v0.16.0...v0.17.0) (2026-06-22)
+
+
+### Features
+
+* **sdk:** DSPX-3309 add hybrid post-quantum key wrapping for KAS (X-Wing, ECDH+ML-KEM) ([#368](https://github.com/opentdf/java-sdk/issues/368)) ([faffa7d](https://github.com/opentdf/java-sdk/commit/faffa7ddc0111e91476e9bf05caea3a5dbc5e29d))
+
+
+### Bug Fixes
+
+* do not push snapshots ([#381](https://github.com/opentdf/java-sdk/issues/381)) ([b761453](https://github.com/opentdf/java-sdk/commit/b761453d1d2cb169ab831f2c86f32f20dbecd241))
+* we deploy from the root ([#379](https://github.com/opentdf/java-sdk/issues/379)) ([3b612dd](https://github.com/opentdf/java-sdk/commit/3b612ddc71f4f5ab32d09f9fde082e1bec54eeed))
+
+## [0.16.0](https://github.com/opentdf/java-sdk/compare/v0.15.0...v0.16.0) (2026-06-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sdk:** remove bouncycastle and ayza libraries ([#367](https://github.com/opentdf/java-sdk/issues/367))
+
+### Features
+
+* **sdk:** remove bouncycastle and ayza libraries ([#367](https://github.com/opentdf/java-sdk/issues/367)) ([63b49af](https://github.com/opentdf/java-sdk/commit/63b49af858f5eb78ea3db72d2fe991abdb3fcec8))
+* verify that BC works with `approved_only` mode set ([#375](https://github.com/opentdf/java-sdk/issues/375)) ([36fd6cf](https://github.com/opentdf/java-sdk/commit/36fd6cf0f75f986f2d4e456f47ee83c55756d2f7))
+
+
+### Bug Fixes
+
+* **main:** Update bc module sdk version. ([#377](https://github.com/opentdf/java-sdk/issues/377)) ([9b38f82](https://github.com/opentdf/java-sdk/commit/9b38f82a5bc61284f844e9527ca34a206648e646))
+
+## [0.15.0](https://github.com/opentdf/java-sdk/compare/v0.14.0...v0.15.0) (2026-04-29)
+
+
+### Features
+
+* **sdk:** add shorthand enum constants for policy types ([#357](https://github.com/opentdf/java-sdk/issues/357)) ([a1d4651](https://github.com/opentdf/java-sdk/commit/a1d4651e709b88834932398332f5c50101f9c54a))
+
+## [0.14.0](https://github.com/opentdf/java-sdk/compare/v0.13.0...v0.14.0) (2026-04-21)
+
+
+### Features
+
+* **sdk:** add ergonomic Resource constructors for authorization ([#354](https://github.com/opentdf/java-sdk/issues/354)) ([9e05ca2](https://github.com/opentdf/java-sdk/commit/9e05ca27517cd28dbf97caf721f9a22083ff680d))
+
+
+### Bug Fixes
+
+* **ci:** allow release branch scopes in PR title validation ([#349](https://github.com/opentdf/java-sdk/issues/349)) ([8020a3b](https://github.com/opentdf/java-sdk/commit/8020a3b243d36a6f866a6a81b0ca1898871d89e8))
+
+## [0.13.0](https://github.com/opentdf/java-sdk/compare/v0.12.0...v0.13.0) (2026-04-09)
+
+
+### Features
+
+* **sdk:** add EntityIdentifier convenience constructors ([#346](https://github.com/opentdf/java-sdk/issues/346)) ([eeb8805](https://github.com/opentdf/java-sdk/commit/eeb880598c0121771ce00838610900da5aa2995c))
+* **sdk:** DSPX-2418 add discovery convenience methods ([#339](https://github.com/opentdf/java-sdk/issues/339)) ([8de6068](https://github.com/opentdf/java-sdk/commit/8de60683794daf64d6fbfbc36b1fc5225d015714))
+* **sdk:** expose SRT signer ([#329](https://github.com/opentdf/java-sdk/issues/329)) ([f93d332](https://github.com/opentdf/java-sdk/commit/f93d33275c4343c04fef4fba2e98ab8b06c1a670))
+
+
+### Bug Fixes
+
+* add a default assertion id if one is not specified ([#341](https://github.com/opentdf/java-sdk/issues/341)) ([69d6a53](https://github.com/opentdf/java-sdk/commit/69d6a53387c8427e0ff968e599086484e6ae90da))
+* **docs:** DSPX-2409 replace SDK README code example with working code ([#336](https://github.com/opentdf/java-sdk/issues/336)) ([0f224a6](https://github.com/opentdf/java-sdk/commit/0f224a636b4e67418680309a1c66ef06519a4e81))
+* **sdk:** Support kas keys with extended EC methods  ([#344](https://github.com/opentdf/java-sdk/issues/344)) ([982b287](https://github.com/opentdf/java-sdk/commit/982b28766da4f996b2149fa2cd2c6a180412bcbf))
+* **sdk:** Support RSA4096 Kas keys ([#343](https://github.com/opentdf/java-sdk/issues/343)) ([dba9bbf](https://github.com/opentdf/java-sdk/commit/dba9bbf5fb33df6dfa467af37374071c46bf521e))
+* **sdk:** Updates to proto version v0.16.0 ([#308](https://github.com/opentdf/java-sdk/issues/308)) ([4660e27](https://github.com/opentdf/java-sdk/commit/4660e27fcec193734d6e343088505be98a278621))
+
+## [0.12.0](https://github.com/opentdf/java-sdk/compare/v0.11.1...v0.12.0) (2026-01-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sdk:** remove NanoTDF implementation ([#321](https://github.com/opentdf/java-sdk/issues/321))
+
+### Features
+
+* **sdk:** enhance assertion verification to support jwk and x509 certificates ([#322](https://github.com/opentdf/java-sdk/issues/322)) ([251fea2](https://github.com/opentdf/java-sdk/commit/251fea2ad92581f9e3127d790d5caacddf58f400))
+* **sdk:** expose base key ([#323](https://github.com/opentdf/java-sdk/issues/323)) ([c370a46](https://github.com/opentdf/java-sdk/commit/c370a461caaa09b2010b82355685944af4a34344))
+
+
+### Bug Fixes
+
+* **sdk:** remove NanoTDF implementation ([#321](https://github.com/opentdf/java-sdk/issues/321)) ([63715d2](https://github.com/opentdf/java-sdk/commit/63715d2c72b6a5124bd7df0fc8bcc19ab02c5b0d))
+
+## [0.11.1](https://github.com/opentdf/java-sdk/compare/v0.11.0...v0.11.1) (2025-12-08)
+
+
+### Bug Fixes
+
+* **examples:** improve logging and setup logic in examples ([#316](https://github.com/opentdf/java-sdk/issues/316)) ([2e5660c](https://github.com/opentdf/java-sdk/commit/2e5660c50b7c5fd80ad4137c1f17a1e1f4470588))
+
+## [0.11.0](https://github.com/opentdf/java-sdk/compare/v0.10.0...v0.11.0) (2025-11-20)
+
+
+### Features
+
+* **ci:** DSPX-1716 Updating permission for bundled tests ([#306](https://github.com/opentdf/java-sdk/issues/306)) ([87ff3e6](https://github.com/opentdf/java-sdk/commit/87ff3e6f24e7cfedbb5aab7f6d0d0bfb1a798888))
+
+
+### Bug Fixes
+
+* **ci:** Fix the workflow that updates the proto version ([#301](https://github.com/opentdf/java-sdk/issues/301)) ([9bd9ce5](https://github.com/opentdf/java-sdk/commit/9bd9ce5eeaf3c4fe0f683d16bb65974c09fe1068))
+* **main:** make examples runnable ([#311](https://github.com/opentdf/java-sdk/issues/311)) ([5ede7dd](https://github.com/opentdf/java-sdk/commit/5ede7dd5555bb60db94fdab875b9a318c6075412))
+* parse hostnames with no ports correctly ([#292](https://github.com/opentdf/java-sdk/issues/292)) ([3da5f51](https://github.com/opentdf/java-sdk/commit/3da5f511a950da4f468f63f62fe52617410fca48))
+* **sdk:** remove reserved and unused proto field ([#299](https://github.com/opentdf/java-sdk/issues/299)) ([50b0302](https://github.com/opentdf/java-sdk/commit/50b0302a8d85b45cc81f465292636330a512c74b))
+* we can't parse things like `192.168.1.1:4000` ([#294](https://github.com/opentdf/java-sdk/issues/294)) ([dc3142d](https://github.com/opentdf/java-sdk/commit/dc3142da71198e16688912152ac5ce866faec060))
+
 ## [0.10.0](https://github.com/opentdf/java-sdk/compare/v0.9.0...v0.10.0) (2025-09-02)
 
 

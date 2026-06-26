@@ -20,9 +20,6 @@ import io.opentdf.platform.policy.namespaces.NamespaceServiceGrpc;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationRequest;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceGrpc;
-import nl.altindag.ssl.SSLFactory;
-import nl.altindag.ssl.pem.util.PemUtils;
-import nl.altindag.ssl.util.KeyStoreUtils;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.tls.HandshakeCertificates;
@@ -30,6 +27,8 @@ import okhttp3.tls.HeldCertificate;
 import org.apache.commons.io.IOUtils;
 import org.junit.jupiter.api.Test;
 
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.X509TrustManager;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -40,7 +39,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyStore;
+import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
@@ -70,27 +72,66 @@ public class SDKBuilderTest {
         IOUtils.write(EXAMPLE_COM_PEM, fos);
         fos.close();
         SDKBuilder builder = SDKBuilder.newBuilder().sslFactoryFromDirectory(certDirPath.toAbsolutePath().toString());
-        SSLFactory sslFactory = builder.getSslFactory();
-        assertNotNull(sslFactory);
-        X509Certificate[] acceptedIssuers = sslFactory.getTrustManager().get().getAcceptedIssuers();
+        SSLSocketFactory sslSocketFactory = builder.getSslFactory();
+        assertNotNull(sslSocketFactory);
+        X509TrustManager trustManager = builder.getTrustManager();
+        assertNotNull(trustManager);
+        X509Certificate[] acceptedIssuers = trustManager.getAcceptedIssuers();
         assertEquals(1, Arrays.stream(acceptedIssuers).filter(x -> x.getIssuerX500Principal().getName()
                 .equals("CN=example.com")).count());
     }
 
     @Test
     void testKeystoreSSLContext() throws Exception {
-        KeyStore keystore = KeyStoreUtils.createKeyStore();
-        keystore.setCertificateEntry("example.com", PemUtils.parseCertificate(EXAMPLE_COM_PEM).get(0));
+        KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
+        keystore.load(null, null);
+        X509Certificate cert = (X509Certificate) CertificateFactory.getInstance("X.509")
+                .generateCertificate(new ByteArrayInputStream(EXAMPLE_COM_PEM.getBytes(StandardCharsets.UTF_8)));
+        keystore.setCertificateEntry("example.com", cert);
         Path keyStorePath = Files.createTempFile("ca", "jks");
         keystore.store(new FileOutputStream(keyStorePath.toAbsolutePath().toString()), "foo".toCharArray());
         SDKBuilder builder = SDKBuilder.newBuilder().sslFactoryFromKeyStore(keyStorePath.toAbsolutePath().toString(),
                 "foo");
-        SSLFactory sslFactory = builder.getSslFactory();
-        assertNotNull(sslFactory);
-        X509Certificate[] acceptedIssuers = sslFactory.getTrustManager().get().getAcceptedIssuers();
+        SSLSocketFactory sslSocketFactory = builder.getSslFactory();
+        assertNotNull(sslSocketFactory);
+        X509TrustManager trustManager = builder.getTrustManager();
+        assertNotNull(trustManager);
+        X509Certificate[] acceptedIssuers = trustManager.getAcceptedIssuers();
         assertEquals(1, Arrays.stream(acceptedIssuers).filter(x -> x.getIssuerX500Principal().getName()
                 .equals("CN=example.com")).count());
 
+    }
+
+    @Test
+    void testTrustManagerSetsSslFactory() throws Exception {
+        KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
+        keystore.load(null, null);
+        X509Certificate cert = (X509Certificate) CertificateFactory.getInstance("X.509")
+                .generateCertificate(new ByteArrayInputStream(EXAMPLE_COM_PEM.getBytes(StandardCharsets.UTF_8)));
+        keystore.setCertificateEntry("example.com", cert);
+
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        tmf.init(keystore);
+        X509TrustManager suppliedTrustManager = null;
+        for (TrustManager tm : tmf.getTrustManagers()) {
+            if (tm instanceof X509TrustManager) {
+                suppliedTrustManager = (X509TrustManager) tm;
+                break;
+            }
+        }
+        assertNotNull(suppliedTrustManager);
+
+        SDKBuilder builder = SDKBuilder.newBuilder().sslFactoryFromTrustManager(suppliedTrustManager);
+
+        SSLSocketFactory sslSocketFactory = builder.getSslFactory();
+        assertNotNull(sslSocketFactory);
+
+        // the builder should retain the exact trust manager the caller supplied
+        assertSame(suppliedTrustManager, builder.getTrustManager());
+
+        X509Certificate[] acceptedIssuers = builder.getTrustManager().getAcceptedIssuers();
+        assertEquals(1, Arrays.stream(acceptedIssuers).filter(x -> x.getIssuerX500Principal().getName()
+                .equals("CN=example.com")).count());
     }
 
     @Test
@@ -108,15 +149,66 @@ public class SDKBuilderTest {
         sdkServicesSetup(false, false);
     }
 
+    @Test
+    void testInjectedSrtSignerIsExposedOnSdk() throws Exception {
+        WellKnownServiceGrpc.WellKnownServiceImplBase wellKnownService = new WellKnownServiceGrpc.WellKnownServiceImplBase() {
+            @Override
+            public void getWellKnownConfiguration(GetWellKnownConfigurationRequest request,
+                                                  StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
+                responseObserver.onNext(GetWellKnownConfigurationResponse.getDefaultInstance());
+                responseObserver.onCompleted();
+            }
+        };
+
+        Server platformServices = null;
+        SrtSigner signer = new SrtSigner() {
+            @Override
+            public byte[] sign(byte[] input) {
+                return new byte[] { 7 };
+            }
+
+            @Override
+            public String alg() {
+                return "RS256";
+            }
+        };
+
+        try {
+            platformServices = ServerBuilder
+                    .forPort(getRandomPort())
+                    .directExecutor()
+                    .addService(wellKnownService)
+                    .build()
+                    .start();
+
+            var sdk = SDKBuilder.newBuilder()
+                    .clientSecret("user", "password")
+                    .platformEndpoint("http://localhost:" + platformServices.getPort())
+                    .useInsecurePlaintextConnection(true)
+                    .protocol(ProtocolType.GRPC)
+                    .srtSigner(signer)
+                    .build();
+
+            assertThat(sdk.getSrtSigner()).isPresent();
+            assertThat(sdk.getSrtSigner().get()).isSameAs(signer);
+        } finally {
+            if (platformServices != null) {
+                platformServices.shutdownNow();
+            }
+        }
+    }
+
     void sdkServicesSetup(boolean useSSLPlatform, boolean useSSLIDP) throws Exception {
 
         HeldCertificate rootCertificate = new HeldCertificate.Builder()
                 .certificateAuthority(0)
+                .rsa2048()
                 .build();
         String localhost = InetAddress.getByName("localhost").getCanonicalHostName();
         HeldCertificate serverCertificate = new HeldCertificate.Builder()
                 .addSubjectAlternativeName(localhost)
-                .commonName("CN=localhost")
+                .rsa2048()
+                .commonName("localhost")
                 .signedBy(rootCertificate)
                 .build();
 
@@ -256,10 +348,12 @@ public class SDKBuilderTest {
                 servicesBuilder = servicesBuilder.useInsecurePlaintextConnection(true);
             }
             if (useSSLPlatform || useSSLIDP) {
+                TrustProvider trustProvider = TrustProvider.builder()
+                        .withTrustMaterial(rootCertificate.certificate())
+                        .build();
                 servicesBuilder = servicesBuilder
-                        .sslFactory(SSLFactory.builder().withTrustMaterial(rootCertificate.certificate()).build());
+                        .sslFactory(trustProvider.getSslSocketFactory(), trustProvider.getTrustManager());
             }
-
             var servicesAndComponents = servicesBuilder.buildServices();
             if (useSSLPlatform || useSSLIDP) {
                 assertThat(servicesAndComponents.trustManager).isNotNull();

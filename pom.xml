@@ -5,7 +5,7 @@
 
     <groupId>io.opentdf.platform</groupId>
     <artifactId>sdk-pom</artifactId>
-    <version>0.10.1-SNAPSHOT</version>
+    <version>0.17.1</version>
     <name>io.opentdf.platform:sdk-pom</name>
     <description>OpenTDF Java SDK</description>
     <url>https://github.com/opentdf/java-sdk</url>
@@ -16,8 +16,12 @@
         <log4j.version>2.20.0</log4j.version>
         <grpc.version>1.75.0</grpc.version>
         <protobuf.version>4.29.2</protobuf.version>
-        <bouncycastle.version>1.82</bouncycastle.version>
-        <ayza.version>10.0.0</ayza.version>
+        <!-- 1.84 patches GHSA-c3fc-8qff-9hwx and GHSA-p93r-85wp-75v3 (open in 1.82). -->
+        <bouncycastle.version>1.84</bouncycastle.version>
+        <bc-fips.version>2.1.2</bc-fips.version>
+        <bcpkix-fips.version>2.1.11</bcpkix-fips.version>
+        <bctls-fips.version>2.1.23</bctls-fips.version>
+        <bytebuddy.version>1.18.3</bytebuddy.version>
         <!-- JaCoCo Properties -->
         <jacoco.version>0.8.13</jacoco.version>
         <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
@@ -78,39 +82,6 @@
                 <scope>provided</scope>
             </dependency>
             <dependency>
-                <groupId>io.github.hakky54</groupId>
-                <artifactId>ayza-for-pem</artifactId>
-                <version>${ayza.version}</version>
-                <exclusions>
-                    <exclusion>
-                        <groupId>org.slf4j</groupId>
-                        <artifactId>slf4j-api</artifactId>
-                    </exclusion>
-                </exclusions>
-            </dependency>
-            <dependency>
-                <groupId>io.github.hakky54</groupId>
-                <artifactId>ayza</artifactId>
-                <version>${ayza.version}</version>
-                <exclusions>
-                    <exclusion>
-                        <groupId>org.slf4j</groupId>
-                        <artifactId>slf4j-api</artifactId>
-                    </exclusion>
-                </exclusions>
-            </dependency>
-            <dependency>
-                <groupId>io.github.hakky54</groupId>
-                <artifactId>ayza-for-netty</artifactId>
-                <version>${ayza.version}</version>
-                <exclusions>
-                    <exclusion>
-                        <groupId>org.slf4j</groupId>
-                        <artifactId>slf4j-api</artifactId>
-                    </exclusion>
-                </exclusions>
-            </dependency>
-            <dependency>
                 <groupId>io.grpc</groupId>
                 <artifactId>grpc-netty-shaded</artifactId>
                 <version>${grpc.version}</version>
@@ -119,12 +90,12 @@
             <dependency>
                 <groupId>com.google.errorprone</groupId>
                 <artifactId>error_prone_annotations</artifactId>
-                <version>2.28.0</version>
+                <version>2.30.0</version>
             </dependency>
             <dependency>
                 <groupId>com.google.guava</groupId>
                 <artifactId>guava</artifactId>
-                <version>33.2.1-android</version>
+                <version>33.3.1-android</version>
             </dependency>
             <dependency>
                 <groupId>com.google.protobuf</groupId>
@@ -156,6 +127,40 @@
                 <artifactId>bcprov-jdk18on</artifactId>
                 <version>${bouncycastle.version}</version>
             </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bctls-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bc-fips</artifactId>
+                <version>${bc-fips.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcpkix-fips</artifactId>
+                <version>${bcpkix-fips.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bctls-fips</artifactId>
+                <version>${bctls-fips.version}</version>
+            </dependency>
+            <!--
+                Pin Byte Buddy for test-time Mockito instrumentation on newer JVMs (e.g. Java 21).
+                This does NOT add a runtime dependency; it only manages the version used by modules.
+            -->
+            <dependency>
+                <groupId>net.bytebuddy</groupId>
+                <artifactId>byte-buddy</artifactId>
+                <version>${bytebuddy.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.bytebuddy</groupId>
+                <artifactId>byte-buddy-agent</artifactId>
+                <version>${bytebuddy.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -177,7 +182,7 @@
                 </plugin>
                 <plugin>
                     <artifactId>maven-surefire-plugin</artifactId>
-                    <version>3.0.0</version>
+                    <version>3.5.6</version>
                 </plugin>
                 <plugin>
                     <artifactId>maven-jar-plugin</artifactId>
@@ -212,6 +217,67 @@
                 <plugin>
                     <artifactId>maven-deploy-plugin</artifactId>
                     <version>3.1.2</version>
+                </plugin>
+                <!-- Plugin to create source JAR -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-source-plugin</artifactId>
+                    <version>3.3.1</version>
+                    <executions>
+                        <execution>
+                            <id>attach-sources</id>
+                            <goals>
+                                <goal>jar</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <!-- Plugin to create Javadoc JAR -->
+                <plugin>
+                    <groupId>org.jetbrains.dokka</groupId>
+                    <artifactId>dokka-maven-plugin</artifactId>
+                    <version>2.0.0</version>
+                    <executions>
+                        <execution>
+                            <id>javadoc</id>
+                            <phase>package</phase>
+                            <goals>
+                                <goal>javadocJar</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <!-- Plugin to generate checksum files -->
+                <plugin>
+                    <groupId>net.nicoulaj.maven.plugins</groupId>
+                    <artifactId>checksum-maven-plugin</artifactId>
+                    <version>1.11</version>
+                    <executions>
+                        <execution>
+                            <id>create-checksums</id>
+                            <phase>package</phase>
+                            <goals>
+                                <goal>files</goal>
+                            </goals>
+                            <configuration>
+                                <algorithms>
+                                    <algorithm>MD5</algorithm>
+                                    <algorithm>SHA-1</algorithm>
+                                    <algorithm>SHA-256</algorithm>
+                                    <algorithm>SHA-512</algorithm>
+                                </algorithms>
+                                <failOnError>true</failOnError>
+                                <fileSets>
+                                    <fileSet>
+                                        <directory>${project.build.directory}</directory>
+                                        <includes>
+                                            <include>*.jar</include>
+                                        </includes>
+                                    </fileSet>
+                                </fileSets>
+                            </configuration>
+                        </execution>
+                    </executions>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -283,6 +349,8 @@
             <modules>
                 <module>sdk</module>
                 <module>cmdline</module>
+                <module>sdk-pqc-bc</module>
+                <module>sdk-fips-bc</module>
                 <module>examples</module>
             </modules>
             <activation>
@@ -325,6 +393,8 @@
             <id>release</id>
             <modules>
                 <module>sdk</module>
+                <module>sdk-pqc-bc</module>
+                <module>sdk-fips-bc</module>
             </modules>
             <activation>
                 <activeByDefault>false</activeByDefault>

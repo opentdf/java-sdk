@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-tests=("fuzzNanoTDF", "fuzzTDF", "fuzzZipRead")
+tests=("fuzzTDF", "fuzzZipRead")
 base_seed_dir="src/test/resources/io/opentdf/platform/sdk/FuzzingInputs/"
 
 for test in "${tests[@]}"; do

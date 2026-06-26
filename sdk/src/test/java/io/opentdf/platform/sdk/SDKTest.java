@@ -1,8 +1,14 @@
 package io.opentdf.platform.sdk;
 
 import com.connectrpc.impl.ProtocolClient;
+import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
+import io.opentdf.platform.policy.Algorithm;
+import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
+import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClientInterface;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -26,8 +32,35 @@ class SDKTest {
     @Test
     void testReadingProtocolClient() {
         var platformServicesClient = mock(ProtocolClient.class);
-        var sdk = new SDK(new FakeServicesBuilder().build(), null, null, platformServicesClient, null);
+        var sdk = new SDK(new FakeServicesBuilder().build(), null, null, platformServicesClient, null, null);
         assertThat(sdk.getPlatformServicesClient()).isSameAs(platformServicesClient);
+    }
+
+    @Test
+    void testGettingBaseKey() {
+        var platformServicesClient = mock(ProtocolClient.class);
+        var wellknownService = Mockito.mock(WellKnownServiceClientInterface.class);
+        var baseKeyJson = "{\"kas_url\":\"https://example.com/base_key\",\"public_key\":{\"algorithm\":\"ALGORITHM_RSA_2048\",\"kid\":\"thekid\",\"pem\": \"thepem\"}}";
+        var val = Value.newBuilder().setStringValue(baseKeyJson).build();
+        var config = Struct.newBuilder().putFields("base_key", val).build();
+        var response = GetWellKnownConfigurationResponse
+                .newBuilder()
+                .setConfiguration(config)
+                .build();
+
+        Mockito.when(wellknownService.getWellKnownConfigurationBlocking(Mockito.any(), Mockito.anyMap()))
+                .thenReturn(TestUtil.successfulUnaryCall(response));
+
+        var services = new FakeServicesBuilder().setWellknownService(wellknownService).build();
+        var sdk = new SDK(services, null, null, platformServicesClient, null, null);
+
+        var baseKey = sdk.getBaseKey();
+        assertThat(baseKey).isPresent();
+        var simpleKasKey = baseKey.get();
+        assertThat(simpleKasKey.getKasUri()).isEqualTo("https://example.com/base_key");
+        assertThat(simpleKasKey.getPublicKey().getAlgorithm()).isEqualTo(Algorithm.ALGORITHM_RSA_2048);
+        assertThat(simpleKasKey.getPublicKey().getKid()).isEqualTo("thekid");
+        assertThat(simpleKasKey.getPublicKey().getPem()).isEqualTo("thepem");
     }
 
     @Test
@@ -35,7 +68,7 @@ class SDKTest {
         var platformServicesClient = mock(ProtocolClient.class);
         io.opentdf.platform.authorization.v2.AuthorizationServiceClientInterface authSvcV2 = mock(io.opentdf.platform.authorization.v2.AuthorizationServiceClientInterface.class);
         var fakeServiceBuilder = new FakeServicesBuilder().setAuthorizationServiceV2(authSvcV2).build();
-        var sdk = new SDK(fakeServiceBuilder, null, null, platformServicesClient, null);
+        var sdk = new SDK(fakeServiceBuilder, null, null, platformServicesClient, null, null);
         assertThat(sdk.getServices().authorizationV2()).isSameAs(fakeServiceBuilder.authorizationV2());
     }
 
