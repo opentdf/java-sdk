@@ -1,5 +1,8 @@
 package io.opentdf.platform.sdk;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.crypto.KeyAgreement;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -26,6 +29,7 @@ public class ECKeyPair {
 
     private static final int SHA256_BYTES = 32;
     private static final String EC_ALGORITHM = "EC";
+    private static final Logger log = LoggerFactory.getLogger(ECKeyPair.class);
 
     private final ECCurve curve;
 
@@ -106,8 +110,21 @@ public class ECKeyPair {
     /**
      * Returns a HKDF key derived from the provided salt and secret
      * that is 32 bytes (256 bits) long.
+     *
+     * Delegates to a registered {@link HkdfProvider} when one is available on the
+     * classpath (e.g. {@code sdk-fips-bc}); otherwise falls back to the
+     * JDK-native HmacSHA256 implementation.
      */
     public static byte[] calculateHKDF(byte[] salt, byte[] secret) {
+        HkdfProvider provider = HkdfResolver.get();
+        if (provider != null) {
+            if (log.isDebugEnabled()) {
+                log.debug("Using resolved HKDF provider of type {}", provider.getClass().getName());
+            }
+            return provider.computeHKDF(salt, secret);
+        }
+
+        log.debug("using SDK HKDF implementation");
         try {
             // RFC 5869: if salt is absent, substitute a zero-filled buffer of Hash output size.
             byte[] effectiveSalt = (salt == null || salt.length == 0) ? new byte[SHA256_BYTES] : salt;
@@ -119,8 +136,14 @@ public class ECKeyPair {
             hmac.init(new SecretKeySpec(prk, HMAC_SHA_256));
             hmac.update((byte) 0x01);
             return hmac.doFinal();
-        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
-            throw new RuntimeException(e);
+        } catch (NoSuchAlgorithmException e) {
+            throw new SDKException("error computing HKDF", e) ;
+        } catch (Exception e) {
+            String className = e.getClass().getName();
+            if (className.contains("bouncycastle") && className.endsWith("IllegalKeyException")) {
+                throw new SDKException("if running bouncycastle FIPS in approved_only mode include the sdk-fips-bc jar to use HKDF", e);
+            }
+            throw new SDKException("error computing HKDF", e);
         }
     }
 

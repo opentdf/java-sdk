@@ -23,6 +23,7 @@ jobs:
       AUTOMATION_KEY: ${{ secrets.AUTOMATION_KEY }}
   release:
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -32,7 +33,6 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       # stage maven profile
       - name: Set up JDK to publish to GitHub Packages
-        if: github.ref == 'refs/heads/main'
         uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
         with:
           java-version: "17"
@@ -44,7 +44,6 @@ jobs:
           gpg-private-key: ${{ secrets.GPG_KEY }}
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
       - name: Publish to GitHub Packages
-        if: github.ref == 'refs/heads/main'
         run: mvn --batch-mode deploy -DskipTests -P stage
         env:
           GITHUB_ACTOR: ${{ secrets.GITHUB_ACTOR }}
@@ -54,7 +53,6 @@ jobs:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_KEY_PASSPHRASE }}
       # release maven profile
       - name: Set up JDK to publish to Maven Central
-        if: startsWith(github.ref, 'refs/tags/')
         uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
         with:
           java-version: "17"
@@ -66,7 +64,6 @@ jobs:
           gpg-private-key: ${{ secrets.GPG_KEY }}
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
       - name: Publish to Maven Central
-        if: startsWith(github.ref, 'refs/tags/')
         run: mvn --batch-mode deploy -DskipTests -P release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

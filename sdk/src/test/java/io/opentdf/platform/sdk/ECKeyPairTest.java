@@ -2,13 +2,12 @@ package io.opentdf.platform.sdk;
 
 import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
-import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+
 import java.nio.charset.StandardCharsets;
-import java.security.*;
-import java.security.cert.CertificateException;
-import java.security.spec.InvalidKeySpecException;
 import java.util.Arrays;
 import java.util.Base64;
 
@@ -16,6 +15,7 @@ import static io.opentdf.platform.sdk.ECCurve.SECP256R1;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ECKeyPairTest {
 
@@ -84,8 +84,7 @@ public class ECKeyPairTest {
     }
 
     @Test
-    void extractPemPubKeyFromX509() throws CertificateException, IOException, NoSuchAlgorithmException,
-            InvalidKeySpecException, NoSuchProviderException, InvalidAlgorithmParameterException, InvalidKeyException {
+    void extractPemPubKeyFromX509() {
         String x509ECPubKey = "-----BEGIN CERTIFICATE-----\n" +
                 "MIIBCzCBsgIJAK3Uxk7fP5oWMAoGCCqGSM49BAMCMA4xDDAKBgNVBAMMA2thczAe\n" +
                 "Fw0yMzA0MjQxNzQ2MTVaFw0yNDA0MjMxNzQ2MTVaMA4xDDAKBgNVBAMMA2thczBZ\n" +
@@ -177,5 +176,13 @@ public class ECKeyPairTest {
             boolean verify = ECKeyPair.verifyECDSAig(plainText.getBytes(), signature, keyPair.getPublicKey());
             assertEquals(verify, true);
         }
+    }
+
+    @Test
+    @Disabled("remove the additionalClassDependencies element in the FIPS profile to execute this test")
+    @EnabledIfSystemProperty(named = "org.bouncycastle.fips.approved_only", matches = "true")
+    void testInformativeException() {
+        var thrown = assertThrows(SDKException.class, () -> ECKeyPair.calculateHKDF(new byte[]{0}, new byte[]{1,2,3}));
+        assertThat(thrown).hasMessage("if running bouncycastle FIPS in approved_only mode include the sdk-fips-bc jar to use HKDF");
     }
 }

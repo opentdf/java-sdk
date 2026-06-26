@@ -8,6 +8,7 @@ import com.nimbusds.jose.*;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.sdk.Config.KASInfo;
+import io.opentdf.platform.sdk.spi.KemProviders;
 
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
@@ -87,6 +88,8 @@ class TDF {
     private static final String kSplitKeyType = "split";
     private static final String kWrapped = "wrapped";
     private static final String kECWrapped = "ec-wrapped";
+    private static final String kHybridWrapped = "hybrid-wrapped";
+    private static final String kMlkemWrapped = "mlkem-wrapped";
     private static final String kKasProtocol = "kas";
     private static final int kGcmIvSize = 12;
     private static final int kAesBlockSize = 16;
@@ -226,7 +229,24 @@ class TDF {
                     : kasInfo.Algorithm;
 
             var keyType = KeyType.fromString(algorithm);
-            if (keyType.isEc()) {
+            if (keyType.isHybrid()) {
+                // Dispatch to whichever KemProvider claims this KeyType (typically the
+                // BouncyCastle-backed impl in sdk-pqc-bc). Keeps the core sdk jar free
+                // of BC compile-time references so the fips Maven profile stays clean.
+                byte[] wrapped = KemProviders.get(keyType).wrapDEK(keyType, kasInfo.PublicKey, symKey);
+                keyAccess.wrappedKey = Base64.getEncoder().encodeToString(wrapped);
+                keyAccess.keyType = kHybridWrapped;
+                // ephemeralPublicKey intentionally left null — the ephemeral material is
+                // carried inside the ASN.1 envelope in wrappedKey.
+            } else if (keyType.isMLKEM()) {
+                // Pure ML-KEM (FIPS 203). Same KemProviders dispatch and same ASN.1
+                // envelope as hybrid, but its own KAO scheme ("mlkem-wrapped") so the
+                // KAS knows to skip HKDF on the wrap-key derivation — see
+                // platform PR #3562 and adr/decisions/2026-06-16-mlkem-direct-key-wrap.md.
+                byte[] wrapped = KemProviders.get(keyType).wrapDEK(keyType, kasInfo.PublicKey, symKey);
+                keyAccess.wrappedKey = Base64.getEncoder().encodeToString(wrapped);
+                keyAccess.keyType = kMlkemWrapped;
+            } else if (keyType.isEc()) {
                 var ecKeyWrappedKeyInfo = createECWrappedKey(kasInfo, symKey, keyType);
                 keyAccess.wrappedKey = ecKeyWrappedKeyInfo.wrappedKey;
                 keyAccess.ephemeralPublicKey = ecKeyWrappedKeyInfo.publicKey;
