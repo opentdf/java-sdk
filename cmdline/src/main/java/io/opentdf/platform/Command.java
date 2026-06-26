@@ -18,7 +18,6 @@ import io.opentdf.platform.sdk.Config;
 import io.opentdf.platform.sdk.KeyType;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
-import nl.altindag.ssl.SSLFactory;
 import picocli.CommandLine;
 import picocli.CommandLine.HelpCommand;
 import picocli.CommandLine.Option;
@@ -53,7 +52,7 @@ import java.util.function.Consumer;
  */
 class Versions {
     // Version of the SDK, managed by release-please.
-    public static final String SDK = "0.15.0"; // x-release-please-version
+    public static final String SDK = "0.17.1"; // x-release-please-version
 
     // This sdk aims to support this version of the TDF spec; currently 4.3.0.
     public static final String TDF_SPEC = "4.3.0";
@@ -62,7 +61,6 @@ class Versions {
 @CommandLine.Command(name = "tdf", subcommands = { HelpCommand.class }, version = "{\"version\":\"" + Versions.SDK
         + "\",\"tdfSpecVersion\":\"" + Versions.TDF_SPEC + "\"}")
 class Command {
-
     @Option(names = { "-V", "--version" }, versionHelp = true, description = "display version info")
     boolean versionInfoRequested;
 
@@ -262,10 +260,7 @@ class Command {
     private SDK buildSDK() {
         SDKBuilder builder = new SDKBuilder();
         if (insecure) {
-            SSLFactory sslFactory = SSLFactory.builder()
-                    .withUnsafeTrustMaterial() // Trust all certificates
-                    .build();
-            builder.sslFactory(sslFactory);
+            builder.insecureSslFactory();
         }
 
         return builder.platformEndpoint(platformEndpoint)

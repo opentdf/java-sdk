@@ -8,10 +8,10 @@ import com.nimbusds.jose.*;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.sdk.Config.KASInfo;
+import io.opentdf.platform.sdk.spi.KemProviders;
 
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
-import org.bouncycastle.jce.interfaces.ECPublicKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,6 +22,8 @@ import java.io.OutputStream;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
+import java.security.interfaces.ECPublicKey;
+import java.security.spec.InvalidKeySpecException;
 import java.text.ParseException;
 import java.util.*;
 
@@ -86,6 +88,8 @@ class TDF {
     private static final String kSplitKeyType = "split";
     private static final String kWrapped = "wrapped";
     private static final String kECWrapped = "ec-wrapped";
+    private static final String kHybridWrapped = "hybrid-wrapped";
+    private static final String kMlkemWrapped = "mlkem-wrapped";
     private static final String kKasProtocol = "kas";
     private static final int kGcmIvSize = 12;
     private static final int kAesBlockSize = 16;
@@ -96,8 +100,6 @@ class TDF {
     private static final String kHmacIntegrityAlgorithm = "HS256";
     private static final String kTDFAsZip = "zip";
     private static final String kTDFZipReference = "reference";
-
-    private static final SecureRandom sRandom = new SecureRandom();
 
     private static final Gson gson = new GsonBuilder().create();
 
@@ -161,8 +163,7 @@ class TDF {
                 String splitID = split.getKey();
 
                 // Symmetric key
-                byte[] symKey = new byte[GCM_KEY_SIZE];
-                sRandom.nextBytes(symKey);
+                byte[] symKey = AesGcm.generateKey();
                 symKeys.add(symKey);
 
                 // Add policyBinding
@@ -228,7 +229,24 @@ class TDF {
                     : kasInfo.Algorithm;
 
             var keyType = KeyType.fromString(algorithm);
-            if (keyType.isEc()) {
+            if (keyType.isHybrid()) {
+                // Dispatch to whichever KemProvider claims this KeyType (typically the
+                // BouncyCastle-backed impl in sdk-pqc-bc). Keeps the core sdk jar free
+                // of BC compile-time references so the fips Maven profile stays clean.
+                byte[] wrapped = KemProviders.get(keyType).wrapDEK(keyType, kasInfo.PublicKey, symKey);
+                keyAccess.wrappedKey = Base64.getEncoder().encodeToString(wrapped);
+                keyAccess.keyType = kHybridWrapped;
+                // ephemeralPublicKey intentionally left null — the ephemeral material is
+                // carried inside the ASN.1 envelope in wrappedKey.
+            } else if (keyType.isMLKEM()) {
+                // Pure ML-KEM (FIPS 203). Same KemProviders dispatch and same ASN.1
+                // envelope as hybrid, but its own KAO scheme ("mlkem-wrapped") so the
+                // KAS knows to skip HKDF on the wrap-key derivation — see
+                // platform PR #3562 and adr/decisions/2026-06-16-mlkem-direct-key-wrap.md.
+                byte[] wrapped = KemProviders.get(keyType).wrapDEK(keyType, kasInfo.PublicKey, symKey);
+                keyAccess.wrappedKey = Base64.getEncoder().encodeToString(wrapped);
+                keyAccess.keyType = kMlkemWrapped;
+            } else if (keyType.isEc()) {
                 var ecKeyWrappedKeyInfo = createECWrappedKey(kasInfo, symKey, keyType);
                 keyAccess.wrappedKey = ecKeyWrappedKeyInfo.wrappedKey;
                 keyAccess.ephemeralPublicKey = ecKeyWrappedKeyInfo.publicKey;
@@ -243,9 +261,14 @@ class TDF {
         private ECKeyWrappedKeyInfo createECWrappedKey(Config.KASInfo kasInfo,
                 byte[] symKey, KeyType keyType) {
             var curveName = keyType.getECCurve();
-            var keyPair = new ECKeyPair(curveName, ECKeyPair.ECAlgorithm.ECDH);
+            var keyPair = new ECKeyPair(curveName);
 
-            ECPublicKey kasPubKey = ECKeyPair.publicKeyFromPem(kasInfo.PublicKey);
+            ECPublicKey kasPubKey;
+            try {
+                kasPubKey = ECKeyPair.publicKeyFromPem(kasInfo.PublicKey);
+            } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+                throw new SDKException("error decoding KAS EC public key", e);
+            }
             byte[] symmetricKey = ECKeyPair.computeECDHKey(kasPubKey, keyPair.getPrivateKey());
 
             var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symmetricKey);
