@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.opentdf.platform</groupId>
+        <artifactId>sdk-pom</artifactId>
+        <version>0.17.1</version>
+    </parent>
+    <artifactId>sdk-fips-bc</artifactId>
+    <name>io.opentdf.platform:sdk-fips-bc</name>
+    <description>BouncyCastle FIPS-backed HkdfProvider SPI implementation (FIPS 140-approved HKDF via bc-fips).</description>
+    <packaging>jar</packaging>
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+    <dependencies>
+        <dependency>
+            <groupId>io.opentdf.platform</groupId>
+            <artifactId>sdk</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- FIPS-approved HKDF requires bc-fips KDF API; no JCA/JDK equivalent
+             that is guaranteed FIPS-approved across all configurations. -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bc-fips</artifactId>
+        </dependency>
+        <!-- Testing -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>3.27.7</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+    <build>
+        <plugins>
+            <!-- Plugin to create source JAR -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+            </plugin>
+            <!-- Plugin to create Javadoc JAR -->
+            <plugin>
+                <groupId>org.jetbrains.dokka</groupId>
+                <artifactId>dokka-maven-plugin</artifactId>
+            </plugin>
+            <!-- Plugin to generate checksum files -->
+            <plugin>
+                <groupId>net.nicoulaj.maven.plugins</groupId>
+                <artifactId>checksum-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -6,7 +6,7 @@
     <parent>
         <artifactId>sdk-pom</artifactId>
         <groupId>io.opentdf.platform</groupId>
-        <version>0.14.1-SNAPSHOT</version>
+        <version>0.17.1</version>
     </parent>
     <packaging>jar</packaging>
     <properties>
@@ -17,6 +17,10 @@
         <connect.version>0.7.2</connect.version>
         <okhttp.version>4.12.0</okhttp.version>
         <platform.branch>protocol/go/protocol/go/v0.36.0</platform.branch>
+        <!-- in the non-FIPS case we don't need to pass anything to the jvm -->
+        <java.security.properties.test/>
+        <!-- Default empty argLine; overridden by jacoco:prepare-agent when the `coverage` profile is active -->
+        <argLine/>
     </properties>
     <dependencies>
         <!-- Logging Dependencies -->
@@ -30,18 +34,6 @@
             <groupId>com.nimbusds</groupId>
             <artifactId>oauth2-oidc-sdk</artifactId>
             <version>11.10.1</version>
-        </dependency>
-        <dependency>
-            <groupId>io.github.hakky54</groupId>
-            <artifactId>ayza-for-pem</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.github.hakky54</groupId>
-            <artifactId>ayza</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.github.hakky54</groupId>
-            <artifactId>ayza-for-netty</artifactId>
         </dependency>
         <!-- Serialization and Deserialization Dependencies -->
         <dependency>
@@ -160,15 +152,7 @@
             <version>6.0.53</version>
             <scope>provided</scope>
         </dependency>
-        <!-- Crypto Dependencies -->
-        <dependency>
-            <groupId>org.bouncycastle</groupId>
-            <artifactId>bcpkix-jdk18on</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.bouncycastle</groupId>
-            <artifactId>bcprov-jdk18on</artifactId>
-        </dependency>
+        <!-- Crypto Dependencies are pulled in via the `non-fips` (default) or `fips` profile -->
         <!-- Testing Dependencies -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -302,12 +286,17 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-source-plugin</artifactId>
-                <version>3.3.1</version>
+            </plugin>
+            <!-- Test-jar for shared test fixtures (FakeServicesBuilder, etc.)
+                 consumed by sibling modules like sdk-pqc-bc. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
                 <executions>
                     <execution>
-                        <id>attach-sources</id>
+                        <id>attach-test-jar</id>
                         <goals>
-                            <goal>jar</goal>
+                            <goal>test-jar</goal>
                         </goals>
                     </execution>
                 </executions>
@@ -316,48 +305,11 @@
             <plugin>
                 <groupId>org.jetbrains.dokka</groupId>
                 <artifactId>dokka-maven-plugin</artifactId>
-                <version>2.0.0</version>
-                <executions>
-                    <execution>
-                        <id>javadoc</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>javadocJar</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
             <!-- Plugin to generate checksum files -->
             <plugin>
                 <groupId>net.nicoulaj.maven.plugins</groupId>
                 <artifactId>checksum-maven-plugin</artifactId>
-                <version>1.11</version>
-                <executions>
-                    <execution>
-                        <id>create-checksums</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>files</goal>
-                        </goals>
-                        <configuration>
-                            <algorithms>
-                                <algorithm>MD5</algorithm>
-                                <algorithm>SHA-1</algorithm>
-                                <algorithm>SHA-256</algorithm>
-                                <algorithm>SHA-512</algorithm>
-                            </algorithms>
-                            <failOnError>true</failOnError>
-                            <fileSets>
-                                <fileSet>
-                                    <directory>${project.build.directory}</directory>
-                                    <includes>
-                                        <include>*.jar</include>
-                                    </includes>
-                                </fileSet>
-                            </fileSets>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -436,7 +388,6 @@
                         <configuration>
                             <sourceDirs>
                                 <source>src/main/kotlin</source>
-                                <source>target/generated-sources</source>
                             </sourceDirs>
                         </configuration>
                     </execution>
@@ -483,11 +434,78 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>@{argLine} ${java.security.properties.test}</argLine>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
-    <!--profile
-    to execute fuzz test -->
     <profiles>
+        <profile>
+            <id>non-fips</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <dependencies>
+                <!-- BouncyCastle stays out of the core sdk compile path. PQC primitives
+                     that require BC live in the sibling sdk-pqc-bc module, discovered
+                     at runtime via java.util.ServiceLoader (see KemProvider SPI). -->
+                <dependency>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcpkix-jdk18on</artifactId>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>fips</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <properties>
+                <java.security.properties.test>-Djava.security.properties==${project.basedir}/src/test/resources/java.security.fips.test -Dorg.bouncycastle.fips.approved_only=true -Djavax.net.ssl.trustStore=${project.basedir}/src/test/resources/empty-fips-truststore.bcfks -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=BCFKS</java.security.properties.test>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <!-- we want to test that we resolve the hkdf provider correctly but adding it as a
+                                 test dependency to SDK causes a circular dependency -->
+                            <additionalClasspathDependencies>
+                                <dependency>
+                                    <groupId>io.opentdf.platform</groupId>
+                                    <artifactId>sdk-fips-bc</artifactId>
+                                    <version>${project.version}</version>
+                                </dependency>
+                            </additionalClasspathDependencies>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+            <dependencies>
+                <dependency>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bc-fips</artifactId>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bctls-fips</artifactId>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcpkix-fips</artifactId>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+        <!-- profile to execute fuzz test -->
         <profile>
             <id>fuzz</id>
             <activation>
@@ -498,7 +516,7 @@
             </properties>
             <build>
                 <plugins>
-                    <!-- Plugin to download and unpack the Jazzer agent -->
+                    <!-- Plugin to download/unpack Jazzer agent and execute fuzzing -->
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-antrun-plugin</artifactId>
@@ -528,35 +546,6 @@
                                     <goal>run</goal>
                                 </goals>
                             </execution>
-                        </executions>
-                    </plugin>
-
-                    <!-- Copy dependencies to a directory for Jazzer to reference -->
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-dependency-plugin</artifactId>
-                        <version>3.4.0</version>
-                        <executions>
-                            <execution>
-                                <id>copy-dependencies</id>
-                                <phase>process-test-classes</phase>
-                                <goals>
-                                    <goal>copy-dependencies</goal>
-                                </goals>
-                                <configuration>
-                                    <outputDirectory>${project.build.directory}/dependency-jars</outputDirectory>
-                                    <includeScope>test</includeScope>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-
-                    <!-- Plugin to execute Jazzer -->
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-antrun-plugin</artifactId>
-                        <version>3.1.0</version>
-                        <executions>
                             <execution>
                                 <id>run-jazzer-fuzzing</id>
                                 <phase>verify</phase>
@@ -585,6 +574,26 @@
                                 <goals>
                                     <goal>run</goal>
                                 </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <!-- Copy dependencies to a directory for Jazzer to reference -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-dependency-plugin</artifactId>
+                        <version>3.4.0</version>
+                        <executions>
+                            <execution>
+                                <id>copy-dependencies</id>
+                                <phase>process-test-classes</phase>
+                                <goals>
+                                    <goal>copy-dependencies</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>${project.build.directory}/dependency-jars</outputDirectory>
+                                    <includeScope>test</includeScope>
+                                </configuration>
                             </execution>
                         </executions>
                     </plugin>

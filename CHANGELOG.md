@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.17.1](https://github.com/opentdf/java-sdk/compare/v0.17.0...v0.17.1) (2026-06-24)
+
+
+### Bug Fixes
+
+* we need to publish all three modules ([#382](https://github.com/opentdf/java-sdk/issues/382)) ([9a93140](https://github.com/opentdf/java-sdk/commit/9a93140d1d654801ac3f2d3937bb52bd4336a11d))
+
+## [0.17.0](https://github.com/opentdf/java-sdk/compare/v0.16.0...v0.17.0) (2026-06-22)
+
+
+### Features
+
+* **sdk:** DSPX-3309 add hybrid post-quantum key wrapping for KAS (X-Wing, ECDH+ML-KEM) ([#368](https://github.com/opentdf/java-sdk/issues/368)) ([faffa7d](https://github.com/opentdf/java-sdk/commit/faffa7ddc0111e91476e9bf05caea3a5dbc5e29d))
+
+
+### Bug Fixes
+
+* do not push snapshots ([#381](https://github.com/opentdf/java-sdk/issues/381)) ([b761453](https://github.com/opentdf/java-sdk/commit/b761453d1d2cb169ab831f2c86f32f20dbecd241))
+* we deploy from the root ([#379](https://github.com/opentdf/java-sdk/issues/379)) ([3b612dd](https://github.com/opentdf/java-sdk/commit/3b612ddc71f4f5ab32d09f9fde082e1bec54eeed))
+
+## [0.16.0](https://github.com/opentdf/java-sdk/compare/v0.15.0...v0.16.0) (2026-06-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sdk:** remove bouncycastle and ayza libraries ([#367](https://github.com/opentdf/java-sdk/issues/367))
+
+### Features
+
+* **sdk:** remove bouncycastle and ayza libraries ([#367](https://github.com/opentdf/java-sdk/issues/367)) ([63b49af](https://github.com/opentdf/java-sdk/commit/63b49af858f5eb78ea3db72d2fe991abdb3fcec8))
+* verify that BC works with `approved_only` mode set ([#375](https://github.com/opentdf/java-sdk/issues/375)) ([36fd6cf](https://github.com/opentdf/java-sdk/commit/36fd6cf0f75f986f2d4e456f47ee83c55756d2f7))
+
+
+### Bug Fixes
+
+* **main:** Update bc module sdk version. ([#377](https://github.com/opentdf/java-sdk/issues/377)) ([9b38f82](https://github.com/opentdf/java-sdk/commit/9b38f82a5bc61284f844e9527ca34a206648e646))
+
+## [0.15.0](https://github.com/opentdf/java-sdk/compare/v0.14.0...v0.15.0) (2026-04-29)
+
+
+### Features
+
+* **sdk:** add shorthand enum constants for policy types ([#357](https://github.com/opentdf/java-sdk/issues/357)) ([a1d4651](https://github.com/opentdf/java-sdk/commit/a1d4651e709b88834932398332f5c50101f9c54a))
+
 ## [0.14.0](https://github.com/opentdf/java-sdk/compare/v0.13.0...v0.14.0) (2026-04-21)
 
 

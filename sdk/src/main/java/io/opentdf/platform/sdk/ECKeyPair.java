@@ -1,39 +1,35 @@
 package io.opentdf.platform.sdk;
 
-import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
-import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
-import org.bouncycastle.cert.X509CertificateHolder;
-import org.bouncycastle.crypto.digests.SHA256Digest;
-import org.bouncycastle.crypto.generators.HKDFBytesGenerator;
-import org.bouncycastle.crypto.params.HKDFParameters;
-import org.bouncycastle.jcajce.provider.asymmetric.ec.KeyPairGeneratorSpi;
-import org.bouncycastle.jce.ECNamedCurveTable;
-import org.bouncycastle.jce.interfaces.ECPrivateKey;
-import org.bouncycastle.jce.interfaces.ECPublicKey;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec;
-import org.bouncycastle.math.ec.ECPoint;
-import org.bouncycastle.openssl.PEMException;
-import org.bouncycastle.openssl.PEMParser;
-import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
-import org.bouncycastle.util.io.pem.*;
-import org.bouncycastle.util.io.pem.PemReader;
-import org.bouncycastle.jce.spec.ECPublicKeySpec;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.crypto.KeyAgreement;
-import java.io.*;
-import java.security.*;
-import java.security.spec.*;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.math.BigInteger;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.Signature;
+import java.security.SignatureException;
+import java.security.interfaces.ECPrivateKey;
+import java.security.interfaces.ECPublicKey;
+import java.security.spec.ECGenParameterSpec;
+import java.security.spec.ECParameterSpec;
+import java.security.spec.ECPoint;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.Base64;
 import java.util.Objects;
-// https://www.bouncycastle.org/latest_releases.html
 
 public class ECKeyPair {
 
     private static final int SHA256_BYTES = 32;
-
-    static {
-        Security.addProvider(new BouncyCastleProvider());
-    }
+    private static final String EC_ALGORITHM = "EC";
+    private static final Logger log = LoggerFactory.getLogger(ECKeyPair.class);
 
     private final ECCurve curve;
 
@@ -42,37 +38,33 @@ public class ECKeyPair {
         ECDSA
     }
 
-    private static final BouncyCastleProvider BOUNCY_CASTLE_PROVIDER = new BouncyCastleProvider();
-
     private KeyPair keyPair;
 
     public ECKeyPair() {
-        this(ECCurve.SECP256R1, ECAlgorithm.ECDH);
+        this(ECCurve.SECP256R1);
     }
 
-    public ECKeyPair(ECCurve curve, ECAlgorithm algorithm) {
+    public ECKeyPair(ECCurve curve) {
         this.curve = Objects.requireNonNull(curve);
-        KeyPairGenerator generator;
-
         try {
-            // Should this just use the algorithm vs use ECDH only for ECDH and ECDSA for
-            // everything else.
-            if (algorithm == ECAlgorithm.ECDH) {
-                generator = KeyPairGeneratorSpi.getInstance(ECAlgorithm.ECDH.name(), BOUNCY_CASTLE_PROVIDER);
-            } else {
-                generator = KeyPairGeneratorSpi.getInstance(ECAlgorithm.ECDSA.name(), BOUNCY_CASTLE_PROVIDER);
-            }
-        } catch (NoSuchAlgorithmException e) {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance(EC_ALGORITHM);
+            generator.initialize(new ECGenParameterSpec(this.curve.getCurveName()));
+            this.keyPair = generator.generateKeyPair();
+        } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
             throw new RuntimeException(e);
         }
+    }
 
-        ECGenParameterSpec spec = new ECGenParameterSpec(this.curve.getCurveName());
+    static ECPublicKey publicKeyFromPem(String pem) throws InvalidKeySpecException, NoSuchAlgorithmException {
+        String pemData = pem.replaceAll("-----(BEGIN|END) [A-Z ]+-----", "").replaceAll("\\s", "");
+        byte[] der;
         try {
-            generator.initialize(spec);
-        } catch (InvalidAlgorithmParameterException e) {
-            throw new RuntimeException(e);
+            der = Base64.getDecoder().decode(pemData);
+        } catch (IllegalArgumentException e) {
+            throw new SDKException("invalid public key format", e);
         }
-        this.keyPair = generator.generateKeyPair();
+        KeyFactory keyFactory = KeyFactory.getInstance("EC");
+        return (ECPublicKey) keyFactory.generatePublic(new X509EncodedKeySpec(der));
     }
 
     public ECPublicKey getPublicKey() {
@@ -88,33 +80,11 @@ public class ECKeyPair {
     }
 
     public String publicKeyInPEMFormat() {
-        StringWriter writer = new StringWriter();
-        PemWriter pemWriter = new PemWriter(writer);
-
-        try {
-            pemWriter.writeObject(new PemObject("PUBLIC KEY", this.keyPair.getPublic().getEncoded()));
-            pemWriter.flush();
-            pemWriter.close();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-
-        return writer.toString();
+        return toPem("PUBLIC KEY", this.keyPair.getPublic().getEncoded());
     }
 
     public String privateKeyInPEMFormat() {
-        StringWriter writer = new StringWriter();
-        PemWriter pemWriter = new PemWriter(writer);
-
-        try {
-            pemWriter.writeObject(new PemObject("PRIVATE KEY", this.keyPair.getPrivate().getEncoded()));
-            pemWriter.flush();
-            pemWriter.close();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-
-        return writer.toString();
+        return toPem("PRIVATE KEY", this.keyPair.getPrivate().getEncoded());
     }
 
     public int keySize() {
@@ -122,163 +92,117 @@ public class ECKeyPair {
     }
 
     public byte[] compressECPublickey() {
-        return ((ECPublicKey) this.keyPair.getPublic()).getQ().getEncoded(true);
-    }
-
-    public static String getPEMPublicKeyFromX509Cert(String pemInX509Format) {
-        try {
-            PEMParser parser = new PEMParser(new StringReader(pemInX509Format));
-            X509CertificateHolder x509CertificateHolder = (X509CertificateHolder) parser.readObject();
-            parser.close();
-            SubjectPublicKeyInfo publicKeyInfo = x509CertificateHolder.getSubjectPublicKeyInfo();
-            JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider(BOUNCY_CASTLE_PROVIDER);
-            ECPublicKey publicKey = null;
-            try {
-                publicKey = (ECPublicKey) converter.getPublicKey(publicKeyInfo);
-            } catch (PEMException e) {
-                throw new RuntimeException(e);
-            }
-
-            // EC public key to pem formated.
-            StringWriter writer = new StringWriter();
-            PemWriter pemWriter = new PemWriter(writer);
-
-            pemWriter.writeObject(new PemObject("PUBLIC KEY", publicKey.getEncoded()));
-            pemWriter.flush();
-            pemWriter.close();
-            return writer.toString();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static byte[] compressECPublickey(String pemECPubKey) {
-        try {
-            KeyFactory ecKeyFac = KeyFactory.getInstance("EC", "BC");
-            PemReader pemReader = new PemReader(new StringReader(pemECPubKey));
-            PemObject pemObject = pemReader.readPemObject();
-            PublicKey pubKey = ecKeyFac.generatePublic(new X509EncodedKeySpec(pemObject.getContent()));
-            return ((ECPublicKey) pubKey).getQ().getEncoded(true);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        } catch (InvalidKeySpecException e) {
-            throw new RuntimeException(e);
-        } catch (NoSuchProviderException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static String publicKeyFromECPoint(byte[] ecPoint, String curveName) {
-        try {
-            // Create EC Public key
-            ECNamedCurveParameterSpec ecSpec = ECNamedCurveTable.getParameterSpec(curveName);
-            ECPoint point = ecSpec.getCurve().decodePoint(ecPoint);
-            ECPublicKeySpec publicKeySpec = new ECPublicKeySpec(point, ecSpec);
-            KeyFactory keyFactory = KeyFactory.getInstance("ECDSA", "BC");
-            PublicKey publicKey = keyFactory.generatePublic(publicKeySpec);
-
-            // EC Public keu to pem format.
-            StringWriter writer = new StringWriter();
-            PemWriter pemWriter = new PemWriter(writer);
-            pemWriter.writeObject(new PemObject("PUBLIC KEY", publicKey.getEncoded()));
-            pemWriter.flush();
-            pemWriter.close();
-            return writer.toString();
-        } catch (InvalidKeySpecException e) {
-            throw new RuntimeException(e);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
-        } catch (NoSuchProviderException e) {
-            throw new RuntimeException(e);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static ECPublicKey publicKeyFromPem(String pemEncoding) {
-        try {
-            PEMParser parser = new PEMParser(new StringReader(pemEncoding));
-            SubjectPublicKeyInfo publicKeyInfo = (SubjectPublicKeyInfo) parser.readObject();
-            parser.close();
-
-            JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider(BOUNCY_CASTLE_PROVIDER);
-            return (ECPublicKey) converter.getPublicKey(publicKeyInfo);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static ECPrivateKey privateKeyFromPem(String pemEncoding) {
-        try {
-            PEMParser parser = new PEMParser(new StringReader(pemEncoding));
-            PrivateKeyInfo privateKeyInfo = (PrivateKeyInfo) parser.readObject();
-            parser.close();
-
-            JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider(BOUNCY_CASTLE_PROVIDER);
-            return (ECPrivateKey) converter.getPrivateKey(privateKeyInfo);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        return encodeCompressedPoint((ECPublicKey) this.keyPair.getPublic());
     }
 
     public static byte[] computeECDHKey(ECPublicKey publicKey, ECPrivateKey privateKey) {
         try {
-            KeyAgreement aKeyAgree = KeyAgreement.getInstance("ECDH", "BC");
+            KeyAgreement aKeyAgree = KeyAgreement.getInstance("ECDH");
             aKeyAgree.init(privateKey);
             aKeyAgree.doPhase(publicKey, true);
             return aKeyAgree.generateSecret();
-        } catch (NoSuchAlgorithmException | NoSuchProviderException | InvalidKeyException e) {
+        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
             throw new RuntimeException(e);
         }
     }
 
+    private static final String HMAC_SHA_256 = "HmacSHA256";
     /**
      * Returns a HKDF key derived from the provided salt and secret
      * that is 32 bytes (256 bits) long.
+     *
+     * Delegates to a registered {@link HkdfProvider} when one is available on the
+     * classpath (e.g. {@code sdk-fips-bc}); otherwise falls back to the
+     * JDK-native HmacSHA256 implementation.
      */
     public static byte[] calculateHKDF(byte[] salt, byte[] secret) {
-        byte[] key = new byte[SHA256_BYTES];
-        HKDFParameters params = new HKDFParameters(secret, salt, null);
+        HkdfProvider provider = HkdfResolver.get();
+        if (provider != null) {
+            if (log.isDebugEnabled()) {
+                log.debug("Using resolved HKDF provider of type {}", provider.getClass().getName());
+            }
+            return provider.computeHKDF(salt, secret);
+        }
 
-        HKDFBytesGenerator hkdf = new HKDFBytesGenerator(SHA256Digest.newInstance());
-        hkdf.init(params);
-        hkdf.generateBytes(key, 0, key.length);
-        return key;
+        log.debug("using SDK HKDF implementation");
+        try {
+            // RFC 5869: if salt is absent, substitute a zero-filled buffer of Hash output size.
+            byte[] effectiveSalt = (salt == null || salt.length == 0) ? new byte[SHA256_BYTES] : salt;
+            Mac hmac = Mac.getInstance(HMAC_SHA_256);
+            hmac.init(new SecretKeySpec(effectiveSalt, HMAC_SHA_256));
+            byte[] prk = hmac.doFinal(secret);
+
+            // HKDF-Expand with empty info and L = 32 (a single HMAC block).
+            hmac.init(new SecretKeySpec(prk, HMAC_SHA_256));
+            hmac.update((byte) 0x01);
+            return hmac.doFinal();
+        } catch (NoSuchAlgorithmException e) {
+            throw new SDKException("error computing HKDF", e) ;
+        } catch (Exception e) {
+            String className = e.getClass().getName();
+            if (className.contains("bouncycastle") && className.endsWith("IllegalKeyException")) {
+                throw new SDKException("if running bouncycastle FIPS in approved_only mode include the sdk-fips-bc jar to use HKDF", e);
+            }
+            throw new SDKException("error computing HKDF", e);
+        }
     }
 
-    public static byte[] computeECDSASig(byte[] digest, ECPrivateKey privateKey) {
+    public static byte[] computeECDSASig(byte[] data, ECPrivateKey privateKey) {
         try {
-            Signature ecdsaSign = Signature.getInstance("SHA256withECDSA", "BC");
+            Signature ecdsaSign = Signature.getInstance("SHA256withECDSA");
             ecdsaSign.initSign(privateKey);
-            ecdsaSign.update(digest);
+            ecdsaSign.update(data);
             return ecdsaSign.sign();
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
-        } catch (NoSuchProviderException e) {
-            throw new RuntimeException(e);
-        } catch (InvalidKeyException e) {
-            throw new RuntimeException(e);
-        } catch (SignatureException e) {
+        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e) {
             throw new RuntimeException(e);
         }
     }
 
     public static Boolean verifyECDSAig(byte[] digest, byte[] signature, ECPublicKey publicKey) {
         try {
-            Signature ecdsaVerify = Signature.getInstance("SHA256withECDSA", "BC");
+            Signature ecdsaVerify = Signature.getInstance("SHA256withECDSA");
             ecdsaVerify.initVerify(publicKey);
             ecdsaVerify.update(digest);
             return ecdsaVerify.verify(signature);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
-        } catch (NoSuchProviderException e) {
-            throw new RuntimeException(e);
-        } catch (InvalidKeyException e) {
-            throw new RuntimeException(e);
-        } catch (SignatureException e) {
+        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private static String toPem(String type, byte[] der) {
+        String b64 = Base64.getEncoder().encodeToString(der);
+        StringBuilder sb = new StringBuilder();
+        sb.append("-----BEGIN ").append(type).append("-----\n");
+        for (int i = 0; i < b64.length(); i += 64) {
+            sb.append(b64, i, Math.min(i + 64, b64.length())).append('\n');
+        }
+        sb.append("-----END ").append(type).append("-----\n");
+        return sb.toString();
+    }
+
+    private static byte[] encodeCompressedPoint(ECPublicKey publicKey) {
+        ECPoint w = publicKey.getW();
+        ECParameterSpec params = publicKey.getParams();
+        int size = (params.getCurve().getField().getFieldSize() + 7) / 8;
+        byte[] x = toFixedLength(w.getAffineX(), size);
+        byte[] result = new byte[size + 1];
+        result[0] = (byte) (w.getAffineY().testBit(0) ? 0x03 : 0x02);
+        System.arraycopy(x, 0, result, 1, size);
+        return result;
+    }
+
+    private static byte[] toFixedLength(BigInteger value, int length) {
+        byte[] bytes = value.toByteArray();
+        if (bytes.length == length) {
+            return bytes;
+        }
+        byte[] result = new byte[length];
+        if (bytes.length > length) {
+            // BigInteger.toByteArray() may prepend a zero sign byte; strip it.
+            System.arraycopy(bytes, bytes.length - length, result, 0, length);
+        } else {
+            System.arraycopy(bytes, 0, result, length - bytes.length, bytes.length);
+        }
+        return result;
     }
 }
