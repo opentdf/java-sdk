@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.2](https://github.com/opentdf/java-sdk/compare/v0.17.1...v0.17.2) (2026-06-29)
+
+
+### Bug Fixes
+
+* **sdk:** Updates to proto version v0.36.0 ([#345](https://github.com/opentdf/java-sdk/issues/345)) ([cde461a](https://github.com/opentdf/java-sdk/commit/cde461a3758caeb7aa2a85a51f4be70e01e50db5))
+
 ## [0.17.1](https://github.com/opentdf/java-sdk/compare/v0.17.0...v0.17.1) (2026-06-24)
 
 
