@@ -77,6 +77,25 @@
             <artifactId>sdk</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- BouncyCastle is required at runtime by com.nimbusds.jose.jwk.JWK.parseFromPEMEncodedObjects,
+             which the CLI calls when the dpop key option is supplied. The sdk module only pulls BC in
+             at test scope, so the CLI must request it explicitly. -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcpkix-jdk18on</artifactId>
+        </dependency>
+        <!-- Test Dependencies -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>3.25.3</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <profiles>
