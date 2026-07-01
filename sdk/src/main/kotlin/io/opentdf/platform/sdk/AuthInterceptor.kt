@@ -122,6 +122,10 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
                 val authHeaders = ts.getAuthHeaders(url, chain.request().method)
                 val newRequestBuilder = chain.request().newBuilder()
                     .header("Authorization", authHeaders.authHeader)
+                    .removeHeader("DPoP")
+                // Re-add only when the refreshed token is still DPoP-bound. Without the
+                // remove above, a Bearer downgrade would leave the original request's
+                // stale DPoP proof paired with a Bearer Authorization header.
                 authHeaders.dpopHeader?.let { newRequestBuilder.header("DPoP", it) }
                 val newRequest = newRequestBuilder.build()
                 logger.debug("DPoP path=okhttp-retry url={} method={} nonce={} authScheme={} {}",
