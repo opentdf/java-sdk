@@ -25,6 +25,9 @@ final class CliDpopOptions {
         final JWSAlgorithm alg;
 
         DpopMaterial(JWK jwk, JWSAlgorithm alg) {
+            // Validate in the constructor so a DpopMaterial is never valid only by
+            // convention of its caller — every instance has a compatible key/alg pair.
+            DpopKeyValidation.validate(jwk, alg);
             this.jwk = jwk;
             this.alg = alg;
         }
@@ -48,13 +51,12 @@ final class CliDpopOptions {
                 alg = JWSAlgorithm.RS256;
             }
             try {
-                DpopKeyValidation.validate(jwk, alg);
+                return Optional.of(new DpopMaterial(jwk, alg));
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException(
                         "DPoP key file " + dpopKeyPath + " is incompatible with --dpop=" + alg + ": " + e.getMessage(),
                         e);
             }
-            return Optional.of(new DpopMaterial(jwk, alg));
         }
         if (dpopAlg != null) {
             JWSAlgorithm alg = dpopAlg.isEmpty() ? JWSAlgorithm.RS256 : parseAlgorithm(dpopAlg);
