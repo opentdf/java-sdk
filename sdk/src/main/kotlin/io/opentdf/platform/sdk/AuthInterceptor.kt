@@ -135,6 +135,12 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
                 }
                 cacheNonceIfPresent(url, response)
                 logger.debug("DPoP path=okhttp-retry-response url={} status={}", url, response.code)
+            } else {
+                // RFC 9449 §9 requires the nonce alongside use_dpop_nonce. A challenge
+                // without it is a server protocol violation; surface it rather than
+                // passing a bare, unexplained 401 back to the caller (mirrors the
+                // token-endpoint handling in TokenSource.getToken).
+                logger.warn("DPoP nonce challenge from {} lacked a DPoP-Nonce header; passing 401 through", url)
             }
         }
         response
