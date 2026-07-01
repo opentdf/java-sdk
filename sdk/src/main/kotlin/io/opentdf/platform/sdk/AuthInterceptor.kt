@@ -99,6 +99,8 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
      * from resource servers (KAS and the platform-services Connect client).
      * A 401 is retried only when WWW-Authenticate carries scheme=DPoP and error=use_dpop_nonce;
      * any other 401 (or any 401 with only a stray DPoP-Nonce header) is passed through unchanged.
+     * The challenge is retried at most once: if the retried request is itself challenged, that
+     * response is returned as-is rather than looping.
      * Rotated nonces are cached after every successful proceed so the next request picks them up.
      */
     fun dpopRetryInterceptor(): okhttp3.Interceptor = okhttp3.Interceptor { chain ->

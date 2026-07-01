@@ -175,12 +175,7 @@ class TokenSource {
                 dpopProof);
     }
 
-    /**
-     * Cache a server-issued nonce for the given URL's origin.
-     *
-     * @param url The URL from which the nonce was received
-     * @param nonce The nonce value to cache
-     */
+    /** Cache a server-issued nonce for the given URL's origin. */
     public void cacheNonce(URL url, String nonce) {
         if (nonce != null && !nonce.isEmpty()) {
             String origin = getOrigin(url);
@@ -189,8 +184,8 @@ class TokenSource {
         }
     }
 
-    // RFC 9449 §4.2: the htu claim is the request URI with query and fragment removed.
-    // Nimbus rejects any URI carrying a query, so strip both before handing it off.
+    // RFC 9449 §4.2: the htu claim is the request URI with query and fragment removed
+    // (and Nimbus additionally rejects a URI that still carries a query).
     private static URI htuOf(URI uri) {
         if (uri.getRawQuery() == null && uri.getRawFragment() == null) {
             return uri;
@@ -202,12 +197,7 @@ class TokenSource {
         }
     }
 
-    /**
-     * Get the origin (scheme://host:port) from a URL for nonce caching.
-     *
-     * @param url The URL to extract origin from
-     * @return The origin string
-     */
+    /** Get the origin (scheme://host:port) from a URL, used as the nonce cache key. */
     private String getOrigin(URL url) {
         int port = url.getPort();
         if (port == -1) {
