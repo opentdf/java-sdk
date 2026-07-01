@@ -487,6 +487,33 @@ class TokenSourceTest {
     }
 
     @Test
+    void htmClaimReflectsRequestMethod() throws Exception {
+        // RFC 9449 §4.2: the htm claim binds the proof to the HTTP method. Pins that the
+        // method passed to getAuthHeaders is stamped verbatim into the proof — the reason
+        // SDKBuilder disables Connect-GET so authenticated requests stay POST and the
+        // pre-minted proof's htm can't drift from the method actually sent.
+        RSAKey rsaKey = new RSAKeyGenerator(2048)
+                .keyUse(KeyUse.SIGNATURE)
+                .keyID(UUID.randomUUID().toString())
+                .generate();
+        try (MockWebServer tokenServer = new MockWebServer()) {
+            tokenServer.enqueue(new MockResponse()
+                    .setBody(FAKE_TOKEN_RESPONSE)
+                    .setHeader("Content-Type", "application/json"));
+            tokenServer.start();
+
+            TokenSource ts = buildTokenSource(tokenServer, rsaKey);
+            URL testUrl = new URL("https://kas.example.com/kas");
+
+            TokenSource.AuthHeaders headers = ts.getAuthHeaders(testUrl, "POST");
+            String htm = SignedJWT.parse(headers.getDpopHeader())
+                    .getJWTClaimsSet().getStringClaim("htm");
+
+            assertThat(htm).isEqualTo("POST");
+        }
+    }
+
+    @Test
     void getAuthHeaders_downgradesToBearerWhenTokenEndpointReturnsBearer() throws Exception {
         // Keycloak realms with DPoP disabled return token_type=Bearer even when the client
         // sent a DPoP proof. The SDK must not emit "Authorization: DPoP <bearer-token>" —
