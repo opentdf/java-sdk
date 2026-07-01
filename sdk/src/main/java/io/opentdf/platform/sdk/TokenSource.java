@@ -91,6 +91,23 @@ class TokenSource {
         }
     }
 
+    /**
+     * Immutable pairing of an access token with the auth scheme (DPoP or Bearer) the AS
+     * assigned it. Returned by {@link #getToken()} so callers read both values atomically:
+     * the mutable token/tokenScheme fields are only ever written and read under
+     * getToken()'s monitor, so a caller can never observe a token from one generation
+     * alongside a scheme from another.
+     */
+    private static final class TokenSnapshot {
+        final AccessToken accessToken;
+        final String scheme;
+
+        TokenSnapshot(AccessToken accessToken, String scheme) {
+            this.accessToken = accessToken;
+            this.scheme = scheme;
+        }
+    }
+
     public AuthHeaders getAuthHeaders(URL url, String method) {
         return getAuthHeaders(url, method, null);
     }
@@ -104,13 +121,16 @@ class TokenSource {
      * @return AuthHeaders containing Authorization and DPoP headers
      */
     public AuthHeaders getAuthHeaders(URL url, String method, String nonce) {
-        // Get the access token
-        AccessToken t = getToken();
+        // Snapshot the token and its scheme together under getToken()'s lock so the
+        // Authorization value and the DPoP/Bearer decision always come from the same
+        // token generation.
+        TokenSnapshot snapshot = getToken();
+        AccessToken t = snapshot.accessToken;
 
         // If the AS returned a plain bearer token, send it as a bearer credential
         // without a DPoP proof. Sending "Authorization: DPoP <bearer>" is a misuse
         // of the scheme and resource servers that enforce DPoP will reject it.
-        if (SCHEME_BEARER.equals(tokenScheme)) {
+        if (SCHEME_BEARER.equals(snapshot.scheme)) {
             return new AuthHeaders("Bearer " + t.getValue(), null);
         }
 
@@ -188,9 +208,9 @@ class TokenSource {
     /**
      * Either fetches a new access token or returns the cached access token if it is still valid.
      *
-     * @return The access token.
+     * @return A snapshot of the access token and its assigned auth scheme.
      */
-    private synchronized AccessToken getToken() {
+    private synchronized TokenSnapshot getToken() {
         try {
             // If the token is expired or initially null, get a new token
             if (token == null || isTokenExpired()) {
@@ -284,7 +304,7 @@ class TokenSource {
 
             } else {
                 // If the token is still valid or not initially null, return the cached token
-                return this.token;
+                return new TokenSnapshot(this.token, this.tokenScheme);
             }
 
         } catch (SDKException e) {
@@ -301,7 +321,7 @@ class TokenSource {
         } catch (RuntimeException e) {
             throw new SDKException("unexpected error fetching token from " + tokenEndpointURI, e);
         }
-        return this.token;
+        return new TokenSnapshot(this.token, this.tokenScheme);
     }
 
     /**
