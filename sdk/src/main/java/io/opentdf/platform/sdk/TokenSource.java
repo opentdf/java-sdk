@@ -113,12 +113,14 @@ class TokenSource {
     }
 
     /**
-     * Get authorization headers for a request, including DPoP proof.
+     * Get authorization headers for a request. When the token is DPoP-bound this includes
+     * a freshly minted DPoP proof; if the AS issued a plain Bearer token the DPoP header is
+     * null (see the Bearer fallback below).
      *
      * @param url The URL being accessed
      * @param method The HTTP method
      * @param nonce Optional server-issued nonce to include in the proof
-     * @return AuthHeaders containing Authorization and DPoP headers
+     * @return AuthHeaders with the Authorization header, and a DPoP proof header when DPoP-bound
      */
     public AuthHeaders getAuthHeaders(URL url, String method, String nonce) {
         // Snapshot the token and its scheme together under getToken()'s lock so the
