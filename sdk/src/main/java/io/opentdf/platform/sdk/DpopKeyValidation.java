@@ -17,6 +17,12 @@ public final class DpopKeyValidation {
         if (alg == null) {
             throw new IllegalArgumentException("DPoP algorithm cannot be null");
         }
+        // DPoP proofs are signed with the private key. A public-only JWK would only fail
+        // later, opaquely, at proof-signing time — reject it up front so every entry
+        // point (SDK and CLI) gives the same clear error.
+        if (!jwk.isPrivate()) {
+            throw new IllegalArgumentException("DPoP JWK must contain private key material for proof signing");
+        }
         if (jwk instanceof RSAKey) {
             if (!isRsaAlgorithm(alg)) {
                 throw new IllegalArgumentException("DPoP algorithm " + alg
