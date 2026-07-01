@@ -35,12 +35,21 @@ import java.util.concurrent.ConcurrentHashMap;
  * timeouts and creating OIDC calls. It is thread-safe.
  */
 class TokenSource {
-    static final String SCHEME_DPOP = "DPoP";
-    static final String SCHEME_BEARER = "Bearer";
+    /** The authorization scheme the AS bound to the access token, and its header prefix. */
+    enum TokenScheme {
+        DPOP("DPoP"),
+        BEARER("Bearer");
+
+        final String headerPrefix;
+
+        TokenScheme(String headerPrefix) {
+            this.headerPrefix = headerPrefix;
+        }
+    }
 
     private Instant tokenExpiryTime;
     private AccessToken token;
-    private String tokenScheme;
+    private TokenScheme tokenScheme;
     private final ClientAuthentication clientAuth;
     private final JWK dpopJwk;
     private final JWSAlgorithm dpopAlg;
@@ -71,7 +80,7 @@ class TokenSource {
         this.tokenExpiryTime = null;
     }
 
-    class AuthHeaders {
+    static final class AuthHeaders {
         private final String authHeader;
         @Nullable
         private final String dpopHeader;
@@ -100,9 +109,9 @@ class TokenSource {
      */
     private static final class TokenSnapshot {
         final AccessToken accessToken;
-        final String scheme;
+        final TokenScheme scheme;
 
-        TokenSnapshot(AccessToken accessToken, String scheme) {
+        TokenSnapshot(AccessToken accessToken, TokenScheme scheme) {
             this.accessToken = accessToken;
             this.scheme = scheme;
         }
@@ -132,8 +141,8 @@ class TokenSource {
         // If the AS returned a plain bearer token, send it as a bearer credential
         // without a DPoP proof. Sending "Authorization: DPoP <bearer>" is a misuse
         // of the scheme and resource servers that enforce DPoP will reject it.
-        if (SCHEME_BEARER.equals(snapshot.scheme)) {
-            return new AuthHeaders("Bearer " + t.getValue(), null);
+        if (snapshot.scheme == TokenScheme.BEARER) {
+            return new AuthHeaders(TokenScheme.BEARER.headerPrefix + " " + t.getValue(), null);
         }
 
         // Build the DPoP proof for each request
@@ -162,7 +171,7 @@ class TokenSource {
         }
 
         return new AuthHeaders(
-                "DPoP " + t.getValue(),
+                TokenScheme.DPOP.headerPrefix + " " + t.getValue(),
                 dpopProof);
     }
 
@@ -293,7 +302,7 @@ class TokenSource {
                     throw new SDKException("token endpoint " + tokenEndpointURI
                             + " returned a success response with no access token");
                 }
-                this.tokenScheme = asAssertsDpop ? SCHEME_DPOP : SCHEME_BEARER;
+                this.tokenScheme = asAssertsDpop ? TokenScheme.DPOP : TokenScheme.BEARER;
                 if (!asAssertsDpop) {
                     logger.warn("token endpoint {} returned a non-DPoP-bound access token (token_type=Bearer) despite"
                             + " DPoP proof — falling back to Bearer scheme. Check the IdP DPoP configuration.",
