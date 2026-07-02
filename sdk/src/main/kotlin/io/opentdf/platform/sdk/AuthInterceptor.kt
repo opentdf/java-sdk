@@ -100,7 +100,7 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
      * A 401 is retried only when WWW-Authenticate carries scheme=DPoP and error=use_dpop_nonce;
      * any other 401 (or any 401 with only a stray DPoP-Nonce header) is passed through unchanged.
      * The challenge is retried at most once: if the retried request is itself challenged, that
-     * response is returned as-is rather than looping.
+     * response is returned as-is (logged at WARN) rather than looping.
      * Rotated nonces are cached after every successful proceed so the next request picks them up.
      */
     fun dpopRetryInterceptor(): okhttp3.Interceptor = okhttp3.Interceptor { chain ->
@@ -141,6 +141,12 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
                 }
                 cacheNonceIfPresent(url, response)
                 logger.debug("DPoP path=okhttp-retry-response url={} status={}", url, response.code)
+                // A second nonce challenge after the retry means the handshake failed twice
+                // (e.g. aggressive nonce rotation or clock skew). We do not loop; surface it
+                // at WARN so the double failure is visible rather than returning a bare 401.
+                if (response.code == 401 && isDpopNonceChallenge(response)) {
+                    logger.warn("DPoP nonce challenge from {} persisted after retry; returning 401", url)
+                }
             } else {
                 // RFC 9449 §9 requires the nonce alongside use_dpop_nonce. A challenge
                 // without it is a server protocol violation; surface it rather than

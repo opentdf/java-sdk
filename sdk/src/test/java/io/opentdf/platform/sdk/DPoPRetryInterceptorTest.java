@@ -16,12 +16,20 @@ import okhttp3.mockwebserver.Dispatcher;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.LoggerConfig;
+import org.apache.logging.log4j.core.config.Property;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -138,13 +146,15 @@ class DPoPRetryInterceptorTest {
         // Pins the single-retry guarantee: even if the retry response is also a
         // 401 + DPoP-Nonce + use_dpop_nonce challenge, no further retry is attempted.
         // This protects against an infinite-retry loop if an AS misbehaves or rotates
-        // nonces faster than the client can spend them.
+        // nonces faster than the client can spend them. The persistent challenge must
+        // also be logged at WARN so the double failure is visible rather than a silent 401.
         RSAKey rsaKey = new RSAKeyGenerator(2048)
                 .keyUse(KeyUse.SIGNATURE)
                 .keyID(UUID.randomUUID().toString())
                 .generate();
         try (MockWebServer tokenServer = new MockWebServer();
-             MockWebServer kasServer = new MockWebServer()) {
+             MockWebServer kasServer = new MockWebServer();
+             LogCapture logs = LogCapture.attach(AuthInterceptor.class)) {
             tokenServer.enqueue(new MockResponse()
                     .setBody(FAKE_TOKEN_RESPONSE)
                     .setHeader("Content-Type", "application/json"));
@@ -174,6 +184,7 @@ class DPoPRetryInterceptorTest {
 
             assertThat(kasServer.getRequestCount()).isEqualTo(2);
             assertThat(response.code()).isEqualTo(401);
+            assertThat(logs.warnings()).anyMatch(m -> m.contains("persisted after retry"));
         }
     }
 
@@ -459,6 +470,45 @@ class DPoPRetryInterceptorTest {
 
             assertThat(kasServer.getRequestCount()).isEqualTo(1);
             assertThat(response.code()).isEqualTo(200);
+        }
+    }
+
+    /**
+     * Captures WARN-and-above log messages from a target logger for the duration of a
+     * test, then detaches on close. Used to assert that a failure is surfaced in the
+     * logs rather than swallowed silently.
+     */
+    private static final class LogCapture extends AbstractAppender implements AutoCloseable {
+        private final List<String> messages = new CopyOnWriteArrayList<>();
+        private final LoggerConfig loggerConfig;
+
+        private LogCapture(LoggerConfig loggerConfig) {
+            super("test-capture", null, null, false, Property.EMPTY_ARRAY);
+            this.loggerConfig = loggerConfig;
+        }
+
+        static LogCapture attach(Class<?> target) {
+            LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
+            LoggerConfig config = ctx.getConfiguration().getLoggerConfig(target.getName());
+            LogCapture appender = new LogCapture(config);
+            appender.start();
+            config.addAppender(appender, Level.WARN, null);
+            return appender;
+        }
+
+        @Override
+        public void append(LogEvent event) {
+            messages.add(event.getMessage().getFormattedMessage());
+        }
+
+        List<String> warnings() {
+            return messages;
+        }
+
+        @Override
+        public void close() {
+            loggerConfig.removeAppender(getName());
+            stop();
         }
     }
 }
