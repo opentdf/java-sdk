@@ -10,6 +10,9 @@
 
 ## Build, Test, and Dev Commands
 
+- `java`/`mvn` are not on PATH and `JAVA_HOME` is unset here. Set it from the Homebrew prefix (compiles the release-11 target fine, no version lookup needed):
+  `export JAVA_HOME="$(brew --prefix openjdk@21)/libexec/openjdk.jdk/Contents/Home"`
+  Other brew JDKs available: `openjdk` (latest), `openjdk@21`, `openjdk@25`, `openjdk@26`.
 - Build everything (runs codegen): `mvn clean install`
 - Fast local build (skip tests): `mvn clean install -DskipTests`
 - SDK unit tests: `mvn -pl sdk test`
