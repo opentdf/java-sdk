@@ -101,6 +101,10 @@ public enum KeyType {
                 return KeyType.HybridSecp256r1MLKEM768Key;
             case ALGORITHM_HPQT_SECP384R1_MLKEM1024:
                 return KeyType.HybridSecp384r1MLKEM1024Key;
+            case ALGORITHM_MLKEM_768:
+                return KeyType.MLKEM768Key;
+            case ALGORITHM_MLKEM_1024:
+                return KeyType.MLKEM1024Key;
             default:
                 throw new IllegalArgumentException("Unsupported algorithm: " + algorithm);
         }
@@ -127,6 +131,10 @@ public enum KeyType {
                 return KeyType.HybridSecp256r1MLKEM768Key;
             case KAS_PUBLIC_KEY_ALG_ENUM_HPQT_SECP384R1_MLKEM1024:
                 return KeyType.HybridSecp384r1MLKEM1024Key;
+            case KAS_PUBLIC_KEY_ALG_ENUM_MLKEM_768:
+                return KeyType.MLKEM768Key;
+            case KAS_PUBLIC_KEY_ALG_ENUM_MLKEM_1024:
+                return KeyType.MLKEM1024Key;
             default:
                 throw new IllegalArgumentException(
                         "Unsupported KAS public-key algorithm: " + algorithm
