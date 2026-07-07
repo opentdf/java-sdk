@@ -222,6 +222,9 @@ public class SDKBuilderTest {
                         .build();
 
                 assertThat(sdk.getSrtSigner()).isPresent();
+                // This test only covers the SRT-signer split (SRT always signs with RSA).
+                // That an EC DPoP key produces ES256 DPoP *proofs* is covered at the minting
+                // point in TokenSourceTest.ecKeyGeneratesDPoPProof.
                 assertThat(sdk.getSrtSigner().get().alg()).isEqualTo("RS256");
                 // Sanity-check: the SRT signer can actually sign, which would fail if it was
                 // mistakenly handed the EC key (RSASSASigner constructor would have thrown).

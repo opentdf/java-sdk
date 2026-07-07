@@ -42,6 +42,9 @@ class DPoPRetryInterceptorTest {
     private static final String FAKE_TOKEN_RESPONSE =
             "{\"access_token\":\"test-token\",\"token_type\":\"DPoP\",\"expires_in\":3600}";
 
+    private static final String BEARER_TOKEN_RESPONSE =
+            "{\"access_token\":\"test-token\",\"token_type\":\"Bearer\",\"expires_in\":3600}";
+
     private AuthInterceptor buildAuthInterceptor(MockWebServer tokenServer, RSAKey rsaKey) throws Exception {
         return new AuthInterceptor(buildTokenSource(tokenServer, rsaKey));
     }
@@ -105,6 +108,63 @@ class DPoPRetryInterceptorTest {
             SignedJWT dpopJwt = SignedJWT.parse(dpopHeader);
             String nonceClaim = dpopJwt.getJWTClaimsSet().getStringClaim("nonce");
             assertThat(nonceClaim).isEqualTo("server-issued-nonce");
+        }
+    }
+
+    @Test
+    void retryDowngradesToBearerAndDropsStaleDpopProof() throws Exception {
+        // Regression guard for AuthInterceptor.dpopRetryInterceptor's removeHeader("DPoP").
+        // When the token refreshed on retry comes back as a plain Bearer token (the AS did
+        // not bind it to the DPoP key), the retried request must send Authorization: Bearer
+        // with NO DPoP header. Without the removeHeader, the original request's stale DPoP
+        // proof would ride along next to a Bearer credential -- an RFC 9449 scheme misuse
+        // that DPoP-enforcing resource servers reject.
+        RSAKey rsaKey = new RSAKeyGenerator(2048)
+                .keyUse(KeyUse.SIGNATURE)
+                .keyID(UUID.randomUUID().toString())
+                .generate();
+        try (MockWebServer tokenServer = new MockWebServer();
+             MockWebServer kasServer = new MockWebServer()) {
+            // The single token fetched during the retry is a plain Bearer token.
+            tokenServer.enqueue(new MockResponse()
+                    .setBody(BEARER_TOKEN_RESPONSE)
+                    .setHeader("Content-Type", "application/json"));
+            tokenServer.start();
+
+            // First request returns 401 + DPoP-Nonce + DPoP nonce challenge; second returns 200
+            kasServer.enqueue(new MockResponse()
+                    .setResponseCode(401)
+                    .addHeader("DPoP-Nonce", "server-issued-nonce")
+                    .addHeader("WWW-Authenticate", "DPoP error=\"use_dpop_nonce\""));
+            kasServer.enqueue(new MockResponse().setResponseCode(200));
+            kasServer.start();
+
+            AuthInterceptor authInterceptor = buildAuthInterceptor(tokenServer, rsaKey);
+            OkHttpClient client = new OkHttpClient.Builder()
+                    .addInterceptor(authInterceptor.dpopRetryInterceptor())
+                    .build();
+
+            // Seed the initial request with a stale DPoP proof + DPoP Authorization so the
+            // downgrade genuinely has a proof to strip (guards against a vacuously-null check).
+            Request request = new Request.Builder()
+                    .url(kasServer.url("/kas/rewrap"))
+                    .header("Authorization", "DPoP stale-token")
+                    .header("DPoP", "stale-proof")
+                    .post(okhttp3.RequestBody.create(new byte[0]))
+                    .build();
+            Response response = client.newCall(request).execute();
+            response.close();
+
+            assertThat(response.code()).isEqualTo(200);
+            assertThat(kasServer.getRequestCount()).isEqualTo(2);
+            // Only one credential refresh happens on retry.
+            assertThat(tokenServer.getRequestCount()).isEqualTo(1);
+
+            kasServer.takeRequest(); // consume first request
+            RecordedRequest retryRequest = kasServer.takeRequest();
+            assertThat(retryRequest.getHeader("Authorization")).startsWith("Bearer ");
+            // The stale proof must be gone: no DPoP header paired with a Bearer credential.
+            assertThat(retryRequest.getHeader("DPoP")).isNull();
         }
     }
 

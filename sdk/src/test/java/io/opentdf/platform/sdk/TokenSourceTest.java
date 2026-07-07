@@ -184,6 +184,38 @@ class TokenSourceTest {
     }
 
     @Test
+    void explicitDpopAlgorithmIsUsedForProof() throws Exception {
+        // A caller may override the default RS256 with an explicit algorithm (via
+        // SDKBuilder.dpopAlgorithm). Verify the override actually reaches the proof
+        // factory rather than being silently replaced by the RS256 default.
+        RSAKey rsaKey = new RSAKeyGenerator(2048)
+                .keyUse(KeyUse.SIGNATURE)
+                .keyID(UUID.randomUUID().toString())
+                .generate();
+        try (MockWebServer tokenServer = new MockWebServer()) {
+            tokenServer.enqueue(new MockResponse()
+                    .setBody(FAKE_TOKEN_RESPONSE)
+                    .setHeader("Content-Type", "application/json"));
+            tokenServer.start();
+
+            TokenSource ts = new TokenSource(
+                    new ClientSecretBasic(new ClientID("test-client"), new Secret("test-secret")),
+                    rsaKey,
+                    JWSAlgorithm.RS512,
+                    tokenServer.url("/token").uri(),
+                    new ClientCredentialsGrant(),
+                    null
+            );
+            URL testUrl = new URL("https://kas.example.com/kas");
+
+            TokenSource.AuthHeaders headers = ts.getAuthHeaders(testUrl, "POST");
+
+            SignedJWT dpopJwt = SignedJWT.parse(headers.getDpopHeader());
+            assertThat(dpopJwt.getHeader().getAlgorithm()).isEqualTo(JWSAlgorithm.RS512);
+        }
+    }
+
+    @Test
     void noncesAreIsolatedByOrigin() throws Exception {
         RSAKey rsaKey = new RSAKeyGenerator(2048)
                 .keyUse(KeyUse.SIGNATURE)

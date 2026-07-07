@@ -73,6 +73,8 @@ class CommandTest {
         CommandLine cli = new CommandLine(new Command());
         cli.setErr(new PrintWriter(err));
 
+        // The endpoint is intentionally unreachable: DPoP option validation fails at parse
+        // time, before any network call, so example.invalid is never resolved or contacted.
         int code = cli.execute(
                 "--platform-endpoint", "https://example.invalid",
                 "--client-id", "x",
