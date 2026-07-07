@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.17.2](https://github.com/opentdf/java-sdk/compare/v0.17.1...v0.17.2) (2026-07-07)
+
+
+### Bug Fixes
+
+* **sdk:** Lets ML-KEM PQ key encapsulation work ([#370](https://github.com/opentdf/java-sdk/issues/370)) ([e7278fb](https://github.com/opentdf/java-sdk/commit/e7278fb6742eb1e437ce3268beac3607b2a4b9f3))
+* **sdk:** Updates to proto version v0.36.0 ([#345](https://github.com/opentdf/java-sdk/issues/345)) ([cde461a](https://github.com/opentdf/java-sdk/commit/cde461a3758caeb7aa2a85a51f4be70e01e50db5))
+* upgrade the publish plugin to avoid an error ([#384](https://github.com/opentdf/java-sdk/issues/384)) ([f94f507](https://github.com/opentdf/java-sdk/commit/f94f507dcee1052ba0aeaeb2472b882d9e60486e))
+
 ## [0.17.1](https://github.com/opentdf/java-sdk/compare/v0.17.0...v0.17.1) (2026-06-24)
 
 
