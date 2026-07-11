@@ -18,7 +18,7 @@ import java.security.SecureRandom;
  * It includes methods to encrypt and decrypt byte arrays using a specified
  * symmetric key.
  */
-public class AesGcm {
+class AesGcm {
     public static final int GCM_NONCE_LENGTH = 12; // in bytes
     public static final int GCM_TAG_LENGTH = 16; // in bytes
     public static final int GCM_KEY_SIZE_BITS = 256;
@@ -52,7 +52,7 @@ public class AesGcm {
         return key.getEncoded();
     }
 
-    public static class Encrypted {
+    static class Encrypted {
         private final byte[] iv;
         private final byte[] ciphertext;
 

@@ -73,7 +73,7 @@ public class AssertionConfig {
         }
     }
 
-    public enum BindingMethod {
+    enum BindingMethod {
         JWS("jws");
 
         private String method;
