@@ -152,14 +152,6 @@ class Command {
     @Option(names = { "-p", "--platform-endpoint" })
     private String platformEndpoint;
 
-    @Option(names = {
-            "--dpop" }, arity = "0..1", fallbackValue = "", scope = CommandLine.ScopeType.INHERIT, description = "Enable DPoP (RFC 9449). Optional: specify algorithm (RS256, RS384, RS512, ES256, ES384, ES512). Default: RS256.")
-    private String dpopAlg;
-
-    @Option(names = {
-            "--dpop-key" }, scope = CommandLine.ScopeType.INHERIT, description = "Enable DPoP using a PEM-encoded private key at <path>. Algorithm inferred from key type. Combinable with --dpop=<alg>.")
-    private Path dpopKeyPath;
-
     private Object correctKeyType(AssertionConfig.AssertionKeyAlg alg, Object key, boolean publicKey)
             throws RuntimeException {
         if (alg == AssertionConfig.AssertionKeyAlg.HS256) {
@@ -324,22 +316,9 @@ class Command {
             builder.insecureSslFactory();
         }
 
-        applyDPoPOptions(builder);
-
         return builder.platformEndpoint(platformEndpoint)
                 .clientSecret(clientId, clientSecret).useInsecurePlaintextConnection(plaintext)
                 .build();
-    }
-
-    private void applyDPoPOptions(SDKBuilder builder) {
-        try {
-            CliDpopOptions.parse(dpopAlg, dpopKeyPath).ifPresent(m -> {
-                builder.dpopKey(m.jwk);
-                builder.dpopAlgorithm(m.alg);
-            });
-        } catch (IllegalArgumentException e) {
-            throw new CommandLine.ParameterException(spec.commandLine(), e.getMessage());
-        }
     }
 
     @CommandLine.Command(name = "decrypt")

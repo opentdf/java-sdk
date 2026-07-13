@@ -67,44 +67,4 @@ class CommandTest {
         assertThat(command.verbose).isTrue();
     }
 
-    @Test
-    void encrypt_withUnsupportedDpopAlgorithm_failsWithUsage() {
-        StringWriter err = new StringWriter();
-        CommandLine cli = new CommandLine(new Command());
-        cli.setErr(new PrintWriter(err));
-
-        // The endpoint is intentionally unreachable: DPoP option validation fails at parse
-        // time, before any network call, so example.invalid is never resolved or contacted.
-        int code = cli.execute(
-                "--platform-endpoint", "https://example.invalid",
-                "--client-id", "x",
-                "--client-secret", "x",
-                "encrypt",
-                "--dpop=HS256",
-                "-k", "https://kas.example.invalid",
-                "-f", "/dev/null");
-
-        assertThat(code).isEqualTo(CommandLine.ExitCode.USAGE);
-        assertThat(err.toString()).contains("Unsupported DPoP algorithm").contains("HS256");
-    }
-
-    @Test
-    void encrypt_withMissingDpopKeyFile_failsWithUsage() {
-        StringWriter err = new StringWriter();
-        CommandLine cli = new CommandLine(new Command());
-        cli.setErr(new PrintWriter(err));
-
-        int code = cli.execute(
-                "--platform-endpoint", "https://example.invalid",
-                "--client-id", "x",
-                "--client-secret", "x",
-                "encrypt",
-                "--dpop-key", "/tmp/does-not-exist-dpop-key.pem",
-                "-k", "https://kas.example.invalid",
-                "-f", "/dev/null");
-
-        assertThat(code).isEqualTo(CommandLine.ExitCode.USAGE);
-        assertThat(err.toString()).contains("Cannot read DPoP key file")
-                .contains("/tmp/does-not-exist-dpop-key.pem");
-    }
 }
