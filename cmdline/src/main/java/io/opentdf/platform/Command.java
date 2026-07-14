@@ -95,7 +95,9 @@ class Command {
             Optional<String> canonical = FEATURES.stream().filter(f -> f.equalsIgnoreCase(feature)).findFirst();
             if (json) {
                 Map<String, Boolean> result = new LinkedHashMap<>();
-                result.put(feature, canonical.isPresent());
+                // Emit the canonical feature name for recognized features so casing is stable
+                // for automation; echo the raw input only for unknown features.
+                result.put(canonical.orElse(feature), canonical.isPresent());
                 System.out.println(new Gson().toJson(result));
             }
             return canonical.isPresent() ? 0 : 1;
@@ -286,7 +288,7 @@ class Command {
             } catch (JsonSyntaxException e) {
                 // try it as a file path
                 try {
-                    String fileJson = new String(Files.readAllBytes(Paths.get(assertionConfig)));
+                    String fileJson = Files.readString(Paths.get(assertionConfig));
                     assertionConfigs = gson.fromJson(fileJson, AssertionConfig[].class);
                 } catch (JsonSyntaxException e2) {
                     throw new RuntimeException("Failed to parse assertion from file, expects an list of assertions",
@@ -378,7 +380,7 @@ class Command {
                         } catch (JsonSyntaxException e) {
                             // try it as a file path
                             try {
-                                String fileJson = new String(Files.readAllBytes(Paths.get(assertionVerificationInput)));
+                                String fileJson = Files.readString(Paths.get(assertionVerificationInput));
                                 assertionVerificationKeys = gson.fromJson(fileJson,
                                         Config.AssertionVerificationKeys.class);
                             } catch (JsonSyntaxException e2) {

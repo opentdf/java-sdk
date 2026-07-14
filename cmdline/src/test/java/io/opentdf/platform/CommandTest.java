@@ -117,6 +117,17 @@ class CommandTest {
     }
 
     @Test
+    void supports_feature_json_emitsCanonicalName() {
+        // A recognized feature given with non-canonical casing must serialize under the
+        // canonical key so JSON output is stable for automation.
+        int[] code = new int[1];
+        String out = captureStdout(() -> code[0] = new CommandLine(new Command()).execute("supports", "DPoP", "--json"));
+
+        assertThat(code[0]).isEqualTo(0);
+        assertThat(out.trim()).isEqualTo("{\"dpop\":true}");
+    }
+
+    @Test
     void supports_unknownFeature_json_false() {
         int[] code = new int[1];
         String out = captureStdout(

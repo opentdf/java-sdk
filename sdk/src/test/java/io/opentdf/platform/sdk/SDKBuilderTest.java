@@ -250,12 +250,13 @@ public class SDKBuilderTest {
                         .keyID(java.util.UUID.randomUUID().toString())
                         .generate();
 
+                // Exercise the two-arg dpopKey(key, alg) overload (explicit algorithm).
                 var sdk = SDKBuilder.newBuilder()
                         .clientSecret("user", "password")
                         .platformEndpoint("http://localhost:" + platformServices.getPort())
                         .useInsecurePlaintextConnection(true)
                         .protocol(ProtocolType.GRPC)
-                        .dpopKey(rsaDpopKey)
+                        .dpopKey(rsaDpopKey, com.nimbusds.jose.JWSAlgorithm.RS256)
                         .build();
 
                 assertThat(sdk.getSrtSigner()).isPresent();

@@ -11,14 +11,15 @@ import java.net.URL
 
 internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
     private val logger = LoggerFactory.getLogger(AuthInterceptor::class.java)
-    // The connect-kotlin Interceptor API exposes no per-call context to thread the
-    // request URL into responseFunction. ThreadLocal is the workaround, relying on
-    // connect-kotlin's contract that requestFunction and responseFunction for a single
-    // unary call run synchronously on the same thread. If that assumption ever breaks,
-    // nonces could be cached against the wrong origin. The okhttp-level
-    // dpopRetryInterceptor below avoids the issue by reading the URL straight from
-    // chain.request().
-    private val requestUrl = ThreadLocal<URL>()
+
+    /**
+     * connect-kotlin builds a fresh interceptor chain per call (ProtocolClient.unary/stream call
+     * config.createInterceptorChain()), and its Interceptor is documented as "instantiated once
+     * per request/stream." The SDK honors that by handing out a new AuthInterceptor per call via
+     * this factory, and unaryFunction() threads the request URL into responseFunction through a
+     * closure-local variable — no ThreadLocal or cross-call shared mutable state.
+     */
+    fun forNewCall(): AuthInterceptor = AuthInterceptor(ts)
 
     override fun streamFunction(): StreamFunction {
         return StreamFunction(
@@ -28,8 +29,10 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
                 requestHeaders["Authorization"] = listOf(authHeaders.authHeader)
                 authHeaders.dpopHeader?.let { requestHeaders["DPoP"] = listOf(it) }
 
-                logger.debug("DPoP path=stream url={} method=POST authScheme={} {}",
-                        request.url, authScheme(authHeaders.authHeader), dpopSummary(authHeaders.dpopHeader))
+                if (logger.isDebugEnabled) {
+                    logger.debug("DPoP path=stream url={} method=POST authScheme={} {}",
+                            request.url, authScheme(authHeaders.authHeader), dpopSummary(authHeaders.dpopHeader))
+                }
 
                 return@StreamFunction request.clone(
                     url = request.url,
@@ -45,41 +48,36 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
     }
 
     override fun unaryFunction(): UnaryFunction {
+        // connect-kotlin invokes unaryFunction() once per call, so this local is scoped to a single
+        // request/response pair: requestFunction stashes the URL here for responseFunction to cache
+        // any server-issued nonce against, with no shared mutable state across calls.
+        var requestUrl: URL? = null
         return UnaryFunction(
             requestFunction = { request ->
-                // Clear any value left behind by an earlier requestFunction that
-                // threw before its paired responseFunction could run.
-                requestUrl.remove()
-                requestUrl.set(request.url)
-                try {
-                    val requestHeaders = mutableMapOf<String, List<String>>()
-                    val authHeaders = ts.getAuthHeaders(request.url, request.httpMethod.name)
-                    requestHeaders["Authorization"] = listOf(authHeaders.authHeader)
-                    authHeaders.dpopHeader?.let { requestHeaders["DPoP"] = listOf(it) }
+                requestUrl = request.url
+                val requestHeaders = mutableMapOf<String, List<String>>()
+                val authHeaders = ts.getAuthHeaders(request.url, request.httpMethod.name)
+                requestHeaders["Authorization"] = listOf(authHeaders.authHeader)
+                authHeaders.dpopHeader?.let { requestHeaders["DPoP"] = listOf(it) }
 
+                if (logger.isDebugEnabled) {
                     logger.debug("DPoP path=unary url={} method={} authScheme={} {}",
                             request.url, request.httpMethod.name,
                             authScheme(authHeaders.authHeader), dpopSummary(authHeaders.dpopHeader))
-
-                    UnaryHTTPRequest(
-                        url = request.url,
-                        contentType = request.contentType,
-                        headers = requestHeaders,
-                        message = request.message,
-                        timeout = request.timeout,
-                        methodSpec = request.methodSpec,
-                        httpMethod = request.httpMethod
-                    )
-                } catch (t: Throwable) {
-                    // responseFunction won't run, so clear the slot ourselves to
-                    // avoid stale state leaking to the next call on this thread.
-                    requestUrl.remove()
-                    throw t
                 }
+
+                UnaryHTTPRequest(
+                    url = request.url,
+                    contentType = request.contentType,
+                    headers = requestHeaders,
+                    message = request.message,
+                    timeout = request.timeout,
+                    methodSpec = request.methodSpec,
+                    httpMethod = request.httpMethod
+                )
             },
             responseFunction = { resp ->
-                val url = requestUrl.get()
-                requestUrl.remove()
+                val url = requestUrl
 
                 // Cache any server-issued DPoP nonce for future requests to the same origin
                 val dpopNonce = resp.headers["dpop-nonce"]?.firstOrNull()
@@ -87,8 +85,10 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
                 if (dpopNonce != null && url != null) {
                     ts.cacheNonce(url, dpopNonce)
                 }
-                logger.debug("DPoP path=unary-response url={} nonceCached={} status={}",
-                        url, dpopNonce != null && url != null, resp.status)
+                if (logger.isDebugEnabled) {
+                    logger.debug("DPoP path=unary-response url={} nonceCached={} status={}",
+                            url, dpopNonce != null && url != null, resp.status)
+                }
                 resp
             },
         )
@@ -111,10 +111,12 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
         // RFC 9449 §9: cache any rotated nonce from the response, regardless of status.
         cacheNonceIfPresent(url, response)
 
-        logger.debug("DPoP path=okhttp url={} method={} status={} authScheme={} {}",
-                url, outgoingMethod, response.code,
-                authScheme(chain.request().header("Authorization")),
-                dpopSummary(chain.request().header("DPoP")))
+        if (logger.isDebugEnabled) {
+            logger.debug("DPoP path=okhttp url={} method={} status={} authScheme={} {}",
+                    url, outgoingMethod, response.code,
+                    authScheme(chain.request().header("Authorization")),
+                    dpopSummary(chain.request().header("DPoP")))
+        }
 
         if (response.code == 401 && isDpopNonceChallenge(response)) {
             val dpopNonce = response.header("dpop-nonce") ?: response.header("DPoP-Nonce")
@@ -130,9 +132,11 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
                 // stale DPoP proof paired with a Bearer Authorization header.
                 authHeaders.dpopHeader?.let { newRequestBuilder.header("DPoP", it) }
                 val newRequest = newRequestBuilder.build()
-                logger.debug("DPoP path=okhttp-retry url={} method={} nonce={} authScheme={} {}",
-                        url, chain.request().method, dpopNonce,
-                        authScheme(authHeaders.authHeader), dpopSummary(authHeaders.dpopHeader))
+                if (logger.isDebugEnabled) {
+                    logger.debug("DPoP path=okhttp-retry url={} method={} nonce={} authScheme={} {}",
+                            url, chain.request().method, dpopNonce,
+                            authScheme(authHeaders.authHeader), dpopSummary(authHeaders.dpopHeader))
+                }
                 response = try {
                     chain.proceed(newRequest)
                 } catch (e: Exception) {

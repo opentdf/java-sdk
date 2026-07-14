@@ -211,101 +211,44 @@ class TokenSource {
      * @return A snapshot of the access token and its assigned auth scheme.
      */
     private synchronized TokenSnapshot getToken() {
+        // If the token is still valid, return the cached snapshot.
+        if (token != null && !isTokenExpired()) {
+            return new TokenSnapshot(this.token, this.tokenScheme);
+        }
+
+        logger.trace("The current access token is expired or empty, getting a new one");
         try {
-            // If the token is expired or initially null, get a new token
-            if (token == null || isTokenExpired()) {
+            DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(dpopJwk, dpopAlg);
+            URL tokenEndpointUrl = tokenEndpointURI.toURL();
 
-                logger.trace("The current access token is expired or empty, getting a new one");
+            // Proactively use any cached nonce for the token endpoint origin (RFC 9449 §8.2)
+            String cachedNonce = nonceCache.get(getOrigin(tokenEndpointUrl));
+            HTTPResponse httpResponse = sendTokenRequest(dpopFactory, cachedNonce);
+            TokenResponse tokenResponse = TokenResponse.parse(httpResponse);
 
-                DPoPProofFactory dpopFactory = new DefaultDPoPProofFactory(dpopJwk, dpopAlg);
-
-                // Proactively use any cached nonce for the token endpoint origin (RFC 9449 §8.2)
-                URL tokenEndpointUrl = tokenEndpointURI.toURL();
-                String cachedNonce = nonceCache.get(getOrigin(tokenEndpointUrl));
-
-                TokenRequest tokenRequest = new TokenRequest(this.tokenEndpointURI, clientAuth, authzGrant, null);
-                HTTPRequest httpRequest = tokenRequest.toHTTPRequest();
-                if (sslSocketFactory != null) {
-                    httpRequest.setSSLSocketFactory(sslSocketFactory);
+            // RFC 9449 §8.2: if the AS requires a nonce, cache it and retry once.
+            if (!tokenResponse.indicatesSuccess()) {
+                String dpopNonce = nonceForRetry(tokenResponse, httpResponse);
+                if (dpopNonce != null) {
+                    cacheNonce(tokenEndpointUrl, dpopNonce);
+                    httpResponse = retryWithNonce(dpopFactory, dpopNonce, tokenEndpointUrl);
+                    tokenResponse = TokenResponse.parse(httpResponse);
                 }
-                URI tokenHtu = htuOf(httpRequest.getURI());
-                SignedJWT proof = (cachedNonce != null)
-                        ? dpopFactory.createDPoPJWT(httpRequest.getMethod().name(), tokenHtu, new Nonce(cachedNonce))
-                        : dpopFactory.createDPoPJWT(httpRequest.getMethod().name(), tokenHtu);
-                httpRequest.setDPoP(proof);
-
-                HTTPResponse httpResponse = httpRequest.send();
-
-                TokenResponse tokenResponse = TokenResponse.parse(httpResponse);
-
-                // RFC 9449 §8.2: if AS requires a nonce, cache it and retry once
                 if (!tokenResponse.indicatesSuccess()) {
-                    ErrorObject error = tokenResponse.toErrorResponse().getErrorObject();
-                    if ("use_dpop_nonce".equals(error.getCode())) {
-                        String dpopNonce = httpResponse.getHeaderValue("DPoP-Nonce");
-                        if (dpopNonce != null) {
-                            cacheNonce(tokenEndpointUrl, dpopNonce);
-                            TokenRequest retryRequest = new TokenRequest(tokenEndpointURI, clientAuth, authzGrant, null);
-                            HTTPRequest retryHttpRequest = retryRequest.toHTTPRequest();
-                            if (sslSocketFactory != null) {
-                                retryHttpRequest.setSSLSocketFactory(sslSocketFactory);
-                            }
-                            SignedJWT retryProof = dpopFactory.createDPoPJWT(
-                                    retryHttpRequest.getMethod().name(),
-                                    htuOf(retryHttpRequest.getURI()),
-                                    new Nonce(dpopNonce));
-                            retryHttpRequest.setDPoP(retryProof);
-                            httpResponse = retryHttpRequest.send();
-                            tokenResponse = TokenResponse.parse(httpResponse);
-                            // Cache any nonce rotation from the AS (RFC 9449 §8.2)
-                            String rotatedNonce = httpResponse.getHeaderValue("DPoP-Nonce");
-                            if (rotatedNonce != null) {
-                                cacheNonce(tokenEndpointUrl, rotatedNonce);
-                            }
-                        } else {
-                            logger.warn("token endpoint {} returned use_dpop_nonce but did not supply a DPoP-Nonce response header",
-                                    tokenEndpointURI);
-                        }
-                    }
-                    if (!tokenResponse.indicatesSuccess()) {
-                        ErrorObject finalError = tokenResponse.toErrorResponse().getErrorObject();
-                        throw new SDKException("failure to get token. description = [" + finalError.getDescription()
-                                + "] error code = [" + finalError.getCode()
-                                + "] error uri = [" + finalError.getURI() + "]");
-                    }
+                    ErrorObject finalError = tokenResponse.toErrorResponse().getErrorObject();
+                    throw new SDKException("failure to get token. description = [" + finalError.getDescription()
+                            + "] error code = [" + finalError.getCode()
+                            + "] error uri = [" + finalError.getURI() + "]");
                 }
-
-                var tokens = tokenResponse.toSuccessResponse().getTokens();
-                boolean asAssertsDpop = tokens.getDPoPAccessToken() != null;
-                if (asAssertsDpop) {
-                    logger.trace("retrieved a new DPoP access token");
-                } else if (tokens.getAccessToken() != null) {
-                    logger.trace("retrieved a new access token");
-                } else {
-                    logger.warn("token endpoint {} returned a success response with an unknown access token type",
-                            tokenEndpointURI);
-                }
-
-                this.token = tokens.getAccessToken();
-                if (this.token == null) {
-                    throw new SDKException("token endpoint " + tokenEndpointURI
-                            + " returned a success response with no access token");
-                }
-                this.tokenScheme = asAssertsDpop ? TokenScheme.DPOP : TokenScheme.BEARER;
-                if (!asAssertsDpop) {
-                    logger.warn("token endpoint {} returned a non-DPoP-bound access token (token_type=Bearer) despite"
-                            + " DPoP proof — falling back to Bearer scheme. Check the IdP DPoP configuration.",
-                            tokenEndpointURI);
-                }
-
-                if (token.getLifetime() != 0) {
-                    this.tokenExpiryTime = Instant.now().plusSeconds(token.getLifetime() / 3);
-                }
-
-            } else {
-                // If the token is still valid or not initially null, return the cached token
-                return new TokenSnapshot(this.token, this.tokenScheme);
             }
+
+            // RFC 9449 §8.2: the AS may supply/rotate a DPoP-Nonce on any response, including a
+            // successful one. Cache the nonce from the final settled response so the next request
+            // uses the freshest value (cacheNonce ignores null/empty).
+            cacheNonce(tokenEndpointUrl, httpResponse.getHeaderValue("DPoP-Nonce"));
+
+            applyTokenResponse(tokenResponse);
+            return new TokenSnapshot(this.token, this.tokenScheme);
 
         } catch (SDKException e) {
             // Already shaped for the caller — don't double-wrap.
@@ -321,7 +264,92 @@ class TokenSource {
         } catch (RuntimeException e) {
             throw new SDKException("unexpected error fetching token from " + tokenEndpointURI, e);
         }
-        return new TokenSnapshot(this.token, this.tokenScheme);
+    }
+
+    /**
+     * If the error response is an RFC 9449 §8.2 {@code use_dpop_nonce} challenge, return the
+     * server-supplied nonce to retry with. Returns null when it is a different error, or when the
+     * challenge is missing its {@code DPoP-Nonce} header (logged as a server protocol violation).
+     */
+    @Nullable
+    private String nonceForRetry(TokenResponse tokenResponse, HTTPResponse httpResponse) {
+        ErrorObject error = tokenResponse.toErrorResponse().getErrorObject();
+        if (!"use_dpop_nonce".equals(error.getCode())) {
+            return null;
+        }
+        String dpopNonce = httpResponse.getHeaderValue("DPoP-Nonce");
+        if (dpopNonce == null) {
+            logger.warn("token endpoint {} returned use_dpop_nonce but did not supply a DPoP-Nonce response header",
+                    tokenEndpointURI);
+        }
+        return dpopNonce;
+    }
+
+    /** Build and send the initial token request, stamping a DPoP proof (with the cached nonce if any). */
+    private HTTPResponse sendTokenRequest(DPoPProofFactory dpopFactory, @Nullable String cachedNonce)
+            throws JOSEException, IOException {
+        TokenRequest tokenRequest = new TokenRequest(this.tokenEndpointURI, clientAuth, authzGrant, null);
+        HTTPRequest httpRequest = tokenRequest.toHTTPRequest();
+        if (sslSocketFactory != null) {
+            httpRequest.setSSLSocketFactory(sslSocketFactory);
+        }
+        URI tokenHtu = htuOf(httpRequest.getURI());
+        SignedJWT proof = (cachedNonce != null)
+                ? dpopFactory.createDPoPJWT(httpRequest.getMethod().name(), tokenHtu, new Nonce(cachedNonce))
+                : dpopFactory.createDPoPJWT(httpRequest.getMethod().name(), tokenHtu);
+        httpRequest.setDPoP(proof);
+        return httpRequest.send();
+    }
+
+    /** Retry the token request once with the AS-provided nonce (RFC 9449 §8.2). */
+    private HTTPResponse retryWithNonce(DPoPProofFactory dpopFactory, String dpopNonce, URL tokenEndpointUrl)
+            throws JOSEException, IOException {
+        TokenRequest retryRequest = new TokenRequest(tokenEndpointURI, clientAuth, authzGrant, null);
+        HTTPRequest retryHttpRequest = retryRequest.toHTTPRequest();
+        if (sslSocketFactory != null) {
+            retryHttpRequest.setSSLSocketFactory(sslSocketFactory);
+        }
+        SignedJWT retryProof = dpopFactory.createDPoPJWT(
+                retryHttpRequest.getMethod().name(),
+                htuOf(retryHttpRequest.getURI()),
+                new Nonce(dpopNonce));
+        retryHttpRequest.setDPoP(retryProof);
+        HTTPResponse retryResponse = retryHttpRequest.send();
+        // Cache a nonce the AS rotates on the retry response too, even if the retry also failed,
+        // so a double-rotation self-heals on the next getToken() call rather than reusing the
+        // stale, already-rejected nonce (RFC 9449 §8.2).
+        cacheNonce(tokenEndpointUrl, retryResponse.getHeaderValue("DPoP-Nonce"));
+        return retryResponse;
+    }
+
+    /** Assign token, scheme, and expiry from a settled successful token response. */
+    private void applyTokenResponse(TokenResponse tokenResponse) {
+        var tokens = tokenResponse.toSuccessResponse().getTokens();
+        boolean asAssertsDpop = tokens.getDPoPAccessToken() != null;
+        if (asAssertsDpop) {
+            logger.trace("retrieved a new DPoP access token");
+        } else if (tokens.getAccessToken() != null) {
+            logger.trace("retrieved a new access token");
+        } else {
+            logger.warn("token endpoint {} returned a success response with an unknown access token type",
+                    tokenEndpointURI);
+        }
+
+        this.token = tokens.getAccessToken();
+        if (this.token == null) {
+            throw new SDKException("token endpoint " + tokenEndpointURI
+                    + " returned a success response with no access token");
+        }
+        this.tokenScheme = asAssertsDpop ? TokenScheme.DPOP : TokenScheme.BEARER;
+        if (!asAssertsDpop) {
+            logger.warn("token endpoint {} returned a non-DPoP-bound access token (token_type=Bearer) despite"
+                    + " DPoP proof — falling back to Bearer scheme. Check the IdP DPoP configuration.",
+                    tokenEndpointURI);
+        }
+
+        if (token.getLifetime() != 0) {
+            this.tokenExpiryTime = Instant.now().plusSeconds(token.getLifetime() / 3);
+        }
     }
 
     /**

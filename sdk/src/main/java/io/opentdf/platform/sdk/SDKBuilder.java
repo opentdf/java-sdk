@@ -218,7 +218,8 @@ public class SDKBuilder {
     }
 
     /**
-     * Configure a custom JWK (RSA or EC) for DPoP (RFC 9449) proof generation.
+     * Configure a custom JWK (RSA or EC) for DPoP (RFC 9449) proof generation, letting the SDK
+     * infer the JWS algorithm from the key (RS256 for RSA, the curve-appropriate ES* for EC).
      * If not provided, the SDK will auto-generate an ephemeral RSA-2048 key.
      * RSA keys also serve as the SRT signing key; EC keys use a separate auto-generated RSA key for SRT.
      *
@@ -227,17 +228,21 @@ public class SDKBuilder {
      */
     public SDKBuilder dpopKey(JWK dpopKey) {
         this.dpopKey = dpopKey;
+        this.dpopAlg = null;
         return this;
     }
 
     /**
-     * Set the JWS algorithm to use for DPoP proofs. If omitted, defaults to RS256 for RSA keys
-     * or the curve-appropriate algorithm for EC keys.
+     * Configure a custom JWK (RSA or EC) for DPoP (RFC 9449) proof generation together with the
+     * JWS algorithm to sign the proofs with. The key and algorithm are set as a pair — the SDK
+     * needs both, so there is no separate algorithm setter.
      *
-     * @param dpopAlg JWS algorithm (e.g. RS256, ES256)
+     * @param dpopKey JWK (RSA or EC) to use for DPoP proofs
+     * @param dpopAlg JWS algorithm matching the key type (e.g. RS256, ES256)
      * @return this builder instance for method chaining
      */
-    public SDKBuilder dpopAlgorithm(JWSAlgorithm dpopAlg) {
+    public SDKBuilder dpopKey(JWK dpopKey, JWSAlgorithm dpopAlg) {
+        this.dpopKey = dpopKey;
         this.dpopAlg = dpopAlg;
         return this;
     }
@@ -272,7 +277,7 @@ public class SDKBuilder {
                     .getFieldsOrThrow(PLATFORM_ISSUER)
                     .getStringValue();
         } catch (IllegalArgumentException e) {
-            if (this.dpopKey != null || this.dpopAlg != null) {
+            if (this.dpopKey != null) {
                 throw new SDKException(
                         "DPoP was requested but the platform_issuer is missing from the well-known "
                                 + "configuration at " + platformEndpoint
@@ -352,8 +357,7 @@ public class SDKBuilder {
         if (this.dpopKey == null) {
             // Auto-generate a single RSA-2048 key used for both DPoP and SRT.
             RSAKey generated = generateSrtRsaKey("Error generating DPoP key");
-            JWSAlgorithm alg = this.dpopAlg != null ? this.dpopAlg : JWSAlgorithm.RS256;
-            return new DpopMaterial(generated, alg, generated);
+            return new DpopMaterial(generated, resolveDpopAlgorithm(generated), generated);
         }
 
         RSAKey srtKey = (this.dpopKey instanceof RSAKey)
@@ -499,7 +503,11 @@ public class SDKBuilder {
                 protocolType.getNetworkProtocol(),
                 null,
                 getConfig,
-                authInterceptor == null ? Collections.emptyList() : List.of(ignoredConfig -> authInterceptor)
+                // connect-kotlin builds the interceptor chain fresh per call, so hand out a new
+                // AuthInterceptor per invocation (it is documented as "instantiated once per
+                // request/stream"); the shared instance is retained only for GET gating above and
+                // the okhttp dpopRetryInterceptor().
+                authInterceptor == null ? Collections.emptyList() : List.of(ignoredConfig -> authInterceptor.forNewCall())
         );
 
         return new ProtocolClient(new ConnectOkHttpClient(httpClient), protocolClientConfig);

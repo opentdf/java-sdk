@@ -18,6 +18,7 @@ import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
 import org.junit.jupiter.api.Test;
 
+import java.net.URI;
 import java.net.URL;
 import java.util.UUID;
 
@@ -32,7 +33,7 @@ class TokenSourceTest {
     private static final String BEARER_TOKEN_RESPONSE =
             "{\"access_token\":\"plain-bearer-token\",\"token_type\":\"Bearer\",\"expires_in\":3600}";
 
-    private TokenSource buildTokenSource(MockWebServer tokenServer, RSAKey rsaKey) throws Exception {
+    private TokenSource buildTokenSource(MockWebServer tokenServer, RSAKey rsaKey) {
         return new TokenSource(
                 new ClientSecretBasic(new ClientID("test-client"), new Secret("test-secret")),
                 rsaKey,
@@ -399,6 +400,88 @@ class TokenSourceTest {
     }
 
     @Test
+    void getToken_cachesNonceFromSuccessfulResponse() throws Exception {
+        // RFC 9449 §8.2: the AS may supply/rotate a DPoP-Nonce on any response, including a
+        // successful 200 with no prior use_dpop_nonce challenge. That nonce must be cached so the
+        // next proof for the same origin carries it. The resource URL shares the token endpoint's
+        // origin, so the cached nonce surfaces in the very next proof built for it.
+        RSAKey rsaKey = new RSAKeyGenerator(2048)
+                .keyUse(KeyUse.SIGNATURE)
+                .keyID(UUID.randomUUID().toString())
+                .generate();
+        try (MockWebServer tokenServer = new MockWebServer()) {
+            tokenServer.enqueue(new MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .addHeader("DPoP-Nonce", "rotated-nonce-xyz")
+                    .setBody(FAKE_TOKEN_RESPONSE));
+            tokenServer.start();
+
+            TokenSource ts = buildTokenSource(tokenServer, rsaKey);
+            // Same origin (scheme://host:port) as the token endpoint, so it reads the cached nonce.
+            URL sameOriginResource = tokenServer.url("/kas").url();
+
+            TokenSource.AuthHeaders headers = ts.getAuthHeaders(sameOriginResource, "POST");
+
+            String nonceClaim = SignedJWT.parse(headers.getDpopHeader())
+                    .getJWTClaimsSet().getStringClaim("nonce");
+            assertThat(nonceClaim).isEqualTo("rotated-nonce-xyz");
+        }
+    }
+
+    @Test
+    void getToken_cachesRotatedNonceFromFailedRetryResponse() throws Exception {
+        // RFC 9449 §8.2: if the AS rotates the nonce again on the *retried* response (a second
+        // use_dpop_nonce), that fresh nonce must still be cached so the next getToken() call retries
+        // with it rather than reusing the first, already-rejected nonce. The first call throws (the
+        // handshake failed twice), but the second call — issued with the rotated nonce cached from
+        // the failed retry — succeeds against a token endpoint that now accepts it.
+        RSAKey rsaKey = new RSAKeyGenerator(2048)
+                .keyUse(KeyUse.SIGNATURE)
+                .keyID(UUID.randomUUID().toString())
+                .generate();
+        try (MockWebServer tokenServer = new MockWebServer()) {
+            // Call #1, request #1: 401 use_dpop_nonce with nonce-A.
+            tokenServer.enqueue(new MockResponse()
+                    .setResponseCode(401)
+                    .setHeader("Content-Type", "application/json")
+                    .addHeader("DPoP-Nonce", "nonce-A")
+                    .setBody("{\"error\":\"use_dpop_nonce\",\"error_description\":\"nonce required\"}"));
+            // Call #1, request #2 (retry with nonce-A): 401 use_dpop_nonce rotating to nonce-B.
+            tokenServer.enqueue(new MockResponse()
+                    .setResponseCode(401)
+                    .setHeader("Content-Type", "application/json")
+                    .addHeader("DPoP-Nonce", "nonce-B")
+                    .setBody("{\"error\":\"use_dpop_nonce\",\"error_description\":\"nonce rotated\"}"));
+            // Call #2, request #3 (initial request now carries the cached nonce-B): success.
+            tokenServer.enqueue(new MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody(FAKE_TOKEN_RESPONSE));
+            tokenServer.start();
+
+            TokenSource ts = buildTokenSource(tokenServer, rsaKey);
+            URL resourceUrl = new URL("https://kas.example.com/kas");
+
+            // First call fails after the double challenge, but caches nonce-B from the failed retry.
+            assertThatThrownBy(() -> ts.getAuthHeaders(resourceUrl, "POST"))
+                    .isInstanceOf(SDKException.class);
+            assertThat(tokenServer.getRequestCount()).isEqualTo(2);
+
+            // Second call succeeds; its initial request must carry the rotated nonce-B.
+            TokenSource.AuthHeaders headers = ts.getAuthHeaders(resourceUrl, "POST");
+            assertThat(tokenServer.getRequestCount()).isEqualTo(3);
+
+            tokenServer.takeRequest(); // request #1
+            tokenServer.takeRequest(); // request #2
+            RecordedRequest third = tokenServer.takeRequest();
+            String thirdNonce = SignedJWT.parse(third.getHeader("DPoP"))
+                    .getJWTClaimsSet().getStringClaim("nonce");
+            assertThat(thirdNonce).isEqualTo("nonce-B");
+        }
+    }
+
+    @Test
     void getToken_throwsDescriptiveErrorWhenUseDpopNonceLacksHeader() throws Exception {
         RSAKey rsaKey = new RSAKeyGenerator(2048)
                 .keyUse(KeyUse.SIGNATURE)
@@ -413,8 +496,9 @@ class TokenSourceTest {
             tokenServer.start();
 
             TokenSource ts = buildTokenSource(tokenServer, rsaKey);
+            URL kasUrl = new URL("https://kas.example.com/kas");
 
-            assertThatThrownBy(() -> ts.getAuthHeaders(new URL("https://kas.example.com/kas"), "POST"))
+            assertThatThrownBy(() -> ts.getAuthHeaders(kasUrl, "POST"))
                     .isInstanceOf(SDKException.class)
                     .satisfies(e -> assertThat(e.getMessage() + (e.getCause() != null ? e.getCause().getMessage() : ""))
                             .contains("use_dpop_nonce"));
@@ -438,8 +522,9 @@ class TokenSourceTest {
             tokenServer.start();
 
             TokenSource ts = buildTokenSource(tokenServer, rsaKey);
+            URL kasUrl = new URL("https://kas.example.com/kas");
 
-            assertThatThrownBy(() -> ts.getAuthHeaders(new URL("https://kas.example.com/kas"), "POST"))
+            assertThatThrownBy(() -> ts.getAuthHeaders(kasUrl, "POST"))
                     .isInstanceOf(SDKException.class)
                     .hasMessageContaining("malformed token response")
                     .hasMessageContaining(tokenServer.url("/token").toString());
@@ -450,10 +535,11 @@ class TokenSourceTest {
     void constructor_rejectsRsaKeyWithEcAlgorithm() throws Exception {
         RSAKey rsaKey = new RSAKeyGenerator(2048).keyUse(KeyUse.SIGNATURE)
                 .keyID(UUID.randomUUID().toString()).generate();
+        URI tokenUri = new URL("https://idp.example.com/token").toURI();
         assertThatThrownBy(() -> new TokenSource(
                 new ClientSecretBasic(new ClientID("c"), new Secret("s")),
                 rsaKey, JWSAlgorithm.ES256,
-                new URL("https://idp.example.com/token").toURI(),
+                tokenUri,
                 new ClientCredentialsGrant(), null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("RSA")
@@ -464,10 +550,11 @@ class TokenSourceTest {
     void constructor_rejectsEcKeyWithMismatchedCurveAlgorithm() throws Exception {
         ECKey ecKey = new ECKeyGenerator(Curve.P_256).keyUse(KeyUse.SIGNATURE)
                 .keyID(UUID.randomUUID().toString()).generate();
+        URI tokenUri = new URL("https://idp.example.com/token").toURI();
         assertThatThrownBy(() -> new TokenSource(
                 new ClientSecretBasic(new ClientID("c"), new Secret("s")),
                 ecKey, JWSAlgorithm.ES384,
-                new URL("https://idp.example.com/token").toURI(),
+                tokenUri,
                 new ClientCredentialsGrant(), null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("P-256")
@@ -481,10 +568,11 @@ class TokenSourceTest {
         JWK okp = JWK.parse("{\"kty\":\"OKP\",\"crv\":\"Ed25519\","
                 + "\"x\":\"11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo\","
                 + "\"d\":\"nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A\"}");
+        URI tokenUri = new URL("https://idp.example.com/token").toURI();
         assertThatThrownBy(() -> new TokenSource(
                 new ClientSecretBasic(new ClientID("c"), new Secret("s")),
                 okp, JWSAlgorithm.EdDSA,
-                new URL("https://idp.example.com/token").toURI(),
+                tokenUri,
                 new ClientCredentialsGrant(), null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unsupported JWK type");

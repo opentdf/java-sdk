@@ -19,16 +19,16 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okio.Buffer
 import org.assertj.core.api.Assertions.assertThat
-import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import java.net.URL
 import java.util.UUID
 
 /**
- * Covers the connect-kotlin request/response path of [AuthInterceptor] — the one that
- * threads the request URL through a ThreadLocal so responseFunction can cache nonces
- * against the correct origin. The okhttp-level retry interceptor is covered separately
- * in DPoPRetryInterceptorTest; this exercises the fragile ThreadLocal handoff directly.
+ * Covers the connect-kotlin request/response path of [AuthInterceptor] — the one that threads the
+ * request URL from requestFunction to responseFunction (via a per-call closure-local) so nonces are
+ * cached against the correct origin. connect-kotlin builds a fresh interceptor + function pair per
+ * call, so each pair's URL is isolated. The okhttp-level retry interceptor is covered separately in
+ * DPoPRetryInterceptorTest.
  */
 class AuthInterceptorConnectPathTest {
 
@@ -86,8 +86,8 @@ class AuthInterceptorConnectPathTest {
             assertThat(outgoing.headers["Authorization"]!!.first()).startsWith("DPoP ")
             assertThat(outgoing.headers["DPoP"]!!.first()).isNotEmpty()
 
-            // responseFunction reads the ThreadLocal set by requestFunction and caches
-            // the server nonce against the request origin.
+            // responseFunction reads the URL stashed by requestFunction and caches the server
+            // nonce against the request origin.
             unary.responseFunction.invoke(httpResponse(mapOf("DPoP-Nonce" to listOf("conn-nonce"))))
 
             val nonce = SignedJWT.parse(ts.getAuthHeaders(kasUrl, "POST").dpopHeader)
@@ -97,32 +97,41 @@ class AuthInterceptorConnectPathTest {
     }
 
     @Test
-    fun requestFunctionThrowClearsThreadLocalSoNoStaleNonceIsCached() {
+    fun eachUnaryFunctionPairIsolatesItsUrlSoNoncesCacheAgainstTheirOwnOrigin() {
+        // connect-kotlin builds a fresh interceptor + function pair per call. Each unaryFunction()
+        // invocation therefore holds its own request URL in a closure-local, so interleaved calls
+        // to two different origins never cross-contaminate their cached nonces (the failure mode the
+        // previous ThreadLocal handoff had to guard against by hand).
         val rsaKey = rsaKey()
         MockWebServer().use { tokenServer ->
-            // First token fetch fails (so requestFunction throws mid-flight, after it has
-            // already stashed the URL in the ThreadLocal); the second succeeds.
-            tokenServer.enqueue(MockResponse().setResponseCode(500).setBody("boom"))
-            tokenServer.enqueue(
-                MockResponse().setBody(fakeTokenResponse).setHeader("Content-Type", "application/json"),
-            )
+            repeat(2) {
+                tokenServer.enqueue(
+                    MockResponse().setBody(fakeTokenResponse).setHeader("Content-Type", "application/json"),
+                )
+            }
             tokenServer.start()
 
             val ts = buildTokenSource(tokenServer, rsaKey)
-            val unary = AuthInterceptor(ts).unaryFunction()
-            val kasUrl = URL("https://kas.example.com/kas")
+            val interceptor = AuthInterceptor(ts)
+            val urlA = URL("https://kas-a.example.com/kas")
+            val urlB = URL("https://kas-b.example.com/kas")
 
-            assertThatThrownBy { unary.requestFunction.invoke(unaryRequest(kasUrl)) }
-                .isInstanceOf(SDKException::class.java)
+            // Two independent call pairs, requests issued before either response settles.
+            val pairA = interceptor.unaryFunction()
+            val pairB = interceptor.unaryFunction()
+            pairA.requestFunction.invoke(unaryRequest(urlA))
+            pairB.requestFunction.invoke(unaryRequest(urlB))
 
-            // A stray responseFunction with no paired successful requestFunction must not
-            // cache against the origin left behind by the throwing call — the catch block
-            // in requestFunction is responsible for clearing the ThreadLocal.
-            unary.responseFunction.invoke(httpResponse(mapOf("DPoP-Nonce" to listOf("leaked-nonce"))))
+            // Responses settle out of order; each must cache against its own pair's origin.
+            pairB.responseFunction.invoke(httpResponse(mapOf("DPoP-Nonce" to listOf("nonce-B"))))
+            pairA.responseFunction.invoke(httpResponse(mapOf("DPoP-Nonce" to listOf("nonce-A"))))
 
-            val nonce = SignedJWT.parse(ts.getAuthHeaders(kasUrl, "POST").dpopHeader)
+            val nonceA = SignedJWT.parse(ts.getAuthHeaders(urlA, "POST").dpopHeader)
                 .jwtClaimsSet.getStringClaim("nonce")
-            assertThat(nonce).isNull()
+            val nonceB = SignedJWT.parse(ts.getAuthHeaders(urlB, "POST").dpopHeader)
+                .jwtClaimsSet.getStringClaim("nonce")
+            assertThat(nonceA).isEqualTo("nonce-A")
+            assertThat(nonceB).isEqualTo("nonce-B")
         }
     }
 }
