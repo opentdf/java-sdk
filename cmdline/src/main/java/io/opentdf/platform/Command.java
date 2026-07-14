@@ -30,6 +30,7 @@ import java.security.spec.X509EncodedKeySpec;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -72,14 +73,42 @@ class Command {
     @CommandLine.Spec
     CommandLine.Model.CommandSpec spec;
 
-    @CommandLine.Command(name = "supports", description = "Check if a feature is supported")
+    @CommandLine.Command(name = "supports", description = "Check if a feature is supported, or list all supported features")
     static class Supports implements Callable<Integer> {
-        @CommandLine.Parameters(index = "0", description = "Feature to check (e.g., dpop)")
+        // Static, always-on capabilities of this build. There is no "known but
+        // unsupported" feature here: anything not in this list is simply unrecognized.
+        private static final List<String> FEATURES = List.of("dpop", "dpop_nonce_challenge");
+
+        @CommandLine.Parameters(index = "0", arity = "0..1", description = "Feature to check (e.g., dpop). Omit to list all supported features.")
         private String feature;
+
+        @Option(names = "--json", description = "Output as a JSON object mapping feature name to supported (boolean)")
+        private boolean json;
 
         @Override
         public Integer call() {
-            return ("dpop".equalsIgnoreCase(feature) || "dpop_nonce_challenge".equalsIgnoreCase(feature)) ? 0 : 1;
+            if (feature == null) {
+                printFeatures(FEATURES);
+                return 0;
+            }
+
+            Optional<String> canonical = FEATURES.stream().filter(f -> f.equalsIgnoreCase(feature)).findFirst();
+            if (json) {
+                Map<String, Boolean> result = new LinkedHashMap<>();
+                result.put(feature, canonical.isPresent());
+                System.out.println(new Gson().toJson(result));
+            }
+            return canonical.isPresent() ? 0 : 1;
+        }
+
+        private void printFeatures(List<String> features) {
+            if (json) {
+                Map<String, Boolean> result = new LinkedHashMap<>();
+                features.forEach(f -> result.put(f, true));
+                System.out.println(new Gson().toJson(result));
+            } else {
+                features.forEach(System.out::println);
+            }
         }
     }
 
