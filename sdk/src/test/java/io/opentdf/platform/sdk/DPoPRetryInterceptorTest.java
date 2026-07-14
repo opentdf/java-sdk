@@ -45,7 +45,7 @@ class DPoPRetryInterceptorTest {
     private static final String BEARER_TOKEN_RESPONSE =
             "{\"access_token\":\"test-token\",\"token_type\":\"Bearer\",\"expires_in\":3600}";
 
-    private AuthInterceptor buildAuthInterceptor(MockWebServer tokenServer, RSAKey rsaKey) throws Exception {
+    private AuthInterceptor buildAuthInterceptor(MockWebServer tokenServer, RSAKey rsaKey) {
         return new AuthInterceptor(buildTokenSource(tokenServer, rsaKey));
     }
 
@@ -283,7 +283,8 @@ class DPoPRetryInterceptorTest {
                         try {
                             hasNonce = SignedJWT.parse(dpop)
                                     .getJWTClaimsSet().getStringClaim("nonce") != null;
-                        } catch (Exception ignored) {
+                        } catch (Exception e) {
+                            // Malformed/unparseable proof simply counts as "no nonce present".
                         }
                     }
                     if (hasNonce) {

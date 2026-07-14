@@ -333,6 +333,54 @@ public class SDKBuilder {
         }
     }
 
+    // Bundles the resolved DPoP proof key/algorithm with the RSA key used for SRT
+    // signing. SRT signing always uses RSA, so an EC DPoP key requires a separate
+    // generated RSA key here.
+    private static final class DpopMaterial {
+        final JWK dpopJwk;
+        final JWSAlgorithm dpopAlg;
+        final RSAKey srtKey;
+
+        DpopMaterial(JWK dpopJwk, JWSAlgorithm dpopAlg, RSAKey srtKey) {
+            this.dpopJwk = dpopJwk;
+            this.dpopAlg = dpopAlg;
+            this.srtKey = srtKey;
+        }
+    }
+
+    private DpopMaterial resolveDpopMaterial() {
+        if (this.dpopKey == null) {
+            // Auto-generate a single RSA-2048 key used for both DPoP and SRT.
+            RSAKey generated = generateSrtRsaKey("Error generating DPoP key");
+            JWSAlgorithm alg = this.dpopAlg != null ? this.dpopAlg : JWSAlgorithm.RS256;
+            return new DpopMaterial(generated, alg, generated);
+        }
+
+        RSAKey srtKey = (this.dpopKey instanceof RSAKey)
+                ? (RSAKey) this.dpopKey
+                // EC DPoP key: generate a separate RSA key for SRT signing.
+                : generateSrtRsaKey("Error generating SRT RSA key");
+        return new DpopMaterial(this.dpopKey, resolveDpopAlgorithm(this.dpopKey), srtKey);
+    }
+
+    private JWSAlgorithm resolveDpopAlgorithm(JWK key) {
+        if (this.dpopAlg != null) {
+            return this.dpopAlg;
+        }
+        return key instanceof ECKey ? inferEcAlgorithm((ECKey) key) : JWSAlgorithm.RS256;
+    }
+
+    private static RSAKey generateSrtRsaKey(String errorMessage) {
+        try {
+            return new RSAKeyGenerator(2048)
+                    .keyUse(KeyUse.SIGNATURE)
+                    .keyID(UUID.randomUUID().toString())
+                    .generate();
+        } catch (JOSEException e) {
+            throw new SDKException(errorMessage, e);
+        }
+    }
+
     ServicesAndInternals buildServices() {
         // Validate configuration compatibility
         if (Boolean.TRUE.equals(usePlainText) && protocolType == ProtocolType.GRPC_WEB) {
@@ -341,50 +389,12 @@ public class SDKBuilder {
                     "while plaintext connections force HTTP/2 prior knowledge.");
         }
 
-        // Resolve the DPoP JWK and algorithm
-        JWK effectiveDpopJwk;
-        JWSAlgorithm effectiveDpopAlg;
-        RSAKey srtKey; // SRT signing always uses RSA
-
-        if (this.dpopKey != null) {
-            effectiveDpopJwk = this.dpopKey;
-            if (this.dpopAlg != null) {
-                effectiveDpopAlg = this.dpopAlg;
-            } else if (effectiveDpopJwk instanceof ECKey) {
-                effectiveDpopAlg = inferEcAlgorithm((ECKey) effectiveDpopJwk);
-            } else {
-                effectiveDpopAlg = JWSAlgorithm.RS256;
-            }
-            if (effectiveDpopJwk instanceof RSAKey) {
-                srtKey = (RSAKey) effectiveDpopJwk;
-            } else {
-                // EC DPoP key: generate a separate RSA key for SRT signing
-                try {
-                    srtKey = new RSAKeyGenerator(2048)
-                            .keyUse(KeyUse.SIGNATURE)
-                            .keyID(UUID.randomUUID().toString())
-                            .generate();
-                } catch (JOSEException e) {
-                    throw new SDKException("Error generating SRT RSA key", e);
-                }
-            }
-        } else {
-            // Auto-generate RSA-2048 for both DPoP and SRT
-            try {
-                srtKey = new RSAKeyGenerator(2048)
-                        .keyUse(KeyUse.SIGNATURE)
-                        .keyID(UUID.randomUUID().toString())
-                        .generate();
-            } catch (JOSEException e) {
-                throw new SDKException("Error generating DPoP key", e);
-            }
-            effectiveDpopJwk = srtKey;
-            effectiveDpopAlg = this.dpopAlg != null ? this.dpopAlg : JWSAlgorithm.RS256;
-        }
+        // Resolve the DPoP JWK/algorithm and the (always-RSA) SRT signing key.
+        DpopMaterial dpop = resolveDpopMaterial();
 
         this.platformEndpoint = AddressNormalizer.normalizeAddress(this.platformEndpoint, this.usePlainText);
-        var authInterceptor = getAuthInterceptor(effectiveDpopJwk, effectiveDpopAlg);
-        var srtSignerToUse = this.srtSigner == null ? new DefaultSrtSigner(srtKey) : this.srtSigner;
+        var authInterceptor = getAuthInterceptor(dpop.dpopJwk, dpop.dpopAlg);
+        var srtSignerToUse = this.srtSigner == null ? new DefaultSrtSigner(dpop.srtKey) : this.srtSigner;
 
         okhttp3.Interceptor dpopRetry = authInterceptor != null ? authInterceptor.dpopRetryInterceptor() : null;
         var kasClient = getKASClient(srtSignerToUse, authInterceptor, dpopRetry);

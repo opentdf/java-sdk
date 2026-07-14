@@ -613,7 +613,7 @@ public class SDKBuilderTest {
     }
 
     @Test
-    public void dpopRequestedButPlatformIssuerMissingThrows() throws Exception {
+    void dpopRequestedButPlatformIssuerMissingThrows() throws Exception {
         // If the well-known config omits platform_issuer but the caller explicitly opted into
         // DPoP via dpopKey(...), the builder must fail loudly — we cannot configure DPoP
         // without a token endpoint, and silently dropping DPoP would surface as a confusing
