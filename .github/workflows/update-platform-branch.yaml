@@ -5,6 +5,9 @@ name: "Update Platform Branch"
 #
 # To test:
 #   `act workflow_dispatch -W ./.github/workflows/update-platform-branch.yaml --input tag=protocol/go/v0.3.1`
+#
+# To run:
+#   `gh workflow run update-platform-branch.yaml --repo opentdf/java-sdk --ref main --field tag=protocol/go/v0.35.0`
 
 on:
   schedule:
