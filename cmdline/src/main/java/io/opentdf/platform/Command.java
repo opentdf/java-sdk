@@ -1,26 +1,14 @@
 package io.opentdf.platform;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonDeserializer;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
-import com.nimbusds.jose.jwk.JWK;
-import com.google.gson.GsonBuilder;
-import com.google.gson.reflect.TypeToken;
-
-import java.text.ParseException;
 import com.google.gson.JsonSyntaxException;
-import io.opentdf.platform.sdk.AssertionConfig;
-import io.opentdf.platform.sdk.AutoConfigureException;
-import io.opentdf.platform.sdk.Config;
-import io.opentdf.platform.sdk.KeyType;
-import io.opentdf.platform.sdk.SDK;
-import io.opentdf.platform.sdk.SDKBuilder;
-import picocli.CommandLine;
-import picocli.CommandLine.HelpCommand;
-import picocli.CommandLine.Option;
+import com.google.gson.reflect.TypeToken;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -39,13 +27,27 @@ import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 
+import io.opentdf.platform.sdk.AssertionConfig;
+import io.opentdf.platform.sdk.AutoConfigureException;
+import io.opentdf.platform.sdk.Config;
+import io.opentdf.platform.sdk.KeyType;
+import io.opentdf.platform.sdk.SDK;
+import io.opentdf.platform.sdk.SDKBuilder;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.core.config.Configurator;
+import picocli.CommandLine;
+import picocli.CommandLine.HelpCommand;
+import picocli.CommandLine.Option;
 /**
  * Constants for the TDF command line tool.
  * These must be compile-time constants to appear in annotations.
@@ -58,17 +60,67 @@ class Versions {
     public static final String TDF_SPEC = "4.3.0";
 }
 
-@CommandLine.Command(name = "tdf", subcommands = { HelpCommand.class }, version = "{\"version\":\"" + Versions.SDK
-        + "\",\"tdfSpecVersion\":\"" + Versions.TDF_SPEC + "\"}")
+@CommandLine.Command(name = "tdf", subcommands = { HelpCommand.class,
+        Command.Supports.class }, version = "{\"version\":\"" + Versions.SDK
+                + "\",\"tdfSpecVersion\":\"" + Versions.TDF_SPEC + "\"}")
 class Command {
     @Option(names = { "-V", "--version" }, versionHelp = true, description = "display version info")
     boolean versionInfoRequested;
 
+    // Picocli injects the parsed command spec here so buildSDK() can raise
+    // ParameterException with the right help context when required options
+    // are missing for encrypt/decrypt/metadata (which all call buildSDK()).
+    @CommandLine.Spec
+    CommandLine.Model.CommandSpec spec;
+
+    @CommandLine.Command(name = "supports", description = "Check if a feature is supported, or list all supported features")
+    static class Supports implements Callable<Integer> {
+        // Static, always-on capabilities of this build. There is no "known but
+        // unsupported" feature here: anything not in this list is simply unrecognized.
+        private static final List<String> FEATURES = List.of("dpop", "dpop_nonce_challenge");
+
+        @CommandLine.Parameters(index = "0", arity = "0..1", description = "Feature to check (e.g., dpop). Omit to list all supported features.")
+        private String feature;
+
+        @Option(names = "--json", description = "Output as a JSON object mapping feature name to supported (boolean)")
+        private boolean json;
+
+        @Override
+        public Integer call() {
+            if (feature == null) {
+                printFeatures(FEATURES);
+                return 0;
+            }
+
+            Optional<String> canonical = FEATURES.stream().filter(f -> f.equalsIgnoreCase(feature)).findFirst();
+            if (json) {
+                Map<String, Boolean> result = new LinkedHashMap<>();
+                // Emit the canonical feature name for recognized features so casing is stable
+                // for automation; echo the raw input only for unknown features.
+                result.put(canonical.orElse(feature), canonical.isPresent());
+                System.out.println(new Gson().toJson(result));
+            }
+            return canonical.isPresent() ? 0 : 1;
+        }
+
+        private void printFeatures(List<String> features) {
+            if (json) {
+                Map<String, Boolean> result = new LinkedHashMap<>();
+                features.forEach(f -> result.put(f, true));
+                System.out.println(new Gson().toJson(result));
+            } else {
+                features.forEach(System.out::println);
+            }
+        }
+    }
+
     private static class AssertionKeyDeserializer implements JsonDeserializer<AssertionConfig.AssertionKey> {
         @Override
-        public AssertionConfig.AssertionKey deserialize(JsonElement json, java.lang.reflect.Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+        public AssertionConfig.AssertionKey deserialize(JsonElement json, java.lang.reflect.Type typeOfT,
+                JsonDeserializationContext context) throws JsonParseException {
             JsonObject jsonObject = json.getAsJsonObject();
-            AssertionConfig.AssertionKey assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.NotDefined, null);
+            AssertionConfig.AssertionKey assertionKey = new AssertionConfig.AssertionKey(
+                    AssertionConfig.AssertionKeyAlg.NotDefined, null);
 
             if (jsonObject.has("alg")) {
                 assertionKey.alg = context.deserialize(jsonObject.get("alg"), AssertionConfig.AssertionKeyAlg.class);
@@ -78,13 +130,15 @@ class Command {
             }
             if (jsonObject.has("jwk")) {
                 try {
-                    assertionKey.jwk = JWK.parse(jsonObject.get("jwk").toString());
+                    assertionKey.jwk = com.nimbusds.jose.jwk.JWK.parse(jsonObject.get("jwk").toString());
                 } catch (ParseException e) {
                     throw new JsonParseException("Failed to parse jwk", e);
                 }
             }
             if (jsonObject.has("x5c")) {
-                assertionKey.x5c = context.deserialize(jsonObject.get("x5c"), new TypeToken<List<com.nimbusds.jose.util.Base64>>() {}.getType());
+                assertionKey.x5c = context.deserialize(jsonObject.get("x5c"),
+                        new TypeToken<List<com.nimbusds.jose.util.Base64>>() {
+                        }.getType());
             }
 
             return assertionKey;
@@ -102,7 +156,19 @@ class Command {
     private static final String PEM_HEADER = "-----BEGIN (.*)-----";
     private static final String PEM_FOOTER = "-----END (.*)-----";
 
-    @Option(names = { "--client-secret" }, required = true)
+    @Option(names = { "-v", "--verbose" }, scope = CommandLine.ScopeType.INHERIT, defaultValue = "false", description = "Enable verbose output including stack traces on error")
+    void setVerbose(boolean verbose) {
+        this.verbose = verbose;
+        if (verbose) {
+            var root = org.apache.logging.log4j.LogManager.getRootLogger();
+            if (!root.getLevel().isLessSpecificThan(Level.DEBUG)) {
+                Configurator.setRootLevel(Level.DEBUG);
+            }
+        }
+    }
+    boolean verbose;
+
+    @Option(names = { "--client-secret" })
     private String clientSecret;
 
     @Option(names = { "-h", "--plaintext" }, defaultValue = "false")
@@ -111,10 +177,10 @@ class Command {
     @Option(names = { "-i", "--insecure" }, defaultValue = "false")
     private boolean insecure;
 
-    @Option(names = { "--client-id" }, required = true)
+    @Option(names = { "--client-id" })
     private String clientId;
 
-    @Option(names = { "-p", "--platform-endpoint" }, required = true)
+    @Option(names = { "-p", "--platform-endpoint" })
     private String platformEndpoint;
 
     private Object correctKeyType(AssertionConfig.AssertionKeyAlg alg, Object key, boolean publicKey)
@@ -222,7 +288,7 @@ class Command {
             } catch (JsonSyntaxException e) {
                 // try it as a file path
                 try {
-                    String fileJson = new String(Files.readAllBytes(Paths.get(assertionConfig)));
+                    String fileJson = Files.readString(Paths.get(assertionConfig));
                     assertionConfigs = gson.fromJson(fileJson, AssertionConfig[].class);
                 } catch (JsonSyntaxException e2) {
                     throw new RuntimeException("Failed to parse assertion from file, expects an list of assertions",
@@ -258,6 +324,24 @@ class Command {
     }
 
     private SDK buildSDK() {
+        // The picocli @Option annotations on platformEndpoint/clientId/clientSecret are
+        // intentionally NOT marked required = true so that `tdf supports <feature>` can
+        // run without credentials. Subcommands that actually build an SDK enforce them
+        // here so the failure surfaces as a normal picocli ParameterException (exit 2)
+        // rather than a deep SDK error.
+        if (platformEndpoint == null || platformEndpoint.isEmpty()) {
+            throw new CommandLine.ParameterException(spec.commandLine(),
+                    "Missing required option: '--platform-endpoint=<platformEndpoint>'");
+        }
+        if (clientId == null || clientId.isEmpty()) {
+            throw new CommandLine.ParameterException(spec.commandLine(),
+                    "Missing required option: '--client-id=<clientId>'");
+        }
+        if (clientSecret == null || clientSecret.isEmpty()) {
+            throw new CommandLine.ParameterException(spec.commandLine(),
+                    "Missing required option: '--client-secret=<clientSecret>'");
+        }
+
         SDKBuilder builder = new SDKBuilder();
         if (insecure) {
             builder.insecureSslFactory();
@@ -296,8 +380,9 @@ class Command {
                         } catch (JsonSyntaxException e) {
                             // try it as a file path
                             try {
-                                String fileJson = new String(Files.readAllBytes(Paths.get(assertionVerificationInput)));
-                                assertionVerificationKeys = gson.fromJson(fileJson, Config.AssertionVerificationKeys.class);
+                                String fileJson = Files.readString(Paths.get(assertionVerificationInput));
+                                assertionVerificationKeys = gson.fromJson(fileJson,
+                                        Config.AssertionVerificationKeys.class);
                             } catch (JsonSyntaxException e2) {
                                 throw new RuntimeException("Failed to parse assertion verification keys from file", e2);
                             } catch (Exception e3) {
