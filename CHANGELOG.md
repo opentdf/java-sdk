@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.18.0](https://github.com/opentdf/java-sdk/compare/v0.17.1...v0.18.0) (2026-07-27)
+
+
+### Features
+
+* **sdk:** add comprehensive DPoP (RFC 9449) support (DSPX-3397) ([#374](https://github.com/opentdf/java-sdk/issues/374)) ([82ddef1](https://github.com/opentdf/java-sdk/commit/82ddef140e3f1e48d8eba8bbe7ea6eeebe44cc59))
+
+
+### Bug Fixes
+
+* **sdk:** Lets ML-KEM PQ key encapsulation work ([#370](https://github.com/opentdf/java-sdk/issues/370)) ([e7278fb](https://github.com/opentdf/java-sdk/commit/e7278fb6742eb1e437ce3268beac3607b2a4b9f3))
+* **sdk:** Updates to proto version v0.36.0 ([#345](https://github.com/opentdf/java-sdk/issues/345)) ([cde461a](https://github.com/opentdf/java-sdk/commit/cde461a3758caeb7aa2a85a51f4be70e01e50db5))
+* **sdk:** Updates to proto version v0.39.0 ([#386](https://github.com/opentdf/java-sdk/issues/386)) ([81c743e](https://github.com/opentdf/java-sdk/commit/81c743e088d6139e63592dc1a7df64fc5e071055))
+* upgrade the publish plugin to avoid an error ([#384](https://github.com/opentdf/java-sdk/issues/384)) ([f94f507](https://github.com/opentdf/java-sdk/commit/f94f507dcee1052ba0aeaeb2472b882d9e60486e))
+
 ## [0.17.1](https://github.com/opentdf/java-sdk/compare/v0.17.0...v0.17.1) (2026-06-24)
 
 
