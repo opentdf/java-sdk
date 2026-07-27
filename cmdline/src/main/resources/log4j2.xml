@@ -6,9 +6,9 @@
         </Console>
     </appenders>
     <loggers>
-        <Root level="trace">
-            <AppenderRef ref="Console"/>
-        </Root>
+        <root level="info">
+            <appender-ref ref="Console"/>
+        </root>
         <Logger name="io.grpc.netty" level="error" additivity="false">
             <AppenderRef ref="Console" />
         </Logger>
