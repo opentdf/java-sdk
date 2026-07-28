@@ -192,7 +192,7 @@ public class Autoconfigure {
     }
 
     // Utility class for an attribute value FQN.
-    static class AttributeValueFQN {
+    public static class AttributeValueFQN {
         private final String url;
         private final String key;
 

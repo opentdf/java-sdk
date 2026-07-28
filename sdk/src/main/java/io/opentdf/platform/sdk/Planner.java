@@ -25,7 +25,7 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 
-public class Planner {
+class Planner {
     private static final String BASE_KEY = "base_key";
     private final Config.TDFConfig tdfConfig;
     private final SDK.Services services;

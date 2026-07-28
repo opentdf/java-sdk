@@ -16,7 +16,7 @@ import static io.opentdf.platform.sdk.TDFWriter.TDF_PAYLOAD_FILE_NAME;
  * The class initializes with a TDF file channel, extracts the manifest and payload entries,
  * and provides methods to retrieve the manifest content, read payload bytes, and read policy objects.
  */
-public class TDFReader {
+class TDFReader {
 
     private final ZipReader.Entry manifestEntry;
     private final InputStream payload;
