@@ -108,7 +108,7 @@ class CommandTest {
 
         assertThat(code[0]).isEqualTo(0);
         assertThat(out.lines()).containsExactlyInAnyOrder("dpop", "dpop_nonce_challenge",
-                "partial_decrypt", "http_range_source");
+                "partial_decrypt", "http_range_source", "session-key-mlkem");
     }
 
     @Test
@@ -118,7 +118,7 @@ class CommandTest {
 
         assertThat(code[0]).isEqualTo(0);
         assertThat(out.trim()).isEqualTo("{\"dpop\":true,\"dpop_nonce_challenge\":true,"
-                + "\"partial_decrypt\":true,\"http_range_source\":true}");
+                + "\"partial_decrypt\":true,\"http_range_source\":true,\"session-key-mlkem\":true}");
     }
 
     @Test

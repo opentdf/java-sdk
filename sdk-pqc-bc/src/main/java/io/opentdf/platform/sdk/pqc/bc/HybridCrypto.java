@@ -3,6 +3,7 @@ package io.opentdf.platform.sdk.pqc.bc;
 import io.opentdf.platform.sdk.ECKeyPair;
 import io.opentdf.platform.sdk.KeyType;
 import io.opentdf.platform.sdk.SDKException;
+import io.opentdf.platform.sdk.spi.KemProvider;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -91,6 +92,37 @@ final class HybridCrypto {
             case MLKEM1024Key:
                 return MLKEMAlgorithm.MLKEM_1024.unwrapDEK(
                         MLKEMAlgorithm.MLKEM_1024.privateKeyFromPem(privateKeyPEM), wrapped);
+            default:
+                throw new SDKException("unsupported PQC key type: " + keyType);
+        }
+    }
+
+    /**
+     * Generate a fresh ephemeral keypair for {@code keyType}. Same dispatch
+     * table as {@link #wrapDEK} / {@link #unwrapDEK}.
+     */
+    static KemProvider.KeyPairPem generateKeyPair(KeyType keyType) {
+        switch (keyType) {
+            case HybridXWingKey: {
+                XWingKeyPair kp = XWingKeyPair.generate();
+                return new KemProvider.KeyPairPem(kp.publicKeyInPemFormat(), kp.privateKeyInPemFormat());
+            }
+            case HybridSecp256r1MLKEM768Key: {
+                HybridNISTKeyPair kp = HybridNISTAlgorithm.P256_MLKEM768.generate();
+                return new KemProvider.KeyPairPem(kp.publicKeyInPemFormat(), kp.privateKeyInPemFormat());
+            }
+            case HybridSecp384r1MLKEM1024Key: {
+                HybridNISTKeyPair kp = HybridNISTAlgorithm.P384_MLKEM1024.generate();
+                return new KemProvider.KeyPairPem(kp.publicKeyInPemFormat(), kp.privateKeyInPemFormat());
+            }
+            case MLKEM768Key: {
+                MLKEMKeyPair kp = MLKEMAlgorithm.MLKEM_768.generate();
+                return new KemProvider.KeyPairPem(kp.publicKeyInPemFormat(), kp.privateKeyInPemFormat());
+            }
+            case MLKEM1024Key: {
+                MLKEMKeyPair kp = MLKEMAlgorithm.MLKEM_1024.generate();
+                return new KemProvider.KeyPairPem(kp.publicKeyInPemFormat(), kp.privateKeyInPemFormat());
+            }
             default:
                 throw new SDKException("unsupported PQC key type: " + keyType);
         }
