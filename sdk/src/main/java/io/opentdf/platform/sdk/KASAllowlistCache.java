@@ -6,22 +6,18 @@ import org.slf4j.LoggerFactory;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 // Mirrors the KASKeyCache pattern: null returns, LocalDateTime.now(), and 5-minute TTL.
 class KASAllowlistCache {
     private static final Logger log = LoggerFactory.getLogger(KASAllowlistCache.class);
-    Map<String, TimeStampedAllowList> cache;
-
-    public KASAllowlistCache() {
-        this.cache = new HashMap<>();
-    }
+    final Map<String, TimeStampedAllowList> cache = new ConcurrentHashMap<>();
 
     public void clear() {
-        this.cache = new HashMap<>();
+        cache.clear();
     }
 
     public Set<String> get(String platformURL) {

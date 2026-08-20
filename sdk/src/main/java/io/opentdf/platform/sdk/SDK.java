@@ -163,7 +163,7 @@ public class SDK implements AutoCloseable {
         try {
             response = RequestHelper.getOrThrow(
                     services.kasRegistry().listKeyAccessServersBlocking(request, Collections.emptyMap()).execute());
-        } catch (Exception e) {
+        } catch (com.connectrpc.ConnectException e) {
             throw new SDKException("error getting kas servers", e);
         }
 
