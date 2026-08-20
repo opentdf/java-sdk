@@ -11,6 +11,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+// Mirrors the KASKeyCache pattern: null returns, LocalDateTime.now(), and 5-minute TTL.
 class KASAllowlistCache {
     private static final Logger log = LoggerFactory.getLogger(KASAllowlistCache.class);
     Map<String, TimeStampedAllowList> cache;
