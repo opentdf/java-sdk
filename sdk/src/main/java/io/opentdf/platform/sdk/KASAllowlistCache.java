@@ -5,7 +5,9 @@ import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -38,12 +40,13 @@ class KASAllowlistCache {
         }
 
         log.debug("successfully returned allowlist for platformURL = [{}]", platformURL);
-        return cachedValue.allowlist;
+        return new HashSet<>(cachedValue.allowlist);
     }
 
     public void store(String platformURL, Set<String> allowlist) {
         log.debug("storing allowlist into the cache for platformURL = [{}]", platformURL);
-        cache.put(platformURL, new TimeStampedAllowList(allowlist, LocalDateTime.now()));
+        cache.put(platformURL, new TimeStampedAllowList(
+                Collections.unmodifiableSet(new HashSet<>(allowlist)), LocalDateTime.now()));
     }
 }
 
