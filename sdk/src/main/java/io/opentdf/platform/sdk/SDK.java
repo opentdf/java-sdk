@@ -18,6 +18,8 @@ import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
 import io.opentdf.platform.policy.attributes.ListAttributesRequest;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClientInterface;
+import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
+import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.policy.namespaces.NamespaceServiceClientInterface;
 import io.opentdf.platform.policy.resourcemapping.ResourceMappingServiceClientInterface;
 import io.opentdf.platform.policy.subjectmapping.SubjectMappingServiceClientInterface;
@@ -30,9 +32,11 @@ import java.io.OutputStream;
 import java.nio.channels.SeekableByteChannel;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -57,6 +61,7 @@ public class SDK implements AutoCloseable {
     private final String platformUrl;
     private final ProtocolClient platformServicesClient;
     private final SrtSigner srtSigner;
+    private final KASAllowlistCache kasAllowlistCache = new KASAllowlistCache();
 
     /**
      * Closes the SDK, including its associated services.
@@ -136,8 +141,40 @@ public class SDK implements AutoCloseable {
     }
 
     public TDF.Reader loadTDF(SeekableByteChannel channel, Config.TDFReaderConfig config) throws SDKException, IOException {
+        resolveKasAllowlist(config);
         var tdf = new TDF(services);
         return tdf.loadTDF(channel, config, platformUrl);
+    }
+
+    private void resolveKasAllowlist(Config.TDFReaderConfig config) throws SDKException {
+        if (config.ignoreKasAllowlist
+                || (config.kasAllowlist != null && !config.kasAllowlist.isEmpty())) {
+            return;
+        }
+
+        var cached = kasAllowlistCache.get(platformUrl);
+        if (cached != null) {
+            config.kasAllowlist = cached;
+            return;
+        }
+
+        var request = ListKeyAccessServersRequest.newBuilder().build();
+        ListKeyAccessServersResponse response;
+        try {
+            response = RequestHelper.getOrThrow(
+                    services.kasRegistry().listKeyAccessServersBlocking(request, Collections.emptyMap()).execute());
+        } catch (Exception e) {
+            throw new SDKException("error getting kas servers", e);
+        }
+
+        var allowlist = new HashSet<String>();
+        for (var entry : response.getKeyAccessServersList()) {
+            allowlist.add(Config.getKasAddress(entry.getUri()));
+        }
+        allowlist.add(Config.getKasAddress(platformUrl));
+
+        config.kasAllowlist = allowlist;
+        kasAllowlistCache.store(platformUrl, allowlist);
     }
 
     public Manifest createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig config) throws SDKException, IOException {
