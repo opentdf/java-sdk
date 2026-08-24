@@ -1,5 +1,7 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.Code;
+import com.connectrpc.ConnectException;
 import com.connectrpc.ResponseMessage;
 import com.connectrpc.UnaryBlockingCall;
 import io.opentdf.platform.policy.Algorithm;
@@ -17,6 +19,8 @@ import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.policy.attributes.AttributesServiceClient;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
+import io.opentdf.platform.policy.attributes.GetKeyMappingsByFqnsRequest;
+import io.opentdf.platform.policy.attributes.GetKeyMappingsByFqnsResponse;
 import io.opentdf.platform.sdk.Autoconfigure.AttributeValueFQN;
 import io.opentdf.platform.sdk.Autoconfigure.Granter;
 import io.opentdf.platform.sdk.Autoconfigure.Granter.AttributeBooleanExpression;
@@ -551,6 +555,59 @@ public class AutoconfigureTest {
         ));
     }
 
+    @Test
+    void testNewGranterFromServiceUsesKeyMappings() {
+        var attributeService = mock(AttributesServiceClient.class);
+        when(attributeService.getKeyMappingsByFqnsBlocking(any(), any())).thenAnswer(invocation -> {
+            var req = (GetKeyMappingsByFqnsRequest) invocation.getArgument(0);
+            var builder = GetKeyMappingsByFqnsResponse.newBuilder();
+            for (String fqn : req.getFqnsList()) {
+                builder.putFqnKeyMappings(fqn.toLowerCase(),
+                        GetKeyMappingsByFqnsResponse.AttributeKeyMapping.newBuilder()
+                                .setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ALL_OF)
+                                .addKeys(VALUE_KEY)
+                                .build());
+            }
+            return TestUtil.successfulUnaryCall(builder.build());
+        });
+
+        var fqn = new AttributeValueFQN("https://mapped.example.com/attr/attr1/value/value1");
+        Granter granter = Autoconfigure.newGranterFromService(attributeService, new KASKeyCache(), fqn);
+        assertThat(granter).isNotNull();
+
+        var counter = new AtomicInteger(0);
+        var splitPlan = granter.getSplits(Collections.emptyList(), () -> Integer.toString(counter.getAndIncrement()), Optional::empty);
+        assertThat(splitPlan).isEqualTo(List.of(
+                new Autoconfigure.KeySplitTemplate(VALUE_KEY.getKasUri(), "", VALUE_KEY.getPublicKey().getKid(), KeyType.EC521Key)));
+        // The mapped-key path must not fall back to the deprecated full lookup.
+        verify(attributeService, never()).getAttributeValuesByFqnsBlocking(any(), any());
+    }
+
+    @Test
+    void testNewGranterFromServiceFallsBackWhenKeyMappingsEmpty() {
+        var attributeService = mock(AttributesServiceClient.class);
+        // Mapping present but with no mapped keys (legacy-grant-only value).
+        when(attributeService.getKeyMappingsByFqnsBlocking(any(), any())).thenAnswer(invocation -> {
+            var req = (GetKeyMappingsByFqnsRequest) invocation.getArgument(0);
+            var builder = GetKeyMappingsByFqnsResponse.newBuilder();
+            for (String fqn : req.getFqnsList()) {
+                builder.putFqnKeyMappings(fqn.toLowerCase(),
+                        GetKeyMappingsByFqnsResponse.AttributeKeyMapping.newBuilder().build());
+            }
+            return TestUtil.successfulUnaryCall(builder.build());
+        });
+        when(attributeService.getAttributeValuesByFqnsBlocking(any(), any())).thenAnswer(invocation -> {
+            var req = (GetAttributeValuesByFqnsRequest) invocation.getArgument(0);
+            return TestUtil.successfulUnaryCall(getResponse(req));
+        });
+
+        Granter granter = Autoconfigure.newGranterFromService(attributeService, new KASKeyCache(),
+                clsS, rel2gbr, rel2usa, n2kHCS, n2kSI);
+        assertThat(granter).isNotNull();
+        // The empty-key FQNs must be resolved through the full attribute lookup.
+        verify(attributeService).getAttributeValuesByFqnsBlocking(any(), any());
+    }
+
     GetAttributeValuesByFqnsResponse getResponse(GetAttributeValuesByFqnsRequest req) {
         GetAttributeValuesByFqnsResponse.Builder builder = GetAttributeValuesByFqnsResponse.newBuilder();
 
@@ -669,6 +726,10 @@ public class AutoconfigureTest {
                     }
                 };
             });
+            // These cases resolve via legacy grants; simulate a platform without
+            // GetKeyMappingsByFqns so resolution falls back to GetAttributeValuesByFqns.
+            when(attributeService.getKeyMappingsByFqnsBlocking(any(), any()))
+                    .thenReturn(TestUtil.failedUnaryCall(Code.UNIMPLEMENTED, "unimplemented"));
 
 
             Granter reasoner = Autoconfigure.newGranterFromService(attributeService, new KASKeyCache(),
@@ -985,6 +1046,10 @@ public class AutoconfigureTest {
                 }
             };
         });
+        // Legacy-grant resolution: simulate a platform without GetKeyMappingsByFqns so
+        // resolution falls back to GetAttributeValuesByFqns.
+        when(attributesServiceClient.getKeyMappingsByFqnsBlocking(any(), any()))
+                .thenReturn(TestUtil.failedUnaryCall(Code.UNIMPLEMENTED, "unimplemented"));
 
         KASKeyCache keyCache = new KASKeyCache();
 
@@ -1103,6 +1168,8 @@ public class AutoconfigureTest {
             }
             return TestUtil.successfulUnaryCall(builder.build());
         });
+        when(attributesServiceClient.getKeyMappingsByFqnsBlocking(any(), any()))
+                .thenReturn(TestUtil.failedUnaryCall(Code.UNIMPLEMENTED, "unimplemented"));
 
         // Act
         Autoconfigure.Granter granter = Autoconfigure.createGranter(services, new Config.TDFConfig() {{

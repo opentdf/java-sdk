@@ -1,5 +1,7 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.Code;
+import com.connectrpc.ConnectException;
 import com.connectrpc.ResponseMessage;
 import com.connectrpc.UnaryBlockingCall;
 
@@ -28,6 +30,24 @@ public class TestUtil {
             @Override
             public void cancel() {
                 // in tests we don't need to preserve server resources, so no-op
+            }
+        };
+    }
+
+    // A unary call that fails with the given code, e.g. to simulate a platform that
+    // does not implement a newer RPC.
+    static <T> UnaryBlockingCall<T> failedUnaryCall(Code code, String message) {
+        return new UnaryBlockingCall<T>() {
+            @Override
+            public ResponseMessage<T> execute() {
+                return new ResponseMessage.Failure<>(
+                        new ConnectException(code, message, null, Collections.emptyMap()),
+                        Collections.emptyMap(), Collections.emptyMap());
+            }
+
+            @Override
+            public void cancel() {
+                // no-op in tests
             }
         };
     }

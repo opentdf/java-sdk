@@ -1,5 +1,7 @@
 package io.opentdf.platform.sdk;
 
+import com.connectrpc.Code;
+import com.connectrpc.ConnectException;
 import com.connectrpc.ResponseMessageKt;
 import io.opentdf.platform.policy.Algorithm;
 import io.opentdf.platform.policy.Attribute;
@@ -10,6 +12,8 @@ import io.opentdf.platform.policy.Value;
 import io.opentdf.platform.policy.attributes.AttributesServiceClientInterface;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsRequest;
 import io.opentdf.platform.policy.attributes.GetAttributeValuesByFqnsResponse;
+import io.opentdf.platform.policy.attributes.GetKeyMappingsByFqnsRequest;
+import io.opentdf.platform.policy.attributes.GetKeyMappingsByFqnsResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -868,17 +872,72 @@ public class Autoconfigure {
         return getGranter(keyCache, attrsAndValues);
     }
 
-    // Gets a list of directory of KAS grants for a list of attribute FQNs
+    // Gets a directory of KAS grants for a list of attribute FQNs.
+    //
+    // Resolution uses GetKeyMappingsByFqns, which returns the effective mapped KAS
+    // keys per value (value > definition > namespace precedence, resolved
+    // server-side). Values that resolve to no mapped keys (e.g. configured only with
+    // legacy KAS grants) fall back to GetAttributeValuesByFqns so their grants still
+    // resolve. Older platforms that do not expose GetKeyMappingsByFqns fall back to
+    // the full attribute lookup for all values.
     static Granter newGranterFromService(AttributesServiceClientInterface as, KASKeyCache keyCache, AttributeValueFQN... fqns) throws AutoConfigureException {
-        GetAttributeValuesByFqnsRequest request = GetAttributeValuesByFqnsRequest.newBuilder()
-                .addAllFqns(Arrays.stream(fqns).map(AttributeValueFQN::toString).collect(Collectors.toList()))
-                .build();
+        GetKeyMappingsByFqnsResponse km;
+        try {
+            GetKeyMappingsByFqnsRequest request = GetKeyMappingsByFqnsRequest.newBuilder()
+                    .addAllFqns(Arrays.stream(fqns).map(AttributeValueFQN::toString).collect(Collectors.toList()))
+                    .build();
+            km = RequestHelper.getOrThrow(
+                    as.getKeyMappingsByFqnsBlocking(request, Collections.emptyMap()).execute()
+            );
+        } catch (ConnectException e) {
+            if (e.getCode() == Code.UNIMPLEMENTED) {
+                return newGranterFromAttributeValues(as, keyCache, Arrays.asList(fqns));
+            }
+            throw new SDKException("error getting key mappings for attribute FQNs", e);
+        }
 
-        GetAttributeValuesByFqnsResponse av = ResponseMessageKt.getOrThrow(
+        Granter grants = new Granter(Arrays.asList(fqns));
+        Map<String, GetKeyMappingsByFqnsResponse.AttributeKeyMapping> mappings = km.getFqnKeyMappingsMap();
+        List<AttributeValueFQN> fallback = new ArrayList<>();
+        for (AttributeValueFQN fqn : fqns) {
+            var mapping = mappings.get(fqn.getKey());
+            if (mapping == null || mapping.getKeysList().isEmpty()) {
+                // No mapped keys (legacy-grant-only, unconfigured, or omitted); resolve
+                // via the full attribute lookup below.
+                fallback.add(fqn);
+                continue;
+            }
+            // Only the FQN prefix and rule are read downstream (constructAttributeBoolean),
+            // so a minimal attribute is sufficient.
+            Attribute attr = Attribute.newBuilder()
+                    .setFqn(fqn.prefix().toString())
+                    .setRule(mapping.getRule())
+                    .build();
+            grants.addAllGrants(fqn, Collections.emptyList(), mapping.getKeysList(), attr);
+            storeKeysToCache(Collections.emptyList(), mapping.getKeysList(), keyCache);
+        }
+
+        if (!fallback.isEmpty()) {
+            GetAttributeValuesByFqnsResponse av = fetchAttributeValues(as, fallback);
+            addGrantsFromAttributeValues(grants, keyCache, new ArrayList<>(av.getFqnAttributeValuesMap().values()));
+        }
+
+        return grants;
+    }
+
+    // Resolves grants for the given FQNs via the full GetAttributeValuesByFqns lookup.
+    private static Granter newGranterFromAttributeValues(AttributesServiceClientInterface as, KASKeyCache keyCache, List<AttributeValueFQN> fqns) throws AutoConfigureException {
+        GetAttributeValuesByFqnsResponse av = fetchAttributeValues(as, fqns);
+        return getGranter(keyCache, new ArrayList<>(av.getFqnAttributeValuesMap().values()));
+    }
+
+    private static GetAttributeValuesByFqnsResponse fetchAttributeValues(AttributesServiceClientInterface as, List<AttributeValueFQN> fqns) throws AutoConfigureException {
+        GetAttributeValuesByFqnsRequest request = GetAttributeValuesByFqnsRequest.newBuilder()
+                .addAllFqns(fqns.stream().map(AttributeValueFQN::toString).collect(Collectors.toList()))
+                .build();
+        return ResponseMessageKt.getOrThrow(
                 as.getAttributeValuesByFqnsBlocking(request, Collections.emptyMap()).execute()
         );
-
-        return getGranter(keyCache, new ArrayList<>(av.getFqnAttributeValuesMap().values()));
     }
 
 
@@ -901,6 +960,14 @@ public class Autoconfigure {
                 .collect(Collectors.toList());
 
         Granter grants = new Granter(attributeValues);
+        addGrantsFromAttributeValues(grants, keyCache, values);
+        return grants;
+    }
+
+    // Populates an existing Granter from GetAttributeValuesByFqns results, resolving
+    // grants with value > definition > namespace precedence.
+    private static void addGrantsFromAttributeValues(Granter grants, @Nullable KASKeyCache keyCache,
+            List<GetAttributeValuesByFqnsResponse.AttributeAndValue> values) {
         for (var attributeAndValue: values) {
             String fqnstr = attributeAndValue.getValue().getFqn();
             AttributeValueFQN fqn = new AttributeValueFQN(fqnstr);
@@ -921,8 +988,6 @@ public class Autoconfigure {
                 storeKeysToCache(namespace.getGrantsList(), namespace.getKasKeysList(), keyCache);
             }
         }
-
-        return grants;
     }
 
     static void storeKeysToCache(List<KeyAccessServer> kases, List<SimpleKasKey> kasKeys, KASKeyCache keyCache) {
