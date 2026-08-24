@@ -511,16 +511,26 @@ public class Autoconfigure {
                 }
                 for (var value : clause.values) {
                     var mapped = mappedKeys.get(value.key);
-                    if (mapped == null) {
-                        logger.warn("No keys found for attribute value {}", value);
+                    if (mapped != null && !mapped.isEmpty()) {
+                        for (var kasInfo : mapped) {
+                            if (kasInfo.URL == null || kasInfo.URL.isEmpty()) {
+                                logger.warn("No KAS URL found for attribute value {}", value);
+                                continue;
+                            }
+                            keys.add(new PublicKeyInfo(kasInfo.URL, kasInfo.KID, kasInfo.Algorithm));
+                        }
                         continue;
                     }
-                    for (var kasInfo : mapped) {
-                        if (kasInfo.URL == null || kasInfo.URL.isEmpty()) {
-                            logger.warn("No KAS URL found for attribute value {}", value);
-                            continue;
+                    // No mapped keys for this value; fall back to its URL-only legacy grants so
+                    // policies mixing mapped-key and legacy-grant values keep every KAS in the
+                    // plan. These grants carry only a KAS URL; the public key is resolved later.
+                    var grant = byAttribute(value);
+                    if (grant != null && !grant.kases.isEmpty()) {
+                        for (var kas : grant.kases) {
+                            keys.add(new PublicKeyInfo(kas));
                         }
-                        keys.add(new PublicKeyInfo(kasInfo.URL, kasInfo.KID, kasInfo.Algorithm));
+                    } else {
+                        logger.warn("No keys found for attribute value {}", value);
                     }
                 }
 
@@ -893,7 +903,7 @@ public class Autoconfigure {
             if (e.getCode() == Code.UNIMPLEMENTED) {
                 return newGranterFromAttributeValues(as, keyCache, Arrays.asList(fqns));
             }
-            throw new SDKException("error getting key mappings for attribute FQNs", e);
+            throw new AutoConfigureException("error getting key mappings for attribute FQNs", e);
         }
 
         Granter grants = new Granter(Arrays.asList(fqns));
