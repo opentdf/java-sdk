@@ -390,8 +390,8 @@ public class SDK implements AutoCloseable {
     }
 
     /**
-     * {@link DataSizeNotSupported} is thrown when the user attempts to create
-     * a TDF with a size larger than the maximum size (currently 64GiB).
+     * Legacy exception type retained for compatibility. TDF creation no longer
+     * imposes a fixed input-size limit.
      */
     public static class DataSizeNotSupported extends SDKException {
         public DataSizeNotSupported(String errorMessage) {

@@ -6,6 +6,7 @@ import com.google.gson.reflect.TypeToken;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.JWK;
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
@@ -21,22 +22,24 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Map;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -697,7 +700,26 @@ public class TDFTest {
         var tdf = new TDF(
                 new FakeServicesBuilder().setKas(kas)
                         .setKeyAccessServerRegistryService(kasRegistryService).build());
-        tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
+        var tdfObject = tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
+
+        var segments = tdfObject.getManifest().encryptionInformation.integrityInformation.segments;
+        assertThat(segments.size())
+                .withFailMessage("test needs more than one segment to be meaningful")
+                .isGreaterThan(1);
+
+        // payload segments start at IV 1 (IV 0 is reserved for the metadata) and
+        // increment by one for every segment
+        var seenIvs = new ArrayList<String>();
+        var encryptedReader = new TDFReader(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()));
+        for (int segmentIndex = 0; segmentIndex < segments.size(); segmentIndex++) {
+            byte[] encryptedSegment = new byte[(int) segments.get(segmentIndex).encryptedSegmentSize];
+            assertThat(encryptedReader.readPayloadBytes(encryptedSegment)).isEqualTo(encryptedSegment.length);
+            byte[] iv = Arrays.copyOf(encryptedSegment, AesGcm.GCM_NONCE_LENGTH);
+            assertThat(iv).containsExactly(bigEndianIv(segmentIndex + 1));
+            seenIvs.add(Base64.getEncoder().encodeToString(iv));
+        }
+        assertThat(seenIvs).doesNotHaveDuplicates();
+
         var unwrappedData = new ByteArrayOutputStream();
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), platformUrl);
         reader.readPayload(unwrappedData);
@@ -708,52 +730,166 @@ public class TDFTest {
 
     }
 
+    /**
+     * The unsigned 96-bit big-endian encoding of {@code value}, for asserting on
+     * expected IVs.
+     */
+    private static byte[] bigEndianIv(long value) {
+        byte[] iv = new byte[AesGcm.GCM_NONCE_LENGTH];
+        for (int index = iv.length - 1; index >= 0 && value != 0; index--) {
+            iv[index] = (byte) value;
+            value >>>= 8;
+        }
+        return iv;
+    }
+
     @Test
-    public void testCreatingTooLargeTDF() {
-        var random = new Random();
-        var maxSize = random.nextInt(1024);
-        var numReturned = new AtomicInteger(0);
-
-        // return 1 more byte than the maximum size
-        var is = new InputStream() {
-            @Override
-            public int read() {
-                if (numReturned.get() > maxSize) {
-                    return -1;
-                }
-                numReturned.incrementAndGet();
-                return 1;
-            }
-
-            @Override
-            public int read(byte[] b, int off, int len) {
-                var numToReturn = Math.min(len, maxSize - numReturned.get() + 1);
-                numReturned.addAndGet(numToReturn);
-                return numToReturn;
-            }
-        };
-
-        var os = new OutputStream() {
-            @Override
-            public void write(int b) {
-            }
-
-            @Override
-            public void write(byte[] b, int off, int len) {
-            }
-        };
-
-        var tdf = new TDF(maxSize, new FakeServicesBuilder().setKas(kas).build());
-        var tdfConfig = Config.newTDFConfig(
+    public void testMetadataUsesIvZero() throws Exception {
+        Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
                 Config.withKasInformation(getRSAKASInfos()),
-                Config.withSegmentSize(Config.MIN_SEGMENT_SIZE));
-        assertThrows(SDK.DataSizeNotSupported.class,
-                () -> tdf.createTDF(is, os, tdfConfig),
-                "didn't throw an exception when we created TDF that was too large");
-        assertThat(numReturned.get())
-                .withFailMessage("test returned the wrong number of bytes")
-                .isEqualTo(maxSize + 1);
+                Config.withMetaData("here is some metadata"));
+
+        var tdfOutputStream = new ByteArrayOutputStream();
+        var tdf = new TDF(
+                new FakeServicesBuilder().setKas(kas)
+                        .setKeyAccessServerRegistryService(kasRegistryService).build());
+        var tdfObject = tdf.createTDF(new ByteArrayInputStream("some data".getBytes(StandardCharsets.UTF_8)),
+                tdfOutputStream, config);
+
+        var keyAccessObjects = tdfObject.getManifest().encryptionInformation.keyAccessObj;
+        assertThat(keyAccessObjects).isNotEmpty();
+        for (Manifest.KeyAccess keyAccess : keyAccessObjects) {
+            var encryptedMetadata = new Gson().fromJson(
+                    new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata), StandardCharsets.UTF_8),
+                    JsonObject.class);
+
+            assertThat(Base64.getDecoder().decode(encryptedMetadata.get("iv").getAsString()))
+                    .withFailMessage("metadata IV is not zero")
+                    .containsExactly(new byte[AesGcm.GCM_NONCE_LENGTH]);
+            // the ciphertext field carries the IV as a prefix as well
+            assertThat(Arrays.copyOf(
+                    Base64.getDecoder().decode(encryptedMetadata.get("ciphertext").getAsString()),
+                    AesGcm.GCM_NONCE_LENGTH))
+                    .containsExactly(new byte[AesGcm.GCM_NONCE_LENGTH]);
+        }
+
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), platformUrl);
+        assertThat(reader.getMetadata()).isEqualTo("here is some metadata");
+    }
+
+    @Test
+    public void testFirstPayloadSegmentUsesIvOne() throws Exception {
+        Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
+                Config.withKasInformation(getRSAKASInfos()),
+                Config.withMetaData("here is some metadata"));
+
+        var tdfOutputStream = new ByteArrayOutputStream();
+        var tdf = new TDF(
+                new FakeServicesBuilder().setKas(kas)
+                        .setKeyAccessServerRegistryService(kasRegistryService).build());
+        var tdfObject = tdf.createTDF(new ByteArrayInputStream("some data".getBytes(StandardCharsets.UTF_8)),
+                tdfOutputStream, config);
+
+        var segments = tdfObject.getManifest().encryptionInformation.integrityInformation.segments;
+        var encryptedReader = new TDFReader(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()));
+        byte[] firstSegment = new byte[(int) segments.get(0).encryptedSegmentSize];
+        assertThat(encryptedReader.readPayloadBytes(firstSegment)).isEqualTo(firstSegment.length);
+
+        assertThat(Arrays.copyOf(firstSegment, AesGcm.GCM_NONCE_LENGTH))
+                .withFailMessage("first payload segment must use IV 1, leaving IV 0 for the metadata")
+                .containsExactly(bigEndianIv(1));
+    }
+
+    @Test
+    public void testPayloadIvCounterStartsAtOne() {
+        var counter = TDF.IvCounter.forPayload();
+
+        assertThat(TDF.IvCounter.metadataIv()).containsExactly(bigEndianIv(0));
+        assertThat(counter.next()).containsExactly(bigEndianIv(1));
+        assertThat(counter.next()).containsExactly(bigEndianIv(2));
+        assertThat(counter.next()).containsExactly(bigEndianIv(3));
+    }
+
+    @Test
+    public void testPayloadIvCounterIncrementsWithCarry() {
+        // one below a two-byte carry boundary
+        var counter = new TDF.IvCounter(new byte[] {
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, (byte) 0xff, (byte) 0xff
+        }, 3);
+
+        assertThat(counter.next()).containsExactly(
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, (byte) 0xff, (byte) 0xff);
+        assertThat(counter.next()).containsExactly(
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 0, 0);
+        assertThat(counter.next()).containsExactly(
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 0, 1);
+    }
+
+    @Test
+    public void testPayloadIvCounterRejectsReuseAfterOverflow() {
+        byte[] finalIv = new byte[AesGcm.GCM_NONCE_LENGTH];
+        Arrays.fill(finalIv, (byte) 0xff);
+        var counter = new TDF.IvCounter(finalIv, Long.MAX_VALUE);
+
+        assertThat(counter.next()).containsExactly(finalIv);
+        // it must refuse rather than wrap around to zero, which would collide with the
+        // metadata IV
+        assertThrows(SDKException.class, counter::next);
+        assertThrows(SDKException.class, counter::next);
+    }
+
+    @Test
+    public void testPayloadIvCounterStopsAtInvocationBudget() {
+        var counter = new TDF.IvCounter(bigEndianIv(1), 2);
+
+        assertThat(counter.next()).containsExactly(bigEndianIv(1));
+        assertThat(counter.next()).containsExactly(bigEndianIv(2));
+
+        var e = assertThrows(SDKException.class, counter::next);
+        assertThat(e).hasMessageContaining("AES-GCM invocations for a single key");
+        // and it stays refused
+        assertThrows(SDKException.class, counter::next);
+    }
+
+    @Test
+    public void testPayloadIvBudgetLeavesOneInvocationForMetadata() {
+        // NIST SP 800-38D 8.3 caps a key at 2^32 invocations; IV 0 is the metadata, so
+        // the payload gets 2^32 - 1 of them
+        assertThat(TDF.MAX_GCM_INVOCATIONS_PER_KEY).isEqualTo(4294967296L);
+
+        var counter = TDF.IvCounter.forPayload();
+        assertThat(counter.next()).containsExactly(bigEndianIv(1));
+
+        var budget = assertDoesNotThrow(() -> {
+            var field = TDF.IvCounter.class.getDeclaredField("remainingInvocations");
+            field.setAccessible(true);
+            return (long) field.get(counter);
+        });
+        assertThat(budget).isEqualTo(TDF.MAX_GCM_INVOCATIONS_PER_KEY - 2);
+    }
+
+    @Test
+    public void testNoTdfInputSizeLimit() {
+        for (var constructor : TDF.class.getDeclaredConstructors()) {
+            assertThat(constructor.getParameterTypes())
+                    .withFailMessage("the maximum-input-size constructor should have been removed")
+                    .doesNotContain(long.class);
+        }
+
+        for (var field : TDF.class.getDeclaredFields()) {
+            boolean isNumericConstant = Modifier.isStatic(field.getModifiers())
+                    && (field.getType().equals(long.class) || field.getType().equals(int.class));
+            if (!isNumericConstant) {
+                continue;
+            }
+            field.setAccessible(true);
+            long value = assertDoesNotThrow(() -> ((Number) field.get(null)).longValue());
+            assertThat(value)
+                    .withFailMessage("TDF still declares a size limit in %s", field.getName())
+                    .isNotIn(68719476736L /* 64 GiB */, 10485760L /* 10 MiB */);
+        }
     }
 
     @Test
