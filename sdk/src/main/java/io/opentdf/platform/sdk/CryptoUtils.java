@@ -12,7 +12,7 @@ import java.util.Base64;
 /**
  * Utility class for cryptographic operations such as generating RSA key pairs and calculating HMAC.
  */
-public class CryptoUtils {
+class CryptoUtils {
     private static final int KEYPAIR_SIZE = 2048;
 
     public static byte[] CalculateSHA256Hmac(byte[] key, byte[] data) {

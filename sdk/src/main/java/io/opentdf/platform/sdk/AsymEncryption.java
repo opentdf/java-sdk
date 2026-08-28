@@ -19,7 +19,7 @@ import java.util.Objects;
  * AsymEncryption class provides methods for asymmetric encryption and
  * handling public keys in PEM format.
  */
-public class AsymEncryption {
+class AsymEncryption {
     private final PublicKey publicKey;
     private static final String PUBLIC_KEY_HEADER = "-----BEGIN PUBLIC KEY-----";
     private static final String PUBLIC_KEY_FOOTER = "-----END PUBLIC KEY-----";

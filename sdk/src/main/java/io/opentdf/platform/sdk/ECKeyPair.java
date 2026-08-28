@@ -25,7 +25,7 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.Objects;
 
-public class ECKeyPair {
+class ECKeyPair {
 
     private static final int SHA256_BYTES = 32;
     private static final String EC_ALGORITHM = "EC";
@@ -33,7 +33,7 @@ public class ECKeyPair {
 
     private final ECCurve curve;
 
-    public enum ECAlgorithm {
+    enum ECAlgorithm {
         ECDH,
         ECDSA
     }
