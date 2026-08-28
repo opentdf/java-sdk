@@ -56,7 +56,7 @@ jobs:
         run: |
           if [ -z "$REQUESTED_TAG" ]; then
             BSR_LABEL=$(buf registry module label list buf.build/opentdf/platform --format json | \
-              jq -r '.labels[].name | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+([+-][0-9A-Za-z.-]+)?$"))' | \
+              jq -r '.labels[].name | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))' | \
               sort -V | \
               tail -n1)
             if [ -z "$BSR_LABEL" ]; then
