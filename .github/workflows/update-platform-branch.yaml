@@ -1,7 +1,7 @@
-name: "Update Platform Branch"
-# This workflow updates the platform.branch property in all pom.xml files to a new tag or branch.
+name: "Update Platform Version"
+# This workflow updates the platform.bsr.label property in all pom.xml files to a published BSR label.
 # It is triggered by a manual dispatch or by a call from another workflow - notably from platform changes to protocol/go.
-# This property is used to select which versions of the protocol buffer definitions to use.
+# This property selects which published version of the protocol buffer definitions to use.
 #
 # To test:
 #   `act workflow_dispatch -W ./.github/workflows/update-platform-branch.yaml --input tag=protocol/go/v0.3.1`
@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "The new tag or branch to update the platform.branch property to use for targeting the RPC protocol buffers."
+        description: "The protocol/go tag whose BSR label should be used for RPC protocol buffers."
         required: true
         default: "protocol/go/v0.3.0"
 
@@ -38,6 +38,9 @@ jobs:
         with:
           persist-credentials: true
 
+      - name: Set up Buf
+        uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1.50.0
+
       - name: Set up GitHub CLI as Actions bot
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -46,30 +49,43 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Fetch latest semver tag for protocol/go
+      - name: Resolve published Platform schema version
         id: fetch-latest-tag
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
         run: |
-          if [ -z "${{ github.event.inputs.tag }}" ]; then
-            LATEST_TAG=$(git ls-remote --tags https://github.com/opentdf/platform.git | \
-              grep "refs/tags/protocol/go" | \
-              sed 's|.*/||' | \
+          if [ -z "$REQUESTED_TAG" ]; then
+            BSR_LABEL=$(buf registry module label list buf.build/opentdf/platform --format json | \
+              jq -r '.labels[].name | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+([+-][0-9A-Za-z.-]+)?$"))' | \
               sort -V | \
               tail -n1)
-            echo "LATEST_TAG=$LATEST_TAG" >> "$GITHUB_ENV"
+            if [ -z "$BSR_LABEL" ]; then
+              BSR_LABEL="main"
+              LATEST_TAG="main"
+            else
+              LATEST_TAG="protocol/go/$BSR_LABEL"
+            fi
           else
-            echo "LATEST_TAG=${{ github.event.inputs.tag }}" >> "$GITHUB_ENV"
+            if [[ ! "$REQUESTED_TAG" =~ ^protocol/go/v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+              echo "Invalid protocol/go tag: $REQUESTED_TAG" >&2
+              exit 1
+            fi
+            LATEST_TAG="$REQUESTED_TAG"
+            BSR_LABEL="${LATEST_TAG##*/}"
           fi
+          buf build "buf.build/opentdf/platform:$BSR_LABEL"
+          echo "LATEST_TAG=$LATEST_TAG" >> "$GITHUB_ENV"
+          echo "BSR_LABEL=$BSR_LABEL" >> "$GITHUB_ENV"
 
       - name: Check if update is needed
         id: check-update
         run: |
-          CURRENT_TAG=$(grep -oP '<platform.branch>\K.*(?=</platform.branch>)' pom.xml | head -n1)
-          if [ "$CURRENT_TAG" = "$LATEST_TAG" ]; then
-            echo "Platform branch is already up-to-date."
+          CURRENT_LABEL=$(grep -oP '<platform.bsr.label>\K.*(?=</platform.bsr.label>)' sdk/pom.xml)
+          if [ "$CURRENT_LABEL" = "$BSR_LABEL" ]; then
+            echo "Platform BSR label is already up-to-date."
             echo "no_updates=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "CURRENT_TAG=$CURRENT_TAG" >> "$GITHUB_ENV"
 
       - name: Check for existing PR
         if: steps.check-update.outputs.no_updates != 'true'
@@ -88,11 +104,11 @@ jobs:
           git fetch origin update-platform-branch:update-platform-branch
           git checkout update-platform-branch
 
-      - name: Update platform.branch in pom.xml files
+      - name: Update platform.bsr.label in pom.xml files
         if: steps.check-update.outputs.no_updates != 'true'
         id: update-platform-branch
         run: |
-          find . -name "pom.xml" -exec sed -i.bak "s|<platform.branch>.*</platform.branch>|<platform.branch>protocol/go/${LATEST_TAG}</platform.branch>|g" {} \;
+          find . -name "pom.xml" -exec sed -i.bak "s|<platform.bsr.label>.*</platform.bsr.label>|<platform.bsr.label>${BSR_LABEL}</platform.bsr.label>|g" {} \;
           CHANGED_FILES=$(find . -name "pom.xml" -exec diff -u {} {}.bak \;)
           if [ -z "$CHANGED_FILES" ]; then
             echo "No changes detected in pom.xml files." | tee -a $GITHUB_STEP_SUMMARY
@@ -146,11 +162,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RELEASE_NOTES=$(gh release view protocol/go/$LATEST_TAG --repo opentdf/platform --json body --jq '.body')
+          RELEASE_NOTES=$(gh release view "$LATEST_TAG" --repo opentdf/platform --json body --jq '.body')
           cat <<EOF > pr_body.txt
-          This PR updates the platform.branch property in all pom.xml files to the new tag or branch: $LATEST_TAG.
+          This PR updates the platform.bsr.label property in all pom.xml files to the BSR label for $LATEST_TAG.
 
-          See the release: https://github.com/opentdf/platform/releases/tag/protocol%2Fgo%2F$LATEST_TAG
+          See the release: https://github.com/opentdf/platform/releases/tag/$LATEST_TAG
 
           Release Notes:
           $RELEASE_NOTES
@@ -177,4 +193,3 @@ jobs:
             --body-file pr_body.txt \
             --head $BRANCH_NAME \
             --base main
-
