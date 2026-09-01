@@ -17,6 +17,19 @@ public class ZipWriter {
 
     private static final int ZIP_VERSION = 0x2D;
     private static final int ZIP_64_MAGIC_VAL = 0xFFFFFFFF;
+
+    /**
+     * The largest offset or size we will write into a 32-bit central directory field. Entries
+     * that don't fit are written as ZIP64 instead.
+     * <p>
+     * This is {@link Integer#MAX_VALUE} rather than the {@code 0xFFFFFFFE} the format allows.
+     * The fields are unsigned on the wire, but readers that widen them with a signed read see
+     * anything at or above 2 GiB as negative. Switching to ZIP64 at 2 GiB costs
+     * {@value #ZIP_64_GLOBAL_EXTENDED_INFO_EXTRA_FIELD_SIZE} bytes per affected entry and keeps
+     * those readers working, including versions of this SDK that predate the unsigned reads in
+     * {@link ZipReader}.
+     */
+    static final long MAX_NON_ZIP64_VALUE = Integer.MAX_VALUE;
     private static final long ZIP_64_END_OF_CD_RECORD_SIZE = 56;
 
     private static final int ZIP_64_GLOBAL_EXTENDED_INFO_EXTRA_FIELD_SIZE = 28;
@@ -28,9 +41,44 @@ public class ZipWriter {
     private static final int MONTH_SHIFT = 5;
     private final CountingOutputStream out;
     private final ArrayList<FileInfo> fileInfos = new ArrayList<>();
+    private final long maxNonZip64Value;
 
     public ZipWriter(OutputStream out) {
+        this(out, MAX_NON_ZIP64_VALUE);
+    }
+
+    /**
+     * Test seam. Lowering the threshold drives the real ZIP64 path in an archive small enough to
+     * write in a unit test.
+     *
+     * @param out the stream to write the archive to
+     * @param maxNonZip64Value the largest offset or size to write into a 32-bit field
+     */
+    ZipWriter(OutputStream out, long maxNonZip64Value) {
+        if (maxNonZip64Value < 0 || maxNonZip64Value > MAX_NON_ZIP64_VALUE) {
+            throw new IllegalArgumentException(
+                    "zip64 threshold must be between 0 and " + MAX_NON_ZIP64_VALUE + ", got " + maxNonZip64Value);
+        }
         this.out = new CountingOutputStream(out);
+        this.maxNonZip64Value = maxNonZip64Value;
+    }
+
+    private boolean needsZip64(long offset, long size) {
+        return offset > maxNonZip64Value || size > maxNonZip64Value;
+    }
+
+    /**
+     * Guards against silently truncating an entry that was not marked as ZIP64. Always checked
+     * against {@link #MAX_NON_ZIP64_VALUE} rather than the configured threshold: lowering the
+     * threshold only makes <em>more</em> entries ZIP64, so this can only fire on a genuine
+     * truncation.
+     */
+    static void checkFitsInCentralDirectory(String name, long offset, long size) {
+        if (offset > MAX_NON_ZIP64_VALUE || size > MAX_NON_ZIP64_VALUE) {
+            throw new SDKException("cannot write zip entry [" + name + "]: offset " + offset
+                    + " and size " + size + " do not both fit in a 32-bit central directory field"
+                    + " and the entry was not marked zip64");
+        }
     }
 
     public OutputStream stream(String name) throws IOException {
@@ -118,6 +166,10 @@ public class ZipWriter {
     }
 
     private static void writeCentralDirectoryHeader(FileInfo fileInfo, OutputStream out) throws IOException {
+        if (!fileInfo.isZip64) {
+            checkFitsInCentralDirectory(fileInfo.filename, fileInfo.offset, fileInfo.size);
+        }
+
         CDFileHeader cdFileHeader = new CDFileHeader();
         cdFileHeader.generalPurposeBitFlag = fileInfo.flag;
         cdFileHeader.lastModifiedTime = fileInfo.fileTime;
@@ -179,7 +231,7 @@ public class ZipWriter {
         fileInfo.filename = name;
         fileInfo.fileTime = (short) fileTime;
         fileInfo.fileDate = (short) fileDate;
-        fileInfo.isZip64 = false;
+        fileInfo.isZip64 = needsZip64(startPosition, data.length);
 
         return fileInfo;
     }
@@ -371,8 +423,9 @@ public class ZipWriter {
             buffer.order(ByteOrder.LITTLE_ENDIAN);
             buffer.putShort(signature);
             buffer.putShort(size);
-            buffer.putLong(compressedSize);
+            // APPNOTE 4.5.3 order: original size, compressed size, then local header offset
             buffer.putLong(originalSize);
+            buffer.putLong(compressedSize);
             buffer.putLong(localFileHeaderOffset);
 
             out.write(buffer.array());
