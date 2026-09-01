@@ -217,7 +217,7 @@ public class ZipReaderTest {
     private static void assertReadsEveryEntry(byte[] archive) throws IOException {
         try (var channel = new SeekableInMemoryByteChannel(archive)) {
             var reader = new ZipReader(channel);
-            assertThat(reader.getEntries().size()).isEqualTo(3);
+            assertThat(reader.getEntries()).hasSize(3);
             assertThat(readEntry(reader, "small.txt")).isEqualTo("tiny");
             assertThat(readEntry(reader, "0.payload")).isEqualTo(PAYLOAD);
             assertThat(readEntry(reader, "0.manifest.json")).isEqualTo(MANIFEST);

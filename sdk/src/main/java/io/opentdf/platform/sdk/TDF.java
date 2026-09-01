@@ -498,7 +498,7 @@ class TDF {
         TDFObject tdfObject = new TDFObject();
         tdfObject.prepareManifest(tdfConfig, splits);
 
-        long encryptedSegmentSize = tdfConfig.defaultSegmentSize + kGcmIvSize + AesGcm.GCM_TAG_LENGTH;
+        long encryptedSegmentSize = (long) tdfConfig.defaultSegmentSize + kGcmIvSize + AesGcm.GCM_TAG_LENGTH;
         TDFWriter tdfWriter = new TDFWriter(outputStream);
 
         ByteArrayOutputStream aggregateHash = new ByteArrayOutputStream();

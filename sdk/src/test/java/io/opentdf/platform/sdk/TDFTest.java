@@ -21,7 +21,6 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
@@ -705,9 +704,9 @@ public class TDFTest {
         var tdfObject = tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
 
         var segments = tdfObject.getManifest().encryptionInformation.integrityInformation.segments;
-        assertThat(segments.size())
+        assertThat(segments)
                 .withFailMessage("test needs more than one segment to be meaningful")
-                .isGreaterThan(1);
+                .hasSizeGreaterThan(1);
 
         // payload segments start at IV 1 (IV 0 is reserved for the metadata) and
         // increment by one for every segment

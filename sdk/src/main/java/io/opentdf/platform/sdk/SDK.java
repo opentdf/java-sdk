@@ -399,6 +399,8 @@ public class SDK implements AutoCloseable {
      * <p>
      * Because this extends {@link SDKException}, which is unchecked, an existing
      * {@code catch (DataSizeNotSupported e)} still compiles and simply never runs.
+     *
+     * @deprecated nothing throws this any more; remove the catch block rather than replacing it.
      */
     @Deprecated(since = "0.19.0", forRemoval = true)
     public static class DataSizeNotSupported extends SDKException {
