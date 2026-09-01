@@ -860,6 +860,8 @@ public class TDFTest {
         assertThrows(IllegalArgumentException.class, () -> new TDF.IvCounter(1, Long.MAX_VALUE));
         assertThrows(IllegalArgumentException.class, () -> new TDF.IvCounter(-1, 10));
         assertThrows(IllegalArgumentException.class, () -> new TDF.IvCounter(10, 9));
+        // and invocation 0 belongs to the metadata, so no payload counter can start there
+        assertThrows(IllegalArgumentException.class, () -> new TDF.IvCounter(0, 10));
 
         assertDoesNotThrow(() -> new TDF.IvCounter(1, TDF.MAX_GCM_INVOCATIONS_PER_KEY));
     }

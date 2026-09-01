@@ -130,7 +130,13 @@ public class ZipReader {
         long offsetToStartOfCentralDirectory = readUnsignedInt();
         int commentLength = readUnsignedShort();
 
-        if (offsetToStartOfCentralDirectory != ZIP64_MAGICVAL) {
+        // any one of these fields may carry the sentinel that sends its real value to the zip64
+        // end of central directory record; an archive can need zip64 for its entry count alone
+        // while its central directory still starts below 4 GiB. the size is checked for the same
+        // reason even though nothing here reads it yet
+        if (totalNumEntries != ZIP64_MAGIC_SHORT
+                && sizeOfCentralDirectory != ZIP64_MAGICVAL
+                && offsetToStartOfCentralDirectory != ZIP64_MAGICVAL) {
             return new CentralDirectoryRecord(totalNumEntries, offsetToStartOfCentralDirectory);
         }
 

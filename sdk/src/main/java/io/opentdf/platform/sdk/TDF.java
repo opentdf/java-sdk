@@ -149,12 +149,14 @@ class TDF {
         }
 
         /**
-         * @param firstInvocation the first invocation number to issue
+         * @param firstInvocation the first invocation number to issue, at least
+         *                        {@link #FIRST_PAYLOAD_INVOCATION}
          * @param limit one past the last invocation number to issue
          */
         IvCounter(long firstInvocation, long limit) {
-            if (firstInvocation < 0) {
-                throw new IllegalArgumentException("invalid first invocation: " + firstInvocation);
+            if (firstInvocation < FIRST_PAYLOAD_INVOCATION) {
+                throw new IllegalArgumentException("invalid first invocation: " + firstInvocation
+                        + "; invocation " + METADATA_INVOCATION + " is reserved for the metadata");
             }
             if (limit < firstInvocation) {
                 throw new IllegalArgumentException(
