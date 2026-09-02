@@ -95,6 +95,31 @@ public class ZipReaderTest {
     }
 
     @Test
+    public void testSingleByteReadAdvancesThroughEntry() throws IOException {
+        byte[] expected = "contents with distinct bytes".getBytes(StandardCharsets.UTF_8);
+        SeekableInMemoryByteChannel outputChannel = new SeekableInMemoryByteChannel();
+        ZipArchiveOutputStream zip = new ZipArchiveOutputStream(outputChannel);
+        ZipArchiveEntry zipEntry = new ZipArchiveEntry("entry");
+        zipEntry.setMethod(0);
+        zip.putArchiveEntry(zipEntry);
+        zip.write(expected);
+        zip.closeArchiveEntry();
+        zip.close();
+
+        var reader = new ZipReader(new SeekableInMemoryByteChannel(outputChannel.array()));
+        var entry = reader.getEntries().get(0);
+        var actual = new ByteArrayOutputStream();
+        try (var data = entry.getData()) {
+            int next;
+            while ((next = data.read()) != -1) {
+                actual.write(next);
+            }
+        }
+
+        assertThat(actual.toByteArray()).isEqualTo(expected);
+    }
+
+    @Test
     public void testReadingAndWritingRandomFiles() throws IOException {
         Random r = new Random();
         int numEntries = r.nextInt(500) + 10;

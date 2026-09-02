@@ -240,6 +240,7 @@ public class ZipReader {
                         return -1;
                     }
                     setChannelPosition();
+                    buf.clear();
                     while (buf.hasRemaining()) {
                         if (zipChannel.read(buf) <= 0) {
                             return -1;
