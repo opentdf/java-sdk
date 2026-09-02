@@ -189,11 +189,24 @@ public class ZipReader {
             return fileName;
         }
 
-        public InputStream getData() throws IOException {
+        /**
+         * Checks that this entry's local header offset points inside the archive, so a corrupt
+         * or truncated central directory fails here rather than at an arbitrary position.
+         */
+        private void checkOffsetToLocalHeader() throws IOException {
             if (offsetToLocalHeader < 0 || offsetToLocalHeader >= zipChannel.size()) {
                 throw new InvalidZipException("local header offset out of range for entry ["
                         + fileName + "]: " + offsetToLocalHeader);
             }
+        }
+
+        /**
+         * Reads this entry's local file header and returns the offset of the first byte of its
+         * data. Leaves the channel positioned within the header rather than at the returned
+         * offset, because the filename and extra field are skipped by arithmetic.
+         */
+        private long findStartOfData() throws IOException {
+            checkOffsetToLocalHeader();
             zipChannel.position(offsetToLocalHeader);
             Integer signature = readInteger();
             if (signature == null || signature != LOCAL_FILE_HEADER_SIGNATURE) {
@@ -212,7 +225,11 @@ public class ZipReader {
             int filenameLength = readUnsignedShort();
             int extrafieldLength = readUnsignedShort();
 
-            final long startPosition = zipChannel.position() + filenameLength + extrafieldLength;
+            return zipChannel.position() + filenameLength + extrafieldLength;
+        }
+
+        public InputStream getData() throws IOException {
+            final long startPosition = findStartOfData();
             final long endPosition = startPosition + fileSize;
             final ByteBuffer buf = ByteBuffer.allocate(1);
             return new InputStream() {
