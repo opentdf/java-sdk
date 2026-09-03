@@ -52,6 +52,15 @@ public class ZipReader {
         return result.intValue();
     }
 
+    /**
+     * Reads a 32-bit zip field as the unsigned value it is on the wire. {@link #readInt()}
+     * sign-extends, which silently turns offsets and sizes at or above 2 GiB into negative
+     * numbers.
+     */
+    private long readUnsignedInt() throws IOException {
+        return readInt() & 0xFFFFFFFFL;
+    }
+
     final ByteBuffer shortBuf = ByteBuffer.allocate(Short.BYTES).order(ByteOrder.LITTLE_ENDIAN);
 
     private short readShort() throws IOException {
@@ -61,6 +70,14 @@ public class ZipReader {
         }
         shortBuf.flip();
         return shortBuf.getShort();
+    }
+
+    /**
+     * Reads a 16-bit zip field as the unsigned value it is on the wire. See
+     * {@link #readUnsignedInt()}.
+     */
+    private int readUnsignedShort() throws IOException {
+        return readShort() & 0xFFFF;
     }
 
     private static class CentralDirectoryRecord {
@@ -79,7 +96,10 @@ public class ZipReader {
     private static final int CENTRAL_FILE_HEADER_SIGNATURE =  0x02014b50;
 
     private static final int LOCAL_FILE_HEADER_SIGNATURE =  0x04034b50;
-    private static final int ZIP64_MAGICVAL = 0xFFFFFFFF;
+    /** Sentinel written into a 32-bit field whose real value lives in the zip64 extra field. */
+    private static final long ZIP64_MAGICVAL = 0xFFFFFFFFL;
+    /** The same sentinel for a 16-bit field, which is only two bytes wide. */
+    private static final int ZIP64_MAGIC_SHORT = 0xFFFF;
     private static final int ZIP64_EXTID= 0x0001;
 
     CentralDirectoryRecord readEndOfCentralDirectory() throws IOException {
@@ -105,12 +125,18 @@ public class ZipReader {
         short centralDirectoryDiskNumber = readShort();
         short numCDEntriesOnThisDisk = readShort();
 
-        int totalNumEntries = readShort();
-        int sizeOfCentralDirectory = readInt();
-        long offsetToStartOfCentralDirectory = readInt();
-        short commentLength = readShort();
+        int totalNumEntries = readUnsignedShort();
+        long sizeOfCentralDirectory = readUnsignedInt();
+        long offsetToStartOfCentralDirectory = readUnsignedInt();
+        int commentLength = readUnsignedShort();
 
-        if (offsetToStartOfCentralDirectory != ZIP64_MAGICVAL) {
+        // any one of these fields may carry the sentinel that sends its real value to the zip64
+        // end of central directory record; an archive can need zip64 for its entry count alone
+        // while its central directory still starts below 4 GiB. the size is checked for the same
+        // reason even though nothing here reads it yet
+        if (totalNumEntries != ZIP64_MAGIC_SHORT
+                && sizeOfCentralDirectory != ZIP64_MAGICVAL
+                && offsetToStartOfCentralDirectory != ZIP64_MAGICVAL) {
             return new CentralDirectoryRecord(totalNumEntries, offsetToStartOfCentralDirectory);
         }
 
@@ -163,7 +189,24 @@ public class ZipReader {
             return fileName;
         }
 
-        public InputStream getData() throws IOException {
+        /**
+         * Checks that this entry's local header offset points inside the archive, so a corrupt
+         * or truncated central directory fails here rather than at an arbitrary position.
+         */
+        private void checkOffsetToLocalHeader() throws IOException {
+            if (offsetToLocalHeader < 0 || offsetToLocalHeader >= zipChannel.size()) {
+                throw new InvalidZipException("local header offset out of range for entry ["
+                        + fileName + "]: " + offsetToLocalHeader);
+            }
+        }
+
+        /**
+         * Reads this entry's local file header and returns the offset of the first byte of its
+         * data. Leaves the channel positioned within the header rather than at the returned
+         * offset, because the filename and extra field are skipped by arithmetic.
+         */
+        private long findStartOfData() throws IOException {
+            checkOffsetToLocalHeader();
             zipChannel.position(offsetToLocalHeader);
             Integer signature = readInteger();
             if (signature == null || signature != LOCAL_FILE_HEADER_SIGNATURE) {
@@ -177,12 +220,16 @@ public class ZipReader {
                     + Short.BYTES
                     + Integer.BYTES);
 
-            long compressedSize = readInt();
-            long uncompressedSize = readInt();
-            int filenameLength = readShort();
-            int extrafieldLength = readShort();
+            long compressedSize = readUnsignedInt();
+            long uncompressedSize = readUnsignedInt();
+            int filenameLength = readUnsignedShort();
+            int extrafieldLength = readUnsignedShort();
 
-            final long startPosition = zipChannel.position() + filenameLength + extrafieldLength;
+            return zipChannel.position() + filenameLength + extrafieldLength;
+        }
+
+        public InputStream getData() throws IOException {
+            final long startPosition = findStartOfData();
             final long endPosition = startPosition + fileSize;
             final ByteBuffer buf = ByteBuffer.allocate(1);
             return new InputStream() {
@@ -193,6 +240,7 @@ public class ZipReader {
                         return -1;
                     }
                     setChannelPosition();
+                    buf.clear();
                     while (buf.hasRemaining()) {
                         if (zipChannel.read(buf) <= 0) {
                             return -1;
@@ -242,15 +290,15 @@ public class ZipReader {
         short lastModFileTime = readShort();
         short lastModFileDate = readShort();
         int crc32 = readInt();
-        long compressedSize = readInt();
-        long uncompressedSize = readInt();
-        int fileNameLength = readShort();
-        int extraFieldLength = readShort();
-        short fileCommentLength = readShort();
-        int diskNumberStart = readShort();
+        long compressedSize = readUnsignedInt();
+        long uncompressedSize = readUnsignedInt();
+        int fileNameLength = readUnsignedShort();
+        int extraFieldLength = readUnsignedShort();
+        int fileCommentLength = readUnsignedShort();
+        int diskNumberStart = readUnsignedShort();
         short internalFileAttributes = readShort();
         int externalFileAttributes = readInt();
-        long relativeOffsetOfLocalHeader = readInt();
+        long relativeOffsetOfLocalHeader = readUnsignedInt();
 
         ByteBuffer fileName = ByteBuffer.allocate(fileNameLength);
         while (fileName.hasRemaining()) {
@@ -262,20 +310,22 @@ public class ZipReader {
         // Parse the extra field
         for (final long startPos = zipChannel.position(); zipChannel.position() < startPos + extraFieldLength; ) {
             long fieldStart = zipChannel.position();
-            int headerId = readShort();
-            int dataSize = readShort();
+            int headerId = readUnsignedShort();
+            int dataSize = readUnsignedShort();
 
             if (headerId == ZIP64_EXTID) {
-                if (compressedSize == -1) {
-                    compressedSize = readLong();
-                }
-                if (uncompressedSize == -1) {
+                // APPNOTE 4.5.3 order: original size, compressed size, then local header offset
+                if (uncompressedSize == ZIP64_MAGICVAL) {
                     uncompressedSize = readLong();
                 }
-                if (relativeOffsetOfLocalHeader == -1) {
+                if (compressedSize == ZIP64_MAGICVAL) {
+                    compressedSize = readLong();
+                }
+                if (relativeOffsetOfLocalHeader == ZIP64_MAGICVAL) {
                     relativeOffsetOfLocalHeader = readLong();
                 }
-                if (diskNumberStart == ZIP64_MAGICVAL) {
+                // a 2-byte field, so its sentinel is 0xFFFF rather than 0xFFFFFFFF
+                if (diskNumberStart == ZIP64_MAGIC_SHORT) {
                     diskNumberStart = readInt();
                 }
             }

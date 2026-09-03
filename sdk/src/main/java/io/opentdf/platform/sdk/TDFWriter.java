@@ -17,6 +17,13 @@ public class TDFWriter {
         this.archiveWriter = new ZipWriter(destination);
     }
 
+    /**
+     * Test seam. See {@link ZipWriter#ZipWriter(OutputStream, long)}.
+     */
+    TDFWriter(OutputStream destination, long maxNonZip64Value) {
+        this.archiveWriter = new ZipWriter(destination, maxNonZip64Value);
+    }
+
     public void appendManifest(String manifest) throws IOException {
         this.archiveWriter.data(TDF_MANIFEST_FILE_NAME, manifest.getBytes(StandardCharsets.UTF_8));
     }

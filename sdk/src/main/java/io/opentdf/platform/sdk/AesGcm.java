@@ -113,6 +113,12 @@ public class AesGcm {
     /**
      * <p>encrypt.</p>
      *
+     * <p><b>Generates a fresh random nonce from {@link SecureRandom} for every call.</b> A
+     * random 96-bit nonce is only safe for a modest number of invocations under one key, so use
+     * this overload only with a key used once or a very small number of times. To encrypt many
+     * messages under a single key, use
+     * {@link #encrypt(byte[], int, byte[], int, int)} with a counter that never repeats.</p>
+     *
      * @param plaintext the plaintext byte array to encrypt
      * @param offset where the input start
      * @param len input length
@@ -151,14 +157,25 @@ public class AesGcm {
     /**
      * <p>encrypt.</p>
      *
-     * @param iv the IV vector
-     * @param authTagLen the length of the auth tag
+     * @param iv the IV vector, which must be {@value #GCM_NONCE_LENGTH} bytes and must never be
+     *           reused under this key
+     * @param authTagLen the length of the auth tag, which must be {@value #GCM_TAG_LENGTH}
      * @param plaintext the plaintext byte array to encrypt
      * @param offset where the input start
      * @param len input length
-     * @return the encrypted text
+     * @return the encrypted text, prefixed with the IV
      */
     public byte[] encrypt(byte[] iv, int authTagLen, byte[] plaintext, int offset, int len) {
+        if (iv == null || iv.length != GCM_NONCE_LENGTH) {
+            throw new IllegalArgumentException(
+                    "invalid IV size for gcm encryption: " + (iv == null ? "null" : iv.length));
+        }
+        // strict, because the read path assumes this length: Encrypted(byte[]) splits at
+        // GCM_NONCE_LENGTH and TDF validates segment sizes against GCM_TAG_LENGTH, so any other
+        // value would write a TDF this SDK cannot read
+        if (authTagLen != GCM_TAG_LENGTH) {
+            throw new IllegalArgumentException("invalid auth tag length for gcm encryption: " + authTagLen);
+        }
         try {
             Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORM);
 
@@ -170,10 +187,9 @@ public class AesGcm {
             System.arraycopy(iv, 0, cipherTextWithNonce, 0, iv.length);
             System.arraycopy(cipherText, 0, cipherTextWithNonce, iv.length, cipherText.length);
             return cipherTextWithNonce;
-        } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
-            throw new RuntimeException("error gcm decrypt", e);
-        } catch (InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
-            throw new RuntimeException("error gcm decrypt", e);
+        } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidAlgorithmParameterException
+                | InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
+            throw new SDKException("error gcm encrypt", e);
         }
     }
 
@@ -189,10 +205,9 @@ public class AesGcm {
             GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, cipherTextWithNonce.iv);
             cipher.init(Cipher.DECRYPT_MODE, key, spec);
             return cipher.doFinal(cipherTextWithNonce.ciphertext);
-        } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
-            throw new RuntimeException("error gcm decrypt", e);
-        } catch (InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
-            throw new RuntimeException("error gcm decrypt", e);
+        } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidAlgorithmParameterException
+                | InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
+            throw new SDKException("error gcm decrypt", e);
         }
     }
 

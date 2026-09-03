@@ -55,35 +55,14 @@ class TDF {
      */
     public static final String TDF_SPEC_VERSION = "4.3.0";
     private static final String KEY_ACCESS_SCHEMA_VERSION = "1.0";
-    private final long maximumSize;
-
     private final SDK.Services services;
 
-    /**
-     * Constructs a new TDF instance using the default maximum input size defined by
-     * MAX_TDF_INPUT_SIZE.
-     * <p>
-     * This constructor is primarily used to initialize the TDF object with the
-     * standard maximum
-     * input size, which controls the maximum size of the input data that can be
-     * processed.
-     * For test purposes, an alternative constructor allows for setting a custom
-     * maximum input size.
-     */
     TDF(SDK.Services services) {
-        this(MAX_TDF_INPUT_SIZE, services);
-    }
-
-    // constructor for tests so that we can set a maximum size that's tractable for
-    // tests
-    TDF(long maximumInputSize, SDK.Services services) {
-        this.maximumSize = maximumInputSize;
         this.services = services;
     }
 
     private static final Logger logger = LoggerFactory.getLogger(TDF.class);
 
-    private static final long MAX_TDF_INPUT_SIZE = 68719476736L;
     private static final int GCM_KEY_SIZE = 32;
     private static final String kSplitKeyType = "split";
     private static final String kWrapped = "wrapped";
@@ -92,7 +71,6 @@ class TDF {
     private static final String kMlkemWrapped = "mlkem-wrapped";
     private static final String kKasProtocol = "kas";
     private static final int kGcmIvSize = 12;
-    private static final int kAesBlockSize = 16;
     private static final String kGCMCipherAlgorithm = "AES-256-GCM";
     private static final int kGMACPayloadLength = 16;
     private static final String kGmacIntegrityAlgorithm = "GMAC";
@@ -102,6 +80,119 @@ class TDF {
     private static final String kTDFZipReference = "reference";
 
     private static final Gson gson = new GsonBuilder().create();
+
+    /**
+     * A self-imposed ceiling on the number of AES-GCM authenticated-encryption
+     * invocations under a single payload key. One invocation is spent on the
+     * metadata (IV 0), leaving 2^32 - 1 for payload segments.
+     * <p>
+     * This follows the deterministic IV construction of NIST SP 800-38D section
+     * 8.2.1. Because the payload key is freshly generated for each TDF and used by a
+     * single device, section 8.2.1 permits an empty fixed field, so the whole 96 bits
+     * are the invocation field and the constraint the standard actually imposes is
+     * 2^96. Section 8.3's limit of 2^32 does <em>not</em> bind here — it is scoped to
+     * RBG-based IVs and to deterministic IVs that are not 96 bits — but it is adopted
+     * anyway as a conservative ceiling.
+     * <p>
+     * It is not reachable in practice: at the smallest segment size
+     * {@link Config#withSegmentSize} permits ({@link Config#MIN_SEGMENT_SIZE}, 16 KiB)
+     * it would take 64 TiB of input. It is enforced so the invariant holds by
+     * construction rather than by assumption.
+     */
+    static final long MAX_GCM_INVOCATIONS_PER_KEY = 1L << 32;
+
+    /**
+     * A deterministic, unsigned 96-bit big-endian AES-GCM IV counter.
+     * <p>
+     * A TDF encrypts its metadata and its payload segments under keys that are
+     * identical when there is a single key split, so the two must never share an
+     * IV. IV 0 is reserved for the metadata and payload segments start at IV 1,
+     * incrementing once per segment.
+     * <p>
+     * The counter refuses to issue an IV once it reaches its limit, and no limit can
+     * exceed {@link #MAX_GCM_INVOCATIONS_PER_KEY}, so an IV can never be handed out
+     * twice and the counter can never reach a value that would collide with the
+     * metadata IV.
+     * <p>
+     * <b>Precondition:</b> this is safe only because the key is freshly generated
+     * for every TDF ({@code AesGcm.generateKey()} in {@code prepareManifest}).
+     * Reusing a key across two TDFs would repeat this IV sequence, which is
+     * catastrophic for AES-GCM — it leaks the XOR of the plaintexts and enables
+     * authentication-key recovery. Do not add a way to supply or reuse a payload
+     * key without also changing this construction.
+     */
+    static final class IvCounter {
+        /** The invocation reserved for the metadata. */
+        static final long METADATA_INVOCATION = 0;
+        /** The first invocation available to payload segments. */
+        static final long FIRST_PAYLOAD_INVOCATION = METADATA_INVOCATION + 1;
+
+        /** Exclusive; the counter stops before issuing this invocation number. */
+        private final long limit;
+        private long next;
+
+        /**
+         * The IV reserved for encrypting the TDF metadata.
+         *
+         * @return twelve zero bytes
+         */
+        static byte[] metadataIv() {
+            return ivFor(METADATA_INVOCATION);
+        }
+
+        /**
+         * A payload IV counter whose first value is 1, leaving IV 0 for the metadata
+         * and the remainder of the per-key invocation budget for payload segments.
+         */
+        static IvCounter forPayload() {
+            return new IvCounter(FIRST_PAYLOAD_INVOCATION, MAX_GCM_INVOCATIONS_PER_KEY);
+        }
+
+        /**
+         * @param firstInvocation the first invocation number to issue, at least
+         *                        {@link #FIRST_PAYLOAD_INVOCATION}
+         * @param limit one past the last invocation number to issue
+         */
+        IvCounter(long firstInvocation, long limit) {
+            if (firstInvocation < FIRST_PAYLOAD_INVOCATION) {
+                throw new IllegalArgumentException("invalid first invocation: " + firstInvocation
+                        + "; invocation " + METADATA_INVOCATION + " is reserved for the metadata");
+            }
+            if (limit < firstInvocation) {
+                throw new IllegalArgumentException(
+                        "limit " + limit + " is below the first invocation " + firstInvocation);
+            }
+            if (limit > MAX_GCM_INVOCATIONS_PER_KEY) {
+                throw new IllegalArgumentException("limit " + limit + " exceeds the maximum of "
+                        + MAX_GCM_INVOCATIONS_PER_KEY + " AES-GCM invocations for a single key");
+            }
+            this.next = firstInvocation;
+            this.limit = limit;
+        }
+
+        /**
+         * @return the next IV in the sequence, which has never been returned before
+         */
+        synchronized byte[] next() {
+            if (next >= limit) {
+                throw new SDKException("exceeded the maximum of " + MAX_GCM_INVOCATIONS_PER_KEY
+                        + " AES-GCM invocations for a single key");
+            }
+            return ivFor(next++);
+        }
+
+        /**
+         * Encodes an invocation number as an unsigned 96-bit big-endian IV.
+         */
+        static byte[] ivFor(long invocation) {
+            byte[] iv = new byte[kGcmIvSize];
+            for (int index = iv.length - 1; index >= 0 && invocation != 0; index--) {
+                iv[index] = (byte) invocation;
+                invocation >>>= Byte.SIZE;
+            }
+            return iv;
+        }
+    }
 
     static class EncryptedMetadata {
         private String ciphertext;
@@ -176,12 +267,17 @@ class TDF {
                 // Add meta data
                 var encryptedMetadata = "";
                 if (tdfConfig.metaData != null && !tdfConfig.metaData.trim().isEmpty()) {
+                    // IV 0 is reserved for the metadata; payload segments start at IV 1. The
+                    // split key used here is the payload key when there is only one split, so
+                    // the two must not share an IV.
+                    byte[] metadataIv = IvCounter.metadataIv();
+                    byte[] metaBytes = tdfConfig.metaData.getBytes(StandardCharsets.UTF_8);
                     AesGcm aesGcm = new AesGcm(symKey);
-                    var encrypted = aesGcm.encrypt(tdfConfig.metaData.getBytes(StandardCharsets.UTF_8));
+                    byte[] ivAndCiphertext = aesGcm.encrypt(metadataIv, AesGcm.GCM_TAG_LENGTH, metaBytes, 0, metaBytes.length);
 
                     EncryptedMetadata em = new EncryptedMetadata();
-                    em.iv = encoder.encodeToString(encrypted.getIv());
-                    em.ciphertext = encoder.encodeToString(encrypted.asBytes());
+                    em.iv = encoder.encodeToString(metadataIv);
+                    em.ciphertext = encoder.encodeToString(ivAndCiphertext);
 
                     var metadata = gson.toJson(em);
                     encryptedMetadata = encoder.encodeToString(metadata.getBytes(StandardCharsets.UTF_8));
@@ -402,14 +498,14 @@ class TDF {
         TDFObject tdfObject = new TDFObject();
         tdfObject.prepareManifest(tdfConfig, splits);
 
-        long encryptedSegmentSize = tdfConfig.defaultSegmentSize + kGcmIvSize + kAesBlockSize;
+        long encryptedSegmentSize = (long) tdfConfig.defaultSegmentSize + kGcmIvSize + AesGcm.GCM_TAG_LENGTH;
         TDFWriter tdfWriter = new TDFWriter(outputStream);
 
         ByteArrayOutputStream aggregateHash = new ByteArrayOutputStream();
         byte[] readBuf = new byte[tdfConfig.defaultSegmentSize];
+        IvCounter payloadIv = IvCounter.forPayload();
 
         tdfObject.manifest.encryptionInformation.integrityInformation.segments = new ArrayList<>();
-        long totalSize = 0;
         boolean finished;
         try (var payloadOutput = tdfWriter.payload()) {
             do {
@@ -420,18 +516,14 @@ class TDF {
                     readThisLoop += nRead;
                 }
                 finished = nRead < 0;
-                totalSize += readThisLoop;
-
-                if (totalSize > maximumSize) {
-                    throw new SDK.DataSizeNotSupported("can't create tdf larger than 64gb");
-                }
 
                 byte[] cipherData;
                 byte[] segmentSig;
                 Manifest.Segment segmentInfo = new Manifest.Segment();
 
                 // encrypt
-                cipherData = tdfObject.aesGcm.encrypt(readBuf, 0, readThisLoop).asBytes();
+                cipherData = tdfObject.aesGcm.encrypt(payloadIv.next(), AesGcm.GCM_TAG_LENGTH,
+                        readBuf, 0, readThisLoop);
                 payloadOutput.write(cipherData);
 
                 segmentSig = calculateSignature(cipherData, tdfObject.payloadKey, tdfConfig.segmentIntegrityAlgorithm);
@@ -693,7 +785,7 @@ class TDF {
         int segmentSize = manifest.encryptionInformation.integrityInformation.segmentSizeDefault;
         int encryptedSegSize = manifest.encryptionInformation.integrityInformation.encryptedSegmentSizeDefault;
 
-        if (segmentSize != encryptedSegSize - (kGcmIvSize + kAesBlockSize)) {
+        if (segmentSize != encryptedSegSize - (kGcmIvSize + AesGcm.GCM_TAG_LENGTH)) {
             throw new IllegalStateException(
                     "segment size mismatch. encrypted segment size differs from plaintext segment size. the TDF is invalid");
         }

@@ -1,5 +1,6 @@
 package io.opentdf.platform.sdk;
 
+import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -71,5 +72,33 @@ String kManifestJsonFromTDF = "{\n" +
         writer.appendManifest(kManifestJsonFromTDF);
         writer.finish();
         fileOutStream.close();
+    }
+
+    /**
+     * The manifest is appended after the payload, so in a large TDF its local header offset
+     * doesn't fit in a 32-bit central directory field. Uses the lowered zip64 threshold to run
+     * that path against a small file.
+     */
+    @Test
+    void readsBackAManifestWrittenPastTheZip64Boundary() throws IOException {
+        var manifest = "{\"payload\":{\"url\":\"0.payload\"}}";
+        var payload = "a payload long enough to push the manifest past the threshold";
+
+        var out = new ByteArrayOutputStream();
+        var writer = new TDFWriter(out, 8);
+        try (var p = writer.payload()) {
+            new ByteArrayInputStream(payload.getBytes(StandardCharsets.UTF_8)).transferTo(p);
+        }
+        writer.appendManifest(manifest);
+        writer.finish();
+
+        try (var chan = new SeekableInMemoryByteChannel(out.toByteArray())) {
+            var reader = new TDFReader(chan);
+            assertEquals(manifest, reader.manifest());
+
+            var payloadBytes = new byte[payload.length()];
+            assertEquals(payload.length(), reader.readPayloadBytes(payloadBytes));
+            assertEquals(payload, new String(payloadBytes, StandardCharsets.UTF_8));
+        }
     }
 }
