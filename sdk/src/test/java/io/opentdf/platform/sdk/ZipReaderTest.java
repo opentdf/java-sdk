@@ -16,6 +16,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
@@ -23,6 +24,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class ZipReaderTest {
 
@@ -255,6 +257,53 @@ public class ZipReaderTest {
             assertThat(readEntry(zip, "small.txt")).isEqualTo("tiny");
             assertThat(readEntry(zip, "0.payload")).isEqualTo(PAYLOAD);
             assertThat(readEntry(zip, "0.manifest.json")).isEqualTo(MANIFEST);
+        }
+    }
+
+    /**
+     * Scanning for the end of central directory used to treat a short read the same as finding
+     * the signature, so a truncated archive fell out of the scan and parsed whatever followed as
+     * the record. Truncation has to surface as "this is not a zip", not as a confusing failure
+     * somewhere downstream.
+     */
+    @Test
+    public void testTruncatedArchiveIsRejected() throws IOException {
+        var archive = zip64Archive();
+
+        // the trailing end of central directory record and its locator are gone
+        assertThatThrownBy(() -> readArchive(
+                Arrays.copyOf(archive, archive.length - (EOCD_SIZE + ZIP64_EOCD_LOCATOR_SIZE))))
+                .isInstanceOf(InvalidZipException.class);
+
+        // only the last few bytes of the record are gone
+        assertThatThrownBy(() -> readArchive(Arrays.copyOf(archive, archive.length - 4)))
+                .isInstanceOf(InvalidZipException.class);
+
+        // cut down to less than a single end of central directory record
+        assertThatThrownBy(() -> readArchive(Arrays.copyOf(archive, EOCD_SIZE - 1)))
+                .isInstanceOf(InvalidZipException.class);
+
+        assertThatThrownBy(() -> readArchive(new byte[0]))
+                .isInstanceOf(InvalidZipException.class);
+    }
+
+    /**
+     * The end of central directory record claims a zip64 locator that the archive is too short to
+     * hold. Reaching for it has to be a zip error rather than an out of range seek.
+     */
+    @Test
+    public void testArchiveTooShortForTheZip64LocatorIsRejected() throws IOException {
+        var archive = zip64Archive();
+        // drop everything before the trailing records, leaving the end of central directory (which
+        // still carries its sentinels) with nothing in front of it
+        var truncated = Arrays.copyOfRange(archive, archive.length - EOCD_SIZE, archive.length);
+
+        assertThatThrownBy(() -> readArchive(truncated)).isInstanceOf(InvalidZipException.class);
+    }
+
+    private static void readArchive(byte[] archive) throws IOException {
+        try (var channel = new SeekableInMemoryByteChannel(archive)) {
+            new ZipReader(channel);
         }
     }
 

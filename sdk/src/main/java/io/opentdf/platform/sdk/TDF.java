@@ -421,6 +421,19 @@ class TDF {
             }
 
             for (Manifest.Segment segment : manifest.encryptionInformation.integrityInformation.segments) {
+                if (segment.encryptedSegmentSize <= 0) {
+                    // an encrypted segment always carries at least an IV and a tag, so this only
+                    // happens on a manifest that supplied neither a per-segment
+                    // encryptedSegmentSize nor a usable encryptedSegmentSizeDefault. reported
+                    // here rather than letting a zero length buffer reach the integrity check,
+                    // where it surfaces as an unrelated complaint about the payload being too
+                    // small to GMAC
+                    throw new IllegalStateException("invalid TDF: segment has an encrypted size of "
+                            + segment.encryptedSegmentSize
+                            + ". the manifest supplied neither a per-segment encryptedSegmentSize"
+                            + " nor a usable encryptedSegmentSizeDefault");
+                }
+
                 if (segment.encryptedSegmentSize > Config.MAX_SEGMENT_SIZE) {
                     throw new IllegalStateException("Segment size " + segment.encryptedSegmentSize + " exceeded limit "
                             + Config.MAX_SEGMENT_SIZE);
