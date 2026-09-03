@@ -18,6 +18,8 @@ import io.opentdf.platform.kas.PublicKeyResponse;
 import io.opentdf.platform.kas.RewrapRequest;
 import io.opentdf.platform.kas.RewrapResponse;
 import io.opentdf.platform.sdk.SDK.KasBadRequestException;
+import io.opentdf.platform.sdk.spi.KemProvider;
+import io.opentdf.platform.sdk.spi.KemProviders;
 
 import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
@@ -47,8 +49,8 @@ class KASClient implements SDK.KAS {
     private final BiFunction<OkHttpClient, String, ProtocolClient> protocolClientFactory;
     private final boolean usePlaintext;
     private final JWSSigner signer;
-    private AsymDecryption decryptor;
-    private String clientPublicKey;
+    private volatile AsymDecryption decryptor;
+    private volatile String clientPublicKey;
     private KASKeyCache kasKeyCache;
 
     private static final Logger log = LoggerFactory.getLogger(KASClient.class);
@@ -118,25 +120,86 @@ class KASClient implements SDK.KAS {
 
     private static final Gson gson = new Gson();
 
-    @Override
-    public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy,  KeyType sessionKeyType) {
-        ECKeyPair ecKeyPair = null;
+    /** Session-key material generated for a single unwrap() call: the PEM to send to KAS, plus whichever private key is needed to process the response. */
+    private static final class SessionKeyMaterial {
+        final String publicKeyPem;
+        final ECKeyPair ecKeyPair;
+        final KemProvider.KeyPairPem kemKeyPair;
+
+        SessionKeyMaterial(String publicKeyPem, ECKeyPair ecKeyPair, KemProvider.KeyPairPem kemKeyPair) {
+            this.publicKeyPem = publicKeyPem;
+            this.ecKeyPair = ecKeyPair;
+            this.kemKeyPair = kemKeyPair;
+        }
+    }
+
+    private SessionKeyMaterial generateSessionKeyMaterial(KeyType sessionKeyType) {
         if (sessionKeyType.isEc()) {
             var curve = sessionKeyType.getECCurve();
-            ecKeyPair = new ECKeyPair(curve);
-            clientPublicKey = ecKeyPair.publicKeyInPEMFormat();
-        } else {
-            // Initialize the RSA key pair only once and reuse it for future unwrap operations
-            if (decryptor == null) {
-                var encryptionKeypair = CryptoUtils.generateRSAKeypair();
-                decryptor = new AsymDecryption(encryptionKeypair.getPrivate());
-                clientPublicKey = CryptoUtils.getRSAPublicKeyPEM(encryptionKeypair.getPublic());
+            ECKeyPair ecKeyPair = new ECKeyPair(curve);
+            return new SessionKeyMaterial(ecKeyPair.publicKeyInPEMFormat(), ecKeyPair, null);
+        }
+        if (sessionKeyType.isMLKEM()) {
+            KemProvider.KeyPairPem kemKeyPair = KemProviders.get(sessionKeyType).generateKeyPair(sessionKeyType);
+            return new SessionKeyMaterial(kemKeyPair.publicKeyPEM, null, kemKeyPair);
+        }
+        // Initialize the RSA key pair only once and reuse it for future unwrap
+        // operations. Double-checked locking: decryptor/clientPublicKey are
+        // volatile so the initializing thread's write is visible to others,
+        // and the synchronized block keeps two concurrent first-callers from
+        // generating distinct keypairs and racing to overwrite each other's
+        // fields (which would send one generation's public key while
+        // decrypting with another's private key).
+        if (decryptor == null) {
+            synchronized (this) {
+                if (decryptor == null) {
+                    var encryptionKeypair = CryptoUtils.generateRSAKeypair();
+                    decryptor = new AsymDecryption(encryptionKeypair.getPrivate());
+                    clientPublicKey = CryptoUtils.getRSAPublicKeyPEM(encryptionKeypair.getPublic());
+                }
             }
         }
+        return new SessionKeyMaterial(clientPublicKey, null, null);
+    }
+
+    private byte[] unwrapResponseKey(
+            KeyType sessionKeyType, SessionKeyMaterial keyMaterial, RewrapResponse response, byte[] wrappedKey) {
+        if (sessionKeyType.isEc()) {
+            if (keyMaterial.ecKeyPair == null) {
+                throw new SDKException("ECKeyPair is null. Unable to proceed with the unwrap operation.");
+            }
+
+            var kasEphemeralPublicKey = response.getSessionPublicKey();
+            ECPublicKey publicKey;
+            try {
+                publicKey = ECKeyPair.publicKeyFromPem(kasEphemeralPublicKey);
+            } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+                throw new SDKException("error decoding KAS session public key", e);
+            }
+            byte[] symKey = ECKeyPair.computeECDHKey(publicKey, keyMaterial.ecKeyPair.getPrivateKey());
+
+            var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symKey);
+
+            AesGcm gcm = new AesGcm(sessionKey);
+            AesGcm.Encrypted encrypted = new AesGcm.Encrypted(wrappedKey);
+            return gcm.decrypt(encrypted);
+        }
+        if (sessionKeyType.isMLKEM()) {
+            if (keyMaterial.kemKeyPair == null) {
+                throw new SDKException("KEM keypair is null. Unable to proceed with the unwrap operation.");
+            }
+            return KemProviders.get(sessionKeyType).unwrapDEK(sessionKeyType, keyMaterial.kemKeyPair.privateKeyPEM, wrappedKey);
+        }
+        return decryptor.decrypt(wrappedKey);
+    }
+
+    @Override
+    public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy,  KeyType sessionKeyType) {
+        SessionKeyMaterial keyMaterial = generateSessionKeyMaterial(sessionKeyType);
 
         RewrapRequestBody body = new RewrapRequestBody();
         body.policy = policy;
-        body.clientPublicKey = clientPublicKey;
+        body.clientPublicKey = keyMaterial.publicKeyPem;
         body.keyAccess = keyAccess;
 
         var requestBody = gson.toJson(body);
@@ -171,29 +234,7 @@ class KASClient implements SDK.KAS {
         }
 
         var wrappedKey = response.getEntityWrappedKey().toByteArray();
-        if (sessionKeyType.isEc()) {
-
-            if (ecKeyPair == null) {
-                throw new SDKException("ECKeyPair is null. Unable to proceed with the unwrap operation.");
-            }
-
-            var kasEphemeralPublicKey = response.getSessionPublicKey();
-            ECPublicKey publicKey;
-            try {
-                publicKey = ECKeyPair.publicKeyFromPem(kasEphemeralPublicKey);
-            } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
-                throw new SDKException("error decoding KAS session public key", e);
-            }
-            byte[] symKey = ECKeyPair.computeECDHKey(publicKey, ecKeyPair.getPrivateKey());
-
-            var sessionKey = ECKeyPair.calculateHKDF(GLOBAL_KEY_SALT, symKey);
-
-            AesGcm gcm = new AesGcm(sessionKey);
-            AesGcm.Encrypted encrypted = new AesGcm.Encrypted(wrappedKey);
-            return gcm.decrypt(encrypted);
-        } else {
-            return decryptor.decrypt(wrappedKey);
-        }
+        return unwrapResponseKey(sessionKeyType, keyMaterial, response, wrappedKey);
     }
 
     private final HashMap<String, AccessServiceClient> stubs = new HashMap<>();
