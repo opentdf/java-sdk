@@ -7,6 +7,7 @@ import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.JWK;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.opentdf.platform.policy.KeyAccessServer;
 import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClient;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
@@ -34,6 +35,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -46,6 +48,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class TDFTest {
     protected static KeyAccessServerRegistryServiceClient kasRegistryService;
@@ -729,6 +732,128 @@ public class TDFTest {
                 .withFailMessage("extracted data does not match")
                 .containsExactly(data);
 
+    }
+
+    /** web-sdk's {@code DEFAULT_SEGMENT_SIZE}, the size at which its omissions start. */
+    private static final int WEB_SDK_DEFAULT_SEGMENT_SIZE = 1024 * 1024;
+
+    /**
+     * web-sdk drops {@code segmentSize} and {@code encryptedSegmentSize} from a segment whenever
+     * they equal the manifest level defaults, which is every full segment of a payload larger
+     * than one segment. Reproduces that encoding on a java-produced TDF rather than carrying a
+     * web-sdk fixture, so the test stays self-contained. Without the fallback the reader
+     * allocates a zero length buffer for those segments and fails inside the integrity check.
+     */
+    @Test
+    public void testReadingATDFThatOmitsDefaultedSegmentSizes() throws Exception {
+        // two full segments and a partial one, the shape that first exposed this
+        var data = new byte[2 * WEB_SDK_DEFAULT_SEGMENT_SIZE + 4242];
+        new Random(4589).nextBytes(data);
+
+        var tdf = new TDF(new FakeServicesBuilder().setKas(kas)
+                .setKeyAccessServerRegistryService(kasRegistryService).build());
+        var original = new ByteArrayOutputStream();
+        var tdfObject = tdf.createTDF(new ByteArrayInputStream(data), original,
+                Config.newTDFConfig(
+                        Config.withAutoconfigure(false),
+                        Config.withKasInformation(getRSAKASInfos()),
+                        Config.withSegmentSize(WEB_SDK_DEFAULT_SEGMENT_SIZE)));
+        assertThat(tdfObject.getManifest().encryptionInformation.integrityInformation.segments)
+                .withFailMessage("the test needs more than one segment to be meaningful")
+                .hasSizeGreaterThan(1);
+
+        var rewritten = rewriteManifest(original.toByteArray(), manifest -> {
+            var integrityInformation = manifest.getAsJsonObject("encryptionInformation")
+                    .getAsJsonObject("integrityInformation");
+            var segmentSizeDefault = integrityInformation.get("segmentSizeDefault").getAsLong();
+            var encryptedSegmentSizeDefault = integrityInformation.get("encryptedSegmentSizeDefault").getAsLong();
+
+            int omitted = 0;
+            for (var element : integrityInformation.getAsJsonArray("segments")) {
+                var segment = element.getAsJsonObject();
+                if (segment.get("segmentSize").getAsLong() == segmentSizeDefault) {
+                    segment.remove("segmentSize");
+                    omitted++;
+                }
+                if (segment.get("encryptedSegmentSize").getAsLong() == encryptedSegmentSizeDefault) {
+                    segment.remove("encryptedSegmentSize");
+                }
+            }
+            assertThat(omitted)
+                    .withFailMessage("no segment matched the defaults, so nothing was omitted")
+                    .isGreaterThan(0);
+        });
+
+        var unwrapped = new ByteArrayOutputStream();
+        tdf.loadTDF(new SeekableInMemoryByteChannel(rewritten), platformUrl).readPayload(unwrapped);
+
+        assertThat(unwrapped.toByteArray())
+                .withFailMessage("extracted data does not match")
+                .containsExactly(data);
+    }
+
+    /**
+     * An explicit zero is a corrupt manifest rather than an omitted default, and has to say so
+     * instead of reaching the integrity check and complaining that the payload is too small to
+     * GMAC.
+     */
+    @Test
+    public void testZeroLengthSegmentIsRejectedWithAClearError() throws Exception {
+        var data = "some data to encrypt".getBytes(StandardCharsets.UTF_8);
+        var tdf = new TDF(new FakeServicesBuilder().setKas(kas)
+                .setKeyAccessServerRegistryService(kasRegistryService).build());
+        var original = new ByteArrayOutputStream();
+        tdf.createTDF(new ByteArrayInputStream(data), original,
+                Config.newTDFConfig(
+                        Config.withAutoconfigure(false),
+                        Config.withKasInformation(getRSAKASInfos())));
+
+        var rewritten = rewriteManifest(original.toByteArray(), manifest -> manifest
+                .getAsJsonObject("encryptionInformation")
+                .getAsJsonObject("integrityInformation")
+                .getAsJsonArray("segments")
+                .get(0).getAsJsonObject()
+                .addProperty("encryptedSegmentSize", 0));
+
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(rewritten), platformUrl);
+        assertThatThrownBy(() -> reader.readPayload(new ByteArrayOutputStream()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("encrypted size of 0");
+    }
+
+    /** Rebuilds a TDF with its manifest edited in place, leaving the payload bytes untouched. */
+    private static byte[] rewriteManifest(byte[] tdfBytes, Consumer<JsonObject> edit) throws IOException {
+        final JsonObject manifest;
+        final byte[] payload;
+        try (var channel = new SeekableInMemoryByteChannel(tdfBytes)) {
+            var reader = new ZipReader(channel);
+            manifest = JsonParser
+                    .parseString(readZipEntry(reader, TDFWriter.TDF_MANIFEST_FILE_NAME)
+                            .toString(StandardCharsets.UTF_8))
+                    .getAsJsonObject();
+            payload = readZipEntry(reader, TDFWriter.TDF_PAYLOAD_FILE_NAME).toByteArray();
+        }
+
+        edit.accept(manifest);
+
+        var out = new ByteArrayOutputStream();
+        var writer = new TDFWriter(out);
+        try (var payloadStream = writer.payload()) {
+            payloadStream.write(payload);
+        }
+        writer.appendManifest(manifest.toString());
+        writer.finish();
+        return out.toByteArray();
+    }
+
+    private static ByteArrayOutputStream readZipEntry(ZipReader reader, String name) throws IOException {
+        var entry = reader.getEntries().stream()
+                .filter(e -> e.getName().equals(name))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no entry named " + name));
+        var data = new ByteArrayOutputStream();
+        entry.getData().transferTo(data);
+        return data;
     }
 
     /**

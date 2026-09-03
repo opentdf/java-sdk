@@ -30,6 +30,17 @@ public class ZipWriter {
      * {@link ZipReader}.
      */
     static final long MAX_NON_ZIP64_VALUE = Integer.MAX_VALUE;
+
+    /**
+     * The largest entry count we will write into the 2-byte end of central directory field.
+     * {@code 0xFFFF} itself is the sentinel that sends the real count to the zip64 end of central
+     * directory record, so it cannot be used as a literal value.
+     */
+    private static final long MAX_NON_ZIP64_ENTRY_COUNT = 0xFFFE;
+
+    /** The largest name we can describe in the 2-byte filename length field. */
+    private static final int MAX_FILENAME_LENGTH = 0xFFFF;
+
     private static final long ZIP_64_END_OF_CD_RECORD_SIZE = 56;
 
     private static final int ZIP_64_GLOBAL_EXTENDED_INFO_EXTRA_FIELD_SIZE = 28;
@@ -81,16 +92,30 @@ public class ZipWriter {
         }
     }
 
+    /**
+     * Encodes an entry name the way it is written to the archive. Zip filename lengths are
+     * counted in bytes, so anything derived from {@link String#length()} — which counts UTF-16
+     * code units — desyncs the central directory for a non-ASCII name.
+     */
+    private static byte[] encodeFilename(String name) {
+        var bytes = name.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > MAX_FILENAME_LENGTH) {
+            throw new SDKException("zip entry name is " + bytes.length
+                    + " bytes when encoded as UTF-8, which does not fit in the "
+                    + MAX_FILENAME_LENGTH + " byte filename length field");
+        }
+        return bytes;
+    }
+
     public OutputStream stream(String name) throws IOException {
         var startPosition = out.position;
         long fileTime, fileDate;
         fileTime = fileDate = getTimeDateUnMSDosFormat();
 
-        var nameBytes = name.getBytes(StandardCharsets.UTF_8);
+        var nameBytes = encodeFilename(name);
         LocalFileHeader localFileHeader = new LocalFileHeader();
         localFileHeader.lastModifiedTime = (int) fileTime;
         localFileHeader.lastModifiedDate = (int) fileDate;
-        localFileHeader.filenameLength = (short) nameBytes.length;
         localFileHeader.crc32 = 0;
         localFileHeader.generalPurposeBitFlag = (1 << 3) | (1 << 11); // we are using the data descriptor and we are using UTF-8
         localFileHeader.compressedSize = ZIP_64_MAGIC_VAL;
@@ -170,12 +195,12 @@ public class ZipWriter {
             checkFitsInCentralDirectory(fileInfo.filename, fileInfo.offset, fileInfo.size);
         }
 
+        var nameBytes = encodeFilename(fileInfo.filename);
         CDFileHeader cdFileHeader = new CDFileHeader();
         cdFileHeader.generalPurposeBitFlag = fileInfo.flag;
         cdFileHeader.lastModifiedTime = fileInfo.fileTime;
         cdFileHeader.lastModifiedDate = fileInfo.fileDate;
         cdFileHeader.crc32 = (int) fileInfo.crc;
-        cdFileHeader.filenameLength = (short) fileInfo.filename.length();
         cdFileHeader.extraFieldLength = 0;
         cdFileHeader.compressedSize = (int) fileInfo.size;
         cdFileHeader.uncompressedSize = (int) fileInfo.size;
@@ -188,7 +213,7 @@ public class ZipWriter {
             cdFileHeader.extraFieldLength = ZIP_64_GLOBAL_EXTENDED_INFO_EXTRA_FIELD_SIZE;
         }
 
-        cdFileHeader.write(out, fileInfo.filename.getBytes(StandardCharsets.UTF_8));
+        cdFileHeader.write(out, nameBytes);
 
         if (fileInfo.isZip64) {
             Zip64GlobalExtendedInfoExtraField zip64ExtendedInfoExtraField = new Zip64GlobalExtendedInfoExtraField();
@@ -208,18 +233,17 @@ public class ZipWriter {
         crc.update(data);
         var crcValue = crc.getValue();
 
-        var nameBytes = name.getBytes(StandardCharsets.UTF_8);
+        var nameBytes = encodeFilename(name);
         LocalFileHeader localFileHeader = new LocalFileHeader();
         localFileHeader.lastModifiedTime = (int) fileTime;
         localFileHeader.lastModifiedDate = (int) fileDate;
-        localFileHeader.filenameLength = (short) nameBytes.length;
         localFileHeader.generalPurposeBitFlag = 0;
         localFileHeader.crc32 = (int) crcValue;
         localFileHeader.compressedSize = data.length;
         localFileHeader.uncompressedSize = data.length;
         localFileHeader.extraFieldLength = 0;
 
-        localFileHeader.write(out, name.getBytes(StandardCharsets.UTF_8));
+        localFileHeader.write(out, nameBytes);
 
         out.write(data);
 
@@ -238,10 +262,14 @@ public class ZipWriter {
 
 
     private void writeEndOfCentralDirectory(boolean hasZip64Entry, long numEntries, long startOfCentralDirectory, long sizeOfCentralDirectory, CountingOutputStream out) throws IOException {
+        // each of these corresponds to a field in the end of central directory record that has to
+        // carry a sentinel — and send its real value to the zip64 record — once the value stops
+        // fitting. the entry count is 2 bytes; the offset and size are 4 bytes each, and are held
+        // to the same 2 GiB ceiling as the per-entry fields so that readers which widen them with
+        // a signed read never see a negative value. see MAX_NON_ZIP64_VALUE.
         var isZip64 = hasZip64Entry
-                || (numEntries & ~0xFF) != 0
-                || (startOfCentralDirectory & ~0xFFFF) != 0
-                || (sizeOfCentralDirectory & ~0xFFFF) != 0;
+                || numEntries > MAX_NON_ZIP64_ENTRY_COUNT
+                || needsZip64(startOfCentralDirectory, sizeOfCentralDirectory);
 
         if (isZip64) {
             var endPosition = out.position;
@@ -322,7 +350,6 @@ public class ZipWriter {
         int compressedSize;
         int uncompressedSize;
 
-        short filenameLength;
         short extraFieldLength = 0;
 
         void write(OutputStream out, byte[] filename) throws IOException {
@@ -337,7 +364,8 @@ public class ZipWriter {
             buffer.putInt(crc32);
             buffer.putInt(compressedSize);
             buffer.putInt(uncompressedSize);
-            buffer.putShort(filenameLength);
+            // the length of the encoded bytes, never String.length()
+            buffer.putShort((short) filename.length);
             buffer.putShort(extraFieldLength);
             buffer.put(filename);
 
@@ -376,7 +404,6 @@ public class ZipWriter {
         int crc32;
         int compressedSize;
         int uncompressedSize;
-        short filenameLength;
         short extraFieldLength;
         final short fileCommentLength = 0;
         final short diskNumberStart = 0;
@@ -397,6 +424,7 @@ public class ZipWriter {
             buffer.putInt(crc32);
             buffer.putInt(compressedSize);
             buffer.putInt(uncompressedSize);
+            // the length of the encoded bytes, never String.length()
             buffer.putShort((short) filename.length);
             buffer.putShort(extraFieldLength);
             buffer.putShort(fileCommentLength);
