@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.0](https://github.com/opentdf/java-sdk/compare/v0.18.0...v0.19.0) (2026-09-03)
+
+
+### Features
+
+* **sdk:** DSPX-4495 remove 64GiB TDF limit, use counter-based payload IVs (DSP… ([#393](https://github.com/opentdf/java-sdk/issues/393)) ([98c839e](https://github.com/opentdf/java-sdk/commit/98c839e28e35103e55cf8d815a0f47037e4ee7e3))
+* **sdk:** resolve attribute key splits via GetKeyMappingsByFqns during encrypt ([#392](https://github.com/opentdf/java-sdk/issues/392)) ([152a115](https://github.com/opentdf/java-sdk/commit/152a11545e68bec16f40cc2ecf7ba0aac4605a3a))
+
 ## [0.18.0](https://github.com/opentdf/java-sdk/compare/v0.17.1...v0.18.0) (2026-07-27)
 
 
