@@ -2,12 +2,12 @@ package io.opentdf.platform.sdk;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonDeserializer;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonParseException;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
 import com.google.gson.TypeAdapter;
@@ -107,13 +107,14 @@ public class Manifest {
     static public class Segment {
         public String hash;
         /**
-         * The plaintext length of this segment. Optional in the JSON: when a producer leaves it
-         * out it means {@link IntegrityInformation#segmentSizeDefault}, which
-         * {@link IntegrityInformationAdapterFactory} fills in during deserialization.
+         * The plaintext length of this segment. Optional when parsing: a producer that leaves the
+         * key out means {@link IntegrityInformation#segmentSizeDefault}, which is filled in during
+         * deserialization. Always written on serialization, so a manifest read and re-emitted by
+         * this SDK carries the value explicitly.
          */
         public long segmentSize;
         /**
-         * The on-the-wire length of this segment. Optional in the JSON the same way
+         * The on-the-wire length of this segment. Optional when parsing the same way
          * {@link #segmentSize} is, defaulting to
          * {@link IntegrityInformation#encryptedSegmentSizeDefault}.
          */
@@ -189,18 +190,24 @@ public class Manifest {
      * Applies {@code segmentSizeDefault} / {@code encryptedSegmentSizeDefault} to any segment
      * that left the corresponding per-segment key out of its JSON.
      * <p>
-     * The per-segment values are optional overrides: {@code manifest.schema.json} marks the two
-     * defaults required on {@code integrityInformation} but puts no {@code required} list on
-     * {@code segments/items}. web-sdk omits a per-segment size whenever it equals the default,
-     * which is every full segment of a payload larger than one segment. Gson leaves an absent
+     * The per-segment values are optional overrides. As of 2026-09,
+     * <a href="https://github.com/opentdf/spec/blob/main/schema/OpenTDF/json-schema/schema.json">the
+     * TDF schema</a> lists {@code segmentSizeDefault} and {@code encryptedSegmentSizeDefault} in
+     * {@code integrityInformation}'s {@code required} array but puts no {@code required} array on
+     * {@code segments/items}, and web-sdk omits a per-segment size whenever it equals the default
+     * -- which is every full segment of a payload larger than one segment. Gson leaves an absent
      * key at {@code 0}, so before this the reader allocated a zero length buffer for those
      * segments and failed inside the integrity check.
      * <p>
      * This runs as a post-deserialization fixup rather than by boxing the fields to {@code Long},
-     * which keeps {@link Segment#segmentSize} a primitive for callers, keeps the value/absence
-     * distinction out of the public API, and applies to every path that parses a manifest. A
-     * primitive alone cannot tell an absent key from a literal {@code 0}, so the decision is made
-     * against the parse tree rather than against the deserialized value.
+     * which keeps {@link Segment#segmentSize} a primitive for callers and keeps the value/absence
+     * distinction out of the public API.
+     * <p>
+     * Two edge cases worth knowing: an explicit {@code null} is treated as absent and gets the
+     * default, while an explicit {@code 0} is a value and is left alone for the reader to reject.
+     * And if the manifest omits a <em>default</em> too then there is nothing to fall back to, so
+     * the segments keep their {@code 0}; {@code TDF.loadTDF} rejects that manifest when it checks
+     * the two defaults against each other.
      */
     private static class IntegrityInformationAdapterFactory implements TypeAdapterFactory {
         private static final String SEGMENTS = "segments";
@@ -235,27 +242,35 @@ public class Manifest {
         private static void applySegmentSizeDefaults(IntegrityInformation integrityInformation, JsonObject json) {
             List<Segment> segments = integrityInformation.segments;
             JsonElement rawSegments = json.get(SEGMENTS);
-            if (segments == null || rawSegments == null || !rawSegments.isJsonArray()) {
+            if (segments == null || rawSegments == null || rawSegments.isJsonNull()) {
+                // no segments to default; readManifest rejects this with its own message
                 return;
             }
             JsonArray rawSegmentArray = rawSegments.getAsJsonArray();
-            int count = Math.min(segments.size(), rawSegmentArray.size());
-            for (int i = 0; i < count; i++) {
+            if (segments.size() != rawSegmentArray.size()) {
+                // Gson's collection adapter is 1:1 with the JSON array, so this cannot happen
+                // today. asserting it rather than iterating the shorter of the two keeps a future
+                // filtering adapter from silently leaving the tail segments at 0
+                throw new IllegalStateException("internal error: deserialized " + segments.size()
+                        + " segments from a JSON array of " + rawSegmentArray.size());
+            }
+            for (int i = 0; i < segments.size(); i++) {
                 Segment segment = segments.get(i);
-                JsonElement rawSegment = rawSegmentArray.get(i);
-                if (segment == null || rawSegment == null || !rawSegment.isJsonObject()) {
+                if (segment == null) {
+                    // a null entry in the array; readManifest rejects it with its own message
                     continue;
                 }
-                JsonObject rawSegmentObject = rawSegment.getAsJsonObject();
-                if (!hasValue(rawSegmentObject, SEGMENT_SIZE)) {
+                JsonObject rawSegment = rawSegmentArray.get(i).getAsJsonObject();
+                if (!hasValue(rawSegment, SEGMENT_SIZE)) {
                     segment.segmentSize = integrityInformation.segmentSizeDefault;
                 }
-                if (!hasValue(rawSegmentObject, ENCRYPTED_SEGMENT_SIZE)) {
+                if (!hasValue(rawSegment, ENCRYPTED_SEGMENT_SIZE)) {
                     segment.encryptedSegmentSize = integrityInformation.encryptedSegmentSizeDefault;
                 }
             }
         }
 
+        /** Whether {@code memberName} carries a value; an explicit {@code null} counts as absent. */
         private static boolean hasValue(JsonObject object, String memberName) {
             JsonElement member = object.get(memberName);
             return member != null && !member.isJsonNull();

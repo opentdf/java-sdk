@@ -16,6 +16,8 @@ import io.opentdf.platform.sdk.TDF.Reader;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.annotation.Nonnull;
 import java.io.ByteArrayInputStream;
@@ -734,20 +736,30 @@ public class TDFTest {
 
     }
 
-    /** web-sdk's {@code DEFAULT_SEGMENT_SIZE}, the size at which its omissions start. */
+    /**
+     * A segment size small enough that the test payloads below span several segments. Matches
+     * web-sdk's {@code DEFAULT_SEGMENT_SIZE}, though nothing here depends on the exact value.
+     */
     private static final int WEB_SDK_DEFAULT_SEGMENT_SIZE = 1024 * 1024;
 
     /**
      * web-sdk drops {@code segmentSize} and {@code encryptedSegmentSize} from a segment whenever
      * they equal the manifest level defaults, which is every full segment of a payload larger
      * than one segment. Reproduces that encoding on a java-produced TDF rather than carrying a
-     * web-sdk fixture, so the test stays self-contained. Without the fallback the reader
-     * allocates a zero length buffer for those segments and fails inside the integrity check.
+     * web-sdk fixture, so the test stays self-contained. Before the fallback existed the reader
+     * allocated a zero length buffer for those segments and failed deep inside the integrity
+     * check.
+     *
+     * @param trailingBytes bytes past the last full segment, so both the "trailing partial
+     *                      segment" and the "exact multiple of the segment size" shapes are
+     *                      covered. The latter omits both keys on every segment, which is where
+     *                      an off-by-one in the fixup's index loop would show up.
      */
-    @Test
-    public void testReadingATDFThatOmitsDefaultedSegmentSizes() throws Exception {
-        // two full segments and a partial one, the shape that first exposed this
-        var data = new byte[2 * WEB_SDK_DEFAULT_SEGMENT_SIZE + 4242];
+    @ParameterizedTest
+    @ValueSource(ints = { 4242, 0 })
+    public void testReadingATDFThatOmitsDefaultedSegmentSizes(int trailingBytes) throws Exception {
+        // two full segments, the shape that first exposed this
+        var data = new byte[2 * WEB_SDK_DEFAULT_SEGMENT_SIZE + trailingBytes];
         new Random(4589).nextBytes(data);
 
         var tdf = new TDF(new FakeServicesBuilder().setKas(kas)
@@ -768,19 +780,26 @@ public class TDFTest {
             var segmentSizeDefault = integrityInformation.get("segmentSizeDefault").getAsLong();
             var encryptedSegmentSizeDefault = integrityInformation.get("encryptedSegmentSizeDefault").getAsLong();
 
-            int omitted = 0;
+            int omittedSegmentSizes = 0;
+            int omittedEncryptedSegmentSizes = 0;
             for (var element : integrityInformation.getAsJsonArray("segments")) {
                 var segment = element.getAsJsonObject();
                 if (segment.get("segmentSize").getAsLong() == segmentSizeDefault) {
                     segment.remove("segmentSize");
-                    omitted++;
+                    omittedSegmentSizes++;
                 }
                 if (segment.get("encryptedSegmentSize").getAsLong() == encryptedSegmentSizeDefault) {
                     segment.remove("encryptedSegmentSize");
+                    omittedEncryptedSegmentSizes++;
                 }
             }
-            assertThat(omitted)
-                    .withFailMessage("no segment matched the defaults, so nothing was omitted")
+            assertThat(omittedSegmentSizes)
+                    .withFailMessage("no segment matched segmentSizeDefault, so nothing was omitted")
+                    .isGreaterThan(0);
+            // this is the omission the reader actually depends on: plaintext segmentSize is
+            // write-only in this SDK, so without this assertion the test could go vacuous
+            assertThat(omittedEncryptedSegmentSizes)
+                    .withFailMessage("no segment matched encryptedSegmentSizeDefault, so nothing was omitted")
                     .isGreaterThan(0);
         });
 
@@ -793,12 +812,18 @@ public class TDFTest {
     }
 
     /**
-     * An explicit zero is a corrupt manifest rather than an omitted default, and has to say so
-     * instead of reaching the integrity check and complaining that the payload is too small to
-     * GMAC.
+     * A per-segment {@code encryptedSegmentSize} too small to hold an IV and a tag is a corrupt
+     * manifest rather than an omitted default, and has to say so instead of reaching the integrity
+     * check, where it surfaces as a signature mismatch or, under GMAC, as a complaint that the
+     * payload is too small to hash. A negative one would reach {@code new byte[...]} as a
+     * {@link NegativeArraySizeException}.
+     *
+     * @param encryptedSegmentSize zero; a positive value under the 28 byte IV-plus-tag floor; and
+     *                             a negative one
      */
-    @Test
-    public void testZeroLengthSegmentIsRejectedWithAClearError() throws Exception {
+    @ParameterizedTest
+    @ValueSource(ints = { 0, 20, -1 })
+    public void testUndersizedSegmentIsRejectedWithAClearError(int encryptedSegmentSize) throws Exception {
         var data = "some data to encrypt".getBytes(StandardCharsets.UTF_8);
         var tdf = new TDF(new FakeServicesBuilder().setKas(kas)
                 .setKeyAccessServerRegistryService(kasRegistryService).build());
@@ -813,12 +838,49 @@ public class TDFTest {
                 .getAsJsonObject("integrityInformation")
                 .getAsJsonArray("segments")
                 .get(0).getAsJsonObject()
-                .addProperty("encryptedSegmentSize", 0));
+                .addProperty("encryptedSegmentSize", encryptedSegmentSize));
 
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(rewritten), platformUrl);
         assertThatThrownBy(() -> reader.readPayload(new ByteArrayOutputStream()))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("encrypted size of 0");
+                .hasMessageContaining("segment 0 declares an encryptedSegmentSize of " + encryptedSegmentSize)
+                .hasMessageContaining("cannot be shorter than 28 bytes");
+    }
+
+    /**
+     * The size check is a pre-pass, so a bad segment in the middle of a payload fails before any
+     * of the earlier segments are decrypted. Otherwise the caller is handed truncated plaintext
+     * from a manifest already known to be invalid.
+     */
+    @Test
+    public void testUndersizedSegmentIsRejectedBeforeAnyPlaintextIsWritten() throws Exception {
+        var data = new byte[2 * WEB_SDK_DEFAULT_SEGMENT_SIZE + 4242];
+        new Random(4589).nextBytes(data);
+
+        var tdf = new TDF(new FakeServicesBuilder().setKas(kas)
+                .setKeyAccessServerRegistryService(kasRegistryService).build());
+        var original = new ByteArrayOutputStream();
+        tdf.createTDF(new ByteArrayInputStream(data), original,
+                Config.newTDFConfig(
+                        Config.withAutoconfigure(false),
+                        Config.withKasInformation(getRSAKASInfos()),
+                        Config.withSegmentSize(WEB_SDK_DEFAULT_SEGMENT_SIZE)));
+
+        // corrupt the *last* segment, so a naive in-loop check would already have emitted the rest
+        var rewritten = rewriteManifest(original.toByteArray(), manifest -> {
+            var segments = manifest.getAsJsonObject("encryptionInformation")
+                    .getAsJsonObject("integrityInformation")
+                    .getAsJsonArray("segments");
+            segments.get(segments.size() - 1).getAsJsonObject().addProperty("encryptedSegmentSize", 0);
+        });
+
+        var unwrapped = new ByteArrayOutputStream();
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(rewritten), platformUrl);
+        assertThatThrownBy(() -> reader.readPayload(unwrapped))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(unwrapped.size())
+                .withFailMessage("plaintext was written before the invalid manifest was rejected")
+                .isZero();
     }
 
     /** Rebuilds a TDF with its manifest edited in place, leaving the payload bytes untouched. */

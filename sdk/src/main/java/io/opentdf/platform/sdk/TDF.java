@@ -420,26 +420,9 @@ class TDF {
                 throw new IllegalStateException("error getting instance of SHA-256", e);
             }
 
+            validateSegmentSizes(manifest);
+
             for (Manifest.Segment segment : manifest.encryptionInformation.integrityInformation.segments) {
-                if (segment.encryptedSegmentSize <= 0) {
-                    // an encrypted segment always carries at least an IV and a tag, so this only
-                    // happens on a manifest that supplied neither a per-segment
-                    // encryptedSegmentSize nor a usable encryptedSegmentSizeDefault. reported
-                    // here rather than letting a zero length buffer reach the integrity check,
-                    // where it surfaces as an unrelated complaint about the payload being too
-                    // small to GMAC
-                    throw new IllegalStateException("invalid TDF: segment has an encrypted size of "
-                            + segment.encryptedSegmentSize
-                            + ". the manifest supplied neither a per-segment encryptedSegmentSize"
-                            + " nor a usable encryptedSegmentSizeDefault");
-                }
-
-                if (segment.encryptedSegmentSize > Config.MAX_SEGMENT_SIZE) {
-                    throw new IllegalStateException("Segment size " + segment.encryptedSegmentSize + " exceeded limit "
-                            + Config.MAX_SEGMENT_SIZE);
-                } // MIN_SEGMENT_SIZE NOT validated out due to tests needing small segment sizes
-                  // with existing payloads
-
                 byte[] readBuf = new byte[(int) segment.encryptedSegmentSize];
                 int bytesRead = tdfReader.readPayloadBytes(readBuf);
 
@@ -482,6 +465,40 @@ class TDF {
 
         public PolicyObject readPolicyObject() {
             return tdfReader.readPolicyObject();
+        }
+    }
+
+    /**
+     * Rejects segment sizes that cannot describe a real segment, before any of the payload is
+     * decrypted. Run as a pre-pass so an invalid size on a later segment does not leave the caller
+     * holding the plaintext of the earlier ones.
+     * <p>
+     * A too-small size otherwise reaches the integrity check as an unrelated signature mismatch,
+     * or under GMAC as a complaint about the payload being too small to hash. A negative one
+     * reaches {@code new byte[...]} as a {@link NegativeArraySizeException}.
+     */
+    private static void validateSegmentSizes(Manifest manifest) {
+        // an encrypted segment carries an IV and an auth tag on top of its plaintext, so it can
+        // never be shorter than the two of them together. an unencrypted payload is stored as-is,
+        // where the only impossible length is a non-positive one
+        long minEncryptedSegmentSize = manifest.payload.isEncrypted ? kGcmIvSize + AesGcm.GCM_TAG_LENGTH : 1;
+
+        List<Manifest.Segment> segments = manifest.encryptionInformation.integrityInformation.segments;
+        for (int i = 0; i < segments.size(); i++) {
+            long encryptedSegmentSize = segments.get(i).encryptedSegmentSize;
+
+            if (encryptedSegmentSize < minEncryptedSegmentSize) {
+                throw new IllegalStateException("invalid TDF: segment " + i
+                        + " declares an encryptedSegmentSize of " + encryptedSegmentSize
+                        + ", but a segment of this payload cannot be shorter than "
+                        + minEncryptedSegmentSize + " bytes");
+            }
+
+            if (encryptedSegmentSize > Config.MAX_SEGMENT_SIZE) {
+                throw new IllegalStateException("Segment size " + encryptedSegmentSize + " exceeded limit "
+                        + Config.MAX_SEGMENT_SIZE);
+            } // MIN_SEGMENT_SIZE NOT validated out due to tests needing small segment sizes
+              // with existing payloads
         }
     }
 
