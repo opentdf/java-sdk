@@ -105,19 +105,25 @@ public class ZipReader {
     CentralDirectoryRecord readEndOfCentralDirectory() throws IOException {
         long eoCDRStart = zipChannel.size() - END_OF_CENTRAL_DIRECTORY_SIZE; // 22 is the minimum size of the EOCDR
 
+        boolean found = false;
         while (eoCDRStart >= 0) {
             zipChannel.position(eoCDRStart);
             Integer signature = readInteger();
-            if (signature == null || signature == END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
+            // a short read means there aren't four bytes here to compare against, which is not
+            // the same thing as having found the signature. treating it as a match let a
+            // truncated archive fall out of this loop and parse whatever followed as an end of
+            // central directory record
+            if (signature != null && signature == END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
                 if (logger.isDebugEnabled()) {
                     logger.debug("Found end of central directory signature at {}", zipChannel.position() - Integer.BYTES);
                 }
+                found = true;
                 break;
             }
             eoCDRStart--;
         }
 
-        if (eoCDRStart < 0) {
+        if (!found) {
             throw new InvalidZipException("Didn't find the end of central directory");
         }
 
@@ -141,6 +147,10 @@ public class ZipReader {
         }
 
         long zip64CentralDirectoryLocatorStart = zipChannel.size() - (ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIZE + END_OF_CENTRAL_DIRECTORY_SIZE + commentLength);
+        if (zip64CentralDirectoryLocatorStart < 0) {
+            throw new InvalidZipException(
+                    "Archive is too small to hold the zip64 end of central directory locator it claims to have");
+        }
         zipChannel.position(zip64CentralDirectoryLocatorStart);
         return extractZIP64CentralDirectoryInfo();
     }
