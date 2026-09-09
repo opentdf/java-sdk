@@ -840,8 +840,9 @@ public class TDFTest {
                 .get(0).getAsJsonObject()
                 .addProperty("encryptedSegmentSize", encryptedSegmentSize));
 
+        var unwrapped = new ByteArrayOutputStream();
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(rewritten), platformUrl);
-        assertThatThrownBy(() -> reader.readPayload(new ByteArrayOutputStream()))
+        assertThatThrownBy(() -> reader.readPayload(unwrapped))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("segment 0 declares an encryptedSegmentSize of " + encryptedSegmentSize)
                 .hasMessageContaining("cannot be shorter than 28 bytes");
