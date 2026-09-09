@@ -16,13 +16,18 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 public class ZipReaderTest {
 
@@ -241,11 +246,7 @@ public class ZipReaderTest {
 
     private static void assertReadsEveryEntry(byte[] archive) throws IOException {
         try (var channel = new SeekableInMemoryByteChannel(archive)) {
-            var reader = new ZipReader(channel);
-            assertThat(reader.getEntries()).hasSize(3);
-            assertThat(readEntry(reader, "small.txt")).isEqualTo("tiny");
-            assertThat(readEntry(reader, "0.payload")).isEqualTo(PAYLOAD);
-            assertThat(readEntry(reader, "0.manifest.json")).isEqualTo(MANIFEST);
+            assertReadsEveryEntry(channel);
         }
 
         // and an independent implementation, so this shows the patched archive is well formed
@@ -255,6 +256,453 @@ public class ZipReaderTest {
             assertThat(readEntry(zip, "small.txt")).isEqualTo("tiny");
             assertThat(readEntry(zip, "0.payload")).isEqualTo(PAYLOAD);
             assertThat(readEntry(zip, "0.manifest.json")).isEqualTo(MANIFEST);
+        }
+    }
+
+    /** Our reader alone, for archives or channels an independent implementation can't take. */
+    private static void assertReadsEveryEntry(SeekableByteChannel channel) throws IOException {
+        var reader = new ZipReader(channel);
+        assertThat(reader.getEntries()).hasSize(3);
+        assertThat(readEntry(reader, "small.txt")).isEqualTo("tiny");
+        assertThat(readEntry(reader, "0.payload")).isEqualTo(PAYLOAD);
+        assertThat(readEntry(reader, "0.manifest.json")).isEqualTo(MANIFEST);
+    }
+
+    /**
+     * An archive missing the trailing records it needs is not a zip, and has to say so rather
+     * than fail somewhere downstream. These all reach the same rejection, by different routes:
+     * the scan finds no signature within its window.
+     */
+    @Test
+    public void testTruncatedArchiveIsRejected() throws IOException {
+        var archive = zip64Archive();
+
+        // the trailing end of central directory record and its locator are gone
+        var withoutTrailingRecords =
+                Arrays.copyOf(archive, archive.length - (EOCD_SIZE + ZIP64_EOCD_LOCATOR_SIZE));
+        // only the last few bytes of the record are gone
+        var clippedRecord = Arrays.copyOf(archive, archive.length - 4);
+        // cut down to less than a single end of central directory record
+        var shorterThanARecord = Arrays.copyOf(archive, EOCD_SIZE - 1);
+
+        for (var truncated : List.of(withoutTrailingRecords, clippedRecord, shorterThanARecord, new byte[0])) {
+            assertThatThrownBy(() -> readArchive(truncated))
+                    .withFailMessage("a %d byte truncation should fail the scan", truncated.length)
+                    .isInstanceOf(InvalidZipException.class)
+                    .hasMessageContaining("Didn't find the end of central directory");
+        }
+    }
+
+    /**
+     * The end of central directory record claims a zip64 locator that the archive is too short to
+     * hold. Reaching for it has to be a zip error rather than an out of range seek.
+     */
+    @Test
+    public void testArchiveTooShortForTheZip64LocatorIsRejected() throws IOException {
+        var archive = zip64Archive();
+        // drop everything before the trailing records, leaving the end of central directory (which
+        // still carries its sentinels) with nothing in front of it
+        var truncated = Arrays.copyOfRange(archive, archive.length - EOCD_SIZE, archive.length);
+
+        assertThatThrownBy(() -> readArchive(truncated))
+                .isInstanceOf(InvalidZipException.class)
+                .hasMessageContaining("too small to hold the zip64 end of central directory locator");
+    }
+
+    private static void readArchive(byte[] archive) throws IOException {
+        try (var channel = new SeekableInMemoryByteChannel(archive)) {
+            new ZipReader(channel);
+        }
+    }
+
+    /**
+     * A channel may satisfy a read with fewer bytes than were asked for while more are still
+     * available. Every multi-byte field the reader parses has to cope with that, or a valid
+     * archive read through such a channel is rejected as corrupt — and {@code loadTDF} takes a
+     * caller-supplied channel, so this is reachable from the public API.
+     */
+    @Test
+    public void testArchiveReadThroughAChannelThatReturnsShortReads() throws IOException {
+        var archive = zip64Archive();
+
+        for (int maxRead = 1; maxRead <= 8; maxRead++) {
+            try (var channel = new ShortReadChannel(new SeekableInMemoryByteChannel(archive), maxRead)) {
+                var reader = new ZipReader(channel);
+                assertThat(reader.getEntries())
+                        .withFailMessage("reading %d byte(s) at a time lost entries", maxRead)
+                        .hasSize(3);
+                assertThat(readEntry(reader, "0.payload"))
+                        .withFailMessage("reading %d byte(s) at a time corrupted the payload", maxRead)
+                        .isEqualTo(PAYLOAD);
+            }
+        }
+    }
+
+    /**
+     * Trailing bytes push the end of central directory record back from the end of the archive.
+     * Everything the reader derives from it — the zip64 locator above all — has to be measured
+     * from where the record actually is, not from the end of the file.
+     */
+    @Test
+    public void testZip64ArchiveWithTrailingDataStillReads() throws IOException {
+        var archive = zip64Archive();
+        var padded = Arrays.copyOf(archive, archive.length + 100);
+
+        assertReadsEveryEntry(padded);
+    }
+
+    /**
+     * The record can only be pushed back by its own comment, whose length field caps it at 65,535
+     * bytes, so the scan stops there. Beyond that limit an archive is not one we can read, and
+     * saying so immediately is the point: an unbounded scan reads its way back through the whole
+     * file a byte at a time before reaching the same conclusion.
+     */
+    @Test
+    public void testEndOfCentralDirectoryPushedBeyondTheCommentLimitIsRejected() throws IOException {
+        var archive = zip64Archive();
+        var padded = Arrays.copyOf(archive, archive.length + 0xFFFF + 1);
+
+        assertThatThrownBy(() -> readArchive(padded))
+                .isInstanceOf(InvalidZipException.class)
+                .hasMessageContaining("Didn't find the end of central directory");
+    }
+
+    /**
+     * The zip64 locator's pointer to the zip64 end of central directory record is a 64-bit value
+     * taken straight from the archive, so a corrupt one can point anywhere. Following it has to
+     * be a zip error rather than an out of range seek.
+     */
+    @Test
+    public void testZip64LocatorPointingOutsideTheArchiveIsRejected() throws IOException {
+        // the locator sits between the zip64 end of central directory record and the trailing
+        // end of central directory record; its pointer is 8 bytes in, after the signature and
+        // the disk number
+        int pointer = zip64Archive().length - (EOCD_SIZE + ZIP64_EOCD_LOCATOR_SIZE) + 8;
+
+        for (long badOffset : new long[] { -1L, Long.MIN_VALUE, 1L << 40 }) {
+            var archive = zip64Archive();
+            ByteBuffer.wrap(archive).order(ByteOrder.LITTLE_ENDIAN).putLong(pointer, badOffset);
+
+            assertThatThrownBy(() -> readArchive(archive))
+                    .withFailMessage("an offset of %d should be rejected as a zip error", badOffset)
+                    .isInstanceOf(InvalidZipException.class)
+                    .hasMessageContaining("outside this");
+        }
+    }
+
+    /**
+     * The same for the central directory offset the zip64 record carries, which is the other
+     * 64-bit offset the reader seeks to.
+     */
+    @Test
+    public void testZip64CentralDirectoryOffsetOutsideTheArchiveIsRejected() throws IOException {
+        var archive = zip64Archive();
+        int zip64Eocd = archive.length - (EOCD_SIZE + ZIP64_EOCD_LOCATOR_SIZE + ZIP64_EOCD_SIZE);
+        var buf = ByteBuffer.wrap(archive).order(ByteOrder.LITTLE_ENDIAN);
+        assertThat(buf.getInt(zip64Eocd)).isEqualTo(ZIP64_EOCD_SIGNATURE);
+        buf.putLong(zip64Eocd + 48, -1L);
+
+        assertThatThrownBy(() -> readArchive(archive))
+                .isInstanceOf(InvalidZipException.class)
+                .hasMessageContaining("outside this");
+    }
+
+    /**
+     * The largest comment the format allows pushes the end of central directory record as far
+     * back as it can go. That is the edge of the scan window, and the record still has to be
+     * found there — and the zip64 locator in front of it, measured from the record rather than
+     * from the end of the archive.
+     */
+    @Test
+    public void testZip64ArchiveWithTheLongestPossibleCommentStillReads() throws IOException {
+        var comment = new byte[0xFFFF];
+        Arrays.fill(comment, (byte) 'c');
+
+        assertReadsEveryEntry(withComment(zip64Archive(), comment));
+    }
+
+    /**
+     * A comment can contain anything, including the end of central directory signature. Scanning
+     * backwards meets that one first; it has to be passed over because the comment it would
+     * carry runs off the end of the archive, which the real record's does not.
+     */
+    @Test
+    public void testSignatureInsideTheCommentIsNotMistakenForTheRecord() throws IOException {
+        var comment = new byte[64];
+        Arrays.fill(comment, (byte) 0xFF); // so the decoy's own comment length reads as 0xFFFF
+        ByteBuffer.wrap(comment).order(ByteOrder.LITTLE_ENDIAN).putInt(0, EOCD_SIGNATURE);
+
+        // commons-compress takes the decoy for the record, so this one is ours alone
+        try (var channel = new SeekableInMemoryByteChannel(withComment(zip64Archive(), comment))) {
+            assertReadsEveryEntry(channel);
+        }
+    }
+
+    /** A record whose comment was cut short isn't the end of a whole archive. */
+    @Test
+    public void testRecordWhoseCommentRunsPastTheEndIsRejected() throws IOException {
+        var withFullComment = withComment(zip64Archive(), new byte[10]);
+        var truncated = Arrays.copyOf(withFullComment, withFullComment.length - 5);
+
+        assertThatThrownBy(() -> readArchive(truncated))
+                .isInstanceOf(InvalidZipException.class)
+                .hasMessageContaining("Didn't find the end of central directory");
+    }
+
+    /**
+     * Gives the trailing end of central directory record a comment. Assumes, as is true of
+     * everything our writer produces, that the archive doesn't already have one.
+     */
+    private static byte[] withComment(byte[] archive, byte[] comment) {
+        var result = Arrays.copyOf(archive, archive.length + comment.length);
+        ByteBuffer.wrap(result).order(ByteOrder.LITTLE_ENDIAN)
+                .putShort(archive.length - Short.BYTES, (short) comment.length);
+        System.arraycopy(comment, 0, result, archive.length, comment.length);
+        return result;
+    }
+
+    /**
+     * A channel is allowed to return zero bytes without being at the end of the stream; only
+     * {@code -1} means that. An empty read has to be retried, not taken for the end of the
+     * archive.
+     */
+    @Test
+    public void testArchiveReadThroughAChannelThatReturnsEmptyReads() throws IOException {
+        try (var channel = new StallingChannel(new SeekableInMemoryByteChannel(zip64Archive()), 1)) {
+            assertReadsEveryEntry(channel);
+        }
+    }
+
+    /**
+     * But a channel that never returns anything has to fail, rather than leave the reader
+     * spinning on it — whether it stops before the archive is opened or partway through an entry.
+     */
+    @Test
+    public void testChannelThatStopsReturningDataFails() throws IOException {
+        assertTimeoutPreemptively(Duration.ofSeconds(10), () -> {
+            try (var channel = new StallingChannel(new SeekableInMemoryByteChannel(zip64Archive()), 0)) {
+                channel.stalled = true;
+                assertThatThrownBy(() -> new ZipReader(channel))
+                        .isInstanceOf(IOException.class)
+                        .hasMessageContaining("no data");
+            }
+
+            try (var channel = new StallingChannel(new SeekableInMemoryByteChannel(zip64Archive()), 0)) {
+                var reader = new ZipReader(channel);
+                channel.stalled = true;
+                assertThatThrownBy(() -> readEntry(reader, "0.payload"))
+                        .isInstanceOf(IOException.class)
+                        .hasMessageContaining("no data");
+            }
+        });
+    }
+
+    /**
+     * The zip64 entry count is a 64-bit value taken straight from the archive. One that is
+     * negative would read as an empty archive, and one too large for the central directory to
+     * hold would send the reader past its end; both have to be zip errors instead.
+     */
+    @Test
+    public void testZip64EntryCountTheCentralDirectoryCannotHoldIsRejected() throws IOException {
+        for (long badCount : new long[] { -1L, Long.MIN_VALUE, 1_000_000L }) {
+            var archive = zip64Archive();
+            int zip64Eocd = archive.length - (EOCD_SIZE + ZIP64_EOCD_LOCATOR_SIZE + ZIP64_EOCD_SIZE);
+            var buf = ByteBuffer.wrap(archive).order(ByteOrder.LITTLE_ENDIAN);
+            assertThat(buf.getInt(zip64Eocd)).isEqualTo(ZIP64_EOCD_SIGNATURE);
+            buf.putLong(zip64Eocd + 32, badCount);
+
+            assertThatThrownBy(() -> readArchive(archive))
+                    .withFailMessage("an entry count of %d should be rejected as a zip error", badCount)
+                    .isInstanceOf(InvalidZipException.class)
+                    .hasMessageContaining("can hold at most");
+        }
+    }
+
+    /** The same bounds check, on the 32-bit offset of an archive that isn't zip64 at all. */
+    @Test
+    public void testCentralDirectoryOffsetOutsideTheArchiveIsRejected() throws IOException {
+        int length = plainArchive().length;
+        for (long badOffset : new long[] { length, 0xFFFFFFFEL }) {
+            var archive = plainArchive();
+            ByteBuffer.wrap(archive).order(ByteOrder.LITTLE_ENDIAN)
+                    .putInt(archive.length - EOCD_SIZE + 16, (int) badOffset);
+
+            assertThatThrownBy(() -> readArchive(archive))
+                    .withFailMessage("an offset of %d should be rejected as a zip error", badOffset)
+                    .isInstanceOf(InvalidZipException.class)
+                    .hasMessageContaining("outside this");
+        }
+    }
+
+    /**
+     * An archive with no entries has nothing but its end of central directory record, and its
+     * central directory offset points right at it. That is still inside the archive.
+     */
+    @Test
+    public void testEmptyArchiveReads() throws IOException {
+        var out = new ByteArrayOutputStream();
+        new ZipWriter(out).finish();
+
+        try (var channel = new SeekableInMemoryByteChannel(out.toByteArray())) {
+            assertThat(new ZipReader(channel).getEntries()).isEmpty();
+        }
+    }
+
+    /** A central directory that ends partway through a filename is a zip error like any other. */
+    @Test
+    public void testCentralDirectoryFilenameRunningPastTheEndIsRejected() throws IOException {
+        var archive = plainArchive();
+        var buf = ByteBuffer.wrap(archive).order(ByteOrder.LITTLE_ENDIAN);
+        int centralDirectory = buf.getInt(archive.length - EOCD_SIZE + 16);
+        buf.putShort(centralDirectory + 28, (short) 0x7000);
+
+        assertThatThrownBy(() -> readArchive(archive))
+                .isInstanceOf(InvalidZipException.class)
+                .hasMessageContaining("byte filename");
+    }
+
+    /**
+     * An entry whose data runs past the end of the archive is truncated, and reading it has to
+     * say so rather than end the stream early and hand back a short entry as if it were whole.
+     */
+    @Test
+    public void testEntryRunningPastTheEndOfTheArchiveFailsToRead() throws IOException {
+        var archive = plainArchive();
+        var buf = ByteBuffer.wrap(archive).order(ByteOrder.LITTLE_ENDIAN);
+        int centralDirectory = buf.getInt(archive.length - EOCD_SIZE + 16);
+        // small.txt comes first; claim it is far bigger than the archive
+        buf.putInt(centralDirectory + 24, 1_000_000);
+
+        try (var channel = new SeekableInMemoryByteChannel(archive)) {
+            var reader = new ZipReader(channel);
+            assertThatThrownBy(() -> readEntry(reader, "small.txt"))
+                    .isInstanceOf(InvalidZipException.class)
+                    .hasMessageContaining("bytes into the 1000000 byte entry [small.txt]");
+
+            // and a byte at a time, which takes a different path through the stream
+            assertThatThrownBy(() -> {
+                try (var data = reader.getEntries().get(0).getData()) {
+                    while (data.read() != -1) {
+                        // drain
+                    }
+                }
+            }).isInstanceOf(InvalidZipException.class)
+                    .hasMessageContaining("byte entry [small.txt]");
+        }
+    }
+
+    /** The same three entries as {@link #zip64Archive()}, written without anything zip64. */
+    private static byte[] plainArchive() throws IOException {
+        var out = new ByteArrayOutputStream();
+        var writer = new ZipWriter(out);
+        writer.data("small.txt", "tiny".getBytes(StandardCharsets.UTF_8));
+        writer.data("0.payload", PAYLOAD.getBytes(StandardCharsets.UTF_8));
+        writer.data("0.manifest.json", MANIFEST.getBytes(StandardCharsets.UTF_8));
+        writer.finish();
+        var archive = out.toByteArray();
+        assertReadsEveryEntry(archive);
+        return archive;
+    }
+
+    /** Hands back at most {@code maxRead} bytes per read, as a channel is permitted to do. */
+    private static final class ShortReadChannel extends DelegatingChannel {
+        private final int maxRead;
+
+        ShortReadChannel(SeekableByteChannel delegate, int maxRead) {
+            super(delegate);
+            this.maxRead = maxRead;
+        }
+
+        @Override
+        public int read(ByteBuffer dst) throws IOException {
+            if (!dst.hasRemaining()) {
+                return 0;
+            }
+            int limit = dst.limit();
+            dst.limit(dst.position() + Math.min(maxRead, dst.remaining()));
+            try {
+                return delegate.read(dst);
+            } finally {
+                dst.limit(limit);
+            }
+        }
+    }
+
+    /**
+     * Returns nothing {@code emptyReadsBeforeEachRead} times before every read that does return
+     * data, as a non-blocking channel is permitted to do, and nothing at all once {@code stalled}.
+     */
+    private static final class StallingChannel extends DelegatingChannel {
+        private final int emptyReadsBeforeEachRead;
+        private int emptyReadsSoFar;
+        volatile boolean stalled;
+
+        StallingChannel(SeekableByteChannel delegate, int emptyReadsBeforeEachRead) {
+            super(delegate);
+            this.emptyReadsBeforeEachRead = emptyReadsBeforeEachRead;
+        }
+
+        @Override
+        public int read(ByteBuffer dst) throws IOException {
+            if (stalled) {
+                return 0;
+            }
+            if (emptyReadsSoFar < emptyReadsBeforeEachRead) {
+                emptyReadsSoFar++;
+                return 0;
+            }
+            emptyReadsSoFar = 0;
+            return delegate.read(dst);
+        }
+    }
+
+    private static class DelegatingChannel implements SeekableByteChannel {
+        protected final SeekableByteChannel delegate;
+
+        DelegatingChannel(SeekableByteChannel delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public int read(ByteBuffer dst) throws IOException {
+            return delegate.read(dst);
+        }
+
+        @Override
+        public int write(ByteBuffer src) throws IOException {
+            return delegate.write(src);
+        }
+
+        @Override
+        public long position() throws IOException {
+            return delegate.position();
+        }
+
+        @Override
+        public SeekableByteChannel position(long newPosition) throws IOException {
+            delegate.position(newPosition);
+            return this;
+        }
+
+        @Override
+        public long size() throws IOException {
+            return delegate.size();
+        }
+
+        @Override
+        public SeekableByteChannel truncate(long size) throws IOException {
+            delegate.truncate(size);
+            return this;
+        }
+
+        @Override
+        public boolean isOpen() {
+            return delegate.isOpen();
+        }
+
+        @Override
+        public void close() throws IOException {
+            delegate.close();
         }
     }
 
