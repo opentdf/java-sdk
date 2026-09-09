@@ -149,6 +149,76 @@ public class ManifestTest {
         assertEquals(manifest.assertions.size(), 0);
     }
 
+    private static final long SEGMENT_SIZE_DEFAULT = 1048576;
+    private static final long ENCRYPTED_SEGMENT_SIZE_DEFAULT = 1048604;
+
+    /** A minimal but valid manifest wrapped around whatever {@code segments} array you give it. */
+    private static String manifestWithSegments(String segmentsJson) {
+        return "{\n" +
+                "  \"encryptionInformation\": {\n" +
+                "    \"integrityInformation\": {\n" +
+                "      \"encryptedSegmentSizeDefault\": " + ENCRYPTED_SEGMENT_SIZE_DEFAULT + ",\n" +
+                "      \"rootSignature\": { \"alg\": \"HS256\", \"sig\": \"c2ln\" },\n" +
+                "      \"segmentHashAlg\": \"GMAC\",\n" +
+                "      \"segmentSizeDefault\": " + SEGMENT_SIZE_DEFAULT + ",\n" +
+                "      \"segments\": [" + segmentsJson + "]\n" +
+                "    },\n" +
+                "    \"keyAccess\": [ { \"protocol\": \"kas\", \"type\": \"wrapped\"," +
+                " \"url\": \"http://localhost:65432/kas\", \"wrappedKey\": \"a2V5\" } ],\n" +
+                "    \"method\": { \"algorithm\": \"AES-256-GCM\", \"isStreamable\": true, \"iv\": \"aXY=\" },\n" +
+                "    \"policy\": \"cG9saWN5\",\n" +
+                "    \"type\": \"split\"\n" +
+                "  },\n" +
+                "  \"payload\": { \"isEncrypted\": true, \"protocol\": \"zip\"," +
+                " \"type\": \"reference\", \"url\": \"0.payload\" }\n" +
+                "}";
+    }
+
+    /**
+     * web-sdk leaves {@code segmentSize} and {@code encryptedSegmentSize} out of a segment
+     * whenever they equal the manifest level defaults. That is legal: {@code manifest.schema.json}
+     * marks the two defaults required on {@code integrityInformation} but puts no
+     * {@code required} list on {@code segments/items}, so the per-segment values are optional
+     * overrides and an absent one means "the default", not zero.
+     */
+    @Test
+    void testAbsentSegmentSizesFallBackToTheManifestDefaults() {
+        Manifest manifest = Manifest.readManifest(manifestWithSegments(
+                "{ \"hash\": \"aGFzaDA=\" },"
+                        + "{ \"hash\": \"aGFzaDE=\", \"segmentSize\": 12 },"
+                        + "{ \"hash\": \"aGFzaDI=\", \"segmentSize\": 3, \"encryptedSegmentSize\": 31 }"));
+
+        var segments = manifest.encryptionInformation.integrityInformation.segments;
+        assertThat(segments).hasSize(3);
+
+        assertThat(segments.get(0).segmentSize).isEqualTo(SEGMENT_SIZE_DEFAULT);
+        assertThat(segments.get(0).encryptedSegmentSize).isEqualTo(ENCRYPTED_SEGMENT_SIZE_DEFAULT);
+
+        assertThat(segments.get(1).segmentSize).isEqualTo(12);
+        assertThat(segments.get(1).encryptedSegmentSize).isEqualTo(ENCRYPTED_SEGMENT_SIZE_DEFAULT);
+
+        assertThat(segments.get(2).segmentSize).isEqualTo(3);
+        assertThat(segments.get(2).encryptedSegmentSize).isEqualTo(31);
+
+        // and the values we filled in survive a round trip through the serializer
+        assertEquals(manifest, Manifest.readManifest(Manifest.toJson(manifest)));
+    }
+
+    /**
+     * An explicit zero is a value rather than an absent key, so it is left alone. The reader
+     * rejects it with its own error; silently rewriting it to the default would hide a corrupt
+     * manifest.
+     */
+    @Test
+    void testExplicitZeroSegmentSizeIsNotTreatedAsAbsent() {
+        Manifest manifest = Manifest.readManifest(manifestWithSegments(
+                "{ \"hash\": \"aGFzaDA=\", \"segmentSize\": 0, \"encryptedSegmentSize\": 0 }"));
+
+        var segment = manifest.encryptionInformation.integrityInformation.segments.get(0);
+        assertThat(segment.segmentSize).isZero();
+        assertThat(segment.encryptedSegmentSize).isZero();
+    }
+
     @Test
     void testReadingManifestWithObjectStatementValue() throws IOException {
         final Manifest manifest;
