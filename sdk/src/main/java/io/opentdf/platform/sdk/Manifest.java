@@ -6,10 +6,17 @@ import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonDeserializer;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParseException;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
+import com.google.gson.TypeAdapter;
+import com.google.gson.TypeAdapterFactory;
 import com.google.gson.annotations.JsonAdapter;
 import com.google.gson.annotations.SerializedName;
+import com.google.gson.reflect.TypeToken;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -56,6 +63,7 @@ public class Manifest {
 
     private static final Gson gson = new GsonBuilder()
             .registerTypeAdapter(AssertionConfig.Statement.class, new AssertionValueAdapter())
+            .registerTypeAdapterFactory(new IntegrityInformationAdapterFactory())
             .create();
     @SerializedName(value = "schemaVersion")
     String tdfVersion;
@@ -98,7 +106,17 @@ public class Manifest {
 
     static public class Segment {
         public String hash;
+        /**
+         * The plaintext length of this segment. Optional in the JSON: when a producer leaves it
+         * out it means {@link IntegrityInformation#segmentSizeDefault}, which
+         * {@link IntegrityInformationAdapterFactory} fills in during deserialization.
+         */
         public long segmentSize;
+        /**
+         * The on-the-wire length of this segment. Optional in the JSON the same way
+         * {@link #segmentSize} is, defaulting to
+         * {@link IntegrityInformation#encryptedSegmentSizeDefault}.
+         */
         public long encryptedSegmentSize;
 
         @Override
@@ -164,6 +182,83 @@ public class Manifest {
         public int hashCode() {
             return Objects.hash(rootSignature, segmentHashAlg, segmentSizeDefault, encryptedSegmentSizeDefault,
                     segments);
+        }
+    }
+
+    /**
+     * Applies {@code segmentSizeDefault} / {@code encryptedSegmentSizeDefault} to any segment
+     * that left the corresponding per-segment key out of its JSON.
+     * <p>
+     * The per-segment values are optional overrides: {@code manifest.schema.json} marks the two
+     * defaults required on {@code integrityInformation} but puts no {@code required} list on
+     * {@code segments/items}. web-sdk omits a per-segment size whenever it equals the default,
+     * which is every full segment of a payload larger than one segment. Gson leaves an absent
+     * key at {@code 0}, so before this the reader allocated a zero length buffer for those
+     * segments and failed inside the integrity check.
+     * <p>
+     * This runs as a post-deserialization fixup rather than by boxing the fields to {@code Long},
+     * which keeps {@link Segment#segmentSize} a primitive for callers, keeps the value/absence
+     * distinction out of the public API, and applies to every path that parses a manifest. A
+     * primitive alone cannot tell an absent key from a literal {@code 0}, so the decision is made
+     * against the parse tree rather than against the deserialized value.
+     */
+    private static class IntegrityInformationAdapterFactory implements TypeAdapterFactory {
+        private static final String SEGMENTS = "segments";
+        private static final String SEGMENT_SIZE = "segmentSize";
+        private static final String ENCRYPTED_SEGMENT_SIZE = "encryptedSegmentSize";
+
+        @Override
+        public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> type) {
+            if (!IntegrityInformation.class.equals(type.getRawType())) {
+                return null;
+            }
+            final TypeAdapter<T> delegate = gson.getDelegateAdapter(this, type);
+            final TypeAdapter<JsonElement> elementAdapter = gson.getAdapter(JsonElement.class);
+            return new TypeAdapter<T>() {
+                @Override
+                public void write(JsonWriter out, T value) throws IOException {
+                    delegate.write(out, value);
+                }
+
+                @Override
+                public T read(JsonReader in) throws IOException {
+                    JsonElement tree = elementAdapter.read(in);
+                    T value = delegate.fromJsonTree(tree);
+                    if (value instanceof IntegrityInformation && tree != null && tree.isJsonObject()) {
+                        applySegmentSizeDefaults((IntegrityInformation) value, tree.getAsJsonObject());
+                    }
+                    return value;
+                }
+            };
+        }
+
+        private static void applySegmentSizeDefaults(IntegrityInformation integrityInformation, JsonObject json) {
+            List<Segment> segments = integrityInformation.segments;
+            JsonElement rawSegments = json.get(SEGMENTS);
+            if (segments == null || rawSegments == null || !rawSegments.isJsonArray()) {
+                return;
+            }
+            JsonArray rawSegmentArray = rawSegments.getAsJsonArray();
+            int count = Math.min(segments.size(), rawSegmentArray.size());
+            for (int i = 0; i < count; i++) {
+                Segment segment = segments.get(i);
+                JsonElement rawSegment = rawSegmentArray.get(i);
+                if (segment == null || rawSegment == null || !rawSegment.isJsonObject()) {
+                    continue;
+                }
+                JsonObject rawSegmentObject = rawSegment.getAsJsonObject();
+                if (!hasValue(rawSegmentObject, SEGMENT_SIZE)) {
+                    segment.segmentSize = integrityInformation.segmentSizeDefault;
+                }
+                if (!hasValue(rawSegmentObject, ENCRYPTED_SEGMENT_SIZE)) {
+                    segment.encryptedSegmentSize = integrityInformation.encryptedSegmentSizeDefault;
+                }
+            }
+        }
+
+        private static boolean hasValue(JsonObject object, String memberName) {
+            JsonElement member = object.get(memberName);
+            return member != null && !member.isJsonNull();
         }
     }
 

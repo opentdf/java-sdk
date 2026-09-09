@@ -15,6 +15,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
@@ -157,6 +159,125 @@ public class ZipWriterTest {
         assertThatThrownBy(() -> new ZipWriter(out, 1L << 32)).isInstanceOf(IllegalArgumentException.class);
     }
 
+    /**
+     * The entry count in the end of central directory record is a 2-byte field, and {@code 0xFFFF}
+     * in it is the sentinel that sends the real count to the zip64 record. An archive can need
+     * zip64 for its entry count alone while every one of its entries, and its whole central
+     * directory, stays comfortably inside 32 bits.
+     */
+    @Test
+    public void entryCountAloneDrivesTheEndOfCentralDirectorySentinel() throws IOException {
+        var justFits = archiveOfEmptyEntries(0xFFFE, ZipWriter.MAX_NON_ZIP64_VALUE);
+        assertThat(endOfCentralDirectory(justFits).totalEntries).isEqualTo(0xFFFE);
+        assertThat(containsZip64EndOfCentralDirectory(justFits))
+                .withFailMessage("an archive whose entry count still fits should not be zip64")
+                .isFalse();
+
+        var overflows = archiveOfEmptyEntries(0xFFFF, ZipWriter.MAX_NON_ZIP64_VALUE);
+        var eocd = endOfCentralDirectory(overflows);
+        assertThat(eocd.totalEntries).isEqualTo(0xFFFF);
+        assertThat(eocd.entriesOnThisDisk).isEqualTo(0xFFFF);
+        assertThat(containsZip64EndOfCentralDirectory(overflows))
+                .withFailMessage("the entry count no longer fits, so the archive has to be zip64")
+                .isTrue();
+
+        // and the real count survives, which it only can if it went into the zip64 record
+        try (var chan = new SeekableInMemoryByteChannel(overflows)) {
+            assertThat(new ZipReader(chan).getEntries().size()).isEqualTo(0xFFFF);
+        }
+    }
+
+    /**
+     * The central directory offset is a 4-byte field. Held to the same 2 GiB ceiling as the
+     * per-entry fields, so the lowered threshold drives it here.
+     */
+    @Test
+    public void centralDirectoryOffsetAloneDrivesTheEndOfCentralDirectorySentinel() throws IOException {
+        // one entry, small enough to stay non-zip64 itself, whose data pushes the start of the
+        // central directory past the threshold while the directory stays under it
+        var belowThreshold = archiveOfOneEntry(50, 100);
+        assertThat(containsZip64EndOfCentralDirectory(belowThreshold))
+                .withFailMessage("nothing here crosses the threshold, so the archive should not be zip64")
+                .isFalse();
+
+        var archive = archiveOfOneEntry(100, 100);
+        var eocd = endOfCentralDirectory(archive);
+        assertThat(eocd.offsetOfCentralDirectory).isEqualTo(ZIP64_SENTINEL);
+        assertThat(containsZip64EndOfCentralDirectory(archive))
+                .withFailMessage("a central directory past the threshold has to be zip64")
+                .isTrue();
+
+        assertOnlyTheEndOfCentralDirectoryIsZip64(archive, "big.bin");
+    }
+
+    /**
+     * The central directory size is also a 4-byte field. An empty entry costs 46 bytes in the
+     * directory but only 30 before it, so a pile of them makes the directory outgrow its own
+     * offset and this sentinel fires while the offset one does not.
+     */
+    @Test
+    public void centralDirectorySizeAloneDrivesTheEndOfCentralDirectorySentinel() throws IOException {
+        // 5 entries: the directory starts at 180 and is 260 bytes long, both under the threshold
+        var belowThreshold = archiveOfEmptyEntries(5, 400);
+        assertThat(containsZip64EndOfCentralDirectory(belowThreshold))
+                .withFailMessage("nothing here crosses the threshold, so the archive should not be zip64")
+                .isFalse();
+
+        // 10 entries: the directory still starts at 360 but is now 520 bytes long
+        var archive = archiveOfEmptyEntries(10, 400);
+        var eocd = endOfCentralDirectory(archive);
+        assertThat(eocd.sizeOfCentralDirectory).isEqualTo(ZIP64_SENTINEL);
+        assertThat(containsZip64EndOfCentralDirectory(archive))
+                .withFailMessage("a central directory larger than the threshold has to be zip64")
+                .isTrue();
+
+        assertOnlyTheEndOfCentralDirectoryIsZip64(archive, "e00000");
+    }
+
+    /**
+     * Zip counts filename lengths in bytes. Deriving one from {@link String#length()}, which
+     * counts UTF-16 code units, desyncs the central directory by the difference for any entry
+     * name that isn't pure ASCII.
+     */
+    @Test
+    public void filenameLengthIsMeasuredInUtf8Bytes() throws IOException {
+        // a surrogate pair (2 code units, 4 bytes) and a BMP character (1 code unit, 3 bytes),
+        // so String.length() is 7 where the encoded form is 11 bytes
+        var name = "🔒両.txt";
+        var nameBytes = name.getBytes(StandardCharsets.UTF_8);
+        assertThat(name.length()).isNotEqualTo(nameBytes.length);
+
+        var out = new ByteArrayOutputStream();
+        var writer = new ZipWriter(out);
+        writer.data(name, "contents".getBytes(StandardCharsets.UTF_8));
+        writer.finish();
+        var archive = out.toByteArray();
+
+        // the sole local file header starts at 0, and its filename length is at offset 26
+        assertThat(readUnsignedShort(archive, 26)).isEqualTo(nameBytes.length);
+        // the central directory file header keeps its filename length at offset 28
+        var centralDirectory = (int) endOfCentralDirectory(archive).offsetOfCentralDirectory;
+        assertThat(readUnsignedShort(archive, centralDirectory + 28)).isEqualTo(nameBytes.length);
+
+        try (var chan = new SeekableInMemoryByteChannel(archive)) {
+            assertThat(readEntry(new ZipReader(chan), name)).isEqualTo("contents");
+        }
+        try (var chan = new SeekableInMemoryByteChannel(archive)) {
+            ZipFile z = new ZipFile.Builder().setSeekableByteChannel(chan).get();
+            assertThat(getDataStream(z, z.getEntry(name)).toString(StandardCharsets.UTF_8))
+                    .isEqualTo("contents");
+        }
+    }
+
+    @Test
+    public void rejectsAnEntryNameTooLongToDescribe() {
+        var name = "両".repeat(30_000); // 3 bytes each, so well past the 0xFFFF byte field
+        var writer = new ZipWriter(new ByteArrayOutputStream());
+        assertThatThrownBy(() -> writer.data(name, new byte[0]))
+                .isInstanceOf(SDKException.class)
+                .hasMessageContaining("filename length field");
+    }
+
     @Test
     @Disabled("this takes a long time and shouldn't run on build machines")
     public void testWritingLargeFile() throws IOException {
@@ -280,6 +401,86 @@ public class ZipWriterTest {
             }
         }
         return false;
+    }
+
+    private static final long ZIP64_SENTINEL = 0xFFFFFFFFL;
+    private static final int END_OF_CENTRAL_DIRECTORY_SIZE = 22;
+    private static final int END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50;
+
+    /** An archive of {@code count} empty entries, whose names are all the same length. */
+    private static byte[] archiveOfEmptyEntries(int count, long threshold) throws IOException {
+        var out = new ByteArrayOutputStream();
+        var writer = new ZipWriter(out, threshold);
+        var empty = new byte[0];
+        for (int i = 0; i < count; i++) {
+            writer.data(String.format("e%05d", i), empty);
+        }
+        writer.finish();
+        return out.toByteArray();
+    }
+
+    /** An archive of one entry named {@code big.bin} carrying {@code dataSize} bytes. */
+    private static byte[] archiveOfOneEntry(int dataSize, long threshold) throws IOException {
+        var out = new ByteArrayOutputStream();
+        var writer = new ZipWriter(out, threshold);
+        writer.data("big.bin", new byte[dataSize]);
+        writer.finish();
+        return out.toByteArray();
+    }
+
+    /**
+     * Shows that it was an end of central directory field, and not an entry, that made the
+     * archive zip64: no entry carries a zip64 extra field, and the whole thing still reads.
+     */
+    private static void assertOnlyTheEndOfCentralDirectoryIsZip64(byte[] archive, String anEntryName)
+            throws IOException {
+        try (var chan = new SeekableInMemoryByteChannel(archive)) {
+            ZipFile z = new ZipFile.Builder().setSeekableByteChannel(chan).get();
+            assertThat(zip64ExtraField(z, anEntryName))
+                    .withFailMessage("no entry should be zip64 here, only the end of central directory")
+                    .isNull();
+        }
+        try (var chan = new SeekableInMemoryByteChannel(archive)) {
+            assertThat(new ZipReader(chan).getEntries().isEmpty())
+                    .withFailMessage("the archive should still be readable")
+                    .isFalse();
+        }
+    }
+
+    private static int readUnsignedShort(byte[] archive, int position) {
+        return ByteBuffer.wrap(archive).order(ByteOrder.LITTLE_ENDIAN).getShort(position) & 0xFFFF;
+    }
+
+    /** The fields of the trailing end of central directory record. We never write a comment. */
+    private static final class EndOfCentralDirectory {
+        final int entriesOnThisDisk;
+        final int totalEntries;
+        final long sizeOfCentralDirectory;
+        final long offsetOfCentralDirectory;
+
+        EndOfCentralDirectory(int entriesOnThisDisk, int totalEntries, long sizeOfCentralDirectory,
+                long offsetOfCentralDirectory) {
+            this.entriesOnThisDisk = entriesOnThisDisk;
+            this.totalEntries = totalEntries;
+            this.sizeOfCentralDirectory = sizeOfCentralDirectory;
+            this.offsetOfCentralDirectory = offsetOfCentralDirectory;
+        }
+    }
+
+    private static EndOfCentralDirectory endOfCentralDirectory(byte[] archive) {
+        var buf = ByteBuffer
+                .wrap(archive, archive.length - END_OF_CENTRAL_DIRECTORY_SIZE, END_OF_CENTRAL_DIRECTORY_SIZE)
+                .order(ByteOrder.LITTLE_ENDIAN);
+        assertThat(buf.getInt())
+                .withFailMessage("the archive doesn't end in an end of central directory record")
+                .isEqualTo(END_OF_CENTRAL_DIRECTORY_SIGNATURE);
+        buf.getShort(); // disk number
+        buf.getShort(); // disk the central directory starts on
+        return new EndOfCentralDirectory(
+                buf.getShort() & 0xFFFF,
+                buf.getShort() & 0xFFFF,
+                buf.getInt() & 0xFFFFFFFFL,
+                buf.getInt() & 0xFFFFFFFFL);
     }
 
     private static long crcOfWholeFile(File file) throws IOException {
