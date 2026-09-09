@@ -8,8 +8,14 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
+import com.google.gson.TypeAdapter;
+import com.google.gson.TypeAdapterFactory;
 import com.google.gson.annotations.JsonAdapter;
 import com.google.gson.annotations.SerializedName;
+import com.google.gson.reflect.TypeToken;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonToken;
+import com.google.gson.stream.JsonWriter;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -30,6 +36,7 @@ import org.apache.commons.codec.binary.Hex;
 import org.erdtman.jcs.JsonCanonicalizer;
 
 import java.io.IOException;
+import java.io.StringReader;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -38,6 +45,7 @@ import java.security.PrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.cert.X509Certificate;
 import java.text.ParseException;
+import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -118,6 +126,192 @@ public class Manifest {
         }
     }
 
+    /**
+     * A compact, append-only {@link Segment} list.
+     * <p>
+     * A plain {@code ArrayList<Segment>} costs roughly 176 bytes per segment, which
+     * is several gigabytes for a multi-terabyte payload. Every segment of a TDF but
+     * the last has the same sizes, and every segment hash is the same fixed length,
+     * so all this stores is the hash characters packed into fixed-stride chunks
+     * plus the two size pairs — about 24 bytes per segment, with no array-growth
+     * copies and no {@code Integer.MAX_VALUE} ceiling on the backing store.
+     * <p>
+     * {@link #append} refuses anything that does not fit those assumptions (a
+     * manifest from another writer may not honor them); callers fall back to an
+     * {@code ArrayList}.
+     * <p>
+     * ponytail: the remaining ceiling is {@link #aggregate}, which materializes one
+     * byte array of {@code count * hashLength} — about 134M segments (256 TiB at
+     * 2 MiB segments), or ~100M if the TDF carries assertions, whose signature is
+     * base64 of that array. Going past that needs a streaming Mac and streaming
+     * base64, and a wire-format change for assertions.
+     */
+    static final class Segments extends AbstractList<Segment> {
+        private static final int SEGMENTS_PER_CHUNK = 4096;
+
+        private final List<byte[]> chunks = new ArrayList<>();
+        private int count;
+        /** Length of every hash, in characters; established by the first append. */
+        private int stride;
+        /** Trailing '=' in every hash, so decoded hashes are also fixed length. */
+        private int padding;
+        private long defaultSegmentSize;
+        private long defaultEncryptedSegmentSize;
+        private long lastSegmentSize;
+        private long lastEncryptedSegmentSize;
+
+        /**
+         * @return false if this segment cannot be represented compactly, in which
+         *         case the segment was not appended and the caller must fall back
+         */
+        boolean append(String hash, long segmentSize, long encryptedSegmentSize) {
+            if (hash == null) {
+                return false;
+            }
+            if (count == 0) {
+                stride = hash.length();
+                padding = trailingPadding(hash);
+                defaultSegmentSize = segmentSize;
+                defaultEncryptedSegmentSize = encryptedSegmentSize;
+            } else if (hash.length() != stride
+                    || trailingPadding(hash) != padding
+                    // the previously appended segment is no longer the last one, so it
+                    // has to match the defaults from here on
+                    || lastSegmentSize != defaultSegmentSize
+                    || lastEncryptedSegmentSize != defaultEncryptedSegmentSize) {
+                return false;
+            }
+
+            if (count % SEGMENTS_PER_CHUNK == 0) {
+                chunks.add(new byte[stride * SEGMENTS_PER_CHUNK]);
+            }
+            byte[] chunk = chunks.get(count / SEGMENTS_PER_CHUNK);
+            int offset = (count % SEGMENTS_PER_CHUNK) * stride;
+            for (int i = 0; i < stride; i++) {
+                char c = hash.charAt(i);
+                if (c > 0x7f) { // non-ASCII would not survive the byte-per-character packing
+                    return false;
+                }
+                chunk[offset + i] = (byte) c;
+            }
+
+            lastSegmentSize = segmentSize;
+            lastEncryptedSegmentSize = encryptedSegmentSize;
+            count++;
+            return true;
+        }
+
+        private static int trailingPadding(String hash) {
+            int padding = 0;
+            while (padding < hash.length() && hash.charAt(hash.length() - 1 - padding) == '=') {
+                padding++;
+            }
+            return padding;
+        }
+
+        /**
+         * Every segment hash concatenated, base64-decoded if {@code decodeBase64}
+         * and taken as raw ASCII otherwise. This is the aggregate hash that the root
+         * signature and the assertion signatures are computed over.
+         */
+        byte[] aggregate(boolean decodeBase64) {
+            if (count == 0) {
+                return new byte[0];
+            }
+            byte[] scratch = new byte[stride];
+            if (!decodeBase64) {
+                byte[] aggregate = new byte[Math.multiplyExact(count, stride)];
+                for (int i = 0; i < count; i++) {
+                    copyHash(i, aggregate, i * stride);
+                }
+                return aggregate;
+            }
+
+            copyHash(0, scratch, 0);
+            int decodedStride = Base64.getDecoder().decode(scratch).length;
+            byte[] aggregate = new byte[Math.multiplyExact(count, decodedStride)];
+            byte[] decoded = new byte[decodedStride];
+            for (int i = 0; i < count; i++) {
+                copyHash(i, scratch, 0);
+                Base64.getDecoder().decode(scratch, decoded);
+                System.arraycopy(decoded, 0, aggregate, i * decodedStride, decodedStride);
+            }
+            return aggregate;
+        }
+
+        private void copyHash(int index, byte[] destination, int destinationOffset) {
+            byte[] chunk = chunks.get(index / SEGMENTS_PER_CHUNK);
+            System.arraycopy(chunk, (index % SEGMENTS_PER_CHUNK) * stride, destination, destinationOffset, stride);
+        }
+
+        @Override
+        public Segment get(int index) {
+            Objects.checkIndex(index, count);
+            byte[] chunk = chunks.get(index / SEGMENTS_PER_CHUNK);
+            Segment segment = new Segment();
+            segment.hash = new String(chunk, (index % SEGMENTS_PER_CHUNK) * stride, stride, StandardCharsets.US_ASCII);
+            boolean last = index == count - 1;
+            segment.segmentSize = last ? lastSegmentSize : defaultSegmentSize;
+            segment.encryptedSegmentSize = last ? lastEncryptedSegmentSize : defaultEncryptedSegmentSize;
+            return segment;
+        }
+
+        @Override
+        public int size() {
+            return count;
+        }
+    }
+
+    /**
+     * Reads {@code segments} into a {@link Segments} when the manifest allows it,
+     * and into a plain {@code ArrayList} when it does not. Writing delegates to the
+     * reflective {@link Segment} adapter, so the JSON is unchanged either way.
+     */
+    static final class SegmentsAdapterFactory implements TypeAdapterFactory {
+        @Override
+        @SuppressWarnings("unchecked")
+        public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> type) {
+            TypeAdapter<Segment> element = gson.getAdapter(Segment.class);
+            return (TypeAdapter<T>) new TypeAdapter<List<Segment>>() {
+                @Override
+                public void write(JsonWriter out, List<Segment> value) throws IOException {
+                    if (value == null) {
+                        out.nullValue();
+                        return;
+                    }
+                    out.beginArray();
+                    for (Segment segment : value) {
+                        element.write(out, segment);
+                    }
+                    out.endArray();
+                }
+
+                @Override
+                public List<Segment> read(JsonReader in) throws IOException {
+                    if (in.peek() == JsonToken.NULL) {
+                        in.nextNull();
+                        return null;
+                    }
+                    in.beginArray();
+                    Segments compact = new Segments();
+                    List<Segment> fallback = null;
+                    while (in.hasNext()) {
+                        Segment segment = element.read(in);
+                        if (fallback != null) {
+                            fallback.add(segment);
+                        } else if (segment == null
+                                || !compact.append(segment.hash, segment.segmentSize, segment.encryptedSegmentSize)) {
+                            fallback = new ArrayList<>(compact);
+                            fallback.add(segment);
+                        }
+                    }
+                    in.endArray();
+                    return fallback == null ? compact : fallback;
+                }
+            };
+        }
+    }
+
     static public class RootSignature {
         @SerializedName(value = "alg")
         public String algorithm;
@@ -145,6 +339,7 @@ public class Manifest {
         public String segmentHashAlg;
         public int segmentSizeDefault;
         public int encryptedSegmentSizeDefault;
+        @JsonAdapter(SegmentsAdapterFactory.class)
         public List<Segment> segments;
 
         @Override
@@ -559,6 +754,14 @@ public class Manifest {
     public Payload payload;
     public List<Assertion> assertions = new ArrayList<>();
     protected static Manifest readManifest(String manifestJson) {
+        return readManifest(new StringReader(manifestJson));
+    }
+
+    /**
+     * Parses a manifest without materializing it as a {@link String}, which a
+     * manifest with tens of millions of segments cannot be.
+     */
+    protected static Manifest readManifest(java.io.Reader manifestJson) {
         Manifest result = gson.fromJson(manifestJson, Manifest.class);
         if (result.assertions == null) {
             result.assertions = new ArrayList<>();
@@ -583,9 +786,13 @@ public class Manifest {
             throw new IllegalArgumentException("Manifest with null policy");
         }
 
-        for (Manifest.Segment segment : result.encryptionInformation.integrityInformation.segments) {
-            if (segment == null || segment.hash == null) {
-                throw new IllegalArgumentException("Invalid integrity segment");
+        // Segments rejects null segments and hashes as it is built, so only the
+        // fallback representation needs checking here.
+        if (!(result.encryptionInformation.integrityInformation.segments instanceof Segments)) {
+            for (Manifest.Segment segment : result.encryptionInformation.integrityInformation.segments) {
+                if (segment == null || segment.hash == null) {
+                    throw new IllegalArgumentException("Invalid integrity segment");
+                }
             }
         }
         for (Manifest.KeyAccess keyAccess : result.encryptionInformation.keyAccessObj) {

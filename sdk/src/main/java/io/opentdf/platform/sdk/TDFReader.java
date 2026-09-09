@@ -1,8 +1,10 @@
 package io.opentdf.platform.sdk;
 
-import java.io.ByteArrayOutputStream;
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -17,6 +19,8 @@ import static io.opentdf.platform.sdk.TDFWriter.TDF_PAYLOAD_FILE_NAME;
  * and provides methods to retrieve the manifest content, read payload bytes, and read policy objects.
  */
 public class TDFReader {
+
+    private static final int MANIFEST_BUFFER_SIZE = 1 << 16;
 
     private final ZipReader.Entry manifestEntry;
     private final InputStream payload;
@@ -37,15 +41,18 @@ public class TDFReader {
         payload = entries.get(TDF_PAYLOAD_FILE_NAME).getData();
     }
 
-    String manifest() {
-        var out = new ByteArrayOutputStream();
+    /**
+     * The manifest entry as a character stream; the caller must close it. Returned
+     * as a stream rather than a String because a manifest with tens of millions of
+     * segments exceeds the maximum size of a Java String.
+     */
+    Reader manifest() {
         try {
-            manifestEntry.getData().transferTo(out);
+            return new BufferedReader(
+                    new InputStreamReader(manifestEntry.getData(), StandardCharsets.UTF_8), MANIFEST_BUFFER_SIZE);
         } catch (IOException e) {
             throw new SDKException("error retrieving manifest from zip file", e);
         }
-
-        return out.toString(StandardCharsets.UTF_8);
     }
 
     int readPayloadBytes(byte[] buf) {
@@ -62,8 +69,10 @@ public class TDFReader {
     }
 
     PolicyObject readPolicyObject() {
-        String manifestJson = manifest();
-        Manifest manifest = Manifest.readManifest(manifestJson);
-        return Manifest.decodePolicyObject(manifest);
+        try (Reader manifestJson = manifest()) {
+            return Manifest.decodePolicyObject(Manifest.readManifest(manifestJson));
+        } catch (IOException e) {
+            throw new SDKException("error reading manifest from zip file", e);
+        }
     }
 }

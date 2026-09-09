@@ -5,13 +5,18 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.FileNotFoundException;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.StringWriter;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.StandardOpenOption;
+import java.util.stream.Collectors;
+import java.util.zip.ZipFile;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class TDFWriterTest {
     @Test
@@ -64,14 +69,39 @@ String kManifestJsonFromTDF = "{\n" +
                 "  }\n" +
                 "}";
         String payload = "Hello, world!";
-        FileOutputStream fileOutStream = new FileOutputStream("sample.tdf");
-        TDFWriter writer = new TDFWriter(fileOutStream);
-        try (var p = writer.payload()) {
-            new ByteArrayInputStream(payload.getBytes(StandardCharsets.UTF_8)).transferTo(p);
+        var tdfFile = File.createTempFile("sample", ".tdf");
+        tdfFile.deleteOnExit();
+        try (var fileOutStream = new FileOutputStream(tdfFile)) {
+            TDFWriter writer = new TDFWriter(fileOutStream);
+            try (var p = writer.payload()) {
+                new ByteArrayInputStream(payload.getBytes(StandardCharsets.UTF_8)).transferTo(p);
+            }
+            try (var m = writer.manifest()) {
+                m.write(kManifestJsonFromTDF.getBytes(StandardCharsets.UTF_8));
+            }
+            writer.finish();
         }
-        writer.appendManifest(kManifestJsonFromTDF);
-        writer.finish();
-        fileOutStream.close();
+
+        // our own reader
+        try (var channel = FileChannel.open(tdfFile.toPath(), StandardOpenOption.READ)) {
+            var entries = new ZipReader(channel).getEntries().stream()
+                    .collect(Collectors.toMap(ZipReader.Entry::getName, e -> e));
+            assertEquals(kManifestJsonFromTDF,
+                    new String(entries.get(TDFWriter.TDF_MANIFEST_FILE_NAME).getData().readAllBytes(),
+                            StandardCharsets.UTF_8));
+            assertEquals(payload,
+                    new String(entries.get(TDFWriter.TDF_PAYLOAD_FILE_NAME).getData().readAllBytes(),
+                            StandardCharsets.UTF_8));
+        }
+
+        // an independent central-directory based reader, as a stand-in for the other SDKs
+        try (var zipFile = new ZipFile(tdfFile)) {
+            var manifestEntry = zipFile.getEntry(TDFWriter.TDF_MANIFEST_FILE_NAME);
+            assertNotNull(manifestEntry);
+            try (var in = zipFile.getInputStream(manifestEntry)) {
+                assertEquals(kManifestJsonFromTDF, new String(in.readAllBytes(), StandardCharsets.UTF_8));
+            }
+        }
     }
 
     /**
@@ -89,12 +119,18 @@ String kManifestJsonFromTDF = "{\n" +
         try (var p = writer.payload()) {
             new ByteArrayInputStream(payload.getBytes(StandardCharsets.UTF_8)).transferTo(p);
         }
-        writer.appendManifest(manifest);
+        try (var m = writer.manifest()) {
+            m.write(manifest.getBytes(StandardCharsets.UTF_8));
+        }
         writer.finish();
 
         try (var chan = new SeekableInMemoryByteChannel(out.toByteArray())) {
             var reader = new TDFReader(chan);
-            assertEquals(manifest, reader.manifest());
+            var readBack = new StringWriter();
+            try (var m = reader.manifest()) {
+                m.transferTo(readBack);
+            }
+            assertEquals(manifest, readBack.toString());
 
             var payloadBytes = new byte[payload.length()];
             assertEquals(payload.length(), reader.readPayloadBytes(payloadBytes));
