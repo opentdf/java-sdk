@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -22,6 +23,20 @@ class ConfigTest {
         assertTrue(config.kasInfoList.isEmpty());
         assertTrue(config.renderVersionInfoInManifest);
         assertFalse(config.hexEncodeRootAndSegmentHashes);
+    }
+
+    @Test
+    void withSegmentIntegrityAlgorithm_setsSegmentOnly() {
+        Config.TDFConfig config = Config.newTDFConfig(
+                Config.withSegmentIntegrityAlgorithm(Config.IntegrityAlgorithm.HS256));
+        assertEquals(Config.IntegrityAlgorithm.HS256, config.segmentIntegrityAlgorithm);
+        assertEquals(Config.IntegrityAlgorithm.HS256, config.integrityAlgorithm);
+    }
+
+    @Test
+    void withRootIntegrityAlgorithm_rejectsGmac() {
+        assertThrows(IllegalArgumentException.class,
+                () -> Config.withRootIntegrityAlgorithm(Config.IntegrityAlgorithm.GMAC));
     }
 
     @Test

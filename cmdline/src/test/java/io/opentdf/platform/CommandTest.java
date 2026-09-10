@@ -1,7 +1,11 @@
 package io.opentdf.platform;
 
+import io.opentdf.platform.sdk.Config;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import picocli.CommandLine;
 
 import java.io.ByteArrayOutputStream;
@@ -9,6 +13,9 @@ import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -137,4 +144,50 @@ class CommandTest {
         assertThat(out.trim()).isEqualTo("{\"unknown_feature\":false}");
     }
 
+    /** Runs `encrypt` with the given extra options, asserts it exited USAGE, and returns stderr. */
+    private String encryptErr(String... opts) {
+        StringWriter err = new StringWriter();
+        CommandLine cli = new CommandLine(new Command());
+        cli.setErr(new PrintWriter(err));
+
+        List<String> args = new ArrayList<>(List.of("encrypt", "-k", "https://kas.example.com", "-f", "/dev/null"));
+        Collections.addAll(args, opts);
+        int code = cli.execute(args.toArray(new String[0]));
+
+        assertThat(code).isEqualTo(CommandLine.ExitCode.USAGE);
+        return err.toString();
+    }
+
+    @ParameterizedTest
+    @CsvSource({ "gmac,GMAC", "GMAC,GMAC", "GMac,GMAC", "hs256,HS256", "HS256,HS256", "'HS256 ',HS256" })
+    void integrityAlgorithmConverter_parsesAnyCasingAndTrims(String in, Config.IntegrityAlgorithm expected) {
+        assertThat(new Command.IntegrityAlgorithmConverter().convert(in)).isEqualTo(expected);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "gmac", "GMAC", "GMac" })
+    void encrypt_rootIntegrityAlgorithmGmac_isRejected(String value) {
+        assertThat(encryptErr("--root-integrity-algorithm", value))
+                .contains("unsupported root integrity algorithm");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "gmac", "GMAC", "hs256", "HS256" })
+    void encrypt_segmentIntegrityAlgorithm_acceptsBothValuesInAnyCasing(String value) {
+        assertThat(encryptErr("--segment-integrity-algorithm", value))
+                .contains("Missing required option: '--platform-endpoint=<platformEndpoint>'");
+    }
+
+    @Test
+    void encrypt_unknownIntegrityAlgorithm_isRejected() {
+        assertThat(encryptErr("--segment-integrity-algorithm", "md5")).contains("--segment-integrity-algorithm");
+    }
+
+    @Test
+    void encryptHelp_listsIntegrityFlags() {
+        String help = new CommandLine(new Command()).getSubcommands().get("encrypt")
+                .getUsageMessage(CommandLine.Help.Ansi.OFF);
+
+        assertThat(help).contains("--root-integrity-algorithm", "--segment-integrity-algorithm");
+    }
 }

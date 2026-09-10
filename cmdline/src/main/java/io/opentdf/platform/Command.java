@@ -114,6 +114,22 @@ class Command {
         }
     }
 
+    /**
+     * Loosely converts string representations of the integrity algorithms to the allowed enum values.
+     */
+    static class IntegrityAlgorithmConverter implements CommandLine.ITypeConverter<Config.IntegrityAlgorithm> {
+        @Override
+        public Config.IntegrityAlgorithm convert(String value) {
+            for (Config.IntegrityAlgorithm algorithm : Config.IntegrityAlgorithm.values()) {
+                if (algorithm.name().equalsIgnoreCase(value.trim())) {
+                    return algorithm;
+                }
+            }
+            throw new CommandLine.TypeConversionException(
+                    "expected one of [HS256, GMAC] (case-insensitive) but was '" + value + "'");
+        }
+    }
+
     private static class AssertionKeyDeserializer implements JsonDeserializer<AssertionConfig.AssertionKey> {
         @Override
         public AssertionConfig.AssertionKey deserialize(JsonElement json, java.lang.reflect.Type typeOfT,
@@ -258,10 +274,25 @@ class Command {
             @Option(names = {
                     "--encap-key-type" }, defaultValue = Option.NULL_VALUE, description = "Preferred key access key wrap algorithm, one of ${COMPLETION-CANDIDATES}") Optional<KeyType> encapKeyType,
             @Option(names = { "--mime-type" }, defaultValue = Option.NULL_VALUE) Optional<String> mimeType,
+            @Option(names = {
+                    "--root-integrity-algorithm" }, defaultValue = Option.NULL_VALUE, converter = IntegrityAlgorithmConverter.class, description = "Algorithm for the TDF root signature. Only HS256 is supported.") Optional<Config.IntegrityAlgorithm> rootIntegrityAlgorithm,
+            @Option(names = {
+                    "--segment-integrity-algorithm" }, defaultValue = Option.NULL_VALUE, converter = IntegrityAlgorithmConverter.class, description = "Algorithm for segment hashes, one of ${COMPLETION-CANDIDATES}") Optional<Config.IntegrityAlgorithm> segmentIntegrityAlgorithm,
             @Option(names = { "--with-assertions" }, defaultValue = Option.NULL_VALUE) Optional<String> assertion,
             @Option(names = { "--with-target-mode" }, defaultValue = Option.NULL_VALUE) Optional<String> targetMode)
 
             throws IOException, AutoConfigureException {
+
+        // Additional command line argument validation
+        List<Consumer<Config.TDFConfig>> integrityConfigs = new ArrayList<>();
+        segmentIntegrityAlgorithm.map(Config::withSegmentIntegrityAlgorithm).ifPresent(integrityConfigs::add);
+        rootIntegrityAlgorithm.ifPresent(alg -> {
+            try {
+                integrityConfigs.add(Config.withRootIntegrityAlgorithm(alg));
+            } catch (IllegalArgumentException e) {
+                throw new CommandLine.ParameterException(spec.commandLine(), e.getMessage(), e);
+            }
+        });
 
         var sdk = buildSDK();
         var kasInfos = kas.stream().map(k -> {
@@ -270,7 +301,7 @@ class Command {
             return ki;
         }).toArray(Config.KASInfo[]::new);
 
-        List<Consumer<Config.TDFConfig>> configs = new ArrayList<>();
+        List<Consumer<Config.TDFConfig>> configs = new ArrayList<>(integrityConfigs);
         configs.add(Config.withKasInformation(kasInfos));
         metadata.map(Config::withMetaData).ifPresent(configs::add);
         configs.add(Config.withSystemMetadataAssertion());

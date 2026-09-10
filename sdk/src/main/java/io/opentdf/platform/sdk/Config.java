@@ -34,7 +34,9 @@ public class Config {
     }
 
     public enum IntegrityAlgorithm {
+        /** Use the HMAC algorithm with the DEK to build the hash. */
         HS256,
+        /** For blocks encrypted with AES-GCM, extract the auth tag and use that as the hash. */
         GMAC
     }
 
@@ -335,6 +337,28 @@ public class Config {
 
     public static Consumer<TDFConfig> withMimeType(String mimeType) {
         return (TDFConfig config) -> config.mimeType = mimeType;
+    }
+
+    /**
+     * Selects the algorithm recorded in each segment's {@code hash}.
+     */
+    public static Consumer<TDFConfig> withSegmentIntegrityAlgorithm(IntegrityAlgorithm algorithm) {
+        Objects.requireNonNull(algorithm, "segment integrity algorithm");
+        return (TDFConfig config) -> config.segmentIntegrityAlgorithm = algorithm;
+    }
+
+    /**
+     * Selects the algorithm used for {@code rootSignature}. {@code HS256} only, which is
+     * also the default.
+     *
+     * @throws IllegalArgumentException if {@code algorithm} is not HS256
+     */
+    public static Consumer<TDFConfig> withRootIntegrityAlgorithm(IntegrityAlgorithm algorithm) {
+        if (algorithm != IntegrityAlgorithm.HS256) {
+            throw new IllegalArgumentException("unsupported root integrity algorithm: " + algorithm
+                    + "; the root signature must be " + IntegrityAlgorithm.HS256);
+        }
+        return (TDFConfig config) -> config.integrityAlgorithm = algorithm;
     }
 
     public static Consumer<TDFConfig> withSystemMetadataAssertion() {
