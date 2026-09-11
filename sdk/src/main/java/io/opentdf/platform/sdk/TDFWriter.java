@@ -2,6 +2,7 @@ package io.opentdf.platform.sdk;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 
 /**
  * The TDFWriter class provides functionalities for creating a TDF (Trusted Data Format) archive.
@@ -21,6 +22,18 @@ public class TDFWriter {
      */
     TDFWriter(OutputStream destination, long maxNonZip64Value) {
         this.archiveWriter = new ZipWriter(destination, maxNonZip64Value);
+    }
+
+    /**
+     * @deprecated use {@link #manifest()}. A manifest with tens of millions of segments
+     *             exceeds the maximum size of a Java {@link String}, so this cannot
+     *             express every manifest the SDK writes. It produces the same zip entry.
+     */
+    @Deprecated
+    public void appendManifest(String manifest) throws IOException {
+        try (OutputStream output = manifest()) {
+            output.write(manifest.getBytes(StandardCharsets.UTF_8));
+        }
     }
 
     /**

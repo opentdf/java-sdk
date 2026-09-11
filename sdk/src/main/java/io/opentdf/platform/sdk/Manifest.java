@@ -148,6 +148,14 @@ public class Manifest {
      */
     static final class Segments extends AbstractList<Segment> {
         private static final int SEGMENTS_PER_CHUNK = 4096;
+        /**
+         * A chunk is {@code stride * SEGMENTS_PER_CHUNK} bytes, so an absurd hash in an
+         * untrusted manifest would size the very first allocation. The longest hash any
+         * writer produces is 128 characters (hex-encoded HS256); anything past this is
+         * left to the {@code ArrayList} fallback, which only ever costs what the input
+         * itself costs.
+         */
+        private static final int MAX_HASH_LENGTH = 1024;
 
         private final List<byte[]> chunks = new ArrayList<>();
         private int count;
@@ -169,6 +177,9 @@ public class Manifest {
                 return false;
             }
             if (count == 0) {
+                if (hash.isEmpty() || hash.length() > MAX_HASH_LENGTH) {
+                    return false;
+                }
                 stride = hash.length();
                 padding = trailingPadding(hash);
                 defaultSegmentSize = segmentSize;

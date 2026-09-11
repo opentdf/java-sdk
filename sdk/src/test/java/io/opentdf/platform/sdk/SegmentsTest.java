@@ -106,6 +106,20 @@ public class SegmentsTest {
     }
 
     @Test
+    void anAbsurdlyLongHashFallsBackInsteadOfSizingAChunkFromIt() {
+        // a chunk is stride * 4096 bytes, so without a bound this one hash would ask for
+        // gigabytes before the fallback ever ran
+        var segments = new ArrayList<>(uniformSegments(2));
+        segments.set(0, segment("A".repeat(100_000), SEGMENT_SIZE, ENCRYPTED_SEGMENT_SIZE));
+
+        var parsed = Manifest.readManifest(manifestJson(segments))
+                .encryptionInformation.integrityInformation.segments;
+
+        assertThat(parsed).isNotInstanceOf(Manifest.Segments.class);
+        assertThat(parsed).containsExactlyElementsOf(segments);
+    }
+
+    @Test
     void aggregateConcatenatesEveryHash() {
         var segments = new Manifest.Segments();
         for (int i = 0; i < 3; i++) {

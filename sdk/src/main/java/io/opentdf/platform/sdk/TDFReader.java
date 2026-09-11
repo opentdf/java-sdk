@@ -69,8 +69,8 @@ public class TDFReader {
     }
 
     PolicyObject readPolicyObject() {
-        try (Reader manifestJson = manifest()) {
-            return Manifest.decodePolicyObject(Manifest.readManifest(manifestJson));
+        try (Reader manifestRaw = manifest()) {
+            return Manifest.decodePolicyObject(Manifest.readManifest(manifestRaw));
         } catch (IOException e) {
             throw new SDKException("error reading manifest from zip file", e);
         }
