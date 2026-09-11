@@ -185,8 +185,9 @@ public class SDK implements AutoCloseable {
      */
     public static Manifest readManifest(SeekableByteChannel tdfBytes) throws SDKException, IOException {
         TDFReader reader = new TDFReader(tdfBytes);
-        String manifestJson = reader.manifest();
-        return Manifest.readManifest(manifestJson);
+        try (var manifestJson = reader.manifest()) {
+            return Manifest.readManifest(manifestJson);
+        }
     }
 
     /**
