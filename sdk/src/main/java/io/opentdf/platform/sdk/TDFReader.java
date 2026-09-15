@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static io.opentdf.platform.sdk.TDFWriter.TDF_MANIFEST_FILE_NAME;
+import static io.opentdf.platform.sdk.TDFWriter.TDF_MANIFEST_FILE_NAME_OFFSPEC;
 import static io.opentdf.platform.sdk.TDFWriter.TDF_PAYLOAD_FILE_NAME;
 
 /**
@@ -26,14 +27,19 @@ public class TDFReader {
                 .stream()
                 .collect(Collectors.toMap(ZipReader.Entry::getName, e -> e));
 
-        if (!entries.containsKey(TDF_MANIFEST_FILE_NAME)) {
+        // The spec name wins over the off-spec one when an archive carries both, so a
+        // conformant entry is never passed over for a superseded one.
+        var manifest = entries.containsKey(TDF_MANIFEST_FILE_NAME)
+                ? entries.get(TDF_MANIFEST_FILE_NAME)
+                : entries.get(TDF_MANIFEST_FILE_NAME_OFFSPEC);
+        if (manifest == null) {
             throw new IllegalArgumentException("tdf doesn't contain a manifest");
         }
         if (!entries.containsKey(TDF_PAYLOAD_FILE_NAME)) {
             throw new IllegalArgumentException("tdf doesn't contain a payload");
         }
 
-        manifestEntry = entries.get(TDF_MANIFEST_FILE_NAME);
+        manifestEntry = manifest;
         payload = entries.get(TDF_PAYLOAD_FILE_NAME).getData();
     }
 
