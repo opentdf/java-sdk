@@ -12,6 +12,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ManifestTest {
+    private static final long SEGMENT_SIZE_DEFAULT = 1048576;
+    private static final long ENCRYPTED_SEGMENT_SIZE_DEFAULT = 1048604;
+
     @Test
     void testManifestMarshalAndUnMarshal() {
         String kManifestJsonFromTDF = "{\n" +
@@ -147,6 +150,109 @@ public class ManifestTest {
         // Test assertion deserialization
         assertThat(manifest.assertions).isNotNull();
         assertEquals(manifest.assertions.size(), 0);
+    }
+
+    /** A minimal but valid manifest wrapped around whatever {@code segments} array you give it. */
+    private static String manifestWithSegments(String segmentsJson) {
+        return manifestWithSegments(segmentsJson,
+                "      \"encryptedSegmentSizeDefault\": " + ENCRYPTED_SEGMENT_SIZE_DEFAULT + ",\n"
+                        + "      \"segmentSizeDefault\": " + SEGMENT_SIZE_DEFAULT + ",\n");
+    }
+
+    /** As {@link #manifestWithSegments(String)}, but with the two default declarations spelled out. */
+    private static String manifestWithSegments(String segmentsJson, String defaultsJson) {
+        return "{\n" +
+                "  \"encryptionInformation\": {\n" +
+                "    \"integrityInformation\": {\n" +
+                defaultsJson +
+                "      \"rootSignature\": { \"alg\": \"HS256\", \"sig\": \"c2ln\" },\n" +
+                "      \"segmentHashAlg\": \"GMAC\",\n" +
+                "      \"segments\": [" + segmentsJson + "]\n" +
+                "    },\n" +
+                "    \"keyAccess\": [ { \"protocol\": \"kas\", \"type\": \"wrapped\"," +
+                " \"url\": \"http://localhost:65432/kas\", \"wrappedKey\": \"a2V5\" } ],\n" +
+                "    \"method\": { \"algorithm\": \"AES-256-GCM\", \"isStreamable\": true, \"iv\": \"aXY=\" },\n" +
+                "    \"policy\": \"cG9saWN5\",\n" +
+                "    \"type\": \"split\"\n" +
+                "  },\n" +
+                "  \"payload\": { \"isEncrypted\": true, \"protocol\": \"zip\"," +
+                " \"type\": \"reference\", \"url\": \"0.payload\" }\n" +
+                "}";
+    }
+
+    /**
+     * web-sdk leaves {@code segmentSize} and {@code encryptedSegmentSize} out of a segment
+     * whenever they equal the manifest level defaults. That is legal, and an absent one means
+     * "the default" rather than zero -- see {@code IntegrityInformationAdapterFactory} in
+     * {@link Manifest} for why.
+     */
+    @Test
+    void testAbsentSegmentSizesFallBackToTheManifestDefaults() {
+        Manifest manifest = Manifest.readManifest(manifestWithSegments(
+                "{ \"hash\": \"aGFzaDA=\" },"
+                        + "{ \"hash\": \"aGFzaDE=\", \"segmentSize\": 12 },"
+                        + "{ \"hash\": \"aGFzaDI=\", \"segmentSize\": 3, \"encryptedSegmentSize\": 31 }"));
+
+        var segments = manifest.encryptionInformation.integrityInformation.segments;
+        assertThat(segments).hasSize(3);
+
+        assertThat(segments.get(0).segmentSize).isEqualTo(SEGMENT_SIZE_DEFAULT);
+        assertThat(segments.get(0).encryptedSegmentSize).isEqualTo(ENCRYPTED_SEGMENT_SIZE_DEFAULT);
+
+        assertThat(segments.get(1).segmentSize).isEqualTo(12);
+        assertThat(segments.get(1).encryptedSegmentSize).isEqualTo(ENCRYPTED_SEGMENT_SIZE_DEFAULT);
+
+        assertThat(segments.get(2).segmentSize).isEqualTo(3);
+        assertThat(segments.get(2).encryptedSegmentSize).isEqualTo(31);
+
+        // and the values we filled in survive a round trip through the serializer
+        assertEquals(manifest, Manifest.readManifest(Manifest.toJson(manifest)));
+    }
+
+    /**
+     * An explicit zero is a value rather than an absent key, so parsing leaves it alone; silently
+     * rewriting it to the default would hide a corrupt manifest. {@code TDF.Reader} is what
+     * rejects a zero {@code encryptedSegmentSize}, in
+     * {@code TDFTest#testZeroLengthSegmentIsRejectedWithAClearError}. A zero {@code segmentSize}
+     * is not checked anywhere, because nothing on the read path consumes it.
+     */
+    @Test
+    void testExplicitZeroSegmentSizeIsNotTreatedAsAbsent() {
+        Manifest manifest = Manifest.readManifest(manifestWithSegments(
+                "{ \"hash\": \"aGFzaDA=\", \"segmentSize\": 0, \"encryptedSegmentSize\": 0 }"));
+
+        var segment = manifest.encryptionInformation.integrityInformation.segments.get(0);
+        assertThat(segment.segmentSize).isZero();
+        assertThat(segment.encryptedSegmentSize).isZero();
+    }
+
+    /**
+     * An explicit {@code null} carries no value, so unlike an explicit zero it is treated as
+     * absent and picks up the default.
+     */
+    @Test
+    void testNullSegmentSizeIsTreatedAsAbsent() {
+        Manifest manifest = Manifest.readManifest(manifestWithSegments(
+                "{ \"hash\": \"aGFzaDA=\", \"segmentSize\": null, \"encryptedSegmentSize\": null }"));
+
+        var segment = manifest.encryptionInformation.integrityInformation.segments.get(0);
+        assertThat(segment.segmentSize).isEqualTo(SEGMENT_SIZE_DEFAULT);
+        assertThat(segment.encryptedSegmentSize).isEqualTo(ENCRYPTED_SEGMENT_SIZE_DEFAULT);
+    }
+
+    /**
+     * With no defaults declared there is nothing to fall back to, so the segments keep their
+     * zeroes rather than the fixup inventing a size. {@code TDF.loadTDF} is what rejects such a
+     * manifest, when it checks the two defaults against each other.
+     */
+    @Test
+    void testAbsentDefaultsLeaveSegmentSizesAtZero() {
+        Manifest manifest = Manifest.readManifest(
+                manifestWithSegments("{ \"hash\": \"aGFzaDA=\" }", ""));
+
+        var segment = manifest.encryptionInformation.integrityInformation.segments.get(0);
+        assertThat(segment.segmentSize).isZero();
+        assertThat(segment.encryptedSegmentSize).isZero();
     }
 
     @Test
