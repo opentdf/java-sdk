@@ -29,9 +29,7 @@ public class TDFReader {
 
         // The spec name wins over the off-spec one when an archive carries both, so a
         // conformant entry is never passed over for a superseded one.
-        var manifest = entries.containsKey(TDF_MANIFEST_FILE_NAME_SPEC)
-                ? entries.get(TDF_MANIFEST_FILE_NAME_SPEC)
-                : entries.get(TDF_MANIFEST_FILE_NAME);
+        var manifest = entries.getOrDefault(TDF_MANIFEST_FILE_NAME_SPEC, entries.get(TDF_MANIFEST_FILE_NAME));
         if (manifest == null) {
             throw new IllegalArgumentException("tdf doesn't contain a manifest");
         }
