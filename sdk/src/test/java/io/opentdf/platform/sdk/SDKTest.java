@@ -43,6 +43,24 @@ class SDKTest {
         }
     }
 
+    /**
+     * The reader accepts an archive carrying both manifest names, so the sniffer that
+     * screens for it must not turn that third entry into a rejection.
+     */
+    @Test
+    void testExaminingTDFWithBothManifestNames() throws IOException {
+        try (var chan = zipOf("0.payload", "manifest.json", "0.manifest.json")) {
+            assertThat(SDK.isTDF(chan)).isTrue();
+        }
+    }
+
+    @Test
+    void testExaminingTDFWithAnExtraEntry() throws IOException {
+        try (var chan = zipOf("0.payload", "manifest.json", "something-else")) {
+            assertThat(SDK.isTDF(chan)).isTrue();
+        }
+    }
+
     @Test
     void testExaminingZipWithNoManifest() throws IOException {
         try (var chan = zipOf("0.payload", "something-else")) {

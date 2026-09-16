@@ -159,7 +159,9 @@ public class SDK implements AutoCloseable {
      * a `manifest.json` and a `0.payload`
      * <p>
      * The off-spec `0.manifest.json` that this SDK writes is also accepted, matching
-     * {@link TDFReader}.
+     * {@link TDFReader}. Entries beyond the manifest and payload are ignored rather than
+     * disqualifying: an archive carrying both manifest names holds three, and the reader
+     * accepts it, so a count check here would reject what the reader it screens for reads.
      *
      * @param channel A channel containing the bytes of the potential Z-TDF
      * @return `true` if
@@ -172,9 +174,6 @@ public class SDK implements AutoCloseable {
             return false;
         }
         var entries = zipReader.getEntries();
-        if (entries.size() != 2) {
-            return false;
-        }
         return entries.stream().anyMatch(e -> TDFWriter.TDF_MANIFEST_FILE_NAME_SPEC.equals(e.getName())
                 || TDFWriter.TDF_MANIFEST_FILE_NAME.equals(e.getName()))
                 && entries.stream().anyMatch(e -> TDFWriter.TDF_PAYLOAD_FILE_NAME.equals(e.getName()));
