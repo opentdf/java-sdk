@@ -10,9 +10,11 @@ import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
+import java.nio.charset.StandardCharsets;
 import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,6 +29,43 @@ class SDKTest {
             var chan = new SeekableInMemoryByteChannel(ztdf.readAllBytes());
             assertThat(SDK.isTDF(chan)).isTrue();
         }
+    }
+
+    /**
+     * The spec names the manifest entry {@code manifest.json}; the fixture above is an
+     * archive this SDK wrote, which names it {@code 0.manifest.json}. Both are recognized.
+     * See <a href="https://github.com/opentdf/platform/issues/3513">platform#3513</a>.
+     */
+    @Test
+    void testExaminingTDFWithSpecManifestName() throws IOException {
+        try (var chan = zipOf("0.payload", "manifest.json")) {
+            assertThat(SDK.isTDF(chan)).isTrue();
+        }
+    }
+
+    @Test
+    void testExaminingZipWithNoManifest() throws IOException {
+        try (var chan = zipOf("0.payload", "something-else")) {
+            assertThat(SDK.isTDF(chan)).isFalse();
+        }
+    }
+
+    @Test
+    void testExaminingZipWithNoPayload() throws IOException {
+        try (var chan = zipOf("manifest.json", "something-else")) {
+            assertThat(SDK.isTDF(chan)).isFalse();
+        }
+    }
+
+    /** Builds a zip holding the named entries; contents are irrelevant to {@link SDK#isTDF}. */
+    private static SeekableInMemoryByteChannel zipOf(String... names) throws IOException {
+        var out = new ByteArrayOutputStream();
+        var writer = new ZipWriter(out);
+        for (var name : names) {
+            writer.data(name, name.getBytes(StandardCharsets.UTF_8));
+        }
+        writer.finish();
+        return new SeekableInMemoryByteChannel(out.toByteArray());
     }
 
     @Test

@@ -157,7 +157,10 @@ public class SDK implements AutoCloseable {
      * Checks to see if this has the structure of a Z-TDF in that it is a zip file
      * containing
      * a `manifest.json` and a `0.payload`
-     * 
+     * <p>
+     * The off-spec `0.manifest.json` that this SDK writes is also accepted, matching
+     * {@link TDFReader}.
+     *
      * @param channel A channel containing the bytes of the potential Z-TDF
      * @return `true` if
      */
@@ -172,8 +175,9 @@ public class SDK implements AutoCloseable {
         if (entries.size() != 2) {
             return false;
         }
-        return entries.stream().anyMatch(e -> "0.manifest.json".equals(e.getName()))
-                && entries.stream().anyMatch(e -> "0.payload".equals(e.getName()));
+        return entries.stream().anyMatch(e -> TDFWriter.TDF_MANIFEST_FILE_NAME_SPEC.equals(e.getName())
+                || TDFWriter.TDF_MANIFEST_FILE_NAME.equals(e.getName()))
+                && entries.stream().anyMatch(e -> TDFWriter.TDF_PAYLOAD_FILE_NAME.equals(e.getName()));
     }
 
     /**
