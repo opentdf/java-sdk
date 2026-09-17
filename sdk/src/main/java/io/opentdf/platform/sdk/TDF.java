@@ -420,7 +420,7 @@ class TDF {
             this.unencryptedMetadata = unencryptedMetadata;
         }
 
-        public void readPayload(OutputStream outputStream) throws SDK.SegmentSignatureMismatch, IOException {
+        public void readPayload(OutputStream outputStream) throws SDK.TamperException, IOException {
 
             MessageDigest digest = null;
             try {
@@ -447,11 +447,8 @@ class TDF {
                 var isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
 
                 if (manifest.payload.isEncrypted) {
-                    String segHashAlg = manifest.encryptionInformation.integrityInformation.segmentHashAlg;
-                    Config.IntegrityAlgorithm sigAlg = Config.IntegrityAlgorithm.HS256;
-                    if (segHashAlg.compareToIgnoreCase(kGmacIntegrityAlgorithm) == 0) {
-                        sigAlg = Config.IntegrityAlgorithm.GMAC;
-                    }
+                    var sigAlg = segmentIntegrityAlgorithmFromManifest(
+                            manifest.encryptionInformation.integrityInformation.segmentHashAlg);
 
                     var payloadSig = calculateSignature(readBuf, payloadKey, sigAlg);
                     if (isLegacyTdf) {
@@ -479,6 +476,29 @@ class TDF {
         public PolicyObject readPolicyObject() {
             return tdfReader.readPolicyObject();
         }
+
+        /**
+         * Resolves {@code segmentHashAlg} as read from the manifest. Both algorithms are
+         * allowed: a GMAC segment hash proves nothing by itself, but unlike the root it is
+         * bracketed by keyed checks that do (see {@link TDF#aeadTag}). An unrecognized name
+         * is still refused rather than defaulted. Contrast
+         * {@link TDF#rootIntegrityAlgorithmFromManifest}, where only HS256 is meaningful.
+         */
+        private static Config.IntegrityAlgorithm segmentIntegrityAlgorithmFromManifest(String declared) {
+            if (declared != null) {
+                String name = declared.trim();
+                if (kGmacIntegrityAlgorithm.equalsIgnoreCase(name)) {
+                    return Config.IntegrityAlgorithm.GMAC;
+                }
+                if (kHmacIntegrityAlgorithm.equalsIgnoreCase(name)) {
+                    return Config.IntegrityAlgorithm.HS256;
+                }
+            }
+            // Not a SegmentSignatureMismatch: no signature was compared. Still a
+            // TamperException, because segmentHashAlg is not covered by the root
+            // signature and so is something an attacker can freely rewrite.
+            throw new SDK.TamperException("unsupported segment integrity algorithm: " + declared);
+        }
     }
 
     /**
@@ -505,13 +525,82 @@ class TDF {
 
         if (kGMACPayloadLength > data.length) {
             throw new IllegalArgumentException("tried to calculate GMAC on too small a payload. payload is "
-                    + data.length + "bytes while GMAC is " + kGMACPayloadLength + " bytes");
+                    + data.length + " bytes while GMAC is " + kGMACPayloadLength + " bytes");
         }
 
         return Arrays.copyOfRange(data, data.length - kGMACPayloadLength, data.length);
     }
 
+    /**
+     * The segment counterpart to {@link #requireSupportedRootIntegrityAlgorithm}. Both
+     * algorithms are legal in this position, so this exists to reject {@code null} and any
+     * future enum value in {@code createTDF} rather than partway through the payload:
+     * TDFConfig's fields are public, so a field left unset arrives here as {@code null} and
+     * would otherwise surface as a {@link NullPointerException} at the switch below, after
+     * segments had already been written to the output stream.
+     *
+     * @throws IllegalArgumentException if {@code algorithm} cannot hash a segment
+     */
+    static void requireSupportedSegmentIntegrityAlgorithm(Config.IntegrityAlgorithm algorithm) {
+        if (algorithm != Config.IntegrityAlgorithm.HS256 && algorithm != Config.IntegrityAlgorithm.GMAC) {
+            throw new IllegalArgumentException("unsupported segment integrity algorithm: " + algorithm);
+        }
+    }
+
+    /**
+     * The write-path gate, and a second checkpoint inside {@link #rootIntegrity}.
+     * <p>
+     * An {@link IllegalArgumentException} rather than a {@link SDK.TamperException}, on
+     * purpose. Reading, this is unreachable: {@link #rootIntegrityAlgorithmFromManifest}
+     * has already narrowed the manifest's declaration to HS256 or thrown
+     * {@link SDK.RootSignatureValidationException} trying. So if it ever does fire on a
+     * read, the cause is a bug in this class rather than a hostile file, and it should
+     * escape {@code loadTDF} uncaught instead of being reported to callers as tamper —
+     * fail loud, and do not let a defect hide inside an exception type that callers
+     * routinely handle.
+     *
+     * @throws IllegalArgumentException if {@code algorithm} cannot authenticate a root
+     *                                  signature
+     */
+    static void requireSupportedRootIntegrityAlgorithm(Config.IntegrityAlgorithm algorithm) {
+        if (algorithm != Config.IntegrityAlgorithm.HS256) {
+            throw new IllegalArgumentException("unsupported root integrity algorithm: " + algorithm
+                    + "; the root signature must be " + kHmacIntegrityAlgorithm);
+        }
+    }
+
+    /**
+     * Resolves {@code rootSignature.alg} as read from the (unauthenticated) manifest.
+     * <p>
+     * An allowlist, deliberately: anything other than HS256 — GMAC, an unknown name, an
+     * empty string — is refused rather than being defaulted to HS256. Defaulting would
+     * validate a downgraded manifest against an algorithm it does not declare.
+     */
+    private static Config.IntegrityAlgorithm rootIntegrityAlgorithmFromManifest(String declared) {
+        if (declared != null && kHmacIntegrityAlgorithm.equalsIgnoreCase(declared.trim())) {
+            return Config.IntegrityAlgorithm.HS256;
+        }
+        throw new SDK.RootSignatureValidationException("unsupported root integrity algorithm: " + declared
+                + "; the root signature must be " + kHmacIntegrityAlgorithm);
+    }
+
+    /**
+     * @throws IllegalArgumentException if {@code tdfConfig} selects an integrity algorithm
+     *                                  that cannot be written. Unchecked and not an
+     *                                  {@link SDKException}, matching how the config layer
+     *                                  already reports out-of-range values (see
+     *                                  {@link Config#withSegmentSize}): this is a caller
+     *                                  mistake to fix in code, not a condition to handle
+     *                                  alongside I/O and tamper failures.
+     */
     TDFObject createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig tdfConfig) throws SDKException, IOException {
+        // Checked before anything is written so an unusable algorithm cannot produce a
+        // partial TDF. There are no setters for these -- the config defaults to an HS256
+        // root and GMAC segments -- but TDFConfig's fields are public, so re-check what
+        // was actually set.
+        requireSupportedRootIntegrityAlgorithm(tdfConfig.integrityAlgorithm);
+        requireSupportedSegmentIntegrityAlgorithm(tdfConfig.segmentIntegrityAlgorithm);
+
         Planner planner = new Planner(tdfConfig, services, Autoconfigure::createGranter);
         Map<String, List<KASInfo>> splits = planner.getSplits();
 
@@ -578,11 +667,10 @@ class TDF {
                 : rootSig;
         rootSignature.signature = Base64.getEncoder().encodeToString(encodedRootSig);
 
-        String alg = kGmacIntegrityAlgorithm;
-        if (tdfConfig.integrityAlgorithm == Config.IntegrityAlgorithm.HS256) {
-            alg = kHmacIntegrityAlgorithm;
-        }
-        rootSignature.algorithm = alg;
+        // Unconditional. createTDF refuses any other root algorithm before a byte is
+        // written and rootIntegrity would refuse it again; selecting on tdfConfig here
+        // would leave a path that emits alg="GMAC" should either check ever be relaxed.
+        rootSignature.algorithm = kHmacIntegrityAlgorithm;
 
         tdfObject.manifest.encryptionInformation.integrityInformation.rootSignature = rootSignature;
         tdfObject.manifest.encryptionInformation.integrityInformation.segmentSizeDefault = tdfConfig.defaultSegmentSize;
@@ -785,10 +873,7 @@ class TDF {
         String rootSigValue;
         boolean isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
         if (manifest.payload.isEncrypted) {
-            Config.IntegrityAlgorithm sigAlg = Config.IntegrityAlgorithm.HS256;
-            if (rootAlgorithm.compareToIgnoreCase(kGmacIntegrityAlgorithm) == 0) {
-                sigAlg = Config.IntegrityAlgorithm.GMAC;
-            }
+            var sigAlg = rootIntegrityAlgorithmFromManifest(rootAlgorithm);
 
             var sig = calculateSignature(aggregateHash, payloadKey, sigAlg);
             if (isLegacyTdf) {
@@ -796,6 +881,13 @@ class TDF {
             }
             rootSigValue = Base64.getEncoder().encodeToString(sig);
         } else {
+            // KNOWN GAP, untouched by this change and tracked separately: this branch is a
+            // bare SHA-256, so it authenticates nothing. `payload.isEncrypted` is itself
+            // unauthenticated manifest data, so flipping it to false selects a keyless
+            // verification path that anyone can satisfy -- and readPayload then emits the
+            // segment bytes without decrypting them. Same downgrade shape as a GMAC root.
+            // Left alone here because closing it means deciding whether unencrypted TDFs
+            // are supported at all, which is a wider question than this fix.
             MessageDigest digest;
             try {
                 digest = MessageDigest.getInstance("SHA-256");
