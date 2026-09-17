@@ -43,6 +43,7 @@ import io.opentdf.platform.sdk.Config;
 import io.opentdf.platform.sdk.KeyType;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
+import io.opentdf.platform.sdk.spi.KemProviders;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.config.Configurator;
 import picocli.CommandLine;
@@ -75,9 +76,21 @@ class Command {
 
     @CommandLine.Command(name = "supports", description = "Check if a feature is supported, or list all supported features")
     static class Supports implements Callable<Integer> {
-        // Static, always-on capabilities of this build. There is no "known but
+        // Always-on capabilities of this build. There is no "known but
         // unsupported" feature here: anything not in this list is simply unrecognized.
-        private static final List<String> FEATURES = List.of("dpop", "dpop_nonce_challenge");
+        private static final List<String> STATIC_FEATURES = List.of("dpop", "dpop_nonce_challenge");
+
+        // session-key-mlkem additionally requires an ML-KEM KemProvider on the
+        // classpath (e.g. sdk-pqc-bc), which the fips Maven profile excludes.
+        // Check the live registry rather than assuming build-profile wiring, so
+        // this doesn't claim support on a classpath that would actually throw.
+        private static List<String> features() {
+            List<String> features = new ArrayList<>(STATIC_FEATURES);
+            if (KemProviders.registered().contains(KeyType.MLKEM768Key)) {
+                features.add("session-key-mlkem");
+            }
+            return features;
+        }
 
         @CommandLine.Parameters(index = "0", arity = "0..1", description = "Feature to check (e.g., dpop). Omit to list all supported features.")
         private String feature;
@@ -87,12 +100,13 @@ class Command {
 
         @Override
         public Integer call() {
+            List<String> features = features();
             if (feature == null) {
-                printFeatures(FEATURES);
+                printFeatures(features);
                 return 0;
             }
 
-            Optional<String> canonical = FEATURES.stream().filter(f -> f.equalsIgnoreCase(feature)).findFirst();
+            Optional<String> canonical = features.stream().filter(f -> f.equalsIgnoreCase(feature)).findFirst();
             if (json) {
                 Map<String, Boolean> result = new LinkedHashMap<>();
                 // Emit the canonical feature name for recognized features so casing is stable

@@ -47,4 +47,26 @@ public interface KemProvider {
      * decap path; the production decrypt flow defers unwrap to the KAS.
      */
     byte[] unwrapDEK(KeyType keyType, String privateKeyPEM, byte[] wrapped);
+
+    /**
+     * Generate a fresh ephemeral keypair for {@code keyType}. Used for the
+     * client's rewrap "session key" — the ephemeral key a client generates
+     * and sends with a rewrap request so KAS can wrap the response DEK back
+     * to it — as opposed to a KAS-managed wrapping key (see {@link #wrapDEK}).
+     *
+     * @param keyType hybrid or pure-PQC algorithm; must be a member of {@link #supportedKeyTypes()}
+     * @return         the generated keypair, PEM-encoded
+     */
+    KeyPairPem generateKeyPair(KeyType keyType);
+
+    /** A generated KEM keypair: SPKI public key PEM and PKCS#8 private key PEM. */
+    final class KeyPairPem {
+        public final String publicKeyPEM;
+        public final String privateKeyPEM;
+
+        public KeyPairPem(String publicKeyPEM, String privateKeyPEM) {
+            this.publicKeyPEM = publicKeyPEM;
+            this.privateKeyPEM = privateKeyPEM;
+        }
+    }
 }
