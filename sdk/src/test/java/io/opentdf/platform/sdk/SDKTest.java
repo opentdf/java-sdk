@@ -32,8 +32,9 @@ class SDKTest {
     }
 
     /**
-     * The spec names the manifest entry {@code manifest.json}; the fixture above is an
-     * archive this SDK wrote, which names it {@code 0.manifest.json}. Both are recognized.
+     * The spec names the manifest entry {@code manifest.json}; the {@code sample.txt.tdf}
+     * fixture that {@link #testExaminingValidZTDF} reads is an archive this SDK wrote, which
+     * names it {@code 0.manifest.json}. Both are recognized.
      * See <a href="https://github.com/opentdf/platform/issues/3513">platform#3513</a>.
      */
     @Test
@@ -71,6 +72,18 @@ class SDKTest {
     @Test
     void testExaminingZipWithNoPayload() throws IOException {
         try (var chan = zipOf("manifest.json", "something-else")) {
+            assertThat(SDK.isTDF(chan)).isFalse();
+        }
+    }
+
+    /**
+     * Dropping the entry-count check widened what counts as a Z-TDF, so the negative cases
+     * have to cover archives larger than two entries too -- otherwise "any zip with more
+     * than two entries" would pass this suite.
+     */
+    @Test
+    void testExaminingLargerZipWithNoManifest() throws IOException {
+        try (var chan = zipOf("0.payload", "something-else", "and-another")) {
             assertThat(SDK.isTDF(chan)).isFalse();
         }
     }
