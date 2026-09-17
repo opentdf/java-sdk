@@ -288,6 +288,21 @@ class TDFRootSignatureTest {
     }
 
     @Test
+    void segmentTooSmallToBeAnAeadMessageIsRejected() throws IOException {
+        // A segment shorter than an IV plus a tag cannot be AES-GCM output at all. It has
+        // always failed -- no sixteen-byte tail of it could match the recorded hash -- and it
+        // must keep failing as a signature mismatch rather than as an argument error escaping
+        // from the crypto layer.
+        var tampered = rewrite(createTdf(fourSegmentPlaintext()),
+                manifest -> segments(manifest).get(0).getAsJsonObject()
+                        .addProperty("encryptedSegmentSize", AesGcm.GCM_NONCE_LENGTH + AesGcm.GCM_TAG_LENGTH - 1),
+                UnaryOperator.identity());
+
+        assertThatThrownBy(() -> decrypt(tampered))
+                .isInstanceOf(SDK.SegmentSignatureMismatch.class);
+    }
+
+    @Test
     void defaultsAreHs256RootAndGmacSegments() throws IOException {
         var integrityInformation = integrityInformation(
                 JsonParser.parseString(manifestOf(createTdf(fourSegmentPlaintext()))).getAsJsonObject());
@@ -399,7 +414,7 @@ class TDFRootSignatureTest {
 
     @Test
     void segmentIntegrityRefusesNullWhenCalledDirectly() {
-        assertThatThrownBy(() -> TDF.segmentIntegrity(new byte[64], new byte[32], null))
+        assertThatThrownBy(() -> TDF.segmentIntegrity(new AesGcm.Encrypted(new byte[64]), new byte[32], null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("unsupported segment integrity algorithm");
     }
