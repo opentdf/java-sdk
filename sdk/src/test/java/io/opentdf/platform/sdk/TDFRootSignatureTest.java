@@ -25,6 +25,7 @@ import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
@@ -371,35 +372,35 @@ class TDFRootSignatureTest {
     /*
      * The manifest resolvers above are what a hostile file actually meets, and the
      * round-trip tests cover them. These call the inner guards directly because nothing
-     * else does: with the resolvers in place a GMAC root cannot reach `rootIntegrity`,
-     * so without these a regression that reintroduced tag extraction there would leave
-     * the whole suite green. Defence in depth is only depth if the inner layer is held
-     * to its contract independently.
+     * else does: with the resolvers in place a GMAC root cannot reach the root
+     * integrity check, so without these a regression there would leave the whole suite
+     * green. Defence in depth is only depth if the inner layer is held to its contract
+     * independently.
      */
 
     @Test
-    void rootIntegrityRefusesGmacWhenCalledDirectly() {
-        assertThatThrownBy(() -> TDF.rootIntegrity(new byte[64], new byte[32], Config.IntegrityAlgorithm.GMAC))
+    void rootAlgorithmGuardRefusesGmac() {
+        assertThatThrownBy(() -> TDF.requireSupportedRootIntegrityAlgorithm(Config.IntegrityAlgorithm.GMAC))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("unsupported root integrity algorithm");
     }
 
     @Test
-    void rootIntegrityRefusesNullWhenCalledDirectly() {
-        assertThatThrownBy(() -> TDF.rootIntegrity(new byte[64], new byte[32], null))
+    void rootAlgorithmGuardRefusesNull() {
+        assertThatThrownBy(() -> TDF.requireSupportedRootIntegrityAlgorithm(null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("unsupported root integrity algorithm");
     }
 
     @Test
-    void rootIntegrityAcceptsHs256() {
-        assertThat(TDF.rootIntegrity(new byte[64], new byte[32], Config.IntegrityAlgorithm.HS256))
-                .hasSize(32);
+    void rootAlgorithmGuardAcceptsHs256() {
+        assertThatCode(() -> TDF.requireSupportedRootIntegrityAlgorithm(Config.IntegrityAlgorithm.HS256))
+                .doesNotThrowAnyException();
     }
 
     @Test
-    void segmentIntegrityRefusesNullWhenCalledDirectly() {
-        assertThatThrownBy(() -> TDF.segmentIntegrity(new byte[64], new byte[32], null))
+    void segmentAlgorithmGuardRefusesNull() {
+        assertThatThrownBy(() -> TDF.requireSupportedSegmentIntegrityAlgorithm(null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("unsupported segment integrity algorithm");
     }
