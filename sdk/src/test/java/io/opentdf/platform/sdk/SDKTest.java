@@ -88,6 +88,26 @@ class SDKTest {
         }
     }
 
+    /**
+     * {@link TDFReader} refuses an archive that lists one name twice rather than guess which
+     * copy wins, so the sniffer that screens for it has to refuse the same archive -- otherwise
+     * a caller clears {@link SDK#isTDF} and then takes an exception on the read it gated.
+     */
+    @Test
+    void testExaminingZipThatListsThePayloadNameTwice() throws IOException {
+        try (var chan = zipOf("0.payload", "0.payload", "manifest.json")) {
+            assertThat(SDK.isTDF(chan)).isFalse();
+        }
+    }
+
+    /** The reader rejects any repeated name, not just a repeated manifest or payload. */
+    @Test
+    void testExaminingZipThatListsAnUnrelatedNameTwice() throws IOException {
+        try (var chan = zipOf("0.payload", "manifest.json", "something-else", "something-else")) {
+            assertThat(SDK.isTDF(chan)).isFalse();
+        }
+    }
+
     /** Builds a zip holding the named entries; contents are irrelevant to {@link SDK#isTDF}. */
     private static SeekableInMemoryByteChannel zipOf(String... names) throws IOException {
         var out = new ByteArrayOutputStream();
