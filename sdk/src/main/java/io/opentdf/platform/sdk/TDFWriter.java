@@ -10,7 +10,21 @@ import java.nio.charset.StandardCharsets;
  */
 public class TDFWriter {
     public static final String TDF_PAYLOAD_FILE_NAME = "0.payload";
-    public static final String TDF_MANIFEST_FILE_NAME = "0.manifest.json";
+
+    /**
+     * The manifest entry name given by the OpenTDF spec:
+     * <a href="https://opentdf.io/spec#tdf-structure">opentdf.io/spec</a>.
+     */
+    public static final String TDF_MANIFEST_FILE_NAME = "manifest.json";
+
+    /**
+     * The manifest entry name this SDK wrote before the spec alignment. The {@code 0.}
+     * prefix is a holdover from an early design that anticipated several payload/manifest
+     * pairs per archive and never shipped. Readers still accept it; the writer no longer
+     * emits it.
+     * See <a href="https://github.com/opentdf/platform/issues/3513">platform#3513</a>.
+     */
+    public static final String TDF_MANIFEST_FILE_NAME_OFFSPEC = "0.manifest.json";
     private final ZipWriter archiveWriter;
 
     public TDFWriter(OutputStream destination) {

@@ -9,9 +9,10 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.stream.Collectors;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TDFWriterTest {
     @Test
@@ -72,6 +73,30 @@ String kManifestJsonFromTDF = "{\n" +
         writer.appendManifest(kManifestJsonFromTDF);
         writer.finish();
         fileOutStream.close();
+    }
+
+    /**
+     * The OpenTDF spec puts the manifest at the archive root under {@code manifest.json};
+     * this SDK wrote {@code 0.manifest.json} before the spec alignment. Conformance test
+     * for the entry name the writer emits.
+     * See <a href="https://github.com/opentdf/platform/issues/3513">platform#3513</a>.
+     */
+    @Test
+    void writesTheManifestUnderTheSpecEntryName() throws IOException {
+        var out = new ByteArrayOutputStream();
+        var writer = new TDFWriter(out);
+        try (var p = writer.payload()) {
+            new ByteArrayInputStream("payload bytes".getBytes(StandardCharsets.UTF_8)).transferTo(p);
+        }
+        writer.appendManifest("{\"payload\":{\"url\":\"0.payload\"}}");
+        writer.finish();
+
+        try (var chan = new SeekableInMemoryByteChannel(out.toByteArray())) {
+            var names = new ZipReader(chan).getEntries().stream()
+                    .map(ZipReader.Entry::getName)
+                    .collect(Collectors.toList());
+            assertThat(names).containsExactlyInAnyOrder("0.payload", "manifest.json");
+        }
     }
 
     /**
