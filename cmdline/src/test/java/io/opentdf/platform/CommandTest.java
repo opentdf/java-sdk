@@ -95,7 +95,7 @@ class CommandTest {
         String out = captureStdout(() -> code[0] = new CommandLine(new Command()).execute("supports"));
 
         assertThat(code[0]).isEqualTo(0);
-        assertThat(out.lines()).containsExactlyInAnyOrder("dpop", "dpop_nonce_challenge");
+        assertThat(out.lines()).containsExactlyInAnyOrder("dpop", "dpop_nonce_challenge", "session-key-mlkem");
     }
 
     @Test
@@ -104,7 +104,8 @@ class CommandTest {
         String out = captureStdout(() -> code[0] = new CommandLine(new Command()).execute("supports", "--json"));
 
         assertThat(code[0]).isEqualTo(0);
-        assertThat(out.trim()).isEqualTo("{\"dpop\":true,\"dpop_nonce_challenge\":true}");
+        assertThat(out.trim()).isEqualTo(
+                "{\"dpop\":true,\"dpop_nonce_challenge\":true,\"session-key-mlkem\":true}");
     }
 
     @Test
