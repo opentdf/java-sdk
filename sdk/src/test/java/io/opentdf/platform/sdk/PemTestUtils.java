@@ -1,7 +1,6 @@
 package io.opentdf.platform.sdk;
 
-import org.checkerframework.checker.nullness.qual.NonNull;
-
+import javax.annotation.Nonnull;
 import java.io.ByteArrayInputStream;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -107,7 +106,7 @@ final class PemTestUtils {
                 + Integer.toHexString(prefix) + ", length=" + data.length);
     }
 
-    private static @NonNull BigInteger getY(EllipticCurve curve, BigInteger x, int prefix) {
+    private static @Nonnull BigInteger getY(EllipticCurve curve, BigInteger x, int prefix) {
         BigInteger p = ((ECFieldFp) curve.getField()).getP();
         // y^2 = x^3 + a*x + b (mod p); valid for all NIST P-curves we support.
         BigInteger rhs = x.modPow(BigInteger.valueOf(3), p)
