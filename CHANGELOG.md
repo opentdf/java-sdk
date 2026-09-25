@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.1](https://github.com/opentdf/java-sdk/compare/v0.19.0...v0.19.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* **sdk:** DSPX-4589 default absent per-segment sizes to the manifest defaults ([#397](https://github.com/opentdf/java-sdk/issues/397)) ([6486b3f](https://github.com/opentdf/java-sdk/commit/6486b3f9056f2058fb0f994f874035d0a4bf8a57))
+
 ## [0.19.0](https://github.com/opentdf/java-sdk/compare/v0.18.0...v0.19.0) (2026-09-14)
 
 
