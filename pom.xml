@@ -17,7 +17,7 @@
         <grpc.version>1.75.0</grpc.version>
         <protobuf.version>4.29.2</protobuf.version>
         <!-- 1.84 patches GHSA-c3fc-8qff-9hwx and GHSA-p93r-85wp-75v3 (open in 1.82). -->
-        <bouncycastle.version>1.84</bouncycastle.version>
+        <bouncycastle.version>1.85</bouncycastle.version>
         <bc-fips.version>2.1.2</bc-fips.version>
         <bcpkix-fips.version>2.1.11</bcpkix-fips.version>
         <bctls-fips.version>2.1.23</bctls-fips.version>
