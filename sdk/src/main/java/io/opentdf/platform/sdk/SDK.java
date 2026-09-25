@@ -157,7 +157,16 @@ public class SDK implements AutoCloseable {
      * Checks to see if this has the structure of a Z-TDF in that it is a zip file
      * containing
      * a `manifest.json` and a `0.payload`
-     * 
+     * <p>
+     * The off-spec `0.manifest.json` that this SDK writes is also accepted, matching
+     * {@link TDFReader}. Entries beyond the manifest and payload are ignored rather than
+     * disqualifying: an archive carrying both manifest names holds three, and the reader
+     * accepts it, so a count check here would reject what the reader it screens for reads.
+     * <p>
+     * An archive that lists one name twice is rejected, again matching {@link TDFReader}:
+     * passing it here and then failing the read would hand callers an exception from the
+     * very check this method exists to spare them.
+     *
      * @param channel A channel containing the bytes of the potential Z-TDF
      * @return `true` if
      */
@@ -169,11 +178,13 @@ public class SDK implements AutoCloseable {
             return false;
         }
         var entries = zipReader.getEntries();
-        if (entries.size() != 2) {
+        var names = entries.stream().map(ZipReader.Entry::getName).collect(Collectors.toSet());
+        if (names.size() != entries.size()) {
             return false;
         }
-        return entries.stream().anyMatch(e -> "0.manifest.json".equals(e.getName()))
-                && entries.stream().anyMatch(e -> "0.payload".equals(e.getName()));
+        return (names.contains(TDFWriter.TDF_MANIFEST_FILE_NAME_SPEC)
+                || names.contains(TDFWriter.TDF_MANIFEST_FILE_NAME))
+                && names.contains(TDFWriter.TDF_PAYLOAD_FILE_NAME);
     }
 
     /**
