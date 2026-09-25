@@ -321,7 +321,6 @@
                     <failFast>false</failFast>
                     <rules>
                         <banDuplicateClasses>
-                            <findAllDuplicates>true</findAllDuplicates>
                             <ignoreWhenIdentical>true</ignoreWhenIdentical>
                             <findAllDuplicates>true</findAllDuplicates>
                         </banDuplicateClasses>
