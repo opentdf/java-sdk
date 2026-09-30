@@ -431,12 +431,18 @@ class TDF {
                             + segment.encryptedSegmentSize + " but got " + bytesRead + ")");
                 }
 
+                var isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
+
                 if (manifest.payload.isEncrypted) {
                     var sigAlg = segmentIntegrityAlgorithmFromManifest(
                             manifest.encryptionInformation.integrityInformation.segmentHashAlg);
 
                     var payloadSig = segmentIntegrity(readBuf, payloadKey, sigAlg);
-                    if (!digestMatchesRecorded(segment.hash, payloadSig)) {
+                    if (isLegacyTdf) {
+                        payloadSig = Hex.encodeHexString(payloadSig).getBytes(StandardCharsets.UTF_8);
+                    }
+
+                    if (segment.hash.compareTo(Base64.getEncoder().encodeToString(payloadSig)) != 0) {
                         throw new SDK.SegmentSignatureMismatch("segment signature miss match");
                     }
 
@@ -789,39 +795,6 @@ class TDF {
     }
 
 
-    /**
-     * Whether the value a manifest records for an integrity check matches {@code digest}, the raw
-     * (non-hex) form recomputed from the file's own bytes.
-     * <p>
-     * The recorded value is base64 over one of two spellings of the same keyed digest: the raw
-     * bytes (TDF spec 4.3.0 and later) or their hex (before 4.3.0). Which spelling a file used is
-     * read off the file, never off the manifest's spec-version field. That field is
-     * unauthenticated, and it only ever tracked the encoding because this SDK's own writer sets
-     * {@code hexEncodeRootAndSegmentHashes} and {@code renderVersionInfoInManifest} from one
-     * boolean -- writers that decoupled them, including every writer that produced the
-     * non-aligned {@code tdf_spec_version} name, break the correspondence and would be misread
-     * as using the other encoding.
-     * <p>
-     * Accepting both spellings weakens nothing. Hex is an invertible encoding of the same HMAC,
-     * so producing either form requires the payload key exactly as much as producing the other;
-     * there is no forgery that the strict form would have rejected.
-     */
-    static boolean digestMatchesRecorded(String recorded, byte[] digest) {
-        var recordedBytes = recorded.getBytes(StandardCharsets.UTF_8);
-        var raw = Base64.getEncoder().encode(digest);
-        var hex = Base64.getEncoder().encode(Hex.encodeHexString(digest).getBytes(StandardCharsets.UTF_8));
-        // non-short-circuiting, so the time taken does not depend on which spelling matched
-        return MessageDigest.isEqual(recordedBytes, raw) | MessageDigest.isEqual(recordedBytes, hex);
-    }
-
-    /** Base64 over {@code aggregateHash || assertionHash}, the value an assertion signature covers. */
-    private static String assertionSignedOver(byte[] aggregateHash, byte[] assertionHash) {
-        var signedOver = new byte[aggregateHash.length + assertionHash.length];
-        System.arraycopy(aggregateHash, 0, signedOver, 0, aggregateHash.length);
-        System.arraycopy(assertionHash, 0, signedOver, aggregateHash.length, assertionHash.length);
-        return Base64.getEncoder().encodeToString(signedOver);
-    }
-
     Reader loadTDF(SeekableByteChannel tdf, String platformUrl) throws SDKException, IOException {
         return loadTDF(tdf, Config.newTDFReaderConfig(), platformUrl);
     }
@@ -949,15 +922,16 @@ class TDF {
             }
         }
 
-        // aggregateHash is built from the segment hashes exactly as the manifest records them
-        // (raw digest bytes, or their hex), so it is already independent of the encoding and
-        // only the comparison below has to allow for both spellings.
-        boolean rootSignatureMatches;
+        String rootSigValue;
+        boolean isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
         if (manifest.payload.isEncrypted) {
             var sigAlg = rootIntegrityAlgorithmFromManifest(rootAlgorithm);
 
             var sig = rootIntegrity(aggregateHash.toByteArray(), payloadKey, sigAlg);
-            rootSignatureMatches = digestMatchesRecorded(rootSignature, sig);
+            if (isLegacyTdf) {
+                sig = Hex.encodeHexString(sig).getBytes();
+            }
+            rootSigValue = Base64.getEncoder().encodeToString(sig);
         } else {
             // KNOWN GAP, untouched by this change and tracked separately: this branch is a
             // bare SHA-256, so it authenticates nothing. `payload.isEncrypted` is itself
@@ -973,11 +947,10 @@ class TDF {
                 throw new IllegalStateException("error getting instance of SHA-256 digest", e);
             }
 
-            String rootSigValue = Base64.getEncoder().encodeToString(digest.digest(aggregateHash.toString().getBytes()));
-            rootSignatureMatches = rootSignature.compareTo(rootSigValue) == 0;
+            rootSigValue = Base64.getEncoder().encodeToString(digest.digest(aggregateHash.toString().getBytes()));
         }
 
-        if (!rootSignatureMatches) {
+        if (rootSignature.compareTo(rootSigValue) != 0) {
             throw new SDK.RootSignatureValidationException("root signature validation failed");
         }
 
@@ -1020,24 +993,21 @@ class TDF {
             }
 
             byte[] hashOfAssertion;
-            try {
-                hashOfAssertion = Hex.decodeHex(hashOfAssertionAsHex);
-            } catch (DecoderException e) {
-                throw new SDKException("error decoding assertion hash", e);
+            if (isLegacyTdf) {
+                hashOfAssertion = hashOfAssertionAsHex.getBytes(StandardCharsets.UTF_8);
+            } else {
+                try {
+                    hashOfAssertion = Hex.decodeHex(hashOfAssertionAsHex);
+                } catch (DecoderException e) {
+                    throw new SDKException("error decoding assertion hash", e);
+                }
             }
+            var signature = new byte[aggregateHashByteArrayBytes.length + hashOfAssertion.length];
+            System.arraycopy(aggregateHashByteArrayBytes, 0, signature, 0, aggregateHashByteArrayBytes.length);
+            System.arraycopy(hashOfAssertion, 0, signature, aggregateHashByteArrayBytes.length, hashOfAssertion.length);
+            var encodeSignature = Base64.getEncoder().encodeToString(signature);
 
-            // The same two spellings as the segment and root digests (raw before hex), for the
-            // same reasons given on digestMatchesRecorded; the spec version is not consulted.
-            // Here the assertion hash is concatenated onto the aggregate hash before signing, so
-            // the candidates are the two concatenations, and either may match. That is sound on
-            // the same grounds: both bind the same aggregate hash and the same assertion hash,
-            // and the recorded value was already verified under assertionKey.
-            var recordedSignature = hashValues.getSignature();
-            if (!Objects.equals(assertionSignedOver(aggregateHashByteArrayBytes, hashOfAssertion), recordedSignature)
-                    && !Objects.equals(
-                            assertionSignedOver(aggregateHashByteArrayBytes,
-                                    hashOfAssertionAsHex.getBytes(StandardCharsets.UTF_8)),
-                            recordedSignature)) {
+            if (!Objects.equals(encodeSignature, hashValues.getSignature())) {
                 throw new SDK.AssertionException("failed integrity check on assertion signature", assertion.id);
             }
         }

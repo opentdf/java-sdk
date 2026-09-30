@@ -72,8 +72,8 @@ public class Manifest {
      * it may also come from the non-aligned {@code tdf_spec_version} name, see
      * {@link SpecVersionAdapterFactory}.
      * <p>
-     * This is metadata. It does not decide whether a container verifies: the integrity digest
-     * encoding is read off the file rather than off this field (see {@code TDF.digestMatchesRecorded}).
+     * The reader uses it to choose how the integrity digests are encoded: hex when no version is
+     * recorded (pre-4.3.0), raw bytes otherwise.
      */
     @SerializedName(value = "schemaVersion")
     String tdfVersion;
