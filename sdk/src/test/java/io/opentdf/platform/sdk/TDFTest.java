@@ -31,12 +31,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -44,7 +41,6 @@ import java.util.stream.Collectors;
 
 import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -691,49 +687,58 @@ public class TDFTest {
 
     @Test
     public void testCreatingTDFWithMultipleSegments() throws Exception {
-        var random = new Random();
-
+        String metadata = "segment IV metadata";
         Config.TDFConfig config = Config.newTDFConfig(
                 Config.withAutoconfigure(false),
-                Config.withKasInformation(getRSAKASInfos()),
-                Config.withSegmentSize(Config.MIN_SEGMENT_SIZE));
+                Config.withKasInformation(getSingleRSAKASInfo()),
+                Config.withSegmentSize(Config.MIN_SEGMENT_SIZE),
+                Config.withMetaData(metadata));
 
-        // data should be large enough to have multiple complete and a partial segment
         var data = new byte[(int) (Config.MIN_SEGMENT_SIZE * 2.8)];
-        random.nextBytes(data);
-        var plainTextInputStream = new ByteArrayInputStream(data);
+        new Random().nextBytes(data);
         var tdfOutputStream = new ByteArrayOutputStream();
         var tdf = new TDF(
                 new FakeServicesBuilder().setKas(kas)
                         .setKeyAccessServerRegistryService(kasRegistryService).build());
-        var tdfObject = tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
+        var tdfObject = tdf.createTDF(new ByteArrayInputStream(data), tdfOutputStream, config);
 
+        Manifest.KeyAccess keyAccess = tdfObject.getManifest().encryptionInformation.keyAccessObj.get(0);
+        String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata),
+                StandardCharsets.UTF_8);
+        Map<String, String> encryptedMetadata = new Gson().fromJson(decodedMetadata,
+                new TypeToken<Map<String, String>>() {
+                }.getType());
+        byte[] metadataIv = Base64.getDecoder().decode(encryptedMetadata.get("iv"));
+        byte[] metadataCiphertext = Base64.getDecoder().decode(encryptedMetadata.get("ciphertext"));
+        assertThat(metadataIv).hasSize(AesGcm.GCM_NONCE_LENGTH);
+        assertThat(invocation(metadataIv)).isZero();
+        assertThat(Arrays.copyOf(metadataCiphertext, AesGcm.GCM_NONCE_LENGTH))
+                .containsExactly(metadataIv);
+
+        byte[] fixedField = Arrays.copyOf(metadataIv, TDF.IvCounter.FIXED_FIELD_SIZE);
         var segments = tdfObject.getManifest().encryptionInformation.integrityInformation.segments;
         assertThat(segments)
                 .withFailMessage("test needs more than one segment to be meaningful")
                 .hasSizeGreaterThan(1);
 
-        // payload segments start at IV 1 (IV 0 is reserved for the metadata) and
-        // increment by one for every segment
-        var seenIvs = new ArrayList<String>();
         var encryptedReader = new TDFReader(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()));
-        for (int segmentIndex = 0; segmentIndex < segments.size(); segmentIndex++) {
-            byte[] encryptedSegment = new byte[(int) segments.get(segmentIndex).encryptedSegmentSize];
+        long expectedInvocation = 1;
+        for (Manifest.Segment segment : segments) {
+            byte[] encryptedSegment = new byte[(int) segment.encryptedSegmentSize];
             assertThat(encryptedReader.readPayloadBytes(encryptedSegment)).isEqualTo(encryptedSegment.length);
-            byte[] iv = Arrays.copyOf(encryptedSegment, AesGcm.GCM_NONCE_LENGTH);
-            assertThat(iv).containsExactly(bigEndianIv(segmentIndex + 1));
-            seenIvs.add(Base64.getEncoder().encodeToString(iv));
+            byte[] payloadIv = Arrays.copyOf(encryptedSegment, AesGcm.GCM_NONCE_LENGTH);
+            assertThat(Arrays.copyOf(payloadIv, TDF.IvCounter.FIXED_FIELD_SIZE))
+                    .containsExactly(fixedField);
+            assertThat(invocation(payloadIv)).isEqualTo(expectedInvocation++);
         }
-        assertThat(seenIvs).doesNotHaveDuplicates();
 
         var unwrappedData = new ByteArrayOutputStream();
         var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), platformUrl);
         reader.readPayload(unwrappedData);
-
         assertThat(unwrappedData.toByteArray())
                 .withFailMessage("extracted data does not match")
                 .containsExactly(data);
-
+        assertThat(reader.getMetadata()).isEqualTo(metadata);
     }
 
     /**
@@ -919,193 +924,61 @@ public class TDFTest {
         return data;
     }
 
-    /**
-     * The unsigned 96-bit big-endian encoding of {@code value}, for asserting on
-     * expected IVs.
-     */
-    private static byte[] bigEndianIv(long value) {
-        byte[] iv = new byte[AesGcm.GCM_NONCE_LENGTH];
-        for (int index = iv.length - 1; index >= 0 && value != 0; index--) {
-            iv[index] = (byte) value;
-            value >>>= 8;
-        }
-        return iv;
-    }
 
     @Test
-    public void testMetadataUsesIvZero() throws Exception {
-        Config.TDFConfig config = Config.newTDFConfig(
-                Config.withAutoconfigure(false),
-                Config.withKasInformation(getSingleRSAKASInfo()),
-                Config.withMetaData("here is some metadata"));
-
-        var tdfOutputStream = new ByteArrayOutputStream();
-        var tdf = new TDF(
-                new FakeServicesBuilder().setKas(kas)
-                        .setKeyAccessServerRegistryService(kasRegistryService).build());
-        var tdfObject = tdf.createTDF(new ByteArrayInputStream("some data".getBytes(StandardCharsets.UTF_8)),
-                tdfOutputStream, config);
-
-        var keyAccessObjects = tdfObject.getManifest().encryptionInformation.keyAccessObj;
-        assertThat(keyAccessObjects).isNotEmpty();
-        for (Manifest.KeyAccess keyAccess : keyAccessObjects) {
-            var encryptedMetadata = new Gson().fromJson(
-                    new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata), StandardCharsets.UTF_8),
-                    JsonObject.class);
-
-            assertThat(Base64.getDecoder().decode(encryptedMetadata.get("iv").getAsString()))
-                    .withFailMessage("metadata IV is not zero")
-                    .containsExactly(new byte[AesGcm.GCM_NONCE_LENGTH]);
-            // the ciphertext field carries the IV as a prefix as well
-            assertThat(Arrays.copyOf(
-                    Base64.getDecoder().decode(encryptedMetadata.get("ciphertext").getAsString()),
-                    AesGcm.GCM_NONCE_LENGTH))
-                    .containsExactly(new byte[AesGcm.GCM_NONCE_LENGTH]);
-        }
-
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), platformUrl);
-        assertThat(reader.getMetadata()).isEqualTo("here is some metadata");
-    }
-
-    @Test
-    public void testFirstPayloadSegmentUsesIvOne() throws Exception {
-        Config.TDFConfig config = Config.newTDFConfig(
-                Config.withAutoconfigure(false),
-                Config.withKasInformation(getSingleRSAKASInfo()),
-                Config.withMetaData("here is some metadata"));
-
-        var tdfOutputStream = new ByteArrayOutputStream();
-        var tdf = new TDF(
-                new FakeServicesBuilder().setKas(kas)
-                        .setKeyAccessServerRegistryService(kasRegistryService).build());
-        var tdfObject = tdf.createTDF(new ByteArrayInputStream("some data".getBytes(StandardCharsets.UTF_8)),
-                tdfOutputStream, config);
-
-        var segments = tdfObject.getManifest().encryptionInformation.integrityInformation.segments;
-        var encryptedReader = new TDFReader(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()));
-        byte[] firstSegment = new byte[(int) segments.get(0).encryptedSegmentSize];
-        assertThat(encryptedReader.readPayloadBytes(firstSegment)).isEqualTo(firstSegment.length);
-
-        assertThat(Arrays.copyOf(firstSegment, AesGcm.GCM_NONCE_LENGTH))
-                .withFailMessage("first payload segment must use IV 1, leaving IV 0 for the metadata")
-                .containsExactly(bigEndianIv(1));
-    }
-
-    @Test
-    public void testPayloadIvCounterStartsAtOne() {
-        var counter = TDF.IvCounter.forPayload();
-
-        assertThat(TDF.IvCounter.metadataIv()).containsExactly(bigEndianIv(0));
-        assertThat(counter.next()).containsExactly(bigEndianIv(1));
-        assertThat(counter.next()).containsExactly(bigEndianIv(2));
-        assertThat(counter.next()).containsExactly(bigEndianIv(3));
-    }
-
-    @Test
-    public void testPayloadIvCounterIncrementsWithCarry() {
-        // spelled out rather than built with bigEndianIv, so this doesn't just re-derive the
-        // encoding it is checking. one below a two-byte carry boundary:
-        var counter = new TDF.IvCounter(0xFFFF, 0x10002);
+    public void testIvCounterUsesBigEndianInvocationAndDefensiveCopy() {
+        byte[] fixedField = new byte[] { 0, 1, 2, 3, 4, 5, 6, 7 };
+        var counter = new TDF.IvCounter(fixedField, 0x0000ffffL);
+        Arrays.fill(fixedField, (byte) 0);
 
         assertThat(counter.next()).containsExactly(
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (byte) 0xff, (byte) 0xff);
+                0, 1, 2, 3, 4, 5, 6, 7, 0, 0, (byte) 0xff, (byte) 0xff);
         assertThat(counter.next()).containsExactly(
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0);
-        assertThat(counter.next()).containsExactly(
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1);
+                0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 0, 0);
     }
 
     @Test
-    public void testPayloadIvCounterCarriesAcrossTheFourByteBoundary() {
-        // an implementation that kept the counter in an int would break here
-        var counter = new TDF.IvCounter(0xFFFFFFFFL, TDF.MAX_GCM_INVOCATIONS_PER_KEY);
-
-        assertThat(counter.next()).containsExactly(
-                0, 0, 0, 0, 0, 0, 0, 0, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff);
-        // 2^32 is the limit, so the counter stops rather than issuing it
-        assertThrows(SDKException.class, counter::next);
-    }
-
-    @Test
-    public void testPayloadIvCounterStopsAtInvocationBudget() {
-        var counter = new TDF.IvCounter(1, 3);
-
-        assertThat(counter.next()).containsExactly(bigEndianIv(1));
-        assertThat(counter.next()).containsExactly(bigEndianIv(2));
-
-        var e = assertThrows(SDKException.class, counter::next);
-        assertThat(e).hasMessageContaining("AES-GCM invocations for a single key");
-        // and it stays refused
-        assertThrows(SDKException.class, counter::next);
-    }
-
-    @Test
-    public void testPayloadIvCounterRejectsALimitThatCouldCollideWithTheMetadataIv() {
-        // no caller can configure a counter that runs far enough to wrap back to IV 0
+    public void testIvCounterValidatesInputs() {
+        assertThrows(IllegalArgumentException.class, () -> new TDF.IvCounter(new byte[7], 0));
+        assertThrows(IllegalArgumentException.class, () -> new TDF.IvCounter(new byte[9], 0));
+        assertThrows(IllegalArgumentException.class, () -> new TDF.IvCounter(new byte[8], -1));
         assertThrows(IllegalArgumentException.class,
-                () -> new TDF.IvCounter(1, TDF.MAX_GCM_INVOCATIONS_PER_KEY + 1));
-        assertThrows(IllegalArgumentException.class, () -> new TDF.IvCounter(1, Long.MAX_VALUE));
-        assertThrows(IllegalArgumentException.class, () -> new TDF.IvCounter(-1, 10));
-        assertThrows(IllegalArgumentException.class, () -> new TDF.IvCounter(10, 9));
-        // and invocation 0 belongs to the metadata, so no payload counter can start there
-        assertThrows(IllegalArgumentException.class, () -> new TDF.IvCounter(0, 10));
-
-        assertDoesNotThrow(() -> new TDF.IvCounter(1, TDF.MAX_GCM_INVOCATIONS_PER_KEY));
+                () -> new TDF.IvCounter(new byte[8], TDF.IvCounter.MAX_INVOCATION + 1));
     }
 
     @Test
-    public void testPayloadIvBudgetLeavesOneInvocationForMetadata() {
-        assertThat(TDF.MAX_GCM_INVOCATIONS_PER_KEY).isEqualTo(4294967296L);
+    public void testIvCounterRejectsReuseAfterExhaustion() {
+        byte[] fixedField = new byte[] { 0, 1, 2, 3, 4, 5, 6, 7 };
+        var counter = new TDF.IvCounter(fixedField, TDF.IvCounter.MAX_INVOCATION);
 
-        // the payload never issues the metadata IV
-        assertThat(TDF.IvCounter.forPayload().next())
-                .isNotEqualTo(TDF.IvCounter.metadataIv());
-
-        // and the payload's budget is exactly one short of the per-key maximum, checked at the
-        // boundary rather than by reading the counter's internals
-        var counter = new TDF.IvCounter(
-                TDF.MAX_GCM_INVOCATIONS_PER_KEY - 2, TDF.MAX_GCM_INVOCATIONS_PER_KEY);
-        assertThat(counter.next()).containsExactly(bigEndianIv(TDF.MAX_GCM_INVOCATIONS_PER_KEY - 2));
-        assertThat(counter.next()).containsExactly(bigEndianIv(TDF.MAX_GCM_INVOCATIONS_PER_KEY - 1));
+        assertThat(counter.next()).containsExactly(
+                0, 1, 2, 3, 4, 5, 6, 7,
+                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff);
+        SDKException exception = assertThrows(SDKException.class, counter::next);
+        assertThat(exception).hasMessageContaining("output stream is incomplete");
         assertThrows(SDKException.class, counter::next);
     }
 
     @Test
-    public void testPayloadIvCounterHandsOutDistinctIvsAcrossThreads() throws Exception {
-        int threads = 8;
-        int perThread = 500;
-        var counter = new TDF.IvCounter(1, 1 + (long) threads * perThread);
+    public void testIvCounterDrawsNewFixedFieldPerStream() {
+        byte[] firstIv = new TDF.IvCounter().next();
+        byte[] secondIv = new TDF.IvCounter().next();
 
-        var pool = Executors.newFixedThreadPool(threads);
-        try {
-            var futures = new ArrayList<Future<List<String>>>();
-            for (int t = 0; t < threads; t++) {
-                futures.add(pool.submit(() -> {
-                    var mine = new ArrayList<String>();
-                    for (int i = 0; i < perThread; i++) {
-                        mine.add(Base64.getEncoder().encodeToString(counter.next()));
-                    }
-                    return mine;
-                }));
-            }
+        assertThat(Arrays.copyOf(firstIv, TDF.IvCounter.FIXED_FIELD_SIZE))
+                .isNotEqualTo(Arrays.copyOf(secondIv, TDF.IvCounter.FIXED_FIELD_SIZE));
+        assertThat(invocation(firstIv)).isZero();
+        assertThat(invocation(secondIv)).isZero();
+    }
 
-            var all = new ArrayList<String>();
-            for (var future : futures) {
-                all.addAll(future.get());
-            }
-            assertThat(all).hasSize(threads * perThread);
-            assertThat(new HashSet<>(all))
-                    .withFailMessage("the counter handed out the same IV twice")
-                    .hasSize(threads * perThread);
-        } finally {
-            pool.shutdownNow();
-        }
+    private static long invocation(byte[] iv) {
+        return ((iv[8] & 0xffL) << 24)
+                | ((iv[9] & 0xffL) << 16)
+                | ((iv[10] & 0xffL) << 8)
+                | (iv[11] & 0xffL);
     }
 
     @Test
     public void testCreateTDFAcceptsInputSpanningManySegments() throws Exception {
-        // a partial trailing segment, so the expected count isn't confused by the empty segment
-        // createTDF's do/while emits when the input is an exact multiple of the segment size
         int fullSegments = 512;
         int expectedSegments = fullSegments + 1;
         var data = new byte[fullSegments * Config.MIN_SEGMENT_SIZE + 100];
@@ -1130,94 +1003,6 @@ public class TDFTest {
         assertThat(decrypted.toByteArray())
                 .withFailMessage("a multi-segment TDF did not round trip")
                 .containsExactly(data);
-    }
-
-    /**
-     * With a single key split the metadata key and the payload key are the same key, so an IV
-     * shared between them would be catastrophic. This is the case the IV reservation exists for.
-     */
-    @Test
-    public void testSingleSplitMetadataAndPayloadNeverShareAnIv() throws Exception {
-        int fullSegments = 4;
-        int expectedSegments = fullSegments + 1; // plus a partial trailing segment
-        var data = new byte[fullSegments * Config.MIN_SEGMENT_SIZE + 100];
-        new Random(17).nextBytes(data);
-
-        var tdf = new TDF(new FakeServicesBuilder().setKas(kas)
-                .setKeyAccessServerRegistryService(kasRegistryService).build());
-        var tdfOutputStream = new ByteArrayOutputStream();
-        var tdfObject = tdf.createTDF(new ByteArrayInputStream(data), tdfOutputStream,
-                Config.newTDFConfig(
-                        Config.withAutoconfigure(false),
-                        Config.withKasInformation(getSingleRSAKASInfo()),
-                        Config.withSegmentSize(Config.MIN_SEGMENT_SIZE),
-                        Config.withMetaData("here is some metadata")));
-
-        var keyAccessObjects = tdfObject.getManifest().encryptionInformation.keyAccessObj;
-        assertThat(keyAccessObjects)
-                .withFailMessage("this test is only meaningful with a single key split")
-                .hasSize(1);
-
-        var seen = new HashSet<String>();
-
-        var encryptedMetadata = new Gson().fromJson(new String(
-                Base64.getDecoder().decode(keyAccessObjects.get(0).encryptedMetadata),
-                StandardCharsets.UTF_8), JsonObject.class);
-        var metadataIv = Base64.getDecoder().decode(encryptedMetadata.get("iv").getAsString());
-        assertThat(metadataIv).containsExactly(bigEndianIv(0));
-        seen.add(Base64.getEncoder().encodeToString(metadataIv));
-
-        var encryptedReader = new TDFReader(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()));
-        var manifestSegments = tdfObject.getManifest().encryptionInformation.integrityInformation.segments;
-        assertThat(manifestSegments).hasSize(expectedSegments);
-        for (int i = 0; i < manifestSegments.size(); i++) {
-            var segment = new byte[(int) manifestSegments.get(i).encryptedSegmentSize];
-            assertThat(encryptedReader.readPayloadBytes(segment)).isEqualTo(segment.length);
-
-            var iv = Arrays.copyOf(segment, AesGcm.GCM_NONCE_LENGTH);
-            assertThat(iv)
-                    .withFailMessage("payload segment %s should use IV %s", i, i + 1)
-                    .containsExactly(bigEndianIv(i + 1));
-            assertThat(seen.add(Base64.getEncoder().encodeToString(iv)))
-                    .withFailMessage("IV reused between the metadata and payload segment %s", i)
-                    .isTrue();
-        }
-    }
-
-    /**
-     * The deterministic IV sequence is only safe because the payload key is fresh for every TDF.
-     * This pins both halves: the IVs repeat, and the ciphertext does not.
-     */
-    @Test
-    public void testEachTdfUsesAFreshPayloadKey() throws Exception {
-        var data = "the same plaintext, encrypted twice".getBytes(StandardCharsets.UTF_8);
-        var tdf = new TDF(new FakeServicesBuilder().setKas(kas)
-                .setKeyAccessServerRegistryService(kasRegistryService).build());
-
-        var firstSegments = new ArrayList<byte[]>();
-        for (int run = 0; run < 2; run++) {
-            // a fresh config per run: createTDF and loadTDF both mutate the config they are given
-            var tdfOutputStream = new ByteArrayOutputStream();
-            var tdfObject = tdf.createTDF(new ByteArrayInputStream(data), tdfOutputStream,
-                    Config.newTDFConfig(
-                            Config.withAutoconfigure(false),
-                            Config.withKasInformation(getSingleRSAKASInfo())));
-
-            var segments = tdfObject.getManifest().encryptionInformation.integrityInformation.segments;
-            var encryptedReader = new TDFReader(
-                    new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()));
-            var segment = new byte[(int) segments.get(0).encryptedSegmentSize];
-            assertThat(encryptedReader.readPayloadBytes(segment)).isEqualTo(segment.length);
-            firstSegments.add(segment);
-        }
-
-        assertThat(Arrays.copyOf(firstSegments.get(0), AesGcm.GCM_NONCE_LENGTH))
-                .withFailMessage("the IV sequence is deterministic, so it should repeat")
-                .containsExactly(Arrays.copyOf(firstSegments.get(1), AesGcm.GCM_NONCE_LENGTH));
-
-        assertThat(firstSegments.get(0))
-                .withFailMessage("identical ciphertext under a repeated IV means the payload key was reused")
-                .isNotEqualTo(firstSegments.get(1));
     }
 
     @Test
