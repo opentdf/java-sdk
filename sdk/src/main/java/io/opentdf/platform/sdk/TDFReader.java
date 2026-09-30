@@ -27,7 +27,7 @@ public class TDFReader {
                 .stream()
                 .collect(Collectors.toMap(ZipReader.Entry::getName, e -> e));
 
-        // The spec name wins over the off-spec one when an archive carries both, so a
+        // The spec name wins over the non-aligned one when an archive carries both, so a
         // conformant entry is never passed over for a superseded one.
         var manifest = entries.containsKey(TDF_MANIFEST_FILE_NAME)
                 ? entries.get(TDF_MANIFEST_FILE_NAME)

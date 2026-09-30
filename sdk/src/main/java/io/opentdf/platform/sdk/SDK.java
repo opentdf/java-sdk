@@ -158,7 +158,7 @@ public class SDK implements AutoCloseable {
      * containing
      * a `manifest.json` and a `0.payload`
      * <p>
-     * The off-spec `0.manifest.json` this SDK wrote before the spec alignment is also
+     * The non-aligned `0.manifest.json` this SDK wrote before the spec alignment is also
      * accepted, matching {@link TDFReader}. Entries beyond those two are ignored rather
      * than disqualifying: the spec fixes where the manifest lives, not what else the
      * archive may hold.
