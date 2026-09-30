@@ -158,7 +158,7 @@ public class SDK implements AutoCloseable {
      * containing
      * a `manifest.json` and a `0.payload`
      * <p>
-     * The off-spec `0.manifest.json` that this SDK writes is also accepted, matching
+     * The non-aligned `0.manifest.json` that this SDK writes is also accepted, matching
      * {@link TDFReader}. Entries beyond the manifest and payload are ignored rather than
      * disqualifying: an archive carrying both manifest names holds three, and the reader
      * accepts it, so a count check here would reject what the reader it screens for reads.
