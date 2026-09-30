@@ -330,6 +330,157 @@ class TDFRootSignatureTest {
                 .isInstanceOf(SDK.RootSignatureValidationException.class);
     }
 
+    // ------------------------------------------------------ spec version and digests
+
+    /*
+     * The manifest's spec-version field used to decide the digest encoding: no version meant
+     * hex (pre-4.3.0), any version meant raw. That only held because this SDK's writer sets
+     * both from one boolean, and the field is unauthenticated. The encoding is now read off the
+     * file, so none of these files depend on what the version field says, or where.
+     */
+
+    @ParameterizedTest
+    @ValueSource(strings = { "root", "payload" })
+    void currentFileWithVersionOnlyUnderTheNonAlignedNameDecrypts(String placement) throws IOException {
+        var plaintext = fourSegmentPlaintext();
+        var rewritten = rewrite(createTdf(plaintext, Config.withAssertionConfig(assertionConfig())),
+                manifest -> moveVersionToNonAlignedName(manifest, placement),
+                UnaryOperator.identity());
+
+        assertThat(Manifest.readManifest(manifestOf(rewritten)).tdfVersion).isEqualTo(TDF.TDF_SPEC_VERSION);
+        assertThat(decrypt(rewritten)).containsExactly(plaintext);
+    }
+
+    @Test
+    void currentFileWithNoVersionAtAllDecrypts() throws IOException {
+        // raw digests with no version recorded anywhere used to be misread as hex
+        var plaintext = fourSegmentPlaintext();
+        var rewritten = rewrite(createTdf(plaintext, Config.withAssertionConfig(assertionConfig())),
+                manifest -> manifest.remove("schemaVersion"),
+                UnaryOperator.identity());
+
+        assertThat(Manifest.readManifest(manifestOf(rewritten)).tdfVersion).isNull();
+        assertThat(decrypt(rewritten)).containsExactly(plaintext);
+    }
+
+    @ParameterizedTest
+    @EnumSource(Config.IntegrityAlgorithm.class)
+    void hexDigestFileThatCarriesAVersionDecrypts(Config.IntegrityAlgorithm segmentAlgorithm) throws IOException {
+        // hex digests with a version recorded used to be misread as raw
+        var plaintext = fourSegmentPlaintext();
+        var tdfBytes = createTdf(plaintext,
+                Config.withTargetMode("4.2.2"),
+                config -> config.renderVersionInfoInManifest = true,
+                withSegmentAlgorithm(segmentAlgorithm),
+                Config.withAssertionConfig(assertionConfig()));
+
+        var manifest = JsonParser.parseString(manifestOf(tdfBytes)).getAsJsonObject();
+        assertThat(manifest.get("schemaVersion").getAsString()).isEqualTo(TDF.TDF_SPEC_VERSION);
+        var rootSignature = Base64.getDecoder().decode(rootSignature(manifest).get("sig").getAsString());
+        assertThat(new String(rootSignature, StandardCharsets.UTF_8)).matches("[0-9a-f]{64}");
+
+        assertThat(decrypt(tdfBytes)).containsExactly(plaintext);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "root", "payload" })
+    void hexDigestFileWithVersionUnderTheNonAlignedNameDecrypts(String placement) throws IOException {
+        var plaintext = fourSegmentPlaintext();
+        var tdfBytes = createTdf(plaintext,
+                Config.withTargetMode("4.2.2"),
+                config -> config.renderVersionInfoInManifest = true,
+                Config.withAssertionConfig(assertionConfig()));
+        var rewritten = rewrite(tdfBytes, manifest -> moveVersionToNonAlignedName(manifest, placement),
+                UnaryOperator.identity());
+
+        assertThat(decrypt(rewritten)).containsExactly(plaintext);
+    }
+
+    @Test
+    void legacyHexDigestFileWithAnAssertionStillDecrypts() throws IOException {
+        var plaintext = fourSegmentPlaintext();
+        var tdfBytes = createTdf(plaintext,
+                Config.withTargetMode("4.2.2"),
+                Config.withAssertionConfig(assertionConfig()));
+        assertThat(JsonParser.parseString(manifestOf(tdfBytes)).getAsJsonObject().has("schemaVersion")).isFalse();
+
+        assertThat(decrypt(tdfBytes)).containsExactly(plaintext);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "4.2.2", "4.3.0" })
+    void respellingSegmentHashesWithoutTheKeyIsCaught(String targetMode) throws IOException {
+        // accepting either spelling of a segment digest does not make the spelling free to
+        // change: the root signature is over the recorded bytes, so switching raw to hex (or
+        // hex back to raw) without the key breaks it
+        var tampered = rewrite(createTdf(fourSegmentPlaintext(), Config.withTargetMode(targetMode)), manifest -> {
+            for (var element : segments(manifest)) {
+                var segment = element.getAsJsonObject();
+                var recorded = Base64.getDecoder().decode(segment.get("hash").getAsString());
+                var respelled = "4.2.2".equals(targetMode)
+                        ? unhex(new String(recorded, StandardCharsets.UTF_8))
+                        : hex(recorded).getBytes(StandardCharsets.UTF_8);
+                segment.addProperty("hash", Base64.getEncoder().encodeToString(respelled));
+            }
+        }, UnaryOperator.identity());
+
+        assertThatThrownBy(() -> decrypt(tampered))
+                .isInstanceOf(SDK.RootSignatureValidationException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "root", "payload" })
+    void tamperingIsStillCaughtWhenTheVersionIsUnderTheNonAlignedName(String placement) throws IOException {
+        var original = createTdf(fourSegmentPlaintext(), withSegmentAlgorithm(Config.IntegrityAlgorithm.HS256));
+
+        var editedSegmentHash = rewrite(original, manifest -> {
+            moveVersionToNonAlignedName(manifest, placement);
+            var first = segments(manifest).get(0).getAsJsonObject();
+            var hash = Base64.getDecoder().decode(first.get("hash").getAsString());
+            hash[0] ^= 0xFF;
+            first.addProperty("hash", Base64.getEncoder().encodeToString(hash));
+        }, UnaryOperator.identity());
+        assertThatThrownBy(() -> decrypt(editedSegmentHash))
+                .isInstanceOf(SDK.RootSignatureValidationException.class);
+
+        var editedRootSignature = rewrite(original, manifest -> {
+            moveVersionToNonAlignedName(manifest, placement);
+            var sig = Base64.getDecoder().decode(rootSignature(manifest).get("sig").getAsString());
+            sig[0] ^= 0xFF;
+            rootSignature(manifest).addProperty("sig", Base64.getEncoder().encodeToString(sig));
+        }, UnaryOperator.identity());
+        assertThatThrownBy(() -> decrypt(editedRootSignature))
+                .isInstanceOf(SDK.RootSignatureValidationException.class);
+
+        var editedSegmentBody = rewrite(original,
+                manifest -> moveVersionToNonAlignedName(manifest, placement),
+                payload -> flipByte(payload, payload.length / 2));
+        assertThatThrownBy(() -> decrypt(editedSegmentBody))
+                .isInstanceOf(SDK.SegmentSignatureMismatch.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "4.2.2", "4.3.0" })
+    void tamperingIsStillCaughtInEitherEncodingWhenAVersionIsRecorded(String targetMode) throws IOException {
+        var original = createTdf(fourSegmentPlaintext(),
+                Config.withTargetMode(targetMode),
+                config -> config.renderVersionInfoInManifest = true,
+                withSegmentAlgorithm(Config.IntegrityAlgorithm.HS256));
+
+        var editedRootSignature = rewrite(original, manifest -> {
+            var sig = Base64.getDecoder().decode(rootSignature(manifest).get("sig").getAsString());
+            sig[0] ^= 0x01;
+            rootSignature(manifest).addProperty("sig", Base64.getEncoder().encodeToString(sig));
+        }, UnaryOperator.identity());
+        assertThatThrownBy(() -> decrypt(editedRootSignature))
+                .isInstanceOf(SDK.RootSignatureValidationException.class);
+
+        var editedSegmentBody = rewrite(original, manifest -> {
+        }, payload -> flipByte(payload, payload.length / 2));
+        assertThatThrownBy(() -> decrypt(editedSegmentBody))
+                .isInstanceOf(SDK.SegmentSignatureMismatch.class);
+    }
+
     // ------------------------------------------------------------------ config
 
     @Test
@@ -464,7 +615,51 @@ class TDFRootSignatureTest {
         return plaintext.toByteArray();
     }
 
+    /** An assertion signed with the default HS256 payload key, so reads verify it. */
+    private static AssertionConfig assertionConfig() {
+        var assertionConfig = new AssertionConfig();
+        assertionConfig.id = "assertion1";
+        assertionConfig.type = AssertionConfig.Type.BaseAssertion;
+        assertionConfig.scope = AssertionConfig.Scope.TrustedDataObj;
+        assertionConfig.appliesToState = AssertionConfig.AppliesToState.Unencrypted;
+        assertionConfig.statement = new AssertionConfig.Statement();
+        assertionConfig.statement.format = "base64binary";
+        assertionConfig.statement.schema = "text";
+        assertionConfig.statement.value = "ICAgIDxlZGoOkVkaD4=";
+        return assertionConfig;
+    }
+
     // ------------------------------------------------------- manifest surgery
+
+    /**
+     * Rewrites the spec version the way a writer built from the non-aligned name emits it:
+     * {@code schemaVersion} removed, the same value recorded as {@code tdf_spec_version} at the
+     * manifest root or under {@code payload}. The root signature covers the segment hashes, not
+     * the JSON, so the result is still internally consistent.
+     */
+    private static void moveVersionToNonAlignedName(JsonObject manifest, String placement) {
+        var version = manifest.remove("schemaVersion");
+        assertThat(version).withFailMessage("fixture should have been written with schemaVersion").isNotNull();
+        var target = "root".equals(placement) ? manifest : manifest.getAsJsonObject("payload");
+        target.add("tdf_spec_version", version);
+    }
+
+    private static String hex(byte[] bytes) {
+        var out = new StringBuilder(bytes.length * 2);
+        for (var b : bytes) {
+            out.append(String.format("%02x", b));
+        }
+        return out.toString();
+    }
+
+    private static byte[] unhex(String hex) {
+        var out = new byte[hex.length() / 2];
+        for (int index = 0; index < out.length; index++) {
+            out[index] = (byte) Integer.parseInt(hex.substring(2 * index, 2 * index + 2), 16);
+        }
+        return out;
+    }
+
 
     private static JsonObject integrityInformation(JsonObject manifest) {
         return manifest.getAsJsonObject("encryptionInformation").getAsJsonObject("integrityInformation");
