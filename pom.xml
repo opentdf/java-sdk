@@ -352,6 +352,7 @@
                 <module>sdk-pqc-bc</module>
                 <module>sdk-fips-bc</module>
                 <module>examples</module>
+                <module>wasm-host</module>
             </modules>
             <activation>
                 <activeByDefault>true</activeByDefault>
