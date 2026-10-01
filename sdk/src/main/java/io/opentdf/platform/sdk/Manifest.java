@@ -64,7 +64,17 @@ public class Manifest {
     private static final Gson gson = new GsonBuilder()
             .registerTypeAdapter(AssertionConfig.Statement.class, new AssertionValueAdapter())
             .registerTypeAdapterFactory(new IntegrityInformationAdapterFactory())
+            .registerTypeAdapterFactory(new SpecVersionAdapterFactory())
             .create();
+
+    /**
+     * The TDF spec version the manifest records. Written as {@code schemaVersion} only; on read
+     * it may also come from the non-aligned {@code tdf_spec_version} name, see
+     * {@link SpecVersionAdapterFactory}.
+     * <p>
+     * The reader uses it to choose how the integrity digests are encoded: hex when no version is
+     * recorded (pre-4.3.0), raw bytes otherwise.
+     */
     @SerializedName(value = "schemaVersion")
     String tdfVersion;
 
@@ -274,6 +284,91 @@ public class Manifest {
         private static boolean hasValue(JsonObject object, String memberName) {
             JsonElement member = object.get(memberName);
             return member != null && !member.isJsonNull();
+        }
+    }
+
+    /**
+     * Reads {@code tdf_spec_version}, a non-aligned name for the spec-version field, when the
+     * canonical {@code schemaVersion} is absent, so that files written with that name stay
+     * readable.
+     * <p>
+     * {@code schemaVersion} is the canonical name. {@code tdf_spec_version} is not a former
+     * spelling that was renamed -- it entered some specification drafts and some older OpenTDF
+     * documentation in error, and writers built from those drafts emitted it. We read it so
+     * those files stay usable; we never write it.
+     * <p>
+     * Precedence is {@code schemaVersion}, then {@code tdf_spec_version} at the root, then
+     * {@code tdf_spec_version} under {@code payload}. Nothing is written back under the
+     * non-aligned name -- serializing a manifest always emits {@code schemaVersion} only, so a
+     * round trip normalizes the name rather than propagating it.
+     * <p>
+     * Both placements are probed because both occur in archival files. The root is where the
+     * spec's own manifest.md has always documented the field, and where web-sdk both wrote it
+     * and still reads it. Under {@code payload} is where revisions of the JSON schema declared it
+     * in error, which led at least one writer to emit the key there with a {@code null} value.
+     * <p>
+     * Only a non-empty JSON string counts. Any other value -- {@code null}, a number, an object
+     * -- is skipped rather than failing the decode: reporting malformed manifests is schema
+     * validation's job, not the decoder's.
+     * <p>
+     * Gson's {@code @SerializedName(alternate = ...)} cannot do this: it cannot reach into
+     * {@code payload}, and when both names are present it keeps whichever comes last in the
+     * document instead of preferring {@code schemaVersion}.
+     */
+    private static class SpecVersionAdapterFactory implements TypeAdapterFactory {
+        private static final String NON_ALIGNED_SPEC_VERSION = "tdf_spec_version";
+        private static final String PAYLOAD = "payload";
+
+        @Override
+        public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> type) {
+            if (!Manifest.class.equals(type.getRawType())) {
+                return null;
+            }
+            final TypeAdapter<T> delegate = gson.getDelegateAdapter(this, type);
+            final TypeAdapter<JsonElement> elementAdapter = gson.getAdapter(JsonElement.class);
+            return new TypeAdapter<T>() {
+                @Override
+                public void write(JsonWriter out, T value) throws IOException {
+                    delegate.write(out, value);
+                }
+
+                @Override
+                public T read(JsonReader in) throws IOException {
+                    JsonElement tree = elementAdapter.read(in);
+                    T value = delegate.fromJsonTree(tree);
+                    if (value instanceof Manifest && tree != null && tree.isJsonObject()) {
+                        Manifest manifest = (Manifest) value;
+                        if (manifest.tdfVersion == null || manifest.tdfVersion.isEmpty()) {
+                            String nonAligned = nonAlignedSpecVersion(tree.getAsJsonObject());
+                            if (nonAligned != null) {
+                                manifest.tdfVersion = nonAligned;
+                            }
+                        }
+                    }
+                    return value;
+                }
+            };
+        }
+
+        /** The first non-empty string under the non-aligned name, root before payload, or null. */
+        private static String nonAlignedSpecVersion(JsonObject root) {
+            String atRoot = nonEmptyString(root.get(NON_ALIGNED_SPEC_VERSION));
+            if (atRoot != null) {
+                return atRoot;
+            }
+            JsonElement payload = root.get(PAYLOAD);
+            if (payload != null && payload.isJsonObject()) {
+                return nonEmptyString(payload.getAsJsonObject().get(NON_ALIGNED_SPEC_VERSION));
+            }
+            return null;
+        }
+
+        private static String nonEmptyString(JsonElement element) {
+            if (element == null || !element.isJsonPrimitive() || !element.getAsJsonPrimitive().isString()) {
+                return null;
+            }
+            String value = element.getAsString();
+            return value.isEmpty() ? null : value;
         }
     }
 
