@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.2](https://github.com/opentdf/java-sdk/compare/v0.19.1...v0.19.2) (2026-10-01)
+
+
+### Bug Fixes
+
+* **sdk:** read a manifest.json entry from TDF archives ([#406](https://github.com/opentdf/java-sdk/issues/406)) ([f7e0c10](https://github.com/opentdf/java-sdk/commit/f7e0c10a87760d6c9e0823737ccb8165a90ff710))
+* **sdk:** update dependencies ([#410](https://github.com/opentdf/java-sdk/issues/410)) ([b3f293e](https://github.com/opentdf/java-sdk/commit/b3f293e35f7a84d652a0fa2ef9461641b85ba74c))
+
 ## [0.19.1](https://github.com/opentdf/java-sdk/compare/v0.19.0...v0.19.1) (2026-09-21)
 
 
