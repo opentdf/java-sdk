@@ -90,7 +90,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
-        run: mvn clean --batch-mode clean install
+        run: |
+          # we need the test jar installed so that the enforcer step that bans duplicate 
+          # dependencies can get it
+          mvn clean --batch-mode clean install -Dmaven.enforcer.skip
       - name: Tests and enforcer (fips)
         run: |
           # install the sdk-fips-bc jar so that FIPS mode tests work
