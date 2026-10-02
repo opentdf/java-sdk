@@ -97,7 +97,7 @@ jobs:
           mvn --batch-mode install -pl sdk-fips-bc -am \
             -Dmaven.antrun.skip \
             -Dmaven.test.skip
-          mvn --batch-mode install test enforcer:enforce -P 'fips,!non-fips' \
+          mvn --batch-mode test enforcer:enforce -P 'fips,!non-fips' \
             -Dmaven.antrun.skip
       - name: Tests with coverage and javadoc (non-fips)
         env:
