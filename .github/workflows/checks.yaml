@@ -92,8 +92,8 @@ jobs:
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
         run: |
           # we need the test jar installed so that the enforcer step that bans duplicate 
-          # dependencies can get it
-          mvn clean --batch-mode clean install -Dmaven.enforcer.skip
+          # dependencies can get it. this also generates the sources
+          mvn clean --batch-mode clean install -Dmaven.enforcer.skip -Dmaven.test.skip
       - name: Tests and enforcer (fips)
         run: |
           # install the sdk-fips-bc jar so that FIPS mode tests work
