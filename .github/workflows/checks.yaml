@@ -90,17 +90,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BUF_INPUT_HTTPS_USERNAME: opentdf-bot
           BUF_INPUT_HTTPS_PASSWORD: ${{ secrets.PERSONAL_ACCESS_TOKEN_OPENTDF }}
-        run: |
-          # we need the test jar installed so that the enforcer step that bans duplicate 
-          # dependencies can get it. this also generates the sources
-          mvn clean --batch-mode clean install -Dmaven.enforcer.skip -Dmaven.test.skip
+        run: mvn clean --batch-mode clean generate-sources -Dmaven.enforcer.skip
       - name: Tests and enforcer (fips)
         run: |
           # install the sdk-fips-bc jar so that FIPS mode tests work
           mvn --batch-mode install -pl sdk-fips-bc -am \
             -Dmaven.antrun.skip \
             -Dmaven.test.skip
-          mvn --batch-mode test enforcer:enforce -P 'fips,!non-fips' \
+          mvn --batch-mode install test enforcer:enforce -P 'fips,!non-fips' \
             -Dmaven.antrun.skip
       - name: Tests with coverage and javadoc (non-fips)
         env:
