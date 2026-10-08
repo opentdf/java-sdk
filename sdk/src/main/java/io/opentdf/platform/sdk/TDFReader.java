@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static io.opentdf.platform.sdk.TDFWriter.TDF_MANIFEST_FILE_NAME;
+import static io.opentdf.platform.sdk.TDFWriter.TDF_MANIFEST_FILE_NAME_SPEC;
 import static io.opentdf.platform.sdk.TDFWriter.TDF_PAYLOAD_FILE_NAME;
 
 /**
@@ -22,18 +23,29 @@ public class TDFReader {
     private final InputStream payload;
 
     public TDFReader(SeekableByteChannel tdf) throws SDKException, IOException {
+        // A zip may legally list the same name twice, and readers disagree about which copy
+        // wins, so reject rather than pick one. Without a merge function this collector throws
+        // IllegalStateException -- outside the constructor's declared error model, and outside
+        // what callers screening untrusted input catch.
         Map<String, ZipReader.Entry> entries = new ZipReader(tdf).getEntries()
                 .stream()
-                .collect(Collectors.toMap(ZipReader.Entry::getName, e -> e));
+                .collect(Collectors.toMap(ZipReader.Entry::getName, e -> e, (first, second) -> {
+                    throw new IllegalArgumentException("tdf contains more than one entry named " + first.getName());
+                }));
 
-        if (!entries.containsKey(TDF_MANIFEST_FILE_NAME)) {
+        // An archive carrying both names is read, not rejected, and the spec name wins, so a
+        // conformant entry is never passed over for a superseded one. Two entries under the
+        // two names are distinct entries -- unlike the duplicate above, where one name is
+        // listed twice and there is no principled way to choose.
+        var manifest = entries.getOrDefault(TDF_MANIFEST_FILE_NAME_SPEC, entries.get(TDF_MANIFEST_FILE_NAME));
+        if (manifest == null) {
             throw new IllegalArgumentException("tdf doesn't contain a manifest");
         }
         if (!entries.containsKey(TDF_PAYLOAD_FILE_NAME)) {
             throw new IllegalArgumentException("tdf doesn't contain a payload");
         }
 
-        manifestEntry = entries.get(TDF_MANIFEST_FILE_NAME);
+        manifestEntry = manifest;
         payload = entries.get(TDF_PAYLOAD_FILE_NAME).getData();
     }
 
