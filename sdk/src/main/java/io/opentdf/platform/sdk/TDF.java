@@ -136,10 +136,15 @@ class TDF {
             this.nextInvocation = initialInvocation;
         }
 
+        /**
+         * @return the next IV in the sequence, which has never been returned before
+         * @throws SDK.AesGcmExhaustedException if the per-key invocation budget is spent; this
+         *         is checked before the IV is issued, so no segment is encrypted past the limit
+         */
         synchronized byte[] next() {
             if (exhausted) {
-                throw new SDKException("exceeded the maximum of 2^32 AES-GCM invocations under a single"
-                        + " payload key; use a larger segment size");
+                throw new SDK.AesGcmExhaustedException("exceeded the maximum of 2^32 AES-GCM invocations"
+                        + " under a single payload key; the TDF is incomplete. Use a larger segment size");
             }
 
             long invocation = nextInvocation;

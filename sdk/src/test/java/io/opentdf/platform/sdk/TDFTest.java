@@ -963,9 +963,10 @@ public class TDFTest {
         assertThat(counter.next()).containsExactly(
                 0, 1, 2, 3, 4, 5, 6, 7,
                 (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff);
-        SDKException exception = assertThrows(SDKException.class, counter::next);
-        assertThat(exception).hasMessageContaining("2^32 AES-GCM invocations");
-        assertThrows(SDKException.class, counter::next);
+        var exception = assertThrows(SDK.AesGcmExhaustedException.class, counter::next);
+        assertThat(exception).isInstanceOf(SDKException.class)
+                .hasMessageContaining("2^32 AES-GCM invocations");
+        assertThrows(SDK.AesGcmExhaustedException.class, counter::next);
     }
 
     // probabilistic: two random 64-bit fixed fields collide with probability 2^-64
