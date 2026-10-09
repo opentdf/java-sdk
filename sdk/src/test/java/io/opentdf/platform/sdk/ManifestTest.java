@@ -1,6 +1,11 @@
 package io.opentdf.platform.sdk;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonNull;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -9,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ManifestTest {
@@ -284,5 +290,48 @@ public class ManifestTest {
                         "context", Map.of("@base", "urn:nato:stanag:5636:A:1:elements:json")
                         )
         );
+    }
+
+    private String manifestWithObjectStatementValue() throws IOException {
+        try (var mStream = getClass().getResourceAsStream("/io.opentdf.platform.sdk.TestData/manifest-with-object-statement-value.json")) {
+            assert mStream != null;
+            return new String(mStream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    /** The first assertion's statement with {@code member} replaced, keeping explicit nulls. */
+    private String withStatementMember(String member, com.google.gson.JsonElement replacement) throws IOException {
+        var root = JsonParser.parseString(manifestWithObjectStatementValue()).getAsJsonObject();
+        var statement = root.getAsJsonArray("assertions").get(0).getAsJsonObject().getAsJsonObject("statement");
+        statement.add(member, replacement);
+        return new GsonBuilder().serializeNulls().create().toJson(root);
+    }
+
+    /**
+     * DSPX-5103: an explicit JSON null in a statement field is the same as leaving it out. It
+     * used to throw UnsupportedOperationException for format and schema, which escaped manifest
+     * parsing, and to become the string "null" for value.
+     */
+    @Test
+    void testNullStatementFieldsReadAsNull() throws IOException {
+        for (var member : List.of("format", "schema", "value")) {
+            var manifest = Manifest.readManifest(withStatementMember(member, JsonNull.INSTANCE));
+            var statement = manifest.assertions.get(0).statement;
+            var actual = member.equals("format") ? statement.format
+                    : member.equals("schema") ? statement.schema : statement.value;
+            assertThat(actual).as(member).isNull();
+        }
+    }
+
+    /** A statement format or schema that is not a string is a parse error, not an unchecked crash. */
+    @Test
+    void testNonStringStatementFormatIsAParseError() throws IOException {
+        for (var member : List.of("format", "schema")) {
+            var json = withStatementMember(member, new JsonObject());
+            assertThatThrownBy(() -> Manifest.readManifest(json))
+                    .as(member)
+                    .isInstanceOf(JsonParseException.class)
+                    .hasMessageContaining(member);
+        }
     }
 }

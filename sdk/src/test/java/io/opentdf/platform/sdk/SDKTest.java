@@ -15,9 +15,12 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.mockito.Mockito.mock;
 
 class SDKTest {
@@ -106,6 +109,51 @@ class SDKTest {
         try (var chan = zipOf("0.payload", "manifest.json", "something-else", "something-else")) {
             assertThat(SDK.isTDF(chan)).isFalse();
         }
+    }
+
+    /**
+     * DSPX-5103: {@link SDK#isTDF} answers a malformed archive with false. It used to hang on
+     * one of these shapes and let an unchecked exception escape on others.
+     */
+    @Test
+    void testExaminingHostileArchivesReturnsFalse() {
+        HostileZips.hostileShapes().forEach((shape, hostile) -> {
+            var archive = HostileZips.tdfWith("{}", hostile);
+            boolean result = assertTimeoutPreemptively(Duration.ofSeconds(5),
+                    () -> SDK.isTDF(new SeekableInMemoryByteChannel(archive)), shape);
+            assertThat(result).as(shape).isFalse();
+        });
+    }
+
+    /** The unmodified hand-built archive those shapes start from is a TDF. */
+    @Test
+    void testExaminingHandBuiltTDF() {
+        assertThat(SDK.isTDF(new SeekableInMemoryByteChannel(HostileZips.tdfWith("{}", e -> { })))).isTrue();
+    }
+
+    /** A channel that throws something unchecked is not a TDF either, rather than a crash in the check. */
+    @Test
+    void testExaminingAChannelThatThrowsUncheckedReturnsFalse() {
+        var channel = new SeekableInMemoryByteChannel(HostileZips.tdfWith("{}", e -> { })) {
+            @Override
+            public int read(ByteBuffer buf) {
+                throw new IllegalStateException("broken channel");
+            }
+        };
+        assertThat(SDK.isTDF(channel)).isFalse();
+    }
+
+    /** {@link SDK#readManifest} reports the same archives as a malformed TDF. */
+    @Test
+    void testReadingTheManifestOfHostileArchivesThrowsMalformedTDF() {
+        HostileZips.hostileShapes().forEach((shape, hostile) -> {
+            var archive = HostileZips.tdfWith("{}", hostile);
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () ->
+                    assertThatThrownBy(() -> SDK.readManifest(new SeekableInMemoryByteChannel(archive)))
+                            .as(shape)
+                            .isInstanceOf(SDK.MalformedTDFException.class),
+                    shape);
+        });
     }
 
     /** Builds a zip holding the named entries; contents are irrelevant to {@link SDK#isTDF}. */

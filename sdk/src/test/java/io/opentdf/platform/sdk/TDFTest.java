@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
+import java.time.Duration;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -46,6 +47,7 @@ import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -1551,6 +1553,47 @@ public class TDFTest {
     @Nonnull
     private static Config.KASInfo[] getSingleRSAKASInfo() {
         return getKASInfos(i -> i == 0);
+    }
+
+    /**
+     * DSPX-5103: a malformed container reaches the caller of {@code loadTDF} as a
+     * {@link SDK.MalformedTDFException}, never as a hang or an IllegalArgumentException,
+     * UnsupportedOperationException or other unchecked exception from inside the parser.
+     */
+    @Test
+    void loadTDFReportsHostileArchivesAsMalformed() {
+        HostileZips.hostileShapes().forEach((shape, hostile) ->
+                assertLoadTDFFailsAsMalformed(shape, HostileZips.tdfWith("{}", hostile)));
+    }
+
+    /** The manifest is buffered whole, so one that claims to be larger than the limit is refused unread. */
+    @Test
+    void loadTDFRefusesAnOversizedManifest() {
+        var archive = HostileZips.tdfWith("{}", e -> e.uncompressedSize = TDFReader.MAX_MANIFEST_SIZE + 1);
+        assertThatThrownBy(() -> loadTDFFrom(archive))
+                .isInstanceOf(SDK.MalformedTDFException.class)
+                .hasMessageContaining("exceeds the " + TDFReader.MAX_MANIFEST_SIZE + " byte limit");
+    }
+
+    @Test
+    void loadTDFReportsAnInvalidManifestAsMalformed() {
+        var assertionWithObjectFormat = "{\"payload\":{},\"assertions\":[{\"statement\":{\"format\":{}}}]}";
+        for (var manifest : List.of("not json", "[]", "{\"payload\": 5}", "{}", assertionWithObjectFormat)) {
+            assertLoadTDFFailsAsMalformed(manifest, HostileZips.tdfWith(manifest, e -> { }));
+        }
+    }
+
+    private static void assertLoadTDFFailsAsMalformed(String description, byte[] archive) {
+        assertTimeoutPreemptively(Duration.ofSeconds(5), () ->
+                assertThatThrownBy(() -> loadTDFFrom(archive))
+                        .as(description)
+                        .isInstanceOf(SDK.MalformedTDFException.class),
+                description);
+    }
+
+    private static void loadTDFFrom(byte[] archive) throws IOException {
+        new TDF(new FakeServicesBuilder().setKas(kas).build())
+                .loadTDF(new SeekableInMemoryByteChannel(archive), Config.newTDFReaderConfig());
     }
 
     private static boolean isHexChar(byte b) {

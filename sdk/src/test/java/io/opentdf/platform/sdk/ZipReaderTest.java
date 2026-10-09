@@ -591,6 +591,62 @@ public class ZipReaderTest {
         }
     }
 
+    /**
+     * DSPX-5103: central directory fields that read as negative, or that point outside the
+     * archive or outside their own extra field, are zip errors. None of them may hang the reader
+     * (a data size of 0xFFFC once looped forever) or escape as an unchecked exception other than
+     * {@link InvalidZipException}.
+     */
+    @Test
+    public void testHostileCentralDirectoryFieldsAreRejected() {
+        HostileZips.hostileShapes().forEach((shape, hostile) -> {
+            var archive = HostileZips.tdfWith(MANIFEST, hostile);
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () ->
+                    assertThatThrownBy(() -> {
+                        try (var channel = new SeekableInMemoryByteChannel(archive)) {
+                            // reading every entry, not just the directory, so a shape that only
+                            // fails once its data is read is caught too
+                            testReadingZipChannel(channel, false);
+                        }
+                    }).as(shape).isInstanceOf(InvalidZipException.class),
+                    shape);
+        });
+    }
+
+    /** The hand-built archives the hostile shapes start from are valid until a shape is applied. */
+    @Test
+    public void testHandBuiltArchiveReads() throws IOException {
+        var archive = HostileZips.tdfWith(MANIFEST, e -> { });
+        try (var channel = new SeekableInMemoryByteChannel(archive)) {
+            var reader = new ZipReader(channel);
+            assertThat(readEntry(reader, "0.manifest.json")).isEqualTo(MANIFEST);
+            assertThat(readEntry(reader, "0.payload")).isEqualTo("payload bytes");
+        }
+    }
+
+    /**
+     * A zip64 record whose values are all within range is still honoured, after an unrelated
+     * record and followed by a few bytes too short to be a record, which readers ignore.
+     */
+    @Test
+    public void testZip64ExtraFieldAmongOtherRecordsStillReads() throws IOException {
+        var archive = HostileZips.tdfWith(MANIFEST, e -> {
+            e.uncompressedSize = 0xFFFFFFFFL;
+            e.compressedSize = 0xFFFFFFFFL;
+            e.localHeaderOffset = 0xFFFFFFFFL;
+            long offset = "0.payload".length() + 30 + "payload bytes".length();
+            e.centralExtra = HostileZips.concat(
+                    HostileZips.extraRecord(0xCAFE, 2, new byte[2]),
+                    HostileZips.extraRecord(0x0001, 24, HostileZips.longs(e.data.length, e.data.length, offset)),
+                    new byte[3]);
+        });
+        try (var channel = new SeekableInMemoryByteChannel(archive)) {
+            var reader = new ZipReader(channel);
+            assertThat(readEntry(reader, "0.manifest.json")).isEqualTo(MANIFEST);
+            assertThat(readEntry(reader, "0.payload")).isEqualTo("payload bytes");
+        }
+    }
+
     /** The same three entries as {@link #zip64Archive()}, written without anything zip64. */
     private static byte[] plainArchive() throws IOException {
         var out = new ByteArrayOutputStream();
