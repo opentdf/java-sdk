@@ -646,14 +646,11 @@ public class Manifest {
             }
             var obj = json.getAsJsonObject();
             var statement = new AssertionConfig.Statement();
-            if (obj.has("format")) {
-                statement.format = obj.get("format").getAsString();
-            }
-            if (obj.has("schema")) {
-                statement.schema = obj.get("schema").getAsString();
-            }
-            if (obj.has("value")) {
-                var value = obj.get("value");
+            statement.format = optionalString(obj, "format");
+            statement.schema = optionalString(obj, "schema");
+            var value = obj.get("value");
+            // an explicit JSON null is the same as no value at all, not the four character string "null"
+            if (value != null && !value.isJsonNull()) {
                 if (value.isJsonPrimitive()) {
                     // it's already a primitive (hopefully string) so we don't need its escaped value here
                     statement.value = value.getAsString();
@@ -662,6 +659,24 @@ public class Manifest {
                 }
             }
             return statement;
+        }
+
+        /**
+         * Reads a member that has to be a JSON primitive if present. A missing member and an
+         * explicit {@code null} both come back as {@code null}; anything else, such as an object
+         * or array, is a malformed statement. Calling {@code getAsString} unchecked throws
+         * {@link UnsupportedOperationException} or {@link IllegalStateException} for these, which
+         * escapes manifest parsing as something other than a parse error.
+         */
+        private static String optionalString(JsonObject obj, String member) {
+            var element = obj.get(member);
+            if (element == null || element.isJsonNull()) {
+                return null;
+            }
+            if (!element.isJsonPrimitive()) {
+                throw new JsonParseException(String.format("assertion statement %s must be a string", member));
+            }
+            return element.getAsString();
         }
     }
 

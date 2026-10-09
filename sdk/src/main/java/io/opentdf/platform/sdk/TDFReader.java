@@ -1,5 +1,7 @@
 package io.opentdf.platform.sdk;
 
+import com.google.gson.JsonParseException;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -49,10 +51,51 @@ public class TDFReader {
         payload = entries.get(TDF_PAYLOAD_FILE_NAME).getData();
     }
 
+    /**
+     * Opens a TDF read from untrusted bytes, reporting a container that is not a well formed
+     * TDF as a {@link SDK.MalformedTDFException} rather than as whichever unchecked exception
+     * the zip reader or this class's own checks happened to raise.
+     */
+    static TDFReader open(SeekableByteChannel tdf) throws IOException {
+        try {
+            return new TDFReader(tdf);
+        } catch (InvalidZipException | IllegalArgumentException e) {
+            throw malformed("tdf is not a valid zip container", e);
+        }
+    }
+
+    /**
+     * Reads and validates the manifest. Malformed JSON, and JSON that does not have the shape of
+     * a manifest, is reported as a {@link SDK.MalformedTDFException}.
+     */
+    Manifest readManifest() {
+        String manifestJson = manifest();
+        try {
+            return Manifest.readManifest(manifestJson);
+        } catch (JsonParseException | IllegalArgumentException | IllegalStateException
+                 | UnsupportedOperationException e) {
+            // Gson reports a JSON value of the wrong type through IllegalStateException and
+            // UnsupportedOperationException (the JsonElement.getAsX accessors), and
+            // Manifest.readManifest reports missing required fields as IllegalArgumentException.
+            // Every one of these here means the manifest itself is malformed.
+            throw malformed("tdf manifest is invalid", e);
+        }
+    }
+
+    private static SDK.MalformedTDFException malformed(String what, RuntimeException e) {
+        return new SDK.MalformedTDFException(what + ": " + e.getMessage(), e);
+    }
+
     String manifest() {
+        // deliberately no fixed size cap: very large payloads (DSPX-4502) have manifests well
+        // over a gigabyte. a hostile declared size cannot make this allocate more than the
+        // archive holds, because the stream stops at the end of the archive and reports the
+        // entry as truncated, and ZipReader rejects entries whose stored bytes do not fit
         var out = new ByteArrayOutputStream();
         try {
             manifestEntry.getData().transferTo(out);
+        } catch (InvalidZipException e) {
+            throw malformed("error retrieving manifest from zip file", e);
         } catch (IOException e) {
             throw new SDKException("error retrieving manifest from zip file", e);
         }
@@ -74,8 +117,7 @@ public class TDFReader {
     }
 
     PolicyObject readPolicyObject() {
-        String manifestJson = manifest();
-        Manifest manifest = Manifest.readManifest(manifestJson);
+        Manifest manifest = readManifest();
         return Manifest.decodePolicyObject(manifest);
     }
 }
