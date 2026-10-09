@@ -82,115 +82,92 @@ class TDF {
     private static final Gson gson = new GsonBuilder().create();
 
     /**
-     * A self-imposed ceiling on the number of AES-GCM authenticated-encryption
-     * invocations under a single payload key. One invocation is spent on the
-     * metadata (IV 0), leaving 2^32 - 1 for payload segments.
+     * An AES-GCM IV generator using the deterministic construction of NIST SP 800-38D
+     * section 8.2.1: a 64-bit fixed field followed by a 32-bit big-endian invocation field.
      * <p>
-     * This follows the deterministic IV construction of NIST SP 800-38D section
-     * 8.2.1. Because the payload key is freshly generated for each TDF and used by a
-     * single device, section 8.2.1 permits an empty fixed field, so the whole 96 bits
-     * are the invocation field and the constraint the standard actually imposes is
-     * 2^96. Section 8.3's limit of 2^32 does <em>not</em> bind here — it is scoped to
-     * RBG-based IVs and to deterministic IVs that are not 96 bits — but it is adopted
-     * anyway as a conservative ceiling.
+     * The fixed field is drawn at random once per instance, and one instance is used per
+     * TDF. The invocation field starts at 0 and increments once per IV, so an instance
+     * issues at most 2^32 distinct IVs and then refuses rather than wrapping. At
+     * {@link Config#MIN_SEGMENT_SIZE} (16 KiB) that is roughly 64 TiB of payload.
      * <p>
-     * It is not reachable in practice: at the smallest segment size
-     * {@link Config#withSegmentSize} permits ({@link Config#MIN_SEGMENT_SIZE}, 16 KiB)
-     * it would take 64 TiB of input. It is enforced so the invariant holds by
-     * construction rather than by assumption.
-     */
-    static final long MAX_GCM_INVOCATIONS_PER_KEY = 1L << 32;
-
-    /**
-     * A deterministic, unsigned 96-bit big-endian AES-GCM IV counter.
+     * A single instance must cover every encryption under the payload key, metadata
+     * included. With a single key split the metadata key <em>is</em> the payload key, so
+     * {@code createTDF} spends invocation 0 on the metadata and payload segments continue
+     * from invocation 1. Drawing the metadata IV independently would risk IV reuse under
+     * that key.
      * <p>
-     * A TDF encrypts its metadata and its payload segments under keys that are
-     * identical when there is a single key split, so the two must never share an
-     * IV. IV 0 is reserved for the metadata and payload segments start at IV 1,
-     * incrementing once per segment.
-     * <p>
-     * The counter refuses to issue an IV once it reaches its limit, and no limit can
-     * exceed {@link #MAX_GCM_INVOCATIONS_PER_KEY}, so an IV can never be handed out
-     * twice and the counter can never reach a value that would collide with the
-     * metadata IV.
-     * <p>
-     * <b>Precondition:</b> this is safe only because the key is freshly generated
-     * for every TDF ({@code AesGcm.generateKey()} in {@code prepareManifest}).
-     * Reusing a key across two TDFs would repeat this IV sequence, which is
-     * catastrophic for AES-GCM — it leaks the XOR of the plaintexts and enables
-     * authentication-key recovery. Do not add a way to supply or reuse a payload
-     * key without also changing this construction.
+     * <b>Precondition:</b> the payload key is freshly generated for every TDF
+     * ({@code AesGcm.generateKey()} in {@code prepareManifest}). The random fixed field is
+     * defense in depth, not a substitute: were a key ever reused, IV uniqueness across TDFs
+     * would rest on 64 random bits alone. Reusing an AES-GCM IV under one key leaks the XOR
+     * of the plaintexts and enables authentication-key recovery. Do not add a way to supply
+     * or reuse a payload key without revisiting this construction.
      */
     static final class IvCounter {
-        /** The invocation reserved for the metadata. */
-        static final long METADATA_INVOCATION = 0;
-        /** The first invocation available to payload segments. */
-        static final long FIRST_PAYLOAD_INVOCATION = METADATA_INVOCATION + 1;
+        static final int FIXED_FIELD_SIZE = 8;
+        /** The largest value of the 32-bit invocation field, inclusive. */
+        static final long MAX_INVOCATION = 0xffff_ffffL;
 
-        /** Exclusive; the counter stops before issuing this invocation number. */
-        private final long limit;
-        private long next;
+        // The fixed field is not secret, so a shared non-blocking SecureRandom suffices;
+        // getInstanceStrong() can block on /dev/random on some Linux hosts.
+        private static final SecureRandom RANDOM = new SecureRandom();
 
-        /**
-         * The IV reserved for encrypting the TDF metadata.
-         *
-         * @return twelve zero bytes
-         */
-        static byte[] metadataIv() {
-            return ivFor(METADATA_INVOCATION);
+        private final byte[] fixedField;
+        private long nextInvocation;
+        private boolean exhausted;
+
+        IvCounter() {
+            this(generateFixedField(), 0);
         }
 
         /**
-         * A payload IV counter whose first value is 1, leaving IV 0 for the metadata
-         * and the remainder of the per-key invocation budget for payload segments.
+         * Visible for testing. Production code must use {@link #IvCounter()}, which draws a
+         * random fixed field.
          */
-        static IvCounter forPayload() {
-            return new IvCounter(FIRST_PAYLOAD_INVOCATION, MAX_GCM_INVOCATIONS_PER_KEY);
-        }
-
-        /**
-         * @param firstInvocation the first invocation number to issue, at least
-         *                        {@link #FIRST_PAYLOAD_INVOCATION}
-         * @param limit one past the last invocation number to issue
-         */
-        IvCounter(long firstInvocation, long limit) {
-            if (firstInvocation < FIRST_PAYLOAD_INVOCATION) {
-                throw new IllegalArgumentException("invalid first invocation: " + firstInvocation
-                        + "; invocation " + METADATA_INVOCATION + " is reserved for the metadata");
+        IvCounter(byte[] fixedField, long initialInvocation) {
+            Objects.requireNonNull(fixedField, "fixed field");
+            if (fixedField.length != FIXED_FIELD_SIZE) {
+                throw new IllegalArgumentException("invalid IV fixed field size: " + fixedField.length);
             }
-            if (limit < firstInvocation) {
-                throw new IllegalArgumentException(
-                        "limit " + limit + " is below the first invocation " + firstInvocation);
+            if (initialInvocation < 0 || initialInvocation > MAX_INVOCATION) {
+                throw new IllegalArgumentException("invalid IV invocation: " + initialInvocation);
             }
-            if (limit > MAX_GCM_INVOCATIONS_PER_KEY) {
-                throw new IllegalArgumentException("limit " + limit + " exceeds the maximum of "
-                        + MAX_GCM_INVOCATIONS_PER_KEY + " AES-GCM invocations for a single key");
-            }
-            this.next = firstInvocation;
-            this.limit = limit;
+            this.fixedField = fixedField.clone();
+            this.nextInvocation = initialInvocation;
         }
 
         /**
          * @return the next IV in the sequence, which has never been returned before
+         * @throws SDK.AesGcmExhaustedException if the per-key invocation budget is spent; this
+         *         is checked before the IV is issued, so no segment is encrypted past the limit
          */
         synchronized byte[] next() {
-            if (next >= limit) {
-                throw new SDKException("exceeded the maximum of " + MAX_GCM_INVOCATIONS_PER_KEY
-                        + " AES-GCM invocations for a single key");
+            if (exhausted) {
+                throw new SDK.AesGcmExhaustedException("exceeded the maximum of 2^32 AES-GCM invocations"
+                        + " under a single payload key; the TDF is incomplete. Use a larger segment size");
             }
-            return ivFor(next++);
+
+            long invocation = nextInvocation;
+            // issue MAX_INVOCATION itself, then refuse; never wrap back to invocation 0
+            if (invocation == MAX_INVOCATION) {
+                exhausted = true;
+            } else {
+                nextInvocation++;
+            }
+
+            byte[] iv = new byte[kGcmIvSize];
+            System.arraycopy(fixedField, 0, iv, 0, FIXED_FIELD_SIZE);
+            iv[8] = (byte) (invocation >>> 24);
+            iv[9] = (byte) (invocation >>> 16);
+            iv[10] = (byte) (invocation >>> 8);
+            iv[11] = (byte) invocation;
+            return iv;
         }
 
-        /**
-         * Encodes an invocation number as an unsigned 96-bit big-endian IV.
-         */
-        static byte[] ivFor(long invocation) {
-            byte[] iv = new byte[kGcmIvSize];
-            for (int index = iv.length - 1; index >= 0 && invocation != 0; index--) {
-                iv[index] = (byte) invocation;
-                invocation >>>= Byte.SIZE;
-            }
-            return iv;
+        private static byte[] generateFixedField() {
+            byte[] fixedField = new byte[FIXED_FIELD_SIZE];
+            RANDOM.nextBytes(fixedField);
+            return fixedField;
         }
     }
 
@@ -239,7 +216,8 @@ class TDF {
 
         private static final Base64.Encoder encoder = Base64.getEncoder();
 
-        private void prepareManifest(Config.TDFConfig tdfConfig, Map<String, List<KASInfo>> splits) {
+        private void prepareManifest(Config.TDFConfig tdfConfig, Map<String, List<KASInfo>> splits,
+                byte[] metadataIv) {
             manifest.tdfVersion = tdfConfig.renderVersionInfoInManifest ? TDF_SPEC_VERSION : null;
             manifest.encryptionInformation.keyAccessType = kSplitKeyType;
             manifest.encryptionInformation.keyAccessObj = new ArrayList<>();
@@ -267,10 +245,8 @@ class TDF {
                 // Add meta data
                 var encryptedMetadata = "";
                 if (tdfConfig.metaData != null && !tdfConfig.metaData.trim().isEmpty()) {
-                    // IV 0 is reserved for the metadata; payload segments start at IV 1. The
-                    // split key used here is the payload key when there is only one split, so
-                    // the two must not share an IV.
-                    byte[] metadataIv = IvCounter.metadataIv();
+                    // metadataIv is invocation 0 of the payload IV stream. With one split symKey
+                    // is the payload key; with several, the IV repeats only under distinct keys.
                     byte[] metaBytes = tdfConfig.metaData.getBytes(StandardCharsets.UTF_8);
                     AesGcm aesGcm = new AesGcm(symKey);
                     byte[] ivAndCiphertext = aesGcm.encrypt(metadataIv, AesGcm.GCM_TAG_LENGTH, metaBytes, 0, metaBytes.length);
@@ -665,14 +641,17 @@ class TDF {
         }
 
         TDFObject tdfObject = new TDFObject();
-        tdfObject.prepareManifest(tdfConfig, splits);
+        // One IV stream per payload key: invocation 0 encrypts the metadata (which is under the
+        // payload key when there is a single split) and segments continue from invocation 1.
+        IvCounter streamIv = new IvCounter();
+        byte[] metadataIv = streamIv.next();
+        tdfObject.prepareManifest(tdfConfig, splits, metadataIv);
 
         long encryptedSegmentSize = (long) tdfConfig.defaultSegmentSize + kGcmIvSize + AesGcm.GCM_TAG_LENGTH;
         TDFWriter tdfWriter = new TDFWriter(outputStream);
 
         ByteArrayOutputStream aggregateHash = new ByteArrayOutputStream();
         byte[] readBuf = new byte[tdfConfig.defaultSegmentSize];
-        IvCounter payloadIv = IvCounter.forPayload();
 
         tdfObject.manifest.encryptionInformation.integrityInformation.segments = new ArrayList<>();
         boolean finished;
@@ -691,7 +670,7 @@ class TDF {
                 Manifest.Segment segmentInfo = new Manifest.Segment();
 
                 // encrypt
-                cipherData = tdfObject.aesGcm.encrypt(payloadIv.next(), AesGcm.GCM_TAG_LENGTH,
+                cipherData = tdfObject.aesGcm.encrypt(streamIv.next(), AesGcm.GCM_TAG_LENGTH,
                         readBuf, 0, readThisLoop);
                 payloadOutput.write(cipherData);
 
