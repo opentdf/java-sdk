@@ -176,6 +176,14 @@ public class SDK implements AutoCloseable {
             zipReader = new ZipReader(channel);
         } catch (IOException | InvalidZipException e) {
             return false;
+        } catch (RuntimeException e) {
+            // ZipReader reports every malformation it knows about as InvalidZipException, and its
+            // tests hold it to that. This is a backstop for the contract of this method, which
+            // screens untrusted input and answers yes or no: a parse failure we did not foresee,
+            // or an unchecked exception from the caller's channel, still means "not a TDF"
+            // rather than an exception from the very check meant to spare callers one.
+            ZipReader.logger.debug("unexpected exception checking whether a channel holds a TDF", e);
+            return false;
         }
         var entries = zipReader.getEntries();
         var names = entries.stream().map(ZipReader.Entry::getName).collect(Collectors.toSet());
@@ -191,13 +199,12 @@ public class SDK implements AutoCloseable {
      * Reads the {@link Manifest} without decrypting the TDF
      * @param tdfBytes A SeekableByteChannel containing the TDF data
      * @return The parsed {@link Manifest} object
+     * @throws MalformedTDFException if the bytes are not a well formed TDF or its manifest is invalid
      * @throws SDKException if an SDK-specific error occurs
      * @throws IOException if an I/O error occurs
      */
     public static Manifest readManifest(SeekableByteChannel tdfBytes) throws SDKException, IOException {
-        TDFReader reader = new TDFReader(tdfBytes);
-        String manifestJson = reader.manifest();
-        return Manifest.readManifest(manifestJson);
+        return TDFReader.open(tdfBytes).readManifest();
     }
 
     /**
@@ -387,6 +394,10 @@ public class SDK implements AutoCloseable {
     public static class MalformedTDFException extends SDKException {
         public MalformedTDFException(String errorMessage) {
             super(errorMessage);
+        }
+
+        public MalformedTDFException(String errorMessage, Exception reason) {
+            super(errorMessage, reason);
         }
     }
 
