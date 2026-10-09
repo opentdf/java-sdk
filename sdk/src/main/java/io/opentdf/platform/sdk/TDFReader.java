@@ -1,5 +1,7 @@
 package io.opentdf.platform.sdk;
 
+import com.google.gson.JsonParseException;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -54,14 +56,68 @@ public class TDFReader {
     }
 
     /**
+     * The largest manifest this reader will buffer, matching the default of the Go SDK and the
+     * limit of the web SDK. The manifest is read whole into memory, and its size comes from the
+     * archive, so without a limit a crafted container could make the reader allocate as much as
+     * the file is long.
+     */
+    static final long MAX_MANIFEST_SIZE = 10L * 1024 * 1024;
+
+    /**
+     * Opens a TDF read from untrusted bytes, reporting a container that is not a well formed
+     * TDF as a {@link SDK.MalformedTDFException} rather than as whichever unchecked exception
+     * the zip reader or this class's own checks happened to raise.
+     */
+    static TDFReader open(SeekableByteChannel tdf) throws IOException {
+        try {
+            return new TDFReader(tdf);
+        } catch (InvalidZipException | IllegalArgumentException e) {
+            throw malformed("tdf is not a valid zip container", e);
+        }
+    }
+
+    /**
+     * Reads and validates the manifest. Malformed JSON, and JSON that does not have the shape of
+     * a manifest, is reported as a {@link SDK.MalformedTDFException}.
+     */
+    Manifest readManifest() {
+        try (Reader manifestJson = manifest()) {
+            return Manifest.readManifest(manifestJson);
+        } catch (InvalidZipException e) {
+            // the manifest entry runs past the end of the archive
+            throw malformed("error retrieving manifest from zip file", e);
+        } catch (JsonParseException | IllegalArgumentException | IllegalStateException
+                 | UnsupportedOperationException e) {
+            // Gson reports a JSON value of the wrong type through IllegalStateException and
+            // UnsupportedOperationException (the JsonElement.getAsX accessors), and
+            // Manifest.readManifest reports missing required fields as IllegalArgumentException.
+            // Every one of these here means the manifest itself is malformed.
+            throw malformed("tdf manifest is invalid", e);
+        } catch (IOException e) {
+            throw new SDKException("error reading manifest from zip file", e);
+        }
+    }
+
+    private static SDK.MalformedTDFException malformed(String what, RuntimeException e) {
+        return new SDK.MalformedTDFException(what + ": " + e.getMessage(), e);
+    }
+
+    /**
      * The manifest entry as a character stream; the caller must close it. Returned
      * as a stream rather than a String because a manifest with tens of millions of
      * segments exceeds the maximum size of a Java String.
      */
     Reader manifest() {
+        long size = manifestEntry.getSize();
+        if (size > MAX_MANIFEST_SIZE) {
+            throw new SDK.MalformedTDFException("tdf manifest is " + size + " bytes, which exceeds the "
+                    + MAX_MANIFEST_SIZE + " byte limit");
+        }
         try {
             return new BufferedReader(
                     new InputStreamReader(manifestEntry.getData(), StandardCharsets.UTF_8), MANIFEST_BUFFER_SIZE);
+        } catch (InvalidZipException e) {
+            throw malformed("error retrieving manifest from zip file", e);
         } catch (IOException e) {
             throw new SDKException("error retrieving manifest from zip file", e);
         }
@@ -81,10 +137,7 @@ public class TDFReader {
     }
 
     PolicyObject readPolicyObject() {
-        try (Reader manifestRaw = manifest()) {
-            return Manifest.decodePolicyObject(Manifest.readManifest(manifestRaw));
-        } catch (IOException e) {
-            throw new SDKException("error reading manifest from zip file", e);
-        }
+        Manifest manifest = readManifest();
+        return Manifest.decodePolicyObject(manifest);
     }
 }

@@ -102,8 +102,8 @@ public class TDFReaderTest {
             var readerConfig = Config.newTDFReaderConfig();
 
             assertThatThrownBy(() -> tdf.loadTDF(tdfBytes, readerConfig))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage("Manifest is empty");
+                    .isInstanceOf(SDK.MalformedTDFException.class)
+                    .hasMessage("tdf manifest is invalid: Manifest is empty");
         }
     }
 
