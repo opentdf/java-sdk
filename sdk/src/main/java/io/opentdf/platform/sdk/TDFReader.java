@@ -52,14 +52,6 @@ public class TDFReader {
     }
 
     /**
-     * The largest manifest this reader will buffer, matching the default of the Go SDK and the
-     * limit of the web SDK. The manifest is read whole into memory, and its size comes from the
-     * archive, so without a limit a crafted container could make the reader allocate as much as
-     * the file is long.
-     */
-    static final long MAX_MANIFEST_SIZE = 10L * 1024 * 1024;
-
-    /**
      * Opens a TDF read from untrusted bytes, reporting a container that is not a well formed
      * TDF as a {@link SDK.MalformedTDFException} rather than as whichever unchecked exception
      * the zip reader or this class's own checks happened to raise.
@@ -95,11 +87,10 @@ public class TDFReader {
     }
 
     String manifest() {
-        long size = manifestEntry.getSize();
-        if (size > MAX_MANIFEST_SIZE) {
-            throw new SDK.MalformedTDFException("tdf manifest is " + size + " bytes, which exceeds the "
-                    + MAX_MANIFEST_SIZE + " byte limit");
-        }
+        // deliberately no fixed size cap: very large payloads (DSPX-4502) have manifests well
+        // over a gigabyte. a hostile declared size cannot make this allocate more than the
+        // archive holds, because the stream stops at the end of the archive and reports the
+        // entry as truncated, and ZipReader rejects entries whose stored bytes do not fit
         var out = new ByteArrayOutputStream();
         try {
             manifestEntry.getData().transferTo(out);
