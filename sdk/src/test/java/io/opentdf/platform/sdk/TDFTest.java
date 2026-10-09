@@ -1566,13 +1566,36 @@ public class TDFTest {
                 assertLoadTDFFailsAsMalformed(shape, HostileZips.tdfWith("{}", hostile)));
     }
 
-    /** The manifest is buffered whole, so one that claims to be larger than the limit is refused unread. */
+    /**
+     * A manifest that claims more bytes than the archive holds is truncated, and is reported as
+     * malformed rather than read short or buffered without bound. This, not a size cap, is what
+     * stops a hostile declared size.
+     */
     @Test
-    void loadTDFRefusesAnOversizedManifest() {
-        var archive = HostileZips.tdfWith("{}", e -> e.uncompressedSize = TDFReader.MAX_MANIFEST_SIZE + 1);
-        assertThatThrownBy(() -> loadTDFFrom(archive))
+    void loadTDFReportsAManifestRunningPastTheArchiveAsMalformed() {
+        var uncompressedPastTheEnd = HostileZips.tdfWith("{}", e -> e.uncompressedSize = 0x7FFFFFFFL);
+        assertThatThrownBy(() -> loadTDFFrom(uncompressedPastTheEnd))
                 .isInstanceOf(SDK.MalformedTDFException.class)
-                .hasMessageContaining("exceeds the " + TDFReader.MAX_MANIFEST_SIZE + " byte limit");
+                .hasCauseInstanceOf(InvalidZipException.class)
+                .hasMessageContaining("Archive ended");
+
+        var storedPastTheEnd = HostileZips.tdfWith("{}", e -> e.compressedSize = 0x7FFFFFFFL);
+        assertThatThrownBy(() -> loadTDFFrom(storedPastTheEnd))
+                .isInstanceOf(SDK.MalformedTDFException.class)
+                .hasCauseInstanceOf(InvalidZipException.class);
+    }
+
+    /**
+     * There is deliberately no fixed manifest size cap: very large payloads (DSPX-4502) have
+     * manifests far bigger than any fixed limit would allow. A manifest larger than the 10 MiB
+     * cap this reader briefly had is read whole.
+     */
+    @Test
+    void readsAManifestLargerThanTenMebibytes() throws IOException {
+        var padding = "a".repeat(11 * 1024 * 1024);
+        var manifest = "{\"padding\":\"" + padding + "\"}";
+        var archive = HostileZips.tdfWith(manifest, e -> { });
+        assertThat(TDFReader.open(new SeekableInMemoryByteChannel(archive)).manifest()).isEqualTo(manifest);
     }
 
     @Test

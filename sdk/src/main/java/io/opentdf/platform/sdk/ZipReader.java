@@ -297,15 +297,6 @@ public class ZipReader {
         }
 
         /**
-         * The uncompressed size the central directory records for this entry. It comes from the
-         * archive and is not checked against the data, so treat it as a claim: it lets a caller
-         * refuse an entry too large to buffer before reading any of it.
-         */
-        long getSize() {
-            return fileSize;
-        }
-
-        /**
          * Checks that this entry's local header offset points inside the archive, so a corrupt
          * or truncated central directory fails here rather than at an arbitrary position.
          */
