@@ -421,6 +421,26 @@ public class SDK implements AutoCloseable {
     }
 
     /**
+     * {@link AesGcmExhaustedException} is thrown during TDF creation when encrypting another
+     * payload segment would exceed the number of AES-GCM invocations allowed under a single
+     * data encryption key.
+     * <p>
+     * IVs are a random 64-bit fixed field followed by a 32-bit invocation counter (NIST SP
+     * 800-38D section 8.2.1), so at most 2^32 invocations can use one key without repeating an
+     * IV: one for the key access metadata and 2^32 - 1 for payload segments. The SDK throws this
+     * before encrypting the segment that would cross that limit. (The same budget keeps random
+     * 96-bit IVs, whose collision probability is roughly k^2 / 2^97, under the section 8 limit
+     * of 2^-32.) The TDF being written is
+     * incomplete and must be discarded; split the input across multiple TDFs or use a larger
+     * segment size.
+     */
+    public static class AesGcmExhaustedException extends SDKException {
+        public AesGcmExhaustedException(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    /**
      * {@link KasInfoMissing} is thrown during TDF creation when no KAS information is present.
      */
     public static class KasInfoMissing extends SDKException {

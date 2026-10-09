@@ -49,8 +49,11 @@ public class Fuzzing {
         byte[] fuzzBytes = data.consumeRemainingAsBytes();
         try {
             ZipReaderTest.testReadingZipChannel(new SeekableInMemoryByteChannel(fuzzBytes), false);
-        } catch (InvalidZipException | IllegalArgumentException | JsonParseException | IOException e) {
-            // cases which are expected with invalid fuzzed inputs
+        } catch (InvalidZipException | JsonParseException | IOException e) {
+            // cases which are expected with invalid fuzzed inputs. JsonParseException comes from
+            // parsing the .json entries, not the zip. anything else the reader throws on bad
+            // input, such as an IllegalArgumentException from seeking to a corrupt offset, is a
+            // bug for the fuzzer to find
         }
     }
 }
