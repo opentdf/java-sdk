@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.19.2](https://github.com/opentdf/java-sdk/compare/v0.19.1...v0.19.2) (2026-10-09)
+
+
+### Bug Fixes
+
+* **sdk:** align TDF3 IV construction ([#412](https://github.com/opentdf/java-sdk/issues/412)) ([214e19e](https://github.com/opentdf/java-sdk/commit/214e19ea3e9538e7243010fdd542859fa5ede276))
+* **sdk:** missed one on the previous pull ([#415](https://github.com/opentdf/java-sdk/issues/415)) ([1ab8a3c](https://github.com/opentdf/java-sdk/commit/1ab8a3cd4e5a6a18a418a94679b57ae4ec31ab7c))
+* **sdk:** read a manifest.json entry from TDF archives ([#406](https://github.com/opentdf/java-sdk/issues/406)) ([f7e0c10](https://github.com/opentdf/java-sdk/commit/f7e0c10a87760d6c9e0823737ccb8165a90ff710))
+* **sdk:** update dependencies ([#410](https://github.com/opentdf/java-sdk/issues/410)) ([b3f293e](https://github.com/opentdf/java-sdk/commit/b3f293e35f7a84d652a0fa2ef9461641b85ba74c))
+* **sdk:** without this the `enforcer` step fails ([#414](https://github.com/opentdf/java-sdk/issues/414)) ([1065499](https://github.com/opentdf/java-sdk/commit/10654999a90d11647927d350c0212d64aa722347))
+
 ## [0.19.1](https://github.com/opentdf/java-sdk/compare/v0.19.0...v0.19.1) (2026-09-21)
 
 
