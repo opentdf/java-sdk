@@ -330,6 +330,70 @@ class TDFRootSignatureTest {
                 .isInstanceOf(SDK.RootSignatureValidationException.class);
     }
 
+    // ------------------------------------------------------------------ spec version
+
+    /*
+     * The manifest's spec-version field decides the digest encoding: no version means hex
+     * (pre-4.3.0), any version means raw. A current file whose version is recorded only under
+     * the non-aligned tdf_spec_version name, at the root or under payload, must still be read
+     * as raw.
+     */
+
+    @ParameterizedTest
+    @ValueSource(strings = { "root", "payload" })
+    void currentFileWithVersionOnlyUnderTheNonAlignedNameDecrypts(String placement) throws IOException {
+        var plaintext = fourSegmentPlaintext();
+        var rewritten = rewrite(createTdf(plaintext, Config.withAssertionConfig(assertionConfig())),
+                manifest -> moveVersionToNonAlignedName(manifest, placement),
+                UnaryOperator.identity());
+
+        assertThat(Manifest.readManifest(manifestOf(rewritten)).tdfVersion).isEqualTo(TDF.TDF_SPEC_VERSION);
+        assertThat(decrypt(rewritten)).containsExactly(plaintext);
+    }
+
+    @Test
+    void legacyHexDigestFileWithAnAssertionStillDecrypts() throws IOException {
+        var plaintext = fourSegmentPlaintext();
+        var tdfBytes = createTdf(plaintext,
+                Config.withTargetMode("4.2.2"),
+                Config.withAssertionConfig(assertionConfig()));
+        assertThat(JsonParser.parseString(manifestOf(tdfBytes)).getAsJsonObject().has("schemaVersion")).isFalse();
+
+        assertThat(decrypt(tdfBytes)).containsExactly(plaintext);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "root", "payload" })
+    void tamperingIsStillCaughtWhenTheVersionIsUnderTheNonAlignedName(String placement) throws IOException {
+        var original = createTdf(fourSegmentPlaintext(), withSegmentAlgorithm(Config.IntegrityAlgorithm.HS256));
+
+        var editedSegmentHash = rewrite(original, manifest -> {
+            moveVersionToNonAlignedName(manifest, placement);
+            var first = segments(manifest).get(0).getAsJsonObject();
+            var hash = Base64.getDecoder().decode(first.get("hash").getAsString());
+            hash[0] ^= 0xFF;
+            first.addProperty("hash", Base64.getEncoder().encodeToString(hash));
+        }, UnaryOperator.identity());
+        assertThatThrownBy(() -> decrypt(editedSegmentHash))
+                .isInstanceOf(SDK.RootSignatureValidationException.class);
+
+        var editedRootSignature = rewrite(original, manifest -> {
+            moveVersionToNonAlignedName(manifest, placement);
+            var sig = Base64.getDecoder().decode(rootSignature(manifest).get("sig").getAsString());
+            sig[0] ^= 0xFF;
+            rootSignature(manifest).addProperty("sig", Base64.getEncoder().encodeToString(sig));
+        }, UnaryOperator.identity());
+        assertThatThrownBy(() -> decrypt(editedRootSignature))
+                .isInstanceOf(SDK.RootSignatureValidationException.class);
+
+        var editedSegmentBody = rewrite(original,
+                manifest -> moveVersionToNonAlignedName(manifest, placement),
+                payload -> flipByte(payload, payload.length / 2));
+        assertThatThrownBy(() -> decrypt(editedSegmentBody))
+                .isInstanceOf(SDK.SegmentSignatureMismatch.class);
+    }
+
+
     // ------------------------------------------------------------------ config
 
     @Test
@@ -464,7 +528,37 @@ class TDFRootSignatureTest {
         return plaintext.toByteArray();
     }
 
+    /** An assertion signed with the default HS256 payload key, so reads verify it. */
+    private static AssertionConfig assertionConfig() {
+        var assertionConfig = new AssertionConfig();
+        assertionConfig.id = "assertion1";
+        assertionConfig.type = AssertionConfig.Type.BaseAssertion;
+        assertionConfig.scope = AssertionConfig.Scope.TrustedDataObj;
+        assertionConfig.appliesToState = AssertionConfig.AppliesToState.Unencrypted;
+        assertionConfig.statement = new AssertionConfig.Statement();
+        assertionConfig.statement.format = "base64binary";
+        assertionConfig.statement.schema = "text";
+        assertionConfig.statement.value = "ICAgIDxlZGoOkVkaD4=";
+        return assertionConfig;
+    }
+
     // ------------------------------------------------------- manifest surgery
+
+    /**
+     * Rewrites the spec version the way a writer built from the non-aligned name emits it:
+     * {@code schemaVersion} removed, the same value recorded as {@code tdf_spec_version} at the
+     * manifest root or under {@code payload}. The root signature covers the segment hashes, not
+     * the JSON, so the result is still internally consistent.
+     */
+    private static void moveVersionToNonAlignedName(JsonObject manifest, String placement) {
+        var version = manifest.remove("schemaVersion");
+        assertThat(version).withFailMessage("fixture should have been written with schemaVersion").isNotNull();
+        var target = "root".equals(placement) ? manifest : manifest.getAsJsonObject("payload");
+        target.add("tdf_spec_version", version);
+    }
+
+
+
 
     private static JsonObject integrityInformation(JsonObject manifest) {
         return manifest.getAsJsonObject("encryptionInformation").getAsJsonObject("integrityInformation");

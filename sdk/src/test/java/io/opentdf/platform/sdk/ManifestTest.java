@@ -1,12 +1,17 @@
 package io.opentdf.platform.sdk;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -284,5 +289,122 @@ public class ManifestTest {
                         "context", Map.of("@base", "urn:nato:stanag:5636:A:1:elements:json")
                         )
         );
+    }
+
+    /**
+     * A minimal but valid manifest with extra members spliced into the {@code payload} object
+     * and into the manifest root. Each extra, when not empty, must begin with a comma.
+     */
+    private static String manifestWithExtras(String payloadExtra, String rootExtra) {
+        return "{\n" +
+                "  \"encryptionInformation\": {\n" +
+                "    \"integrityInformation\": {\n" +
+                "      \"encryptedSegmentSizeDefault\": " + ENCRYPTED_SEGMENT_SIZE_DEFAULT + ",\n" +
+                "      \"segmentSizeDefault\": " + SEGMENT_SIZE_DEFAULT + ",\n" +
+                "      \"rootSignature\": { \"alg\": \"HS256\", \"sig\": \"c2ln\" },\n" +
+                "      \"segmentHashAlg\": \"GMAC\",\n" +
+                "      \"segments\": [ { \"hash\": \"aGFzaDA=\" } ]\n" +
+                "    },\n" +
+                "    \"keyAccess\": [ { \"protocol\": \"kas\", \"type\": \"wrapped\"," +
+                " \"url\": \"http://localhost:65432/kas\", \"wrappedKey\": \"a2V5\" } ],\n" +
+                "    \"method\": { \"algorithm\": \"AES-256-GCM\", \"isStreamable\": true, \"iv\": \"aXY=\" },\n" +
+                "    \"policy\": \"cG9saWN5\",\n" +
+                "    \"type\": \"split\"\n" +
+                "  },\n" +
+                "  \"payload\": { \"isEncrypted\": true, \"protocol\": \"zip\"," +
+                " \"type\": \"reference\", \"url\": \"0.payload\"" + payloadExtra + " }" +
+                rootExtra + "\n" +
+                "}";
+    }
+
+    static Stream<Arguments> specVersionCases() {
+        return Stream.of(
+                Arguments.of("schemaVersion at root", "", ",\"schemaVersion\":\"4.3.0\"", "4.3.0"),
+                // where the spec prose documents it, and where web-sdk writes it
+                Arguments.of("tdf_spec_version at root", "", ",\"tdf_spec_version\":\"4.3.0\"", "4.3.0"),
+                // where revisions of the JSON schema declared it in error
+                Arguments.of("tdf_spec_version under payload", ",\"tdf_spec_version\":\"4.3.0\"", "", "4.3.0"),
+                Arguments.of("schemaVersion wins over payload tdf_spec_version",
+                        ",\"tdf_spec_version\":\"4.2.0\"", ",\"schemaVersion\":\"4.3.0\"", "4.3.0"),
+                Arguments.of("schemaVersion wins over root tdf_spec_version, whatever the key order",
+                        "", ",\"tdf_spec_version\":\"4.2.0\",\"schemaVersion\":\"4.3.0\"", "4.3.0"),
+                Arguments.of("schemaVersion wins over root tdf_spec_version",
+                        "", ",\"schemaVersion\":\"4.3.0\",\"tdf_spec_version\":\"4.2.0\"", "4.3.0"),
+                // the root is the placement with the better provenance, so it decides when the
+                // two copies disagree
+                Arguments.of("root tdf_spec_version wins over the payload copy",
+                        ",\"tdf_spec_version\":\"4.2.0\"", ",\"tdf_spec_version\":\"4.3.0\"", "4.3.0"),
+                // a null root copy is not a value, so the payload copy still applies
+                Arguments.of("null root tdf_spec_version falls through to payload",
+                        ",\"tdf_spec_version\":\"4.3.0\"", ",\"tdf_spec_version\":null", "4.3.0"),
+                Arguments.of("numeric root tdf_spec_version falls through to payload",
+                        ",\"tdf_spec_version\":\"4.3.0\"", ",\"tdf_spec_version\":430", "4.3.0"),
+                Arguments.of("empty root tdf_spec_version falls through to payload",
+                        ",\"tdf_spec_version\":\"4.3.0\"", ",\"tdf_spec_version\":\"\"", "4.3.0"),
+                // an empty schemaVersion is not a value, so the fallback still applies
+                Arguments.of("empty schemaVersion falls back to tdf_spec_version",
+                        ",\"tdf_spec_version\":\"4.3.0\"", ",\"schemaVersion\":\"\"", "4.3.0"),
+                Arguments.of("null schemaVersion falls back to tdf_spec_version",
+                        "", ",\"schemaVersion\":null,\"tdf_spec_version\":\"4.3.0\"", "4.3.0"),
+                Arguments.of("no version at all", "", "", null),
+                // non-string values are schema validation's problem to report, not the decoder's
+                // to choke on. the key is known in the wild carrying null
+                Arguments.of("null tdf_spec_version is ignored", ",\"tdf_spec_version\":null", "", null),
+                Arguments.of("numeric tdf_spec_version is ignored", ",\"tdf_spec_version\":430", "", null),
+                Arguments.of("boolean tdf_spec_version is ignored", "", ",\"tdf_spec_version\":true", null),
+                Arguments.of("object tdf_spec_version is ignored",
+                        ",\"tdf_spec_version\":{\"major\":4}", ",\"tdf_spec_version\":{\"major\":4}", null),
+                Arguments.of("array tdf_spec_version is ignored", ",\"tdf_spec_version\":[\"4.3.0\"]", "", null));
+    }
+
+    /**
+     * {@code schemaVersion} is the name of the spec-version field. {@code tdf_spec_version} is a
+     * non-aligned name that entered some specification drafts and some older OpenTDF documentation
+     * in error; it is read, at the root and then under {@code payload}, only so that files written
+     * with it stay usable.
+     */
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("specVersionCases")
+    void testSpecVersionIsReadFromAllThreePlaces(String name, String payloadExtra, String rootExtra, String want) {
+        Manifest manifest = Manifest.readManifest(manifestWithExtras(payloadExtra, rootExtra));
+
+        assertThat(manifest.tdfVersion).isEqualTo(want);
+
+        // the version lookup must not disturb anything else in the document
+        assertThat(manifest.payload.url).isEqualTo("0.payload");
+        assertThat(manifest.payload.isEncrypted).isTrue();
+        assertThat(manifest.encryptionInformation.keyAccessType).isEqualTo("split");
+        assertThat(manifest.encryptionInformation.policy).isEqualTo("cG9saWN5");
+        var integrityInformation = manifest.encryptionInformation.integrityInformation;
+        assertThat(integrityInformation.segmentHashAlg).isEqualTo("GMAC");
+        assertThat(integrityInformation.rootSignature.signature).isEqualTo("c2ln");
+        // and the segment-size fixup, which lives in its own adapter, still runs
+        assertThat(integrityInformation.segments.get(0).encryptedSegmentSize).isEqualTo(ENCRYPTED_SEGMENT_SIZE_DEFAULT);
+    }
+
+    /**
+     * The writer names the field {@code schemaVersion} and never the non-aligned
+     * {@code tdf_spec_version}, at the root or under {@code payload}. Reading a manifest that
+     * used the non-aligned name and writing it back out therefore normalizes the name rather
+     * than propagating it.
+     */
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("nonAlignedPlacements")
+    void testRoundTripEmitsSchemaVersionOnly(String name, String payloadExtra, String rootExtra) {
+        Manifest manifest = Manifest.readManifest(manifestWithExtras(payloadExtra, rootExtra));
+        assertThat(manifest.tdfVersion).isEqualTo("4.3.0");
+
+        var written = JsonParser.parseString(Manifest.toJson(manifest)).getAsJsonObject();
+        assertThat(written.get("schemaVersion").getAsString()).isEqualTo("4.3.0");
+        assertThat(written.has("tdf_spec_version")).isFalse();
+        assertThat(written.getAsJsonObject("payload").has("tdf_spec_version")).isFalse();
+
+        assertEquals(manifest, Manifest.readManifest(written.toString()));
+    }
+
+    static Stream<Arguments> nonAlignedPlacements() {
+        return Stream.of(
+                Arguments.of("root", "", ",\"tdf_spec_version\":\"4.3.0\""),
+                Arguments.of("payload", ",\"tdf_spec_version\":\"4.3.0\"", ""));
     }
 }
