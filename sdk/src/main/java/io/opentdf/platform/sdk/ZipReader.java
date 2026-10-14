@@ -31,10 +31,9 @@ public class ZipReader {
 
     /**
      * Reads at least one byte into {@code buf}, which must have room for one. Only {@code -1}
-     * from {@link SeekableByteChannel#read} is an end of file; {@code 0} just means nothing
-     * arrived this time, which a non-blocking channel is allowed to do. Empty reads are retried,
-     * but only {@value #MAX_CONSECUTIVE_EMPTY_READS} times in a row, so that a channel with
-     * nothing to give fails instead of spinning forever.
+     * from {@link SeekableByteChannel#read} means end of file. An occasional {@code 0} is
+     * retried, but without waiting: after {@value #MAX_CONSECUTIVE_EMPTY_READS} empty reads in a
+     * row this gives up rather than spin. Non-blocking channels are not supported.
      *
      * @return the number of bytes read, which is always positive, or {@code -1} at end of file
      * @throws IOException if the channel keeps returning nothing
@@ -46,17 +45,17 @@ public class ZipReader {
                 return read;
             }
         }
-        throw new IOException("channel returned no data " + MAX_CONSECUTIVE_EMPTY_READS
-                + " times in a row at offset " + zipChannel.position());
+        throw new IOException(zipChannel.getClass().getName() + " returned no data "
+                + MAX_CONSECUTIVE_EMPTY_READS + " times in a row at offset " + zipChannel.position()
+                + "; ZipReader requires a blocking channel");
     }
 
     /**
-     * Fills {@code buf} from the channel. {@link SeekableByteChannel#read} may return fewer bytes
-     * than asked for while more are still available, so a single read cannot tell "the archive
-     * ends here" from "that read came up short" — and taking the second for the first rejects a
-     * perfectly good archive.
+     * Fills {@code buf} from the channel, reading as many times as it takes, since a single
+     * {@link SeekableByteChannel#read} may come up short without being at the end of the file.
      *
      * @return false at end of file, in which case {@code buf} holds nothing worth reading
+     * @throws IOException if the channel stalls (see {@link #readSome})
      */
     private boolean fill(ByteBuffer buf) throws IOException {
         buf.clear();
@@ -143,8 +142,8 @@ public class ZipReader {
     /**
      * The longest comment the end of central directory record can carry, since its length lives
      * in a 2-byte field. This is how far back from the end of the archive the scan for the record
-     * looks. Trailing data after the record is tolerated, but only within this same budget,
-     * because nothing records how long it is.
+     * looks, so trailing data after the record is tolerated only if it fits in the same window
+     * as the comment.
      */
     private static final long MAX_END_OF_CENTRAL_DIRECTORY_COMMENT_SIZE = 0xFFFF;
 
@@ -152,9 +151,8 @@ public class ZipReader {
     private static final int CENTRAL_DIRECTORY_FILE_HEADER_MIN_SIZE = 46;
 
     /**
-     * Positions the channel at an offset that came out of the archive itself. The zip64 records
-     * carry offsets as 64-bit values, so a corrupt archive can point anywhere. Unchecked, a
-     * negative offset escapes as an {@link IllegalArgumentException} from the channel rather than
+     * Positions the channel at an offset read from the archive, which a corrupt archive can set
+     * to anything, in a 32-bit field or a zip64 one. Unchecked, a negative offset escapes as an {@link IllegalArgumentException} from the channel rather than
      * as a zip error, and one past the end fails at the next read with a generic complaint that
      * names neither the offset nor the field it came from.
      */
@@ -181,12 +179,10 @@ public class ZipReader {
 
     CentralDirectoryRecord readEndOfCentralDirectory() throws IOException {
         long eoCDRStart = zipChannel.size() - END_OF_CENTRAL_DIRECTORY_SIZE; // 22 is the minimum size of the EOCDR
-        // the record can only be pushed back from the end of the archive by its own comment, plus
-        // whatever trailing data fits in the same budget, so there is no reason to look back any
-        // further than the longest possible comment. an unbounded scan walks the whole archive a
-        // byte at a time doing a positioned four byte read per byte — tens of seconds per hundred
-        // MiB against a file — before it can report that the archive is not a zip, and it gives a
-        // stray signature deep inside a payload a chance to be mistaken for the record
+        // in a conformant archive only the comment follows the record, so the scan stops after the
+        // longest possible comment. an unbounded scan does a positioned four byte read for every
+        // byte of the archive before it can reject a non-zip, and gives a stray signature deep
+        // inside a payload a chance to be mistaken for the record
         long earliestPossibleStart = Math.max(0, zipChannel.size()
                 - (END_OF_CENTRAL_DIRECTORY_SIZE + MAX_END_OF_CENTRAL_DIRECTORY_COMMENT_SIZE));
 
@@ -195,8 +191,8 @@ public class ZipReader {
             zipChannel.position(eoCDRStart);
             Integer signature = readInteger();
             if (signature == null) {
-                // every offset this scan probes has a whole record behind it, so an end of file
-                // here means the channel holds less than its size claims
+                // every probed offset is at most size - 22, so a whole record's worth of bytes
+                // should follow it; an end of file here means the channel holds less than size()
                 throw new InvalidZipException("Archive ended at offset " + zipChannel.position()
                         + ", before its reported size of " + zipChannel.size() + " bytes");
             }
@@ -222,7 +218,6 @@ public class ZipReader {
         int totalNumEntries = readUnsignedShort();
         long sizeOfCentralDirectory = readUnsignedInt();
         long offsetToStartOfCentralDirectory = readUnsignedInt();
-        // the comment length comes next, and the scan has already checked it
 
         // any one of these fields may carry the sentinel that sends its real value to the zip64
         // end of central directory record; an archive can need zip64 for its entry count alone
@@ -234,10 +229,8 @@ public class ZipReader {
             return new CentralDirectoryRecord(totalNumEntries, offsetToStartOfCentralDirectory);
         }
 
-        // the locator sits immediately before the record we found, so it is measured from there
-        // rather than from the end of the archive. the two agree only when nothing follows the
-        // record but a comment whose length is honest; measuring from the end lands at the wrong
-        // offset for anything else and blames the locator for it
+        // the locator immediately precedes the record (APPNOTE 4.3.15), so measure from the record
+        // rather than from the end of the archive, which may hold trailing data
         long zip64CentralDirectoryLocatorStart = eoCDRStart - ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIZE;
         if (zip64CentralDirectoryLocatorStart < 0) {
             throw new InvalidZipException(
@@ -317,7 +310,9 @@ public class ZipReader {
             zipChannel.position(offsetToLocalHeader);
             Integer signature = readInteger();
             if (signature == null || signature != LOCAL_FILE_HEADER_SIGNATURE) {
-                throw new InvalidZipException("Invalid Local Header Signature");
+                throw new InvalidZipException("Invalid local file header signature for entry [" + fileName
+                        + "] at offset " + offsetToLocalHeader + ": "
+                        + (signature == null ? "the archive ends there" : "found 0x" + Integer.toHexString(signature)));
             }
             zipChannel.position(zipChannel.position()
                     + Short.BYTES
@@ -463,8 +458,8 @@ public class ZipReader {
         zipChannel = channel;
         var centralDirectoryRecord = readEndOfCentralDirectory();
         seekWithinArchive("the central directory", centralDirectoryRecord.offsetToStart);
-        // the zip64 count is a 64-bit value straight from the archive. a corrupt one that comes
-        // out negative would otherwise read as an empty archive, with no sign anything was wrong
+        // a corrupt zip64 count can be negative, which would read as an empty archive, or more
+        // than the rest of the archive can hold, which would read past the central directory
         long bytesAvailable = zipChannel.size() - centralDirectoryRecord.offsetToStart;
         long mostEntriesThatFit = bytesAvailable / CENTRAL_DIRECTORY_FILE_HEADER_MIN_SIZE;
         if (centralDirectoryRecord.numEntries < 0 || centralDirectoryRecord.numEntries > mostEntriesThatFit) {

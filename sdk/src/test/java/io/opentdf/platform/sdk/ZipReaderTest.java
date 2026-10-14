@@ -270,8 +270,8 @@ public class ZipReaderTest {
 
     /**
      * An archive missing the trailing records it needs is not a zip, and has to say so rather
-     * than fail somewhere downstream. These all reach the same rejection, by different routes:
-     * the scan finds no signature within its window.
+     * than fail somewhere downstream. Whether the record is gone, clipped, or the file is shorter
+     * than one, the scan finds no acceptable signature within its window.
      */
     @Test
     public void testTruncatedArchiveIsRejected() throws IOException {
@@ -352,8 +352,8 @@ public class ZipReaderTest {
     }
 
     /**
-     * The record can only be pushed back by its own comment, whose length field caps it at 65,535
-     * bytes, so the scan stops there. Beyond that limit an archive is not one we can read, and
+     * The scan only looks back as far as the longest possible comment, 65,535 bytes; trailing data
+     * is tolerated only within that same window. Beyond it an archive is not one we can read, and
      * saying so immediately is the point: an unbounded scan reads its way back through the whole
      * file a byte at a time before reaching the same conclusion.
      */
@@ -432,7 +432,7 @@ public class ZipReaderTest {
         Arrays.fill(comment, (byte) 0xFF); // so the decoy's own comment length reads as 0xFFFF
         ByteBuffer.wrap(comment).order(ByteOrder.LITTLE_ENDIAN).putInt(0, EOCD_SIGNATURE);
 
-        // commons-compress takes the decoy for the record, so this one is ours alone
+        // an independent reader may take the decoy for the record, so this one is ours alone
         try (var channel = new SeekableInMemoryByteChannel(withComment(zip64Archive(), comment))) {
             assertReadsEveryEntry(channel);
         }
@@ -478,7 +478,7 @@ public class ZipReaderTest {
      * spinning on it — whether it stops before the archive is opened or partway through an entry.
      */
     @Test
-    public void testChannelThatStopsReturningDataFails() throws IOException {
+    public void testChannelThatStopsReturningDataFails() {
         assertTimeoutPreemptively(Duration.ofSeconds(10), () -> {
             try (var channel = new StallingChannel(new SeekableInMemoryByteChannel(zip64Archive()), 0)) {
                 channel.stalled = true;
@@ -487,10 +487,19 @@ public class ZipReaderTest {
                         .hasMessageContaining("no data");
             }
 
-            try (var channel = new StallingChannel(new SeekableInMemoryByteChannel(zip64Archive()), 0)) {
-                var reader = new ZipReader(channel);
+            // getData() reads the local header, so the stall has to start after it returns to
+            // reach the stream itself: once for a block read, once for a single byte
+            try (var channel = new StallingChannel(new SeekableInMemoryByteChannel(zip64Archive()), 0);
+                 var data = new ZipReader(channel).getEntries().get(0).getData()) {
                 channel.stalled = true;
-                assertThatThrownBy(() -> readEntry(reader, "0.payload"))
+                assertThatThrownBy(() -> data.read(new byte[4]))
+                        .isInstanceOf(IOException.class)
+                        .hasMessageContaining("no data");
+            }
+            try (var channel = new StallingChannel(new SeekableInMemoryByteChannel(zip64Archive()), 0);
+                 var data = new ZipReader(channel).getEntries().get(0).getData()) {
+                channel.stalled = true;
+                assertThatThrownBy(data::read)
                         .isInstanceOf(IOException.class)
                         .hasMessageContaining("no data");
             }
@@ -577,17 +586,91 @@ public class ZipReaderTest {
             var reader = new ZipReader(channel);
             assertThatThrownBy(() -> readEntry(reader, "small.txt"))
                     .isInstanceOf(InvalidZipException.class)
-                    .hasMessageContaining("bytes into the 1000000 byte entry [small.txt]");
+                    .hasMessageContaining("[small.txt]")
+                    .hasMessageContaining("1000000");
 
             // and a byte at a time, which takes a different path through the stream
-            assertThatThrownBy(() -> {
-                try (var data = reader.getEntries().get(0).getData()) {
-                    while (data.read() != -1) {
-                        // drain
-                    }
-                }
-            }).isInstanceOf(InvalidZipException.class)
-                    .hasMessageContaining("byte entry [small.txt]");
+            var entry = reader.getEntries().get(0);
+            assertThatThrownBy(() -> drainByteAtATime(entry))
+                    .isInstanceOf(InvalidZipException.class)
+                    .hasMessageContaining("[small.txt]");
+        }
+    }
+
+    /**
+     * {@link java.io.InputStream} requires a zero-length read to return 0, even at the end of the
+     * stream. Passed through to the channel, it would read nothing every time and trip the
+     * stalled-channel check on a valid archive.
+     */
+    @Test
+    public void testZeroLengthReadReturnsZero() throws IOException {
+        try (var channel = new SeekableInMemoryByteChannel(plainArchive())) {
+            var entry = new ZipReader(channel).getEntries().get(0);
+            try (var data = entry.getData()) {
+                var buf = new byte[4];
+                assertThat(data.read(buf, 0, 0)).isZero();
+                assertThat(data.read()).isEqualTo('t');
+                assertThat(data.read(buf, 0, 0)).isZero();
+                assertThat(data.read(buf, 0, 4)).isEqualTo(3);
+                // the entry is used up, but a zero-length read is still 0 rather than -1
+                assertThat(data.read(buf, 0, 0)).isZero();
+                assertThat(data.read(buf, 0, 4)).isEqualTo(-1);
+            }
+        }
+    }
+
+    /**
+     * An end of central directory record that claims zip64 when nothing in front of it is a
+     * locator. The locator is looked for immediately before the record, and what is there instead
+     * has to be reported as a bad signature at that offset.
+     */
+    @Test
+    public void testMissingZip64LocatorIsRejected() throws IOException {
+        var archive = plainArchive();
+        ByteBuffer.wrap(archive).order(ByteOrder.LITTLE_ENDIAN)
+                .putInt(archive.length - EOCD_SIZE + 16, 0xFFFFFFFF);
+        int locatorStart = archive.length - EOCD_SIZE - ZIP64_EOCD_LOCATOR_SIZE;
+
+        assertThatThrownBy(() -> readArchive(archive))
+                .isInstanceOf(InvalidZipException.class)
+                .hasMessageContaining("locator")
+                .hasMessageContaining("offset " + locatorStart);
+    }
+
+    /**
+     * A locator pointer that stays inside the archive but lands on something other than the zip64
+     * end of central directory record. The bounds check passes, so the signature check is all
+     * that stands between the reader and a misparse.
+     */
+    @Test
+    public void testZip64LocatorPointingAtTheWrongRecordIsRejected() throws IOException {
+        var archive = zip64Archive();
+        int pointer = archive.length - (EOCD_SIZE + ZIP64_EOCD_LOCATOR_SIZE) + 8;
+        // offset 0 holds the first local file header
+        ByteBuffer.wrap(archive).order(ByteOrder.LITTLE_ENDIAN).putLong(pointer, 0L);
+
+        assertThatThrownBy(() -> readArchive(archive))
+                .isInstanceOf(InvalidZipException.class)
+                .hasMessageContaining("0x" + Integer.toHexString(0x04034b50));
+    }
+
+    /**
+     * A channel whose size claims more bytes than it holds. Every offset the scan probes should
+     * have a whole record after it, so running out of data there is a zip error, not a miss.
+     */
+    @Test
+    public void testChannelSmallerThanItsReportedSizeIsRejected() throws IOException {
+        var archive = plainArchive();
+        long claimedSize = archive.length + 30L;
+        try (var channel = new DelegatingChannel(new SeekableInMemoryByteChannel(archive)) {
+            @Override
+            public long size() {
+                return claimedSize;
+            }
+        }) {
+            assertThatThrownBy(() -> new ZipReader(channel))
+                    .isInstanceOf(InvalidZipException.class)
+                    .hasMessageContaining(Long.toString(claimedSize));
         }
     }
 
@@ -714,6 +797,14 @@ public class ZipReaderTest {
         var data = new ByteArrayOutputStream();
         entry.getData().transferTo(data);
         return data.toString(StandardCharsets.UTF_8);
+    }
+
+    private static void drainByteAtATime(ZipReader.Entry entry) throws IOException {
+        try (var data = entry.getData()) {
+            while (data.read() != -1) {
+                // drain
+            }
+        }
     }
 
     private static String readEntry(ZipFile zip, String name) throws IOException {
