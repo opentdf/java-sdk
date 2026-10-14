@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -189,6 +190,24 @@ public class TDFReaderTest {
 
             assertThat(reader.readPayloadBytes(buf)).isEqualTo(expected.length);
             assertThat(buf).startsWith(expected);
+        }
+    }
+
+    /**
+     * A payload whose declared size runs past the end of the archive is only detected when it is
+     * read. Like a truncated manifest, it is a malformed TDF, not a raw zip reader exception.
+     */
+    @Test
+    void reportsATruncatedPayloadAsMalformed() throws IOException {
+        var payload = new HostileZips.Entry(TDFWriter.TDF_PAYLOAD_FILE_NAME, PAYLOAD.getBytes(StandardCharsets.UTF_8));
+        payload.uncompressedSize = 1_000_000L;
+        var manifest = new HostileZips.Entry("0.manifest.json", MANIFEST.getBytes(StandardCharsets.UTF_8));
+        try (var tdf = new SeekableInMemoryByteChannel(HostileZips.build(List.of(payload, manifest)))) {
+            var reader = new TDFReader(tdf);
+
+            assertThatThrownBy(() -> reader.readPayloadBytes(new byte[1_000_000]))
+                    .isInstanceOf(SDK.MalformedTDFException.class)
+                    .hasCauseInstanceOf(InvalidZipException.class);
         }
     }
 }
