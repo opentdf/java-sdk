@@ -26,8 +26,7 @@ public class ZipWriter {
      * The fields are unsigned on the wire, but readers that widen them with a signed read see
      * anything at or above 2 GiB as negative. Switching to ZIP64 at 2 GiB costs
      * {@value #ZIP_64_GLOBAL_EXTENDED_INFO_EXTRA_FIELD_SIZE} bytes per affected entry and keeps
-     * those readers working, including versions of this SDK that predate the unsigned reads in
-     * {@link ZipReader}.
+     * those readers working, including SDK releases before 0.19.0.
      */
     static final long MAX_NON_ZIP64_VALUE = Integer.MAX_VALUE;
 
@@ -36,21 +35,19 @@ public class ZipWriter {
      * {@code 0xFFFF} in that field is the sentinel that sends the real count to the zip64 end of
      * central directory record, so the format's own limit is {@code 0xFFFE}.
      * <p>
-     * We stop at {@link Short#MAX_VALUE} instead, for the reason spelled out on
-     * {@link #MAX_NON_ZIP64_VALUE}: the field is unsigned on the wire, but a reader that widens it
-     * with a signed read sees any count above {@code 0x7FFF} as negative and then finds no entries
-     * at all — which is what versions of this SDK that predate the unsigned reads in
-     * {@link ZipReader} do. Switching to ZIP64 above 32,767 entries costs one zip64 end of central
-     * directory record and locator for the whole archive.
+     * We stop at {@link Short#MAX_VALUE} instead, for the reason given on
+     * {@link #MAX_NON_ZIP64_VALUE}: SDK releases before 0.19.0 read the count as signed, see any
+     * count above {@code 0x7FFF} as negative, and find no entries at all. Switching to ZIP64
+     * above 32,767 entries costs one zip64 end of central directory record and locator for the
+     * whole archive.
      */
     private static final long MAX_NON_ZIP64_ENTRY_COUNT = Short.MAX_VALUE;
 
     /**
      * The longest entry name, in UTF-8 bytes, we will write. The filename length field is 2 bytes
      * and unsigned, so the format allows {@code 0xFFFF}. We stop at {@link Short#MAX_VALUE} for
-     * the same reason as {@link #MAX_NON_ZIP64_ENTRY_COUNT}: versions of this SDK that predate
-     * the unsigned reads in {@link ZipReader} read the length as signed, and a negative length
-     * fails there.
+     * the same reason as {@link #MAX_NON_ZIP64_ENTRY_COUNT}: SDK releases before 0.19.0 read the
+     * length as signed, and a negative length fails there.
      */
     static final int MAX_FILENAME_LENGTH = Short.MAX_VALUE;
 
@@ -109,6 +106,8 @@ public class ZipWriter {
      * Encodes an entry name the way it is written to the archive. Zip filename lengths are
      * counted in bytes, so anything derived from {@link String#length()} — which counts UTF-16
      * code units — desyncs the central directory for a non-ASCII name.
+     *
+     * @throws SDKException if the name is longer than {@link #MAX_FILENAME_LENGTH} bytes
      */
     private static byte[] encodeFilename(String name) {
         var bytes = name.getBytes(StandardCharsets.UTF_8);
@@ -287,12 +286,11 @@ public class ZipWriter {
 
 
     private void writeEndOfCentralDirectory(boolean hasZip64Entry, long numEntries, long startOfCentralDirectory, long sizeOfCentralDirectory, CountingOutputStream out) throws IOException {
-        // each of these corresponds to a field in the end of central directory record that has to
-        // carry a sentinel — and send its real value to the zip64 record — once the value stops
-        // fitting. the entry count is 2 bytes and uses its own fixed limit; the offset and size
-        // are 4 bytes each and go through the configured threshold, which is MAX_NON_ZIP64_VALUE
-        // outside of tests. both limits stop short of what the format allows, so that readers
-        // which widen these fields with a signed read never see a negative value
+        // if any of these doesn't fit, the archive goes zip64 and every end of central directory
+        // field gets the sentinel, even the ones that fit. SDK readers before 0.19.0 only check
+        // the offset for the sentinel, so it has to be there for them to find the zip64 record.
+        // the count limit is fixed; the offset and size use the configured threshold, which is
+        // MAX_NON_ZIP64_VALUE outside of tests
         var isZip64 = hasZip64Entry
                 || numEntries > MAX_NON_ZIP64_ENTRY_COUNT
                 || needsZip64(startOfCentralDirectory, sizeOfCentralDirectory);
@@ -390,7 +388,7 @@ public class ZipWriter {
             buffer.putInt(crc32);
             buffer.putInt(compressedSize);
             buffer.putInt(uncompressedSize);
-            // the length of the encoded bytes, never String.length()
+            // encodeFilename bounds this to Short.MAX_VALUE, so the cast cannot truncate
             buffer.putShort((short) filename.length);
             buffer.putShort(extraFieldLength);
             buffer.put(filename);
@@ -450,7 +448,7 @@ public class ZipWriter {
             buffer.putInt(crc32);
             buffer.putInt(compressedSize);
             buffer.putInt(uncompressedSize);
-            // the length of the encoded bytes, never String.length()
+            // encodeFilename bounds this to Short.MAX_VALUE, so the cast cannot truncate
             buffer.putShort((short) filename.length);
             buffer.putShort(extraFieldLength);
             buffer.putShort(fileCommentLength);

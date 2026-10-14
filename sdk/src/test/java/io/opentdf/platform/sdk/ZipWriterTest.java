@@ -21,6 +21,7 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.StandardOpenOption;
+import java.util.Collections;
 import java.util.Locale;
 import java.util.Random;
 import java.util.zip.CRC32;
@@ -193,6 +194,11 @@ public class ZipWriterTest {
         try (var chan = new SeekableInMemoryByteChannel(overflows)) {
             assertThat(new ZipReader(chan).getEntries()).hasSize(Short.MAX_VALUE + 1);
         }
+        // an independent reader finds the zip64 records well formed too
+        try (var chan = new SeekableInMemoryByteChannel(overflows)) {
+            ZipFile z = new ZipFile.Builder().setSeekableByteChannel(chan).get();
+            assertThat(Collections.list(z.getEntries())).hasSize(Short.MAX_VALUE + 1);
+        }
     }
 
     /**
@@ -219,9 +225,9 @@ public class ZipWriterTest {
     }
 
     /**
-     * The central directory size is also a 4-byte field. An empty entry costs 46 bytes in the
-     * directory but only 30 before it, so a pile of them makes the directory outgrow its own
-     * offset and this sentinel fires while the offset one does not.
+     * The central directory size is also a 4-byte field. An empty entry costs 46 bytes plus its
+     * name in the directory but only 30 plus its name before it, so a pile of them makes the
+     * directory outgrow its own offset and this sentinel fires while the offset one does not.
      */
     @Test
     public void centralDirectorySizeAloneDrivesTheEndOfCentralDirectorySentinel() throws IOException {
@@ -283,6 +289,37 @@ public class ZipWriterTest {
             ZipFile z = new ZipFile.Builder().setSeekableByteChannel(chan).get();
             assertThat(getDataStream(z, z.getEntry(name)).toString(StandardCharsets.UTF_8))
                     .isEqualTo("contents");
+        }
+    }
+
+    /**
+     * The same for a streamed entry, which is how a TDF writes its payload. Its central directory
+     * header is built when the archive is finished, and carries a zip64 extra field after the
+     * name.
+     */
+    @Test
+    public void streamedEntryNameIsMeasuredInUtf8Bytes() throws IOException {
+        var name = "🔒両.payload";
+        var out = new ByteArrayOutputStream();
+        var writer = new ZipWriter(out);
+        try (var entry = writer.stream(name)) {
+            entry.write("contents".getBytes(StandardCharsets.UTF_8));
+        }
+        writer.data("after.txt", "more".getBytes(StandardCharsets.UTF_8));
+        writer.finish();
+        var archive = out.toByteArray();
+
+        try (var chan = new SeekableInMemoryByteChannel(archive)) {
+            var reader = new ZipReader(chan);
+            assertThat(readEntry(reader, name)).isEqualTo("contents");
+            assertThat(readEntry(reader, "after.txt")).isEqualTo("more");
+        }
+        try (var chan = new SeekableInMemoryByteChannel(archive)) {
+            ZipFile z = new ZipFile.Builder().setSeekableByteChannel(chan).get();
+            assertThat(getDataStream(z, z.getEntry(name)).toString(StandardCharsets.UTF_8))
+                    .isEqualTo("contents");
+            assertThat(getDataStream(z, z.getEntry("after.txt")).toString(StandardCharsets.UTF_8))
+                    .isEqualTo("more");
         }
     }
 
