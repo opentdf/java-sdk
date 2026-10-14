@@ -138,6 +138,9 @@ public class TDFReader {
             while (totalRead < buf.length && (nread = payload.read(buf, totalRead, buf.length - totalRead)) >= 0) {
                 totalRead += nread;
             }
+        } catch (InvalidZipException e) {
+            // the payload entry runs past the end of the archive
+            throw malformed("error reading from payload in TDF", e);
         } catch (IOException e) {
             throw new SDKException("error reading from payload in TDF", e);
         }
