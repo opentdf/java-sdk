@@ -783,6 +783,45 @@ public class ZipReaderTest {
         });
     }
 
+    /**
+     * The last central directory header claims a filename longer than the one it holds, so the
+     * name runs into the end of central directory record. Checked only against the end of the
+     * archive, that record's bytes would come back as part of the entry name.
+     */
+    @Test
+    public void testFilenameRunningPastTheCentralDirectoryIsRejected() {
+        var archive = HostileZips.tdfWith(MANIFEST, e -> e.fileNameLength = e.name.length() + 10);
+
+        assertThatThrownBy(() -> readArchive(archive))
+                .isInstanceOf(InvalidZipException.class)
+                .hasMessageContaining("past the end of the central directory");
+    }
+
+    /**
+     * A central directory whose declared size runs into the record after it, in both a plain
+     * archive and a zip64 one. With no other candidate record to fall back on, the scan reports
+     * why it passed over the real one.
+     */
+    @Test
+    public void testCentralDirectorySizeRunningIntoTheNextRecordIsRejected() throws IOException {
+        var plain = plainArchive();
+        var plainBuf = ByteBuffer.wrap(plain).order(ByteOrder.LITTLE_ENDIAN);
+        int sizeField = plain.length - EOCD_SIZE + 12;
+        plainBuf.putInt(sizeField, plainBuf.getInt(sizeField) + 1);
+
+        var zip64 = zip64Archive();
+        int zip64Eocd = zip64.length - (EOCD_SIZE + ZIP64_EOCD_LOCATOR_SIZE + ZIP64_EOCD_SIZE);
+        var zip64Buf = ByteBuffer.wrap(zip64).order(ByteOrder.LITTLE_ENDIAN);
+        assertThat(zip64Buf.getInt(zip64Eocd)).isEqualTo(ZIP64_EOCD_SIGNATURE);
+        zip64Buf.putLong(zip64Eocd + 40, zip64Buf.getLong(zip64Eocd + 40) + 1);
+
+        for (var archive : List.of(plain, zip64)) {
+            assertThatThrownBy(() -> readArchive(archive))
+                    .isInstanceOf(InvalidZipException.class)
+                    .hasMessageContaining("which does not end where that record starts");
+        }
+    }
+
     /** The hand-built archives the hostile shapes start from are valid until a shape is applied. */
     @Test
     public void testHandBuiltArchiveReads() throws IOException {
