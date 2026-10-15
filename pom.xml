@@ -237,7 +237,9 @@
                         <execution>
                             <id>attach-sources</id>
                             <goals>
-                                <goal>jar</goal>
+                                <!-- jar-no-fork: the plain jar goal forks the lifecycle
+                                     through generate-sources, re-running buf generate -->
+                                <goal>jar-no-fork</goal>
                             </goals>
                         </execution>
                     </executions>
