@@ -120,10 +120,13 @@ public class ZipReader {
     private static class CentralDirectoryRecord {
         final long numEntries;
         final long offsetToStart;
+        /** Never negative, and ends exactly where the record that follows the directory starts. */
+        final long size;
 
-        public CentralDirectoryRecord(long numEntries, long offsetToStart) {
+        public CentralDirectoryRecord(long numEntries, long offsetToStart, long size) {
             this.numEntries = numEntries;
             this.offsetToStart = offsetToStart;
+            this.size = size;
         }
     }
 
@@ -194,7 +197,7 @@ public class ZipReader {
                     + " describes a central directory of " + Long.toUnsignedString(size) + " bytes at offset "
                     + offset + ", which does not end where that record starts");
         }
-        return new CentralDirectoryRecord(numEntries, offset);
+        return new CentralDirectoryRecord(numEntries, offset, size);
     }
 
     /**
@@ -478,7 +481,60 @@ public class ZipReader {
             };
         }
     }
+
+    /** Each extra field record starts with a 2-byte id and a 2-byte data size. */
+    private static final int EXTRA_FIELD_HEADER_SIZE = 4;
+
+    /**
+     * Checks that a {@code size} byte value read at the current position stays inside the zip64
+     * extra field record ending at {@code fieldEnd}. A record too short for the values its
+     * sentinels promise would otherwise be read past, into whatever follows it.
+     */
+    private void requireWithinField(String what, int size, long fieldEnd, long headerStart) throws IOException {
+        if (zipChannel.position() + size > fieldEnd) {
+            throw new InvalidZipException("The zip64 extra field of the central directory file header at offset "
+                    + headerStart + " is too short to hold the " + what + " its sentinel promises");
+        }
+    }
+
+    /**
+     * Reads one 8-byte value out of a zip64 extra field record. The format calls these unsigned,
+     * but nothing can be larger than {@link Long#MAX_VALUE} bytes, so a value that comes out
+     * negative as a Java {@code long} is a corrupt or hostile archive rather than a big one.
+     */
+    private long readZip64Value(String what, long fieldEnd, long headerStart) throws IOException {
+        requireWithinField(what, Long.BYTES, fieldEnd, headerStart);
+        long value = readLong();
+        if (value < 0) {
+            throw new InvalidZipException("The zip64 " + what + " of the central directory file header at offset "
+                    + headerStart + " is " + Long.toUnsignedString(value) + ", which no archive can hold");
+        }
+        return value;
+    }
+
     public Entry readCentralDirectoryFileHeader() throws IOException {
+        return readCentralDirectoryFileHeader(zipChannel.size());
+    }
+
+    /**
+     * Throws if a part of the central directory file header at {@code headerStart} ends after
+     * {@code centralDirectoryEnd}. Checking against the end of the directory rather than the end
+     * of the archive keeps an inflated length from reading the records that follow the directory
+     * as part of an entry.
+     */
+    private static void requireWithinCentralDirectory(String what, long end, long centralDirectoryEnd,
+                                                      long headerStart) {
+        if (end > centralDirectoryEnd) {
+            throw new InvalidZipException("The " + what + " of the central directory file header at offset "
+                    + headerStart + " ends at offset " + end + ", past the end of the central directory at offset "
+                    + centralDirectoryEnd);
+        }
+    }
+
+    private Entry readCentralDirectoryFileHeader(long centralDirectoryEnd) throws IOException {
+        long headerStart = zipChannel.position();
+        requireWithinCentralDirectory("fixed part", headerStart + CENTRAL_DIRECTORY_FILE_HEADER_MIN_SIZE,
+                centralDirectoryEnd, headerStart);
         Integer signature = readInteger();
         if (signature == null || signature != CENTRAL_FILE_HEADER_SIGNATURE) {
             throw new InvalidZipException("Invalid Central Directory File Header Signature");
@@ -501,48 +557,71 @@ public class ZipReader {
         long relativeOffsetOfLocalHeader = readUnsignedInt();
 
         long fileNameStart = zipChannel.position();
+        requireWithinCentralDirectory(fileNameLength + " byte filename", fileNameStart + fileNameLength,
+                centralDirectoryEnd, headerStart);
         ByteBuffer fileName = ByteBuffer.allocate(fileNameLength);
         if (!fill(fileName)) {
             throw new InvalidZipException("Archive ended inside the " + fileNameLength
-                    + " byte filename of the central directory file header at offset "
-                    + (fileNameStart - CENTRAL_DIRECTORY_FILE_HEADER_MIN_SIZE));
+                    + " byte filename of the central directory file header at offset " + headerStart);
         }
 
-        // Parse the extra field
-        for (final long startPos = zipChannel.position(); zipChannel.position() < startPos + extraFieldLength; ) {
-            long fieldStart = zipChannel.position();
+        long extraFieldStart = zipChannel.position();
+        long extraFieldEnd = extraFieldStart + extraFieldLength;
+        requireWithinCentralDirectory(extraFieldLength + " byte extra field", extraFieldEnd,
+                centralDirectoryEnd, headerStart);
+
+        // walk the extra field as a sequence of (id, size, data) records. each step moves past a
+        // whole record, header included, so the walk always advances, and no record may claim
+        // more bytes than are left in the extra field. a sign-extended or oversized data size
+        // used to send the position backwards or beyond the field, looping forever or reading
+        // the next header as if it were part of this one
+        long fieldStart = extraFieldStart;
+        while (extraFieldEnd - fieldStart >= EXTRA_FIELD_HEADER_SIZE) {
+            zipChannel.position(fieldStart);
             int headerId = readUnsignedShort();
             int dataSize = readUnsignedShort();
+            long dataStart = fieldStart + EXTRA_FIELD_HEADER_SIZE;
+            long dataEnd = dataStart + dataSize;
+            if (dataEnd > extraFieldEnd) {
+                throw new InvalidZipException("Extra field 0x" + Integer.toHexString(headerId) + " of the central"
+                        + " directory file header at offset " + headerStart + " claims " + dataSize
+                        + " bytes, but only " + (extraFieldEnd - dataStart) + " remain in the extra field");
+            }
 
             if (headerId == ZIP64_EXTID) {
                 // APPNOTE 4.5.3 order: original size, compressed size, then local header offset
                 if (uncompressedSize == ZIP64_MAGICVAL) {
-                    uncompressedSize = readLong();
+                    uncompressedSize = readZip64Value("uncompressed size", dataEnd, headerStart);
                 }
                 if (compressedSize == ZIP64_MAGICVAL) {
-                    compressedSize = readLong();
+                    compressedSize = readZip64Value("compressed size", dataEnd, headerStart);
                 }
                 if (relativeOffsetOfLocalHeader == ZIP64_MAGICVAL) {
-                    relativeOffsetOfLocalHeader = readLong();
+                    relativeOffsetOfLocalHeader = readZip64Value("local header offset", dataEnd, headerStart);
                 }
                 // a 2-byte field, so its sentinel is 0xFFFF rather than 0xFFFFFFFF
                 if (diskNumberStart == ZIP64_MAGIC_SHORT) {
+                    requireWithinField("disk number", Integer.BYTES, dataEnd, headerStart);
                     diskNumberStart = readInt();
                 }
             }
-            // Skip other extra fields
-            zipChannel.position(fieldStart + dataSize + 4);
+            fieldStart = dataEnd;
         }
+        // fewer bytes than a record header may be left over; like other readers, ignore them
 
-        // a zip64 size is unsigned on the wire, but nothing holds more than Long.MAX_VALUE bytes, so
-        // one that reads as negative is corrupt. left alone, it reads as an empty entry, not an error
-        if (uncompressedSize < 0) {
+        long fileCommentEnd = extraFieldEnd + fileCommentLength;
+        requireWithinCentralDirectory(fileCommentLength + " byte comment", fileCommentEnd,
+                centralDirectoryEnd, headerStart);
+        // an honest archive stores every byte of an entry's data after its local header, so an
+        // entry that claims to start or end beyond the archive cannot be read. the uncompressed
+        // size is left to the reader, which reports a short entry as truncated when it gets there
+        if (relativeOffsetOfLocalHeader >= zipChannel.size()
+                || compressedSize > zipChannel.size() - relativeOffsetOfLocalHeader) {
             throw new InvalidZipException("Entry [" + new String(fileName.array(), StandardCharsets.UTF_8)
-                    + "] claims a size of " + Long.toUnsignedString(uncompressedSize)
-                    + " bytes, which no archive can hold");
+                    + "] claims " + compressedSize + " bytes at local header offset " + relativeOffsetOfLocalHeader
+                    + ", which does not fit in this " + zipChannel.size() + " byte archive");
         }
-
-        zipChannel.position(zipChannel.position() + fileCommentLength);
+        zipChannel.position(fileCommentEnd);
 
         return new Entry(fileName.array(), relativeOffsetOfLocalHeader, uncompressedSize);
     }
@@ -551,17 +630,20 @@ public class ZipReader {
         zipChannel = channel;
         var centralDirectoryRecord = readEndOfCentralDirectory();
         seekWithinArchive("the central directory", centralDirectoryRecord.offsetToStart);
+        // readEndOfCentralDirectory only accepts a directory that ends where the record after it
+        // starts. every header is then held to the declared size, so the records that follow the
+        // directory are never read as directory data
+        long centralDirectoryEnd = centralDirectoryRecord.offsetToStart + centralDirectoryRecord.size;
         // a corrupt zip64 count can be negative, which would read as an empty archive, or more
-        // than the rest of the archive can hold, which would read past the central directory
-        long bytesAvailable = zipChannel.size() - centralDirectoryRecord.offsetToStart;
-        long mostEntriesThatFit = bytesAvailable / CENTRAL_DIRECTORY_FILE_HEADER_MIN_SIZE;
+        // than the directory can hold, which would read past its end
+        long mostEntriesThatFit = centralDirectoryRecord.size / CENTRAL_DIRECTORY_FILE_HEADER_MIN_SIZE;
         if (centralDirectoryRecord.numEntries < 0 || centralDirectoryRecord.numEntries > mostEntriesThatFit) {
             throw new InvalidZipException("The central directory claims " + centralDirectoryRecord.numEntries
-                    + " entries, but the " + bytesAvailable + " bytes from its start to the end of the archive"
-                    + " can hold at most " + mostEntriesThatFit);
+                    + " entries, but its " + centralDirectoryRecord.size + " bytes can hold at most "
+                    + mostEntriesThatFit);
         }
         for (long i = 0; i < centralDirectoryRecord.numEntries; i++) {
-            entries.add(readCentralDirectoryFileHeader());
+            entries.add(readCentralDirectoryFileHeader(centralDirectoryEnd));
         }
     }
 

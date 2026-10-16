@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
+import java.time.Duration;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -45,6 +46,7 @@ import java.util.stream.Collectors;
 import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -1500,6 +1502,70 @@ public class TDFTest {
     @Nonnull
     private static Config.KASInfo[] getSingleRSAKASInfo() {
         return getKASInfos(i -> i == 0);
+    }
+
+    /**
+     * DSPX-5103: a malformed container reaches the caller of {@code loadTDF} as a
+     * {@link SDK.MalformedTDFException}, never as a hang or an IllegalArgumentException,
+     * UnsupportedOperationException or other unchecked exception from inside the parser.
+     */
+    @Test
+    void loadTDFReportsHostileArchivesAsMalformed() {
+        HostileZips.hostileShapes().forEach((shape, hostile) ->
+                assertLoadTDFFailsAsMalformed(shape, HostileZips.tdfWith("{}", hostile)));
+    }
+
+    /**
+     * A manifest that claims more bytes than the archive holds is truncated, and is reported as
+     * malformed rather than read short or buffered without bound. This, not a size cap, is what
+     * stops a hostile declared size.
+     */
+    @Test
+    void loadTDFReportsAManifestRunningPastTheArchiveAsMalformed() {
+        var uncompressedPastTheEnd = HostileZips.tdfWith("{}", e -> e.uncompressedSize = 0x7FFFFFFFL);
+        assertThatThrownBy(() -> loadTDFFrom(uncompressedPastTheEnd))
+                .isInstanceOf(SDK.MalformedTDFException.class)
+                .hasCauseInstanceOf(InvalidZipException.class)
+                .hasMessageContaining("Archive ended");
+
+        var storedPastTheEnd = HostileZips.tdfWith("{}", e -> e.compressedSize = 0x7FFFFFFFL);
+        assertThatThrownBy(() -> loadTDFFrom(storedPastTheEnd))
+                .isInstanceOf(SDK.MalformedTDFException.class)
+                .hasCauseInstanceOf(InvalidZipException.class);
+    }
+
+    /**
+     * There is deliberately no fixed manifest size cap: very large payloads (DSPX-4502) have
+     * manifests far bigger than any fixed limit would allow. A manifest larger than the 10 MiB
+     * cap this reader briefly had is read whole.
+     */
+    @Test
+    void readsAManifestLargerThanTenMebibytes() throws IOException {
+        var padding = "a".repeat(11 * 1024 * 1024);
+        var manifest = "{\"padding\":\"" + padding + "\"}";
+        var archive = HostileZips.tdfWith(manifest, e -> { });
+        assertThat(TDFReader.open(new SeekableInMemoryByteChannel(archive)).manifest()).isEqualTo(manifest);
+    }
+
+    @Test
+    void loadTDFReportsAnInvalidManifestAsMalformed() {
+        var assertionWithObjectFormat = "{\"payload\":{},\"assertions\":[{\"statement\":{\"format\":{}}}]}";
+        for (var manifest : List.of("not json", "[]", "{\"payload\": 5}", "{}", assertionWithObjectFormat)) {
+            assertLoadTDFFailsAsMalformed(manifest, HostileZips.tdfWith(manifest, e -> { }));
+        }
+    }
+
+    private static void assertLoadTDFFailsAsMalformed(String description, byte[] archive) {
+        assertTimeoutPreemptively(Duration.ofSeconds(5), () ->
+                assertThatThrownBy(() -> loadTDFFrom(archive))
+                        .as(description)
+                        .isInstanceOf(SDK.MalformedTDFException.class),
+                description);
+    }
+
+    private static void loadTDFFrom(byte[] archive) throws IOException {
+        new TDF(new FakeServicesBuilder().setKas(kas).build())
+                .loadTDF(new SeekableInMemoryByteChannel(archive), Config.newTDFReaderConfig());
     }
 
     private static boolean isHexChar(byte b) {
