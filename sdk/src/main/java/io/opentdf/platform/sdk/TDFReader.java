@@ -51,8 +51,14 @@ public class TDFReader {
 
     String manifest() {
         var out = new ByteArrayOutputStream();
-        try {
-            manifestEntry.getData().transferTo(out);
+        // Read in large chunks rather than transferTo's small ones: over HTTP every read
+        // is a range request.
+        var buf = new byte[1 << 20];
+        try (var in = manifestEntry.getData()) {
+            int n;
+            while ((n = in.read(buf)) >= 0) {
+                out.write(buf, 0, n);
+            }
         } catch (IOException e) {
             throw new SDKException("error retrieving manifest from zip file", e);
         }

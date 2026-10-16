@@ -27,6 +27,7 @@ import javax.net.ssl.TrustManager;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URI;
 import java.nio.channels.SeekableByteChannel;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -34,6 +35,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+
+import okhttp3.OkHttpClient;
 
 /**
  * The SDK class represents a software development kit for interacting with the
@@ -57,6 +60,8 @@ public class SDK implements AutoCloseable {
     private final String platformUrl;
     private final ProtocolClient platformServicesClient;
     private final SrtSigner srtSigner;
+    // Fetches TDFs by URL. Unauthenticated: platform credentials never go to the TDF host.
+    private final OkHttpClient rangeClient;
 
     /**
      * Closes the SDK, including its associated services.
@@ -66,6 +71,8 @@ public class SDK implements AutoCloseable {
     @Override
     public void close() throws Exception {
         services.close();
+        rangeClient.dispatcher().executorService().shutdown();
+        rangeClient.connectionPool().evictAll();
     }
 
     /**
@@ -114,6 +121,12 @@ public class SDK implements AutoCloseable {
     }
 
     SDK(Services services, TrustManager trustManager, Interceptor authInterceptor, ProtocolClient platformServicesClient, String platformUrl, SrtSigner srtSigner) {
+        this(services, trustManager, authInterceptor, platformServicesClient, platformUrl, srtSigner,
+                new OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).build());
+    }
+
+    SDK(Services services, TrustManager trustManager, Interceptor authInterceptor, ProtocolClient platformServicesClient, String platformUrl, SrtSigner srtSigner, OkHttpClient rangeClient) {
+        this.rangeClient = rangeClient;
         this.platformUrl = platformUrl;
         this.services = services;
         this.trustManager = trustManager;
@@ -138,6 +151,20 @@ public class SDK implements AutoCloseable {
     public TDF.Reader loadTDF(SeekableByteChannel channel, Config.TDFReaderConfig config) throws SDKException, IOException {
         var tdf = new TDF(services);
         return tdf.loadTDF(channel, config, platformUrl);
+    }
+
+    /**
+     * Loads a TDF served over HTTP(S), reading it with range requests so only the zip
+     * directory, the manifest, and the payload segments actually read are downloaded.
+     * The server must answer range requests with 206; redirects are not followed.
+     *
+     * @throws RangeNotSupportedException if the server ignores range requests
+     */
+    public TDF.Reader loadTDF(URI url, Config.TDFReaderConfig config) throws SDKException, IOException {
+        if (!"http".equalsIgnoreCase(url.getScheme()) && !"https".equalsIgnoreCase(url.getScheme())) {
+            throw new IllegalArgumentException("unsupported URL scheme: " + url.getScheme());
+        }
+        return loadTDF(new HttpRangeChannel(rangeClient, url), config);
     }
 
     public Manifest createTDF(InputStream payload, OutputStream outputStream, Config.TDFConfig config) throws SDKException, IOException {
@@ -379,6 +406,16 @@ public class SDK implements AutoCloseable {
             throw new SDKException("checking attribute value existence: " + e.getMessage(), e);
         }
         return resp.getFqnAttributeValuesMap().containsKey(valueFqn);
+    }
+
+    /**
+     * The server holding a TDF did not honor an HTTP range request, so the TDF cannot be
+     * read in place; download it and load it from a file instead.
+     */
+    public static class RangeNotSupportedException extends IOException {
+        public RangeNotSupportedException(String errorMessage) {
+            super("server did not honor the HTTP range request: " + errorMessage);
+        }
     }
 
     /**
