@@ -388,6 +388,41 @@ class TDF {
         }
 
         public void readPayload(OutputStream outputStream) throws SDK.TamperException, IOException {
+            readPayload(outputStream, 0, -1);
+        }
+
+        /**
+         * Writes the plaintext bytes {@code [offset, offset + length)} to {@code outputStream}.
+         * Only the segments covering the range are read, verified and decrypted, so over
+         * {@link SDK#loadTDF(java.net.URI, Config.TDFReaderConfig)} only those are downloaded.
+         *
+         * @param offset plaintext offset to start at; equal to the payload size writes nothing
+         * @param length number of bytes to write; negative means to the end of the payload, and
+         *               a range running past the end is clamped to it
+         * @throws IllegalArgumentException if {@code offset} is negative or beyond the end of the
+         *                                  payload, before anything is written
+         */
+        public void readPayload(OutputStream outputStream, long offset, long length)
+                throws SDK.TamperException, IOException {
+            if (offset < 0) {
+                throw new IllegalArgumentException("offset must not be negative: " + offset);
+            }
+
+            validateSegmentSizes();
+
+            List<Manifest.Segment> segments = manifest.encryptionInformation.integrityInformation.segments;
+            long total = 0;
+            for (Manifest.Segment segment : segments) {
+                total += plaintextSize(segment);
+            }
+            if (offset > total) {
+                throw new IllegalArgumentException(
+                        "offset " + offset + " is beyond the end of the payload (" + total + " bytes)");
+            }
+            long end = length < 0 || length > total - offset ? total : offset + length;
+            if (offset == end) {
+                return;
+            }
 
             MessageDigest digest = null;
             try {
@@ -396,43 +431,71 @@ class TDF {
                 throw new IllegalStateException("error getting instance of SHA-256", e);
             }
 
-            validateSegmentSizes();
+            try (var payload = tdfReader.payload()) {
+                long plainStart = 0;
+                for (Manifest.Segment segment : segments) {
+                    if (plainStart >= end) {
+                        break;
+                    }
+                    long plainEnd = plainStart + plaintextSize(segment);
+                    // <=, not <: a segment ending exactly at offset holds none of the range
+                    if (plainEnd <= offset) {
+                        if (payload.skip(segment.encryptedSegmentSize) != segment.encryptedSegmentSize) {
+                            throw new IllegalStateException("unable to skip segment of "
+                                    + segment.encryptedSegmentSize + " bytes");
+                        }
+                        plainStart = plainEnd;
+                        continue;
+                    }
 
-            for (Manifest.Segment segment : manifest.encryptionInformation.integrityInformation.segments) {
-                byte[] readBuf = new byte[(int) segment.encryptedSegmentSize];
-                int bytesRead = tdfReader.readPayloadBytes(readBuf);
+                    byte[] plain = readSegment(payload, segment, digest);
+                    int from = (int) Math.max(0, offset - plainStart);
+                    int to = (int) Math.min(plain.length, end - plainStart);
+                    outputStream.write(plain, from, to - from);
+                    plainStart = plainEnd;
+                }
+            }
+        }
 
-                if (readBuf.length != bytesRead) {
-                    throw new IllegalStateException("unable to read bytes for segment (wanted "
-                            + segment.encryptedSegmentSize + " but got " + bytesRead + ")");
+        // Derived from the ciphertext length rather than trusting the manifest's segmentSize,
+        // so a range lands on the bytes decryption actually produces.
+        private long plaintextSize(Manifest.Segment segment) {
+            return segment.encryptedSegmentSize
+                    - (manifest.payload.isEncrypted ? kGcmIvSize + AesGcm.GCM_TAG_LENGTH : 0);
+        }
+
+        private byte[] readSegment(InputStream payload, Manifest.Segment segment, MessageDigest digest) {
+            byte[] readBuf = new byte[(int) segment.encryptedSegmentSize];
+            int bytesRead = TDFReader.readPayloadBytes(payload, readBuf);
+
+            if (readBuf.length != bytesRead) {
+                throw new IllegalStateException("unable to read bytes for segment (wanted "
+                        + segment.encryptedSegmentSize + " but got " + bytesRead + ")");
+            }
+
+            var isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
+
+            if (manifest.payload.isEncrypted) {
+                var sigAlg = segmentIntegrityAlgorithmFromManifest(
+                        manifest.encryptionInformation.integrityInformation.segmentHashAlg);
+
+                var payloadSig = segmentIntegrity(readBuf, payloadKey, sigAlg);
+                if (isLegacyTdf) {
+                    payloadSig = Hex.encodeHexString(payloadSig).getBytes(StandardCharsets.UTF_8);
                 }
 
-                var isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
-
-                if (manifest.payload.isEncrypted) {
-                    var sigAlg = segmentIntegrityAlgorithmFromManifest(
-                            manifest.encryptionInformation.integrityInformation.segmentHashAlg);
-
-                    var payloadSig = segmentIntegrity(readBuf, payloadKey, sigAlg);
-                    if (isLegacyTdf) {
-                        payloadSig = Hex.encodeHexString(payloadSig).getBytes(StandardCharsets.UTF_8);
-                    }
-
-                    if (segment.hash.compareTo(Base64.getEncoder().encodeToString(payloadSig)) != 0) {
-                        throw new SDK.SegmentSignatureMismatch("segment signature miss match");
-                    }
-
-                    byte[] writeBuf = aesGcm.decrypt(new AesGcm.Encrypted(readBuf));
-                    outputStream.write(writeBuf);
-
-                } else {
-                    String segmentSig = Hex.encodeHexString(digest.digest(readBuf));
-                    if (segment.hash.compareTo(segmentSig) != 0) {
-                        throw new SDK.SegmentSignatureMismatch("segment signature miss match");
-                    }
-
-                    outputStream.write(readBuf);
+                if (segment.hash.compareTo(Base64.getEncoder().encodeToString(payloadSig)) != 0) {
+                    throw new SDK.SegmentSignatureMismatch("segment signature miss match");
                 }
+
+                return aesGcm.decrypt(new AesGcm.Encrypted(readBuf));
+            } else {
+                String segmentSig = Hex.encodeHexString(digest.digest(readBuf));
+                if (segment.hash.compareTo(segmentSig) != 0) {
+                    throw new SDK.SegmentSignatureMismatch("segment signature miss match");
+                }
+
+                return readBuf;
             }
         }
 

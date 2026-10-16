@@ -20,6 +20,7 @@ import static io.opentdf.platform.sdk.TDFWriter.TDF_PAYLOAD_FILE_NAME;
 public class TDFReader {
 
     private final ZipReader.Entry manifestEntry;
+    private final ZipReader.Entry payloadEntry;
     private final InputStream payload;
 
     public TDFReader(SeekableByteChannel tdf) throws SDKException, IOException {
@@ -46,7 +47,8 @@ public class TDFReader {
         }
 
         manifestEntry = manifest;
-        payload = entries.get(TDF_PAYLOAD_FILE_NAME).getData();
+        payloadEntry = entries.get(TDF_PAYLOAD_FILE_NAME);
+        payload = payloadEntry.getData();
     }
 
     String manifest() {
@@ -66,7 +68,16 @@ public class TDFReader {
         return out.toString(StandardCharsets.UTF_8);
     }
 
+    /** A fresh stream over the payload, positioned at its start. */
+    InputStream payload() throws IOException {
+        return payloadEntry.getData();
+    }
+
     int readPayloadBytes(byte[] buf) {
+        return readPayloadBytes(payload, buf);
+    }
+
+    static int readPayloadBytes(InputStream payload, byte[] buf) {
         int totalRead = 0;
         int nread;
         try {

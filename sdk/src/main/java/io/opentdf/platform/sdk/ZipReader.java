@@ -254,6 +254,15 @@ public class ZipReader {
                     return offset >= fileSize;
                 }
 
+                // Moves the cursor without reading: the default skip reads and discards, which
+                // over HTTP would download everything skipped.
+                @Override
+                public long skip(long n) {
+                    long skipped = Math.max(0, Math.min(n, fileSize - offset));
+                    offset += skipped;
+                    return skipped;
+                }
+
                 private void setChannelPosition() throws IOException {
                     var nextPosition = startPosition + offset;
                     if (zipChannel.position() != nextPosition) {
