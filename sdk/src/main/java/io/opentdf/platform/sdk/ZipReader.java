@@ -151,25 +151,58 @@ public class ZipReader {
     private static final int CENTRAL_DIRECTORY_FILE_HEADER_MIN_SIZE = 46;
 
     /**
-     * Positions the channel at an offset read from the archive, which a corrupt archive can set
-     * to anything, in a 32-bit field or a zip64 one. Unchecked, a negative offset escapes as an {@link IllegalArgumentException} from the channel rather than
-     * as a zip error, and one past the end fails at the next read with a generic complaint that
-     * names neither the offset nor the field it came from.
+     * Checks an offset read from the archive, which a corrupt archive can set to anything, in a
+     * 32-bit field or a zip64 one. Unchecked, a negative offset escapes as an
+     * {@link IllegalArgumentException} from the channel rather than as a zip error, and one at or
+     * past the end fails at the next read with a generic complaint that names neither the offset
+     * nor the field it came from.
      */
-    private void seekWithinArchive(String what, long offset) throws IOException {
+    private void requireWithinArchive(String what, long offset) throws IOException {
         if (offset < 0 || offset >= zipChannel.size()) {
             throw new InvalidZipException(what + " points to offset " + offset
                     + ", which is outside this " + zipChannel.size() + " byte archive");
         }
+    }
+
+    /**
+     * Positions the channel at an offset read from the archive, once {@link #requireWithinArchive}
+     * accepts it.
+     */
+    private void seekWithinArchive(String what, long offset) throws IOException {
+        requireWithinArchive(what, offset);
         zipChannel.position(offset);
     }
 
     /**
+     * Ties a candidate end of central directory record to the central directory it describes. In
+     * every archive this reader supports the central directory ends exactly where the record
+     * after it begins: the zip64 end of central directory record if there is one, otherwise the
+     * end of central directory record itself (APPNOTE 4.3.6). A stray signature in the comment
+     * or in trailing data can carry a comment length that fits, so that check alone does not rule
+     * it out, but the extent it declares will not land on it.
+     *
+     * @param recordStart where the record that follows the central directory starts
+     */
+    private CentralDirectoryRecord centralDirectoryEndingAt(String recordName, long recordStart, long numEntries,
+                                                            long offset, long size) throws IOException {
+        requireWithinArchive("the " + recordName + " at offset " + recordStart, offset);
+        // compared as a difference, since a zip64 size can be large enough to overflow a sum. a
+        // zip64 size can also read as negative, which would match a central directory said to
+        // start after the record it ends at
+        if (size < 0 || size != recordStart - offset) {
+            throw new InvalidZipException("The " + recordName + " at offset " + recordStart
+                    + " describes a central directory of " + Long.toUnsignedString(size) + " bytes at offset "
+                    + offset + ", which does not end where that record starts");
+        }
+        return new CentralDirectoryRecord(numEntries, offset);
+    }
+
+    /**
      * Checks that the comment of a candidate end of central directory record ends inside the
-     * archive, as a real record's comment does. The backward scan can meet a stray signature
-     * inside the comment or in trailing data before it reaches the real record; this rules out
-     * most of them, along with a real record whose comment was cut short. Trailing data after
-     * the comment is allowed.
+     * archive, as a real record's comment does. This rejects a real record whose comment was cut
+     * short, and a stray signature whose length bytes happen to be large. A stray signature with
+     * a small declared length gets past it, and is caught by {@link #centralDirectoryEndingAt}
+     * instead. Trailing data after the comment is allowed.
      */
     private boolean commentEndsWithinArchive(long eoCDRStart) throws IOException {
         zipChannel.position(eoCDRStart + END_OF_CENTRAL_DIRECTORY_SIZE - Short.BYTES);
@@ -186,8 +219,11 @@ public class ZipReader {
         long earliestPossibleStart = Math.max(0, zipChannel.size()
                 - (END_OF_CENTRAL_DIRECTORY_SIZE + MAX_END_OF_CENTRAL_DIRECTORY_COMMENT_SIZE));
 
-        boolean found = false;
-        while (eoCDRStart >= earliestPossibleStart) {
+        // a candidate that fails a structural check is passed over, since the scan can meet a stray
+        // signature before the real record. if none passes, the failure of the one nearest the
+        // end is reported
+        InvalidZipException firstRejection = null;
+        for (; eoCDRStart >= earliestPossibleStart; eoCDRStart--) {
             zipChannel.position(eoCDRStart);
             Integer signature = readInteger();
             if (signature == null) {
@@ -196,20 +232,35 @@ public class ZipReader {
                 throw new InvalidZipException("Archive ended at offset " + zipChannel.position()
                         + ", before its reported size of " + zipChannel.size() + " bytes");
             }
-            if (signature == END_OF_CENTRAL_DIRECTORY_SIGNATURE && commentEndsWithinArchive(eoCDRStart)) {
-                logger.debug("Found end of central directory signature at {}", eoCDRStart);
-                found = true;
-                break;
+            if (signature != END_OF_CENTRAL_DIRECTORY_SIGNATURE || !commentEndsWithinArchive(eoCDRStart)) {
+                continue;
             }
-            eoCDRStart--;
+            try {
+                var centralDirectory = readCentralDirectoryRecord(eoCDRStart);
+                logger.debug("Found end of central directory record at {}", eoCDRStart);
+                return centralDirectory;
+            } catch (InvalidZipException e) {
+                logger.debug("Passing over end of central directory signature at {}: {}", eoCDRStart, e.getMessage());
+                if (firstRejection == null) {
+                    firstRejection = e;
+                }
+            }
         }
 
-        if (!found) {
-            throw new InvalidZipException("Didn't find the end of central directory in the last "
-                    + (zipChannel.size() - earliestPossibleStart) + " bytes of this "
-                    + zipChannel.size() + " byte archive");
+        if (firstRejection != null) {
+            throw firstRejection;
         }
+        throw new InvalidZipException("Didn't find the end of central directory in the last "
+                + (zipChannel.size() - earliestPossibleStart) + " bytes of this "
+                + zipChannel.size() + " byte archive");
+    }
 
+    /**
+     * Reads the candidate end of central directory record at {@code eoCDRStart}, following it to
+     * the zip64 record if it has one, and checks that it describes the central directory in front
+     * of it.
+     */
+    private CentralDirectoryRecord readCentralDirectoryRecord(long eoCDRStart) throws IOException {
         zipChannel.position(eoCDRStart + Integer.BYTES);
         short diskNumber = readShort();
         short centralDirectoryDiskNumber = readShort();
@@ -221,15 +272,20 @@ public class ZipReader {
 
         // any one of these fields may carry the sentinel that sends its real value to the zip64
         // end of central directory record; an archive can need zip64 for its entry count alone
-        // while its central directory still starts below 4 GiB. the size is checked for the same
-        // reason even though nothing here reads it yet
+        // while its central directory still starts below 4 GiB
         if (totalNumEntries != ZIP64_MAGIC_SHORT
                 && sizeOfCentralDirectory != ZIP64_MAGICVAL
                 && offsetToStartOfCentralDirectory != ZIP64_MAGICVAL) {
-            return new CentralDirectoryRecord(totalNumEntries, offsetToStartOfCentralDirectory);
+            long zip64RecordStart = zip64RecordStartIfAny(eoCDRStart);
+            if (zip64RecordStart >= 0) {
+                return centralDirectoryEndingAt("zip64 end of central directory record", zip64RecordStart,
+                        totalNumEntries, offsetToStartOfCentralDirectory, sizeOfCentralDirectory);
+            }
+            return centralDirectoryEndingAt("end of central directory record", eoCDRStart, totalNumEntries,
+                    offsetToStartOfCentralDirectory, sizeOfCentralDirectory);
         }
 
-        // the locator immediately precedes the record (APPNOTE 4.3.15), so measure from the record
+        // the locator immediately precedes the record (APPNOTE 4.3.6), so measure from the record
         // rather than from the end of the archive, which may hold trailing data
         long zip64CentralDirectoryLocatorStart = eoCDRStart - ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIZE;
         if (zip64CentralDirectoryLocatorStart < 0) {
@@ -237,6 +293,34 @@ public class ZipReader {
                     "Archive is too small to hold the zip64 end of central directory locator it claims to have");
         }
         return extractZIP64CentralDirectoryInfo(zip64CentralDirectoryLocatorStart);
+    }
+
+    /**
+     * Finds the zip64 end of central directory record of an archive whose end of central directory
+     * record carries no sentinel. Some writers, commons-compress among them, add the zip64 records
+     * anyway, and then the central directory ends where the zip64 record starts rather than where
+     * the end of central directory record does. Nothing else is read from them, since every field
+     * the reader needs fit in the end of central directory record.
+     *
+     * @return where the zip64 record starts, or -1 if a locator in front of {@code eoCDRStart}
+     *     doesn't lead to one
+     */
+    private long zip64RecordStartIfAny(long eoCDRStart) throws IOException {
+        long locatorStart = eoCDRStart - ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIZE;
+        if (locatorStart < 0) {
+            return -1;
+        }
+        zipChannel.position(locatorStart);
+        if (readInt() != ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIGNATURE) {
+            return -1;
+        }
+        readInt(); // disk number
+        long zip64RecordStart = readLong();
+        if (zip64RecordStart < 0 || zip64RecordStart >= locatorStart) {
+            return -1;
+        }
+        zipChannel.position(zip64RecordStart);
+        return readInt() == ZIP_64_END_OF_CENTRAL_DIRECTORY_SIGNATURE ? zip64RecordStart : -1;
     }
 
     private CentralDirectoryRecord extractZIP64CentralDirectoryInfo(long locatorStart) throws IOException {
@@ -271,7 +355,8 @@ public class ZipReader {
         long cdSize = readLong();
         long cdOffset = readLong();
 
-        return new CentralDirectoryRecord(totalNumCDEntries, cdOffset);
+        return centralDirectoryEndingAt("zip64 end of central directory record", offsetToEndOfCentralDirectory,
+                totalNumCDEntries, cdOffset, cdSize);
     }
 
     public class Entry {
@@ -447,6 +532,14 @@ public class ZipReader {
             }
             // Skip other extra fields
             zipChannel.position(fieldStart + dataSize + 4);
+        }
+
+        // a zip64 size is unsigned on the wire, but nothing holds more than Long.MAX_VALUE bytes, so
+        // one that reads as negative is corrupt. left alone, it reads as an empty entry, not an error
+        if (uncompressedSize < 0) {
+            throw new InvalidZipException("Entry [" + new String(fileName.array(), StandardCharsets.UTF_8)
+                    + "] claims a size of " + Long.toUnsignedString(uncompressedSize)
+                    + " bytes, which no archive can hold");
         }
 
         zipChannel.position(zipChannel.position() + fileCommentLength);

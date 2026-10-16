@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
@@ -423,8 +424,10 @@ public class ZipReaderTest {
 
     /**
      * A comment can contain anything, including the end of central directory signature. Scanning
-     * backwards meets that one first; it has to be passed over because the comment it would
-     * carry runs off the end of the archive, which the real record's does not.
+     * backwards meets that one first. Here it is passed over because the comment it would carry
+     * runs off the end of the archive, which the real record's does not; see
+     * {@link #testSignatureWithAPlausibleCommentLengthIsNotMistakenForTheRecord} for one whose
+     * comment fits.
      */
     @Test
     public void testSignatureInsideTheCommentIsNotMistakenForTheRecord() throws IOException {
@@ -435,6 +438,39 @@ public class ZipReaderTest {
         // an independent reader may take the decoy for the record, so this one is ours alone
         try (var channel = new SeekableInMemoryByteChannel(withComment(zip64Archive(), comment))) {
             assertReadsEveryEntry(channel);
+        }
+    }
+
+    /**
+     * A stray signature whose declared comment fits in the archive gets past the comment check, so
+     * the central directory it describes has to give it away: it never ends where the stray
+     * record starts. Covers a zero-filled record, which would read as an empty archive; a copy of
+     * the real record, which for a zip64 archive sends the reader looking for a locator that isn't
+     * there; and a copy claiming one entry, which would read as an archive missing two. Each one
+     * goes in a comment with room to spare, in a comment it fills exactly, and in trailing data.
+     */
+    @Test
+    public void testSignatureWithAPlausibleCommentLengthIsNotMistakenForTheRecord() throws IOException {
+        for (var base : List.of(plainArchive(), zip64Archive())) {
+            var empty = new byte[EOCD_SIZE];
+            ByteBuffer.wrap(empty).order(ByteOrder.LITTLE_ENDIAN).putInt(0, EOCD_SIGNATURE);
+            var copy = Arrays.copyOfRange(base, base.length - EOCD_SIZE, base.length);
+            var oneEntry = copy.clone();
+            ByteBuffer.wrap(oneEntry).order(ByteOrder.LITTLE_ENDIAN).putShort(8, (short) 1).putShort(10, (short) 1);
+
+            for (var decoy : List.of(empty, copy, oneEntry)) {
+                var roomy = Arrays.copyOf(decoy, 64);
+                var trailing = Arrays.copyOf(base, base.length + roomy.length);
+                System.arraycopy(roomy, 0, trailing, base.length, roomy.length);
+
+                for (var archive : List.of(withComment(base, roomy), withComment(base, decoy), trailing)) {
+                    assertThatCode(() -> {
+                        try (var channel = new SeekableInMemoryByteChannel(archive)) {
+                            assertReadsEveryEntry(channel);
+                        }
+                    }).as("a %d byte archive with a decoy record", archive.length).doesNotThrowAnyException();
+                }
+            }
         }
     }
 
@@ -525,6 +561,57 @@ public class ZipReaderTest {
                     .isInstanceOf(InvalidZipException.class)
                     .hasMessageContaining("can hold at most");
         }
+    }
+
+    /**
+     * A zip64 entry size is unsigned on the wire, but one that reads as a negative {@code long}
+     * describes more than any archive can hold. Left alone it reads as an empty entry, so a
+     * corrupt size would silently drop the entry's data instead of failing.
+     */
+    @Test
+    public void testZip64EntrySizeThatReadsAsNegativeIsRejected() throws IOException {
+        for (long badSize : new long[] { -1L, Long.MIN_VALUE }) {
+            var archive = zip64Archive();
+            var buf = ByteBuffer.wrap(archive).order(ByteOrder.LITTLE_ENDIAN);
+            int zip64Eocd = archive.length - (EOCD_SIZE + ZIP64_EOCD_LOCATOR_SIZE + ZIP64_EOCD_SIZE);
+            assertThat(buf.getInt(zip64Eocd)).isEqualTo(ZIP64_EOCD_SIGNATURE);
+
+            // walk the central directory to the streamed entry, which the writer always marks zip64
+            int header = (int) buf.getLong(zip64Eocd + 48);
+            while (!new String(archive, header + 46, buf.getShort(header + 28), StandardCharsets.UTF_8)
+                    .equals("0.payload")) {
+                header += 46 + buf.getShort(header + 28) + buf.getShort(header + 30) + buf.getShort(header + 32);
+            }
+            int extraField = header + 46 + buf.getShort(header + 28);
+            assertThat(buf.getShort(extraField)).as("zip64 extra field id").isEqualTo((short) 1);
+            // the original size is the first value in the field, after its id and data size
+            buf.putLong(extraField + 4, badSize);
+
+            assertThatThrownBy(() -> readArchive(archive))
+                    .withFailMessage("a size of %d should be rejected as a zip error", badSize)
+                    .isInstanceOf(InvalidZipException.class)
+                    .hasMessageContaining(Long.toUnsignedString(badSize));
+        }
+    }
+
+    /**
+     * A zip64 central directory size that reads as negative, with an offset past the record it
+     * ends at so that the two still add up to that record's position. It describes a directory
+     * that starts after it ends, and has to be rejected rather than read.
+     */
+    @Test
+    public void testZip64CentralDirectorySizeThatReadsAsNegativeIsRejected() throws IOException {
+        var archive = zip64Archive();
+        int zip64Eocd = archive.length - (EOCD_SIZE + ZIP64_EOCD_LOCATOR_SIZE + ZIP64_EOCD_SIZE);
+        var buf = ByteBuffer.wrap(archive).order(ByteOrder.LITTLE_ENDIAN);
+        assertThat(buf.getInt(zip64Eocd)).isEqualTo(ZIP64_EOCD_SIGNATURE);
+        long offset = archive.length - 1;
+        buf.putLong(zip64Eocd + 40, zip64Eocd - offset);
+        buf.putLong(zip64Eocd + 48, offset);
+
+        assertThatThrownBy(() -> readArchive(archive))
+                .isInstanceOf(InvalidZipException.class)
+                .hasMessageContaining(Long.toUnsignedString(zip64Eocd - offset));
     }
 
     /** The same bounds check, on the 32-bit offset of an archive that isn't zip64 at all. */
