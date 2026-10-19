@@ -82,6 +82,109 @@ class TDF {
     private static final Gson gson = new GsonBuilder().create();
 
     /**
+     * Computes the policy binding hash for a key access object.
+     *
+     * @param symKey the symmetric key
+     * @param base64Policy the base64-encoded policy
+     * @param hexless if true, returns Base64(HMAC); if false, returns Base64(hex(HMAC))
+     * @return the policy binding hash
+     */
+    static String policyBindingHash(byte[] symKey, String base64Policy, boolean hexless) {
+        byte[] hmac = CryptoUtils.CalculateSHA256Hmac(symKey, base64Policy.getBytes(StandardCharsets.UTF_8));
+        Base64.Encoder encoder = Base64.getEncoder();
+
+        if (hexless) {
+            return encoder.encodeToString(hmac);
+        } else {
+            String hexBinding = Hex.encodeHexString(hmac);
+            return encoder.encodeToString(hexBinding.getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
+    /**
+     * Re-encodes a hexless policy binding hash to the legacy form for KAS compatibility.
+     * Returns Base64(hex(raw)) when the input decodes to exactly 32 bytes; otherwise
+     * returns the input unchanged.
+     * <p>
+     * KAS releases before the dual-accept fix only verify the Base64(hex(HMAC)) form.
+     * This method ensures compatibility by re-encoding hexless bindings when reading
+     * a TDF for decryption through such a KAS.
+     *
+     * @param hash the policy binding hash
+     * @return the legacy-encoded hash or the original if not a 32-byte binding
+     */
+    static String legacyPolicyBindingHash(String hash) {
+        if (hash == null) {
+            return null;
+        }
+        try {
+            Base64.Decoder decoder = Base64.getDecoder();
+            byte[] decoded = decoder.decode(hash);
+
+            if (decoded.length == 32) {
+                // This is a hexless binding (32 bytes of raw HMAC)
+                // Re-encode to legacy form: Base64(hex(raw))
+                String hexEncoded = Hex.encodeHexString(decoded);
+                return Base64.getEncoder().encodeToString(hexEncoded.getBytes(StandardCharsets.UTF_8));
+            }
+
+            // Not a 32-byte binding, return unchanged
+            return hash;
+        } catch (IllegalArgumentException e) {
+            // Invalid base64, return unchanged
+            return hash;
+        }
+    }
+
+    /**
+     * Creates a copy of the given KeyAccess with its policy binding hash transformed
+     * through legacyPolicyBindingHash for compatibility with older KAS implementations.
+     * Returns the original object if re-encoding does not change the hash.
+     */
+    private static Manifest.KeyAccess copyKeyAccessWithLegacyBinding(Manifest.KeyAccess original) {
+        String legacyHash = null;
+        String originalHash = null;
+
+        // Extract and transform the hash
+        if (original.policyBinding instanceof Manifest.PolicyBinding) {
+            Manifest.PolicyBinding originalBinding = (Manifest.PolicyBinding) original.policyBinding;
+            originalHash = originalBinding.hash;
+            legacyHash = legacyPolicyBindingHash(originalHash);
+        } else if (original.policyBinding instanceof String) {
+            originalHash = (String) original.policyBinding;
+            legacyHash = legacyPolicyBindingHash(originalHash);
+        }
+
+        // Only copy if re-encoding changed the hash
+        if (legacyHash != null && !legacyHash.equals(originalHash)) {
+            Manifest.KeyAccess copy = new Manifest.KeyAccess();
+            copy.keyType = original.keyType;
+            copy.url = original.url;
+            copy.protocol = original.protocol;
+            copy.wrappedKey = original.wrappedKey;
+            copy.encryptedMetadata = original.encryptedMetadata;
+            copy.kid = original.kid;
+            copy.sid = original.sid;
+            copy.schemaVersion = original.schemaVersion;
+            copy.ephemeralPublicKey = original.ephemeralPublicKey;
+
+            if (original.policyBinding instanceof Manifest.PolicyBinding) {
+                Manifest.PolicyBinding copyBinding = new Manifest.PolicyBinding();
+                copyBinding.alg = ((Manifest.PolicyBinding) original.policyBinding).alg;
+                copyBinding.hash = legacyHash;
+                copy.policyBinding = copyBinding;
+            } else {
+                copy.policyBinding = legacyHash;
+            }
+
+            return copy;
+        }
+
+        // No change needed, return original
+        return original;
+    }
+
+    /**
      * An AES-GCM IV generator using the deterministic construction of NIST SP 800-38D
      * section 8.2.1: a 64-bit fixed field followed by a 32-bit big-endian invocation field.
      * <p>
@@ -226,6 +329,8 @@ class TDF {
             String base64PolicyObject = encoder
                     .encodeToString(gson.toJson(policyObject).getBytes(StandardCharsets.UTF_8));
 
+            // A pre-4.3.0 target keeps the legacy binding
+            boolean useHexless = tdfConfig.hexlessPolicyBinding && !tdfConfig.hexEncodeRootAndSegmentHashes;
 
             List<byte[]> symKeys = new ArrayList<>(splits.size());
             for (var split : splits.entrySet()) {
@@ -236,11 +341,9 @@ class TDF {
                 symKeys.add(symKey);
 
                 // Add policyBinding
-                var hexBinding = Hex.encodeHexString(
-                        CryptoUtils.CalculateSHA256Hmac(symKey, base64PolicyObject.getBytes(StandardCharsets.UTF_8)));
                 var policyBinding = new Manifest.PolicyBinding();
                 policyBinding.alg = kHmacIntegrityAlgorithm;
-                policyBinding.hash = encoder.encodeToString(hexBinding.getBytes(StandardCharsets.UTF_8));
+                policyBinding.hash = policyBindingHash(symKey, base64PolicyObject, useHexless);
 
                 // Add meta data
                 var encryptedMetadata = "";
@@ -839,7 +942,11 @@ class TDF {
                         logger.error("KasAllowlist: kas url {} is not allowed", realAddress);
                         throw new SDK.KasAllowlistException("KasAllowlist: kas url " + realAddress + " is not allowed");
                     }
-                    unwrappedKey = services.kas().unwrap(keyAccess, manifest.encryptionInformation.policy,
+
+                    // Transform the policy binding to legacy form for KAS compatibility
+                    Manifest.KeyAccess kasKeyAccess = copyKeyAccessWithLegacyBinding(keyAccess);
+
+                    unwrappedKey = services.kas().unwrap(kasKeyAccess, manifest.encryptionInformation.policy,
                             tdfReaderConfig.sessionKeyType);
                 } catch (Exception e) {
                     skippedSplits.put(ss, e);
