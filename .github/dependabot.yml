@@ -1,0 +1,28 @@
+# dependabot.yml
+#
+# Documentation:
+#   https://docs.github.com/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+#
+# Dependabot only opens security update PRs here; open-pull-requests-limit: 0
+# turns off version updates. Security update PRs still use the commit-message
+# settings, which keep their titles within the scopes allowed by the PR title
+# check in workflows/checks.yaml.
+
+version: 2
+updates:
+  - package-ecosystem: maven
+    directories:
+      - /
+      - /cmdline
+      - /examples
+      - /sdk
+      - /sdk-fips-bc
+      - /sdk-pqc-bc
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    commit-message:
+      # Runtime dependencies ship in released artifacts, so cut a patch release.
+      prefix: "fix(main)"
+      # Test-scoped dependencies don't change released artifacts.
+      prefix-development: "chore(ci)"
