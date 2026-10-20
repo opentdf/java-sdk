@@ -2,6 +2,8 @@ package io.opentdf.platform.sdk;
 
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -77,6 +79,20 @@ public class TDFReaderTest {
                 TDFWriter.TDF_PAYLOAD_FILE_NAME, PAYLOAD,
                 "0.manifest.json", MANIFEST)) {
             assertThat(new TDFReader(tdf).manifest()).isEqualTo(MANIFEST);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "", "null" })
+    void rejectsEmptyManifest(String manifest) throws IOException {
+        try (var tdfBytes = archiveOf(
+                TDFWriter.TDF_PAYLOAD_FILE_NAME, PAYLOAD,
+                "0.manifest.json", manifest)) {
+            var tdf = new TDF(new FakeServicesBuilder().setKas(TDFTest.kas).build());
+
+            assertThatThrownBy(() -> tdf.loadTDF(tdfBytes, Config.newTDFReaderConfig()))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("Manifest is empty");
         }
     }
 
