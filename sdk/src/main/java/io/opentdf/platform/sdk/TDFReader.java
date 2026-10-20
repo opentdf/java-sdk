@@ -51,8 +51,9 @@ public class TDFReader {
 
     String manifest() {
         var out = new ByteArrayOutputStream();
-        try {
-            manifestEntry.getData().transferTo(out);
+        // closing releases the inflater when the manifest entry is deflated
+        try (var manifestData = manifestEntry.getData()) {
+            manifestData.transferTo(out);
         } catch (IOException e) {
             throw new SDKException("error retrieving manifest from zip file", e);
         }

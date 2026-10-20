@@ -1,5 +1,6 @@
 package io.opentdf.platform.sdk;
 
+import org.apache.commons.compress.archivers.zip.Zip64Mode;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -179,6 +180,64 @@ public class TDFReaderTest {
 
             assertThat(reader.readPayloadBytes(buf)).isEqualTo(expected.length);
             assertThat(buf).startsWith(expected);
+        }
+    }
+
+    /**
+     * The reader opens the payload stream when it is constructed and may read the manifest again
+     * at any point (for the policy, say) while the payload is part way through. With both
+     * entries deflated, the payload stream must pick up where it left off.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = { "manifest.json", "0.manifest.json" })
+    void readsADeflatedPayloadAroundRereadsOfADeflatedManifest(String manifestName) throws IOException {
+        byte[] payload = ZipReaderTest.compressibleBytes(100_000);
+        byte[] archive = ZipReaderTest.zipOf(Zip64Mode.Never,
+                ZipReaderTest.deflated(TDFWriter.TDF_PAYLOAD_FILE_NAME, payload),
+                ZipReaderTest.deflated(manifestName, MANIFEST.getBytes(StandardCharsets.UTF_8)));
+        try (var tdf = new SeekableInMemoryByteChannel(archive)) {
+            var reader = new TDFReader(tdf);
+            var first = new byte[30_000];
+            var rest = new byte[payload.length - first.length + 1];
+
+            assertThat(reader.readPayloadBytes(first)).isEqualTo(first.length);
+            assertThat(reader.manifest()).isEqualTo(MANIFEST);
+            assertThat(reader.readPayloadBytes(rest)).isEqualTo(payload.length - first.length);
+            assertThat(reader.manifest()).isEqualTo(MANIFEST);
+
+            var whole = new ByteArrayOutputStream();
+            whole.write(first);
+            whole.write(rest, 0, payload.length - first.length);
+            assertThat(whole.toByteArray()).isEqualTo(payload);
+        }
+    }
+
+    @Test
+    void rejectsAPayloadWithAnUnsupportedCompressionMethod() throws IOException {
+        byte[] archive = ZipReaderTest.withCompressionMethod(ZipReaderTest.zipOf(Zip64Mode.Never,
+                ZipReaderTest.stored(TDFWriter.TDF_PAYLOAD_FILE_NAME, PAYLOAD.getBytes(StandardCharsets.UTF_8)),
+                ZipReaderTest.stored("manifest.json", MANIFEST.getBytes(StandardCharsets.UTF_8))),
+                TDFWriter.TDF_PAYLOAD_FILE_NAME, 12);
+        try (var tdf = new SeekableInMemoryByteChannel(archive)) {
+            assertThatThrownBy(() -> new TDFReader(tdf))
+                    .isInstanceOf(InvalidZipException.class)
+                    .hasMessageContaining("[" + TDFWriter.TDF_PAYLOAD_FILE_NAME + "]")
+                    .hasMessageContaining("unsupported compression method 12");
+        }
+    }
+
+    @Test
+    void rejectsAManifestWithAnUnsupportedCompressionMethod() throws IOException {
+        byte[] archive = ZipReaderTest.withCompressionMethod(ZipReaderTest.zipOf(Zip64Mode.Never,
+                ZipReaderTest.stored(TDFWriter.TDF_PAYLOAD_FILE_NAME, PAYLOAD.getBytes(StandardCharsets.UTF_8)),
+                ZipReaderTest.stored("manifest.json", MANIFEST.getBytes(StandardCharsets.UTF_8))),
+                "manifest.json", 12);
+        try (var tdf = new SeekableInMemoryByteChannel(archive)) {
+            var reader = new TDFReader(tdf);
+            assertThatThrownBy(reader::manifest)
+                    .isInstanceOf(InvalidZipException.class)
+                    .hasMessageContaining("[manifest.json]")
+                    .hasMessageContaining("unsupported compression method 12");
         }
     }
 }

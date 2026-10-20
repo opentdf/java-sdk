@@ -12,12 +12,16 @@ import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.zip.DataFormatException;
+import java.util.zip.Inflater;
 
 /**
  * The ZipReader class provides functionality to read basic ZIP file
  * structures, such as the End of Central Directory Record and the
  * Local File Header. This class supports standard ZIP archives as well
- * as ZIP64 format.
+ * as ZIP64 format, with entries that are stored (method 0) or deflated
+ * (method 8). Entry sizes are taken from the central directory.
  */
 public class ZipReader {
 
@@ -101,6 +105,10 @@ public class ZipReader {
     /** The same sentinel for a 16-bit field, which is only two bytes wide. */
     private static final int ZIP64_MAGIC_SHORT = 0xFFFF;
     private static final int ZIP64_EXTID= 0x0001;
+    /** Compression method 0: the entry's bytes are written as they are. All OpenTDF writers use it. */
+    private static final int STORED = 0;
+    /** Compression method 8: raw DEFLATE (RFC 1951), which some other TDF writers use. */
+    private static final int DEFLATED = 8;
 
     CentralDirectoryRecord readEndOfCentralDirectory() throws IOException {
         long eoCDRStart = zipChannel.size() - END_OF_CENTRAL_DIRECTORY_SIZE; // 22 is the minimum size of the EOCDR
@@ -176,17 +184,34 @@ public class ZipReader {
 
     public class Entry {
         private final long fileSize;
+        private final long compressedSize;
+        private final int compressionMethod;
         private final String fileName;
         final long offsetToLocalHeader;
 
-        private Entry(byte[] fileName, long offsetToLocalHeader, long fileSize) {
+        private Entry(byte[] fileName, long offsetToLocalHeader, int compressionMethod, long compressedSize,
+                      long uncompressedSize) {
             this.fileName = new String(fileName, StandardCharsets.UTF_8);
             this.offsetToLocalHeader = offsetToLocalHeader;
-            this.fileSize = fileSize;
+            this.compressionMethod = compressionMethod;
+            this.compressedSize = compressedSize;
+            this.fileSize = uncompressedSize;
         }
 
         public String getName() {
             return fileName;
+        }
+
+        int getCompressionMethod() {
+            return compressionMethod;
+        }
+
+        long getCompressedSize() {
+            return compressedSize;
+        }
+
+        long getUncompressedSize() {
+            return fileSize;
         }
 
         /**
@@ -228,9 +253,44 @@ public class ZipReader {
             return zipChannel.position() + filenameLength + extrafieldLength;
         }
 
+        /**
+         * Opens this entry's contents. A stored entry is read straight from the archive; a
+         * deflated one is inflated as it is read, never past the uncompressed size the central
+         * directory declares. Any other compression method is refused here, so an archive whose
+         * other entries use one can still be listed and those entries left unread.
+         * <p>
+         * Entries share the archive's channel. Each stream positions the channel itself on every
+         * read, so streams over different entries may be interleaved, but a stream must not be
+         * used from more than one thread at a time.
+         *
+         * @return the entry's uncompressed bytes
+         * @throws InvalidZipException if the entry uses a compression method other than stored
+         *         or deflate, or its local header is invalid. A deflated stream also throws it from
+         *         {@code read} when its data is corrupt or does not inflate to exactly the declared
+         *         uncompressed size.
+         */
         public InputStream getData() throws IOException {
-            final long startPosition = findStartOfData();
-            final long endPosition = startPosition + fileSize;
+            switch (compressionMethod) {
+                case STORED:
+                    return channelStream(findStartOfData(), fileSize);
+                case DEFLATED:
+                    // zip64 sizes are read as signed longs, so one at or above 2^63 arrives negative
+                    if (compressedSize < 0 || fileSize < 0) {
+                        throw new InvalidZipException("entry [" + fileName + "] declares a size out of range: compressed "
+                                + Long.toUnsignedString(compressedSize) + ", uncompressed " + Long.toUnsignedString(fileSize));
+                    }
+                    return new InflatingInputStream(channelStream(findStartOfData(), compressedSize), fileSize, fileName);
+                default:
+                    throw new InvalidZipException("unsupported compression method " + compressionMethod
+                            + " for entry [" + fileName + "]; only stored (0) and deflate (8) are supported");
+            }
+        }
+
+        /**
+         * Reads {@code length} bytes of the archive starting at {@code startPosition}, ending early
+         * only if the archive does.
+         */
+        private InputStream channelStream(final long startPosition, final long length) {
             final ByteBuffer buf = ByteBuffer.allocate(1);
             return new InputStream() {
                 long offset = 0;
@@ -251,7 +311,7 @@ public class ZipReader {
                 }
 
                 private boolean doneReading() {
-                    return offset >= fileSize;
+                    return offset >= length;
                 }
 
                 private void setChannelPosition() throws IOException {
@@ -267,7 +327,7 @@ public class ZipReader {
                         return -1;
                     }
                     setChannelPosition();
-                    var lenToRead = (int)Math.min(len, fileSize - offset); // cast is always valid because len is an int
+                    var lenToRead = (int)Math.min(len, length - offset); // cast is always valid because len is an int
                     var buf = ByteBuffer.wrap(b, off, lenToRead);
                     var nread = zipChannel.read(buf);
                     if (nread > 0) {
@@ -286,7 +346,7 @@ public class ZipReader {
         short versionMadeBy = readShort();
         short versionNeededToExtract = readShort();
         short generalPurposeBitFlag = readShort();
-        short compressionMethod = readShort();
+        int compressionMethod = readUnsignedShort();
         short lastModFileTime = readShort();
         short lastModFileDate = readShort();
         int crc32 = readInt();
@@ -335,7 +395,8 @@ public class ZipReader {
 
         zipChannel.position(zipChannel.position() + fileCommentLength);
 
-        return new Entry(fileName.array(), relativeOffsetOfLocalHeader, uncompressedSize);
+        return new Entry(fileName.array(), relativeOffsetOfLocalHeader, compressionMethod, compressedSize,
+                uncompressedSize);
     }
 
     public ZipReader(SeekableByteChannel channel) throws IOException {
@@ -352,5 +413,144 @@ public class ZipReader {
 
     public List<Entry> getEntries() {
         return entries;
+    }
+
+    /**
+     * Inflates a raw DEFLATE stream to exactly the uncompressed size the central directory
+     * declares. Output is produced only as it is read, so a large entry is never held in memory,
+     * and never past the declared size: once that many bytes have been returned the deflate
+     * stream has to end there, and an entry that holds more, or ends sooner, is rejected. That
+     * keeps a small entry from expanding without bound, whatever it claims about itself.
+     * <p>
+     * The CRC-32 is not checked. A TDF's integrity comes from its segment hashes and root
+     * signature, which are verified over these bytes.
+     */
+    private static final class InflatingInputStream extends InputStream {
+        private static final int INPUT_BUFFER_SIZE = 8192;
+
+        private final InputStream compressed;
+        private final long uncompressedSize;
+        private final String entryName;
+        private final Inflater inflater = new Inflater(true);
+        private final byte[] input = new byte[INPUT_BUFFER_SIZE];
+        private final byte[] singleByte = new byte[1];
+        private long produced = 0;
+        private boolean paddingFed = false;
+        private boolean endVerified = false;
+        private boolean closed = false;
+
+        InflatingInputStream(InputStream compressed, long uncompressedSize, String entryName) {
+            this.compressed = compressed;
+            this.uncompressedSize = uncompressedSize;
+            this.entryName = entryName;
+        }
+
+        @Override
+        public int read() throws IOException {
+            return read(singleByte, 0, 1) == -1 ? -1 : singleByte[0] & 0xFF;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            Objects.checkFromIndexSize(off, len, b.length);
+            if (closed) {
+                throw new IOException("stream closed");
+            }
+            if (len == 0) {
+                return 0;
+            }
+            if (produced == uncompressedSize) {
+                verifyEnd();
+                return -1;
+            }
+            // never ask for more than the declared size, so nothing past it reaches the caller
+            int wanted = (int) Math.min(len, uncompressedSize - produced);
+            while (true) {
+                int n = inflate(b, off, wanted);
+                if (n > 0) {
+                    produced += n;
+                    return n;
+                }
+                if (inflater.finished()) {
+                    throw new InvalidZipException("deflated entry [" + entryName + "] ended after " + produced
+                            + " bytes, but its declared uncompressed size is " + uncompressedSize);
+                }
+                fill();
+            }
+        }
+
+        /**
+         * At the declared size the deflate stream must also be at its end. Probes for a single
+         * further byte: getting one means the entry holds more than it declares.
+         */
+        private void verifyEnd() throws IOException {
+            if (endVerified) {
+                return;
+            }
+            byte[] probe = new byte[1];
+            while (!inflater.finished()) {
+                if (inflate(probe, 0, 1) > 0) {
+                    throw new InvalidZipException("deflated entry [" + entryName
+                            + "] holds more data than its declared uncompressed size of " + uncompressedSize);
+                }
+                if (!inflater.finished()) {
+                    fill();
+                }
+            }
+            endVerified = true;
+        }
+
+        private int inflate(byte[] b, int off, int len) {
+            int n;
+            try {
+                n = inflater.inflate(b, off, len);
+            } catch (DataFormatException e) {
+                throw new InvalidZipException("invalid deflate data in entry [" + entryName + "]", e);
+            }
+            if (n > 0 && paddingFed) {
+                // the padding byte was taken as data, so the real compressed data ran out first
+                throw truncated();
+            }
+            return n;
+        }
+
+        private void fill() throws IOException {
+            if (inflater.needsDictionary()) {
+                // raw deflate has no way to name a dictionary, so only corrupt data gets here
+                throw new InvalidZipException("invalid deflate data in entry [" + entryName
+                        + "]: it asks for a preset dictionary");
+            }
+            if (!inflater.needsInput()) {
+                return;
+            }
+            int n = compressed.read(input, 0, input.length);
+            if (n > 0) {
+                inflater.setInput(input, 0, n);
+                return;
+            }
+            if (!paddingFed) {
+                // without the zlib wrapper, zlib may want one byte past the end of the deflate
+                // stream before it reports the end (see Inflater(boolean)); ZipFile pads the same way
+                paddingFed = true;
+                input[0] = 0;
+                inflater.setInput(input, 0, 1);
+                return;
+            }
+            throw truncated();
+        }
+
+        private InvalidZipException truncated() {
+            return new InvalidZipException("deflated entry [" + entryName + "] is truncated: its compressed data ran out after "
+                    + produced + " of its declared " + uncompressedSize + " uncompressed bytes");
+        }
+
+        @Override
+        public void close() throws IOException {
+            if (!closed) {
+                closed = true;
+                inflater.end();
+                compressed.close();
+            }
+        }
     }
 }

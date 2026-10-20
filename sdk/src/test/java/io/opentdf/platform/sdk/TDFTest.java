@@ -17,6 +17,7 @@ import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.annotation.Nonnull;
@@ -41,6 +42,9 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.zip.CRC32;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -914,6 +918,97 @@ public class TDFTest {
         var data = new ByteArrayOutputStream();
         entry.getData().transferTo(data);
         return data;
+    }
+
+    /**
+     * OpenTDF writers store both entries, but other TDF writers may deflate either one. Takes a
+     * TDF this SDK wrote, repacks it with the requested entries deflated, and decrypts it end to
+     * end. The entry contents are unchanged, so the segment hashes and root signature still have
+     * to verify against the inflated bytes. The payload spans several segments, so the reader
+     * walks the inflated stream across segment boundaries.
+     */
+    @ParameterizedTest
+    @CsvSource({
+            "manifest.json,   true,  true",
+            "0.manifest.json, true,  true",
+            "manifest.json,   true,  false",
+            "0.manifest.json, false, true",
+    })
+    public void testDecryptingATDFWithDeflatedEntries(String manifestName, boolean deflateManifest,
+                                                     boolean deflatePayload) throws Exception {
+        String metadata = "metadata for a deflated tdf";
+        var data = new byte[(int) (Config.MIN_SEGMENT_SIZE * 3.5)];
+        new Random(7741).nextBytes(data);
+        var tdf = new TDF(new FakeServicesBuilder().setKas(kas)
+                .setKeyAccessServerRegistryService(kasRegistryService).build());
+        var original = new ByteArrayOutputStream();
+        var tdfObject = tdf.createTDF(new ByteArrayInputStream(data), original,
+                Config.newTDFConfig(
+                        Config.withAutoconfigure(false),
+                        Config.withKasInformation(getRSAKASInfos()),
+                        Config.withSegmentSize(Config.MIN_SEGMENT_SIZE),
+                        Config.withMetaData(metadata)));
+        assertThat(tdfObject.getManifest().encryptionInformation.integrityInformation.segments)
+                .withFailMessage("the test needs more than one segment to be meaningful")
+                .hasSizeGreaterThan(1);
+
+        byte[] repacked = repackWithDeflate(original.toByteArray(), manifestName, deflateManifest, deflatePayload);
+        assertThat(ZipReaderTest.compressionMethodOf(repacked, manifestName))
+                .isEqualTo(deflateManifest ? ZipEntry.DEFLATED : ZipEntry.STORED);
+        assertThat(ZipReaderTest.compressionMethodOf(repacked, TDFWriter.TDF_PAYLOAD_FILE_NAME))
+                .isEqualTo(deflatePayload ? ZipEntry.DEFLATED : ZipEntry.STORED);
+
+        var unwrapped = new ByteArrayOutputStream();
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(repacked), platformUrl);
+        reader.readPayload(unwrapped);
+
+        assertThat(unwrapped.toByteArray())
+                .withFailMessage("extracted data does not match")
+                .containsExactly(data);
+        assertThat(reader.getMetadata()).isEqualTo(metadata);
+        assertThat(SDK.readManifest(new SeekableInMemoryByteChannel(repacked)).payload.isEncrypted).isTrue();
+    }
+
+    /**
+     * Repacks a TDF this SDK wrote using {@link ZipOutputStream}, deflating the entries asked
+     * for. That writer streams, so deflated entries carry their sizes in a data descriptor and
+     * the central directory, with zeros in the local header.
+     */
+    private static byte[] repackWithDeflate(byte[] tdfBytes, String manifestName, boolean deflateManifest,
+                                            boolean deflatePayload) throws IOException {
+        final byte[] manifest;
+        final byte[] payload;
+        try (var channel = new SeekableInMemoryByteChannel(tdfBytes)) {
+            var reader = new ZipReader(channel);
+            manifest = readZipEntry(reader, TDFWriter.TDF_MANIFEST_FILE_NAME).toByteArray();
+            payload = readZipEntry(reader, TDFWriter.TDF_PAYLOAD_FILE_NAME).toByteArray();
+        }
+
+        var out = new ByteArrayOutputStream();
+        try (var zip = new ZipOutputStream(out)) {
+            putZipEntry(zip, TDFWriter.TDF_PAYLOAD_FILE_NAME, payload, deflatePayload);
+            putZipEntry(zip, manifestName, manifest, deflateManifest);
+        }
+        return out.toByteArray();
+    }
+
+    private static void putZipEntry(ZipOutputStream zip, String name, byte[] content, boolean deflate)
+            throws IOException {
+        var entry = new ZipEntry(name);
+        if (deflate) {
+            entry.setMethod(ZipEntry.DEFLATED);
+        } else {
+            // ZipOutputStream needs a stored entry's size and CRC before its data
+            var crc = new CRC32();
+            crc.update(content);
+            entry.setMethod(ZipEntry.STORED);
+            entry.setSize(content.length);
+            entry.setCompressedSize(content.length);
+            entry.setCrc(crc.getValue());
+        }
+        zip.putNextEntry(entry);
+        zip.write(content);
+        zip.closeEntry();
     }
 
 
