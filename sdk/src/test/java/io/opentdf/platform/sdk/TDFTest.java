@@ -1468,6 +1468,97 @@ public class TDFTest {
         assertThat(assertionWithId.id).isEqualTo("explicit-id");
     }
 
+    @Test
+    void unprefixedManifestNameRoundTrips() throws Exception {
+        Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
+                Config.withKasInformation(getSingleRSAKASInfo()),
+                Config.withUnprefixedManifestName());
+
+        String plainText = "test data for unprefixed manifest";
+        InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes(StandardCharsets.UTF_8));
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+
+        TDF tdf = new TDF(
+                new FakeServicesBuilder().setKas(kas)
+                        .setKeyAccessServerRegistryService(kasRegistryService).build());
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
+
+        try (var chan = new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray())) {
+            var names = new ZipReader(chan).getEntries().stream()
+                    .map(ZipReader.Entry::getName)
+                    .collect(Collectors.toList());
+            assertThat(names).contains("manifest.json");
+            assertThat(names).doesNotContain("0.manifest.json");
+
+            var reader = tdf.loadTDF(chan, platformUrl);
+            var unwrappedData = new ByteArrayOutputStream();
+            reader.readPayload(unwrappedData);
+            assertThat(unwrappedData.toString(StandardCharsets.UTF_8)).isEqualTo(plainText);
+        }
+    }
+
+    @Test
+    void legacyTargetModeOverridesUnprefixedManifestName() throws Exception {
+        Consumer<Config.TDFConfig>[] optionsFirstOrder = new Consumer[]{
+                Config.withAutoconfigure(false),
+                Config.withKasInformation(getSingleRSAKASInfo()),
+                Config.withUnprefixedManifestName(),
+                Config.withTargetMode("4.2.2")
+        };
+        Consumer<Config.TDFConfig>[] optionsSecondOrder = new Consumer[]{
+                Config.withAutoconfigure(false),
+                Config.withKasInformation(getSingleRSAKASInfo()),
+                Config.withTargetMode("4.2.2"),
+                Config.withUnprefixedManifestName()
+        };
+
+        for (Consumer<Config.TDFConfig>[] options : new Consumer[][]{optionsFirstOrder, optionsSecondOrder}) {
+            Config.TDFConfig config = Config.newTDFConfig(options);
+
+            String plainText = "test data";
+            InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes(StandardCharsets.UTF_8));
+            ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+
+            TDF tdf = new TDF(
+                    new FakeServicesBuilder().setKas(kas)
+                            .setKeyAccessServerRegistryService(kasRegistryService).build());
+            tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
+
+            try (var chan = new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray())) {
+                var names = new ZipReader(chan).getEntries().stream()
+                        .map(ZipReader.Entry::getName)
+                        .collect(Collectors.toList());
+                assertThat(names).contains("0.manifest.json");
+                assertThat(names).doesNotContain("manifest.json");
+            }
+        }
+    }
+
+    @Test
+    void defaultManifestNameIsUnchanged() throws Exception {
+        Config.TDFConfig config = Config.newTDFConfig(
+                Config.withAutoconfigure(false),
+                Config.withKasInformation(getSingleRSAKASInfo()));
+
+        String plainText = "test data for default manifest";
+        InputStream plainTextInputStream = new ByteArrayInputStream(plainText.getBytes(StandardCharsets.UTF_8));
+        ByteArrayOutputStream tdfOutputStream = new ByteArrayOutputStream();
+
+        TDF tdf = new TDF(
+                new FakeServicesBuilder().setKas(kas)
+                        .setKeyAccessServerRegistryService(kasRegistryService).build());
+        tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
+
+        try (var chan = new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray())) {
+            var names = new ZipReader(chan).getEntries().stream()
+                    .map(ZipReader.Entry::getName)
+                    .collect(Collectors.toList());
+            assertThat(names).contains("0.manifest.json");
+            assertThat(names).doesNotContain("manifest.json");
+        }
+    }
+
     @Nonnull
     private static Config.KASInfo[] getKASInfos(Predicate<Integer> filter) {
         var kasInfos = new ArrayList<Config.KASInfo>();

@@ -83,4 +83,10 @@ class ConfigTest {
         Config.TDFConfig config = Config.newTDFConfig(Config.withMimeType(mimeType));
         assertEquals(mimeType, config.mimeType);
     }
+
+    @Test
+    void withUnprefixedManifestName_shouldSetUnprefixedManifestName() {
+        Config.TDFConfig config = Config.newTDFConfig(Config.withUnprefixedManifestName());
+        assertTrue(config.unprefixedManifestName);
+    }
 }

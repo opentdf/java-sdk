@@ -648,7 +648,10 @@ class TDF {
         tdfObject.prepareManifest(tdfConfig, splits, metadataIv);
 
         long encryptedSegmentSize = (long) tdfConfig.defaultSegmentSize + kGcmIvSize + AesGcm.GCM_TAG_LENGTH;
-        TDFWriter tdfWriter = new TDFWriter(outputStream);
+        String manifestFileName = (tdfConfig.unprefixedManifestName && !tdfConfig.hexEncodeRootAndSegmentHashes)
+                ? TDFWriter.TDF_MANIFEST_FILE_NAME_SPEC
+                : TDFWriter.TDF_MANIFEST_FILE_NAME;
+        TDFWriter tdfWriter = new TDFWriter(outputStream, manifestFileName);
 
         ByteArrayOutputStream aggregateHash = new ByteArrayOutputStream();
         byte[] readBuf = new byte[tdfConfig.defaultSegmentSize];

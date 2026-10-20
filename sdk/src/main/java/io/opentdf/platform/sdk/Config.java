@@ -194,6 +194,7 @@ public class Config {
         public boolean hexEncodeRootAndSegmentHashes;
         public boolean renderVersionInfoInManifest;
         public boolean systemMetadataAssertion;
+        public boolean unprefixedManifestName;
 
         public TDFConfig() {
             this.autoconfigure = true;
@@ -211,6 +212,7 @@ public class Config {
             this.hexEncodeRootAndSegmentHashes = false;
             this.renderVersionInfoInManifest = true;
             this.systemMetadataAssertion = false;
+            this.unprefixedManifestName = false;
         }
     }
 
@@ -323,6 +325,16 @@ public class Config {
             config.renderVersionInfoInManifest = !legacyTDF;
             config.hexEncodeRootAndSegmentHashes = legacyTDF;
         };
+    }
+
+    /**
+     * Stores the manifest under the zip entry name manifest.json, the name the TDF spec defines,
+     * instead of the legacy 0.manifest.json written by default. Readers that predate manifest.json
+     * support can't open the result. A pre-4.3.0 {@link #withTargetMode(String)} overrides this
+     * option and keeps the legacy name.
+     */
+    public static Consumer<TDFConfig> withUnprefixedManifestName() {
+        return (TDFConfig config) -> config.unprefixedManifestName = true;
     }
 
     public static Consumer<TDFConfig> WithWrappingKeyAlg(KeyType    keyType) {

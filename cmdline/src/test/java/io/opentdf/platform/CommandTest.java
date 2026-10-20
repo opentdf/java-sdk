@@ -64,6 +64,19 @@ class CommandTest {
     }
 
     @Test
+    void encrypt_unprefixedManifestNameFlag_acceptedByPicocli() {
+        StringWriter err = new StringWriter();
+        CommandLine cli = new CommandLine(new Command());
+        cli.setErr(new PrintWriter(err));
+
+        int code = cli.execute("encrypt", "-k", "https://kas.example.com", "-f", "/dev/null", "--unprefixed-manifest-name");
+
+        // Picocli accepts the flag; the command fails later on missing credentials, not unknown option.
+        assertThat(code).isEqualTo(CommandLine.ExitCode.USAGE);
+        assertThat(err.toString()).contains("Missing required option: '--platform-endpoint=<platformEndpoint>'");
+    }
+
+    @Test
     void supports_withoutCredentials_stillExits0() {
         // Regression sentinel: tdf supports must not require --client-id/--client-secret/--platform-endpoint.
         int code = new CommandLine(new Command()).execute("supports", "dpop");
