@@ -799,6 +799,8 @@ public class Manifest {
         for (Manifest.KeyAccess keyAccess : result.encryptionInformation.keyAccessObj) {
             if (keyAccess == null) {
                 throw new IllegalArgumentException("Invalid null KeyAccess in manifest");
+            } else if (keyAccess.url == null) {
+                throw new IllegalArgumentException("Invalid KeyAccess with null url in manifest");
             }
         }
 

@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ManifestTest {
@@ -258,6 +259,16 @@ public class ManifestTest {
         var segment = manifest.encryptionInformation.integrityInformation.segments.get(0);
         assertThat(segment.segmentSize).isZero();
         assertThat(segment.encryptedSegmentSize).isZero();
+    }
+
+    @Test
+    void rejectsKeyAccessWithoutUrl() {
+        String manifest = manifestWithSegments("{ \"hash\": \"aGFzaDA=\" }")
+                .replace(" \"url\": \"http://localhost:65432/kas\",", "");
+
+        assertThatThrownBy(() -> Manifest.readManifest(manifest))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid KeyAccess with null url in manifest");
     }
 
     @Test

@@ -89,8 +89,9 @@ public class TDFReaderTest {
                 TDFWriter.TDF_PAYLOAD_FILE_NAME, PAYLOAD,
                 "0.manifest.json", manifest)) {
             var tdf = new TDF(new FakeServicesBuilder().setKas(TDFTest.kas).build());
+            var readerConfig = Config.newTDFReaderConfig();
 
-            assertThatThrownBy(() -> tdf.loadTDF(tdfBytes, Config.newTDFReaderConfig()))
+            assertThatThrownBy(() -> tdf.loadTDF(tdfBytes, readerConfig))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("Manifest is empty");
         }
