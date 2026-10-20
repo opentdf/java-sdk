@@ -51,4 +51,9 @@ public final class BouncyCastleKemProvider implements KemProvider {
     public byte[] unwrapDEK(KeyType keyType, String privateKeyPEM, byte[] wrapped) {
         return HybridCrypto.unwrapDEK(keyType, privateKeyPEM, wrapped);
     }
+
+    @Override
+    public KeyPairPem generateKeyPair(KeyType keyType) {
+        return HybridCrypto.generateKeyPair(keyType);
+    }
 }
