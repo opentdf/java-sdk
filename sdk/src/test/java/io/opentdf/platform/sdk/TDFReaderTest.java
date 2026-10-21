@@ -240,4 +240,99 @@ public class TDFReaderTest {
                     .hasMessageContaining("unsupported compression method 12");
         }
     }
+
+    /**
+     * The manifest is read whole into memory before it is validated, so a tiny archive whose
+     * deflated manifest declares 16 MiB is refused on its declaration, before anything is
+     * inflated.
+     */
+    @Test
+    void rejectsADeflatedManifestBombBeforeInflatingIt() throws IOException {
+        byte[] archive = ZipReaderTest.zipOf(Zip64Mode.Never,
+                ZipReaderTest.stored(TDFWriter.TDF_PAYLOAD_FILE_NAME, PAYLOAD.getBytes(StandardCharsets.UTF_8)),
+                ZipReaderTest.deflated("manifest.json", new byte[16 * 1024 * 1024]));
+        assertThat(archive.length).isLessThan(64 * 1024);
+        int inflatersBefore = ZipReader.inflatersCreated();
+        try (var tdf = new SeekableInMemoryByteChannel(archive)) {
+            assertThatThrownBy(() -> SDK.readManifest(tdf))
+                    .isInstanceOf(InvalidZipException.class)
+                    .hasMessageContaining("[manifest.json]")
+                    .hasMessageContaining("budget");
+        }
+        assertThat(ZipReader.inflatersCreated()).isEqualTo(inflatersBefore);
+    }
+
+    /**
+     * A deflated payload over the budget is refused when the reader is built, before a key is
+     * requested. Real payloads are ciphertext, which does not compress, so a legitimate one never
+     * declares more than the archive holds.
+     */
+    @Test
+    void rejectsADeflatedPayloadDeclaringMoreThanTheBudget() throws IOException {
+        byte[] archive = ZipReaderTest.zipOf(Zip64Mode.Never,
+                ZipReaderTest.deflated(TDFWriter.TDF_PAYLOAD_FILE_NAME, new byte[11 * 1024 * 1024]),
+                ZipReaderTest.stored("manifest.json", MANIFEST.getBytes(StandardCharsets.UTF_8)));
+        try (var tdf = new SeekableInMemoryByteChannel(archive)) {
+            assertThatThrownBy(() -> new TDFReader(tdf))
+                    .isInstanceOf(InvalidZipException.class)
+                    .hasMessageContaining("[" + TDFWriter.TDF_PAYLOAD_FILE_NAME + "]")
+                    .hasMessageContaining("uncompressed size of " + (11 * 1024 * 1024) + " bytes")
+                    .hasMessageContaining("budget of " + (10 * 1024 * 1024) + " bytes");
+        }
+    }
+
+    /**
+     * Reading only the manifest never opens the payload, so a deflated payload gets no inflater.
+     * The manifest here is stored, so any inflater at all would have to be the payload's.
+     */
+    @Test
+    void manifestOnlyReadsDoNotCreateAPayloadInflater() throws IOException {
+        byte[] archive = ZipReaderTest.zipOf(Zip64Mode.Never,
+                ZipReaderTest.deflated(TDFWriter.TDF_PAYLOAD_FILE_NAME, ZipReaderTest.compressibleBytes(50_000)),
+                ZipReaderTest.stored("manifest.json", MANIFEST.getBytes(StandardCharsets.UTF_8)));
+        int inflatersBefore = ZipReader.inflatersCreated();
+        try (var tdf = new SeekableInMemoryByteChannel(archive)) {
+            var reader = new TDFReader(tdf);
+            assertThat(reader.manifest()).isEqualTo(MANIFEST);
+            assertThat(reader.manifest()).isEqualTo(MANIFEST);
+        }
+        assertThat(ZipReader.inflatersCreated()).isEqualTo(inflatersBefore);
+    }
+
+    /**
+     * Once the payload has been read to its end it is released, and a failed read releases it
+     * too. A deflated manifest's inflater is released as soon as the manifest has been read.
+     */
+    @Test
+    void releasesInflatersWhenThePayloadIsFinishedOrFails() throws IOException {
+        byte[] payload = ZipReaderTest.compressibleBytes(50_000);
+        byte[] archive = ZipReaderTest.zipOf(Zip64Mode.Never,
+                ZipReaderTest.deflated(TDFWriter.TDF_PAYLOAD_FILE_NAME, payload),
+                ZipReaderTest.deflated("manifest.json", MANIFEST.getBytes(StandardCharsets.UTF_8)));
+        int openBefore = ZipReader.openInflaters();
+
+        try (var tdf = new SeekableInMemoryByteChannel(archive)) {
+            var reader = new TDFReader(tdf);
+            assertThat(reader.manifest()).isEqualTo(MANIFEST);
+            assertThat(ZipReader.openInflaters()).isEqualTo(openBefore);
+
+            assertThat(reader.readPayloadBytes(new byte[payload.length])).isEqualTo(payload.length);
+            assertThat(ZipReader.openInflaters()).isEqualTo(openBefore + 1);
+            reader.finishPayload();
+            assertThat(ZipReader.openInflaters()).isEqualTo(openBefore);
+        }
+
+        // declares one byte fewer than it holds, so the read that reaches the end fails
+        byte[] corrupt = ZipReaderTest.withDeclaredUncompressedSize(
+                ZipReaderTest.zipOf(Zip64Mode.Never,
+                        ZipReaderTest.deflated(TDFWriter.TDF_PAYLOAD_FILE_NAME, payload),
+                        ZipReaderTest.stored("manifest.json", MANIFEST.getBytes(StandardCharsets.UTF_8))),
+                TDFWriter.TDF_PAYLOAD_FILE_NAME, payload.length - 1L);
+        try (var tdf = new SeekableInMemoryByteChannel(corrupt)) {
+            var reader = new TDFReader(tdf);
+            var buf = new byte[payload.length];
+            assertThatThrownBy(() -> reader.readPayloadBytes(buf)).isInstanceOf(InvalidZipException.class);
+            assertThat(ZipReader.openInflaters()).isEqualTo(openBefore);
+        }
+    }
 }

@@ -524,6 +524,60 @@ public class ZipReaderTest {
         assertThat(delivered.size()).isEqualTo(1024);
     }
 
+    /** The floor of the deflated size budget: 10 MiB. */
+    private static final int BUDGET_FLOOR = 10 * 1024 * 1024;
+
+    /**
+     * Inflation stops at the declared size, so the declaration itself has a budget: a deflated
+     * entry may not claim more than the larger of the archive's length and 10 MiB. 16 MiB of zeros
+     * deflates to about 16 KiB, so without that budget this archive would expand a thousandfold.
+     * It is refused before a stream exists, so nothing is inflated.
+     */
+    @Test
+    public void testDeflatedEntryDeclaringMoreThanTheBudgetIsRejectedBeforeInflating() throws IOException {
+        byte[] bomb = new byte[16 * 1024 * 1024];
+        byte[] archive = zipOf(Zip64Mode.Never, deflated("manifest.json", bomb));
+        assertThat(archive.length).isLessThan(64 * 1024);
+        var entry = entryNamed(new ZipReader(new SeekableInMemoryByteChannel(archive)), "manifest.json");
+        int inflatersBefore = ZipReader.inflatersCreated();
+
+        assertThatThrownBy(entry::getData)
+                .isInstanceOf(InvalidZipException.class)
+                .hasMessageContaining("[manifest.json]")
+                .hasMessageContaining("uncompressed size of " + bomb.length + " bytes")
+                .hasMessageContaining("budget of " + BUDGET_FLOOR + " bytes");
+        assertThat(ZipReader.inflatersCreated()).isEqualTo(inflatersBefore);
+    }
+
+    /** A small archive may still hold a deflated entry right up to the floor. */
+    @Test
+    public void testDeflatedEntryDeclaringExactlyTheBudgetFloorIsRead() throws IOException {
+        byte[] zeros = new byte[BUDGET_FLOOR];
+        byte[] archive = zipOf(Zip64Mode.Never, deflated("entry", zeros));
+        assertThat(archive.length).isLessThan(BUDGET_FLOOR);
+
+        assertThat(readEntryBytes(new ZipReader(new SeekableInMemoryByteChannel(archive)), "entry")).isEqualTo(zeros);
+    }
+
+    /** Past the floor the budget is the archive's length, however the archive came to be that long. */
+    @Test
+    public void testDeflatedSizeBudgetGrowsWithTheArchive() throws IOException {
+        byte[] padding = randomBytes(BUDGET_FLOOR + 1024 * 1024, 3);
+        byte[] zeros = new byte[BUDGET_FLOOR + 512 * 1024];
+        byte[] archive = zipOf(Zip64Mode.Never, stored("padding", padding), deflated("entry", zeros));
+        assertThat(archive.length).isGreaterThan(zeros.length);
+
+        assertThat(readEntryBytes(new ZipReader(new SeekableInMemoryByteChannel(archive)), "entry")).isEqualTo(zeros);
+
+        byte[] overBudget = withDeclaredUncompressedSize(archive, "entry", archive.length + 1L);
+        var entry = entryNamed(new ZipReader(new SeekableInMemoryByteChannel(overBudget)), "entry");
+        assertThatThrownBy(entry::getData)
+                .isInstanceOf(InvalidZipException.class)
+                .hasMessageContaining("[entry]")
+                .hasMessageContaining("uncompressed size of " + (archive.length + 1L) + " bytes")
+                .hasMessageContaining("budget of " + archive.length + " bytes");
+    }
+
     @ParameterizedTest
     @ValueSource(longs = { 1, 2, 5_000 })
     public void testDeflatedEntrySmallerThanDeclaredIsRejected(long extra) throws IOException {
@@ -804,7 +858,7 @@ public class ZipReaderTest {
     }
 
     /** Rewrites the uncompressed size in the central directory, which is the one the reader trusts. */
-    private static byte[] withDeclaredUncompressedSize(byte[] archive, String name, long size) {
+    static byte[] withDeclaredUncompressedSize(byte[] archive, String name, long size) {
         byte[] patched = archive.clone();
         ByteBuffer.wrap(patched).order(ByteOrder.LITTLE_ENDIAN)
                 .putInt(centralDirectoryHeaderOf(patched, name) + CDH_UNCOMPRESSED_SIZE, (int) size);

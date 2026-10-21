@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
@@ -109,6 +110,13 @@ public class ZipReader {
     private static final int STORED = 0;
     /** Compression method 8: raw DEFLATE (RFC 1951), which some other TDF writers use. */
     private static final int DEFLATED = 8;
+    /**
+     * The least uncompressed size a deflated entry may declare, however small the archive: 10 MiB.
+     * Past it, an entry may declare no more than the archive's length. A deflated TDF payload is
+     * ciphertext, which does not compress, so it never declares more than the archive holds;
+     * the floor leaves room for a manifest that compresses well.
+     */
+    private static final long DEFLATED_SIZE_BUDGET_FLOOR = 10L * 1024 * 1024;
 
     CentralDirectoryRecord readEndOfCentralDirectory() throws IOException {
         long eoCDRStart = zipChannel.size() - END_OF_CENTRAL_DIRECTORY_SIZE; // 22 is the minimum size of the EOCDR
@@ -259,30 +267,61 @@ public class ZipReader {
          * directory declares. Any other compression method is refused here, so an archive whose
          * other entries use one can still be listed and those entries left unread.
          * <p>
+         * A deflated entry may not declare an uncompressed size larger than the larger of the
+         * archive's length and 10 MiB. Inflation never passes the declared size, so this is what
+         * bounds how far a small archive can expand.
+         * <p>
          * Entries share the archive's channel. Each stream positions the channel itself on every
          * read, so streams over different entries may be interleaved, but a stream must not be
-         * used from more than one thread at a time.
+         * used from more than one thread at a time. Close a deflated entry's stream to release its
+         * inflater.
          *
          * @return the entry's uncompressed bytes
          * @throws InvalidZipException if the entry uses a compression method other than stored
-         *         or deflate, or its local header is invalid. A deflated stream also throws it from
-         *         {@code read} when its data is corrupt or does not inflate to exactly the declared
-         *         uncompressed size.
+         *         or deflate, declares a deflated size over its budget, or its local header is
+         *         invalid. A deflated stream also throws it from {@code read} when its data is
+         *         corrupt or does not inflate to exactly the declared uncompressed size.
          */
         public InputStream getData() throws IOException {
+            long startOfData = checkReadable();
+            if (compressionMethod == DEFLATED) {
+                return new InflatingInputStream(channelStream(startOfData, compressedSize), fileSize, fileName);
+            }
+            return channelStream(startOfData, fileSize);
+        }
+
+        /**
+         * Makes every check {@link #getData()} makes, without opening a stream or allocating an
+         * inflater, so a reader can refuse an entry it will only read later.
+         *
+         * @return the offset of the entry's first byte of data
+         * @throws InvalidZipException as {@link #getData()} does before it returns a stream
+         */
+        long checkReadable() throws IOException {
             switch (compressionMethod) {
                 case STORED:
-                    return channelStream(findStartOfData(), fileSize);
+                    break;
                 case DEFLATED:
-                    // zip64 sizes are read as signed longs, so one at or above 2^63 arrives negative
-                    if (compressedSize < 0 || fileSize < 0) {
-                        throw new InvalidZipException("entry [" + fileName + "] declares a size out of range: compressed "
-                                + Long.toUnsignedString(compressedSize) + ", uncompressed " + Long.toUnsignedString(fileSize));
-                    }
-                    return new InflatingInputStream(channelStream(findStartOfData(), compressedSize), fileSize, fileName);
+                    checkDeflatedSizes();
+                    break;
                 default:
                     throw new InvalidZipException("unsupported compression method " + compressionMethod
                             + " for entry [" + fileName + "]; only stored (0) and deflate (8) are supported");
+            }
+            return findStartOfData();
+        }
+
+        private void checkDeflatedSizes() throws IOException {
+            // zip64 sizes are read as signed longs, so one at or above 2^63 arrives negative
+            if (compressedSize < 0 || fileSize < 0) {
+                throw new InvalidZipException("entry [" + fileName + "] declares a size out of range: compressed "
+                        + Long.toUnsignedString(compressedSize) + ", uncompressed " + Long.toUnsignedString(fileSize));
+            }
+            long budget = Math.max(zipChannel.size(), DEFLATED_SIZE_BUDGET_FLOOR);
+            if (fileSize > budget) {
+                throw new InvalidZipException("deflated entry [" + fileName + "] declares an uncompressed size of "
+                        + fileSize + " bytes, more than its budget of " + budget
+                        + " bytes (the larger of the archive's length and " + DEFLATED_SIZE_BUDGET_FLOOR + " bytes)");
             }
         }
 
@@ -415,6 +454,24 @@ public class ZipReader {
         return entries;
     }
 
+    /** Inflaters created by {@link Entry#getData()}, across every reader in this JVM. */
+    private static final AtomicInteger INFLATERS_CREATED = new AtomicInteger();
+    /** Inflaters created and not yet released by closing their stream. */
+    private static final AtomicInteger OPEN_INFLATERS = new AtomicInteger();
+
+    /**
+     * How many inflaters deflated entries have created. An inflater holds native memory until it
+     * is released, so the TDF reader's tests use this to check it creates them only when needed.
+     */
+    static int inflatersCreated() {
+        return INFLATERS_CREATED.get();
+    }
+
+    /** How many inflaters are currently allocated: created, and their stream not yet closed. */
+    static int openInflaters() {
+        return OPEN_INFLATERS.get();
+    }
+
     /**
      * Inflates a raw DEFLATE stream to exactly the uncompressed size the central directory
      * declares. Output is produced only as it is read, so a large entry is never held in memory,
@@ -443,6 +500,8 @@ public class ZipReader {
             this.compressed = compressed;
             this.uncompressedSize = uncompressedSize;
             this.entryName = entryName;
+            INFLATERS_CREATED.incrementAndGet();
+            OPEN_INFLATERS.incrementAndGet();
         }
 
         @Override
@@ -549,6 +608,7 @@ public class ZipReader {
             if (!closed) {
                 closed = true;
                 inflater.end();
+                OPEN_INFLATERS.decrementAndGet();
                 compressed.close();
             }
         }
