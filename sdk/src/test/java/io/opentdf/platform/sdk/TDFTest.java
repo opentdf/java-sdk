@@ -1505,4 +1505,147 @@ public class TDFTest {
     private static boolean isHexChar(byte b) {
         return (b >= 'a' && b <= 'f') || (b >= '0' && b <= '9');
     }
+
+    @Test
+    void hexlessPolicyBindingOnEveryKeyAccess() throws Exception {
+        var tdf = new TDF(new FakeServicesBuilder().setKas(kas)
+                .setKeyAccessServerRegistryService(kasRegistryService).build());
+        var tdfOutputStream = new ByteArrayOutputStream();
+
+        // Create TDF with two KAS (two splits) and hexless policy binding
+        var manifest = tdf.createTDF(
+                new ByteArrayInputStream("test data".getBytes()),
+                tdfOutputStream,
+                Config.newTDFConfig(
+                        Config.withAutoconfigure(false),
+                        Config.withKasInformation(getSingleRSAKASInfo()[0], getSingleRSAKASInfo()[0]),
+                        Config.withHexlessPolicyBinding()
+                )
+        ).getManifest();
+
+        // Verify both key access objects have hexless bindings (32 bytes)
+        var keyAccessObjects = manifest.encryptionInformation.keyAccessObj;
+        assertThat(keyAccessObjects).hasSize(2);
+
+        for (Manifest.KeyAccess keyAccess : keyAccessObjects) {
+            Manifest.PolicyBinding policyBinding = (Manifest.PolicyBinding) keyAccess.policyBinding;
+            byte[] decoded = Base64.getDecoder().decode(policyBinding.hash);
+            assertThat(decoded).hasSize(32);
+        }
+    }
+
+    @Test
+    void legacyTargetModeOverridesHexlessPolicyBinding() throws Exception {
+        var tdf = new TDF(new FakeServicesBuilder().setKas(kas)
+                .setKeyAccessServerRegistryService(kasRegistryService).build());
+
+        // Test order 1: hexless then legacy
+        var tdfOutputStream1 = new ByteArrayOutputStream();
+        var manifest1 = tdf.createTDF(
+                new ByteArrayInputStream("test data".getBytes()),
+                tdfOutputStream1,
+                Config.newTDFConfig(
+                        Config.withAutoconfigure(false),
+                        Config.withKasInformation(getSingleRSAKASInfo()[0]),
+                        Config.withHexlessPolicyBinding(),
+                        Config.withTargetMode("4.2.2")
+                )
+        ).getManifest();
+
+        Manifest.PolicyBinding pb1 = (Manifest.PolicyBinding) manifest1.encryptionInformation.keyAccessObj.get(0).policyBinding;
+        byte[] decoded1 = Base64.getDecoder().decode(pb1.hash);
+        assertThat(decoded1).hasSize(64); // Legacy form is 64 hex chars, i.e., 64 bytes
+        for (byte b : decoded1) {
+            assertThat(isHexChar(b)).isTrue();
+        }
+
+        // Test order 2: legacy then hexless
+        var tdfOutputStream2 = new ByteArrayOutputStream();
+        var manifest2 = tdf.createTDF(
+                new ByteArrayInputStream("test data".getBytes()),
+                tdfOutputStream2,
+                Config.newTDFConfig(
+                        Config.withAutoconfigure(false),
+                        Config.withKasInformation(getSingleRSAKASInfo()[0]),
+                        Config.withTargetMode("4.2.2"),
+                        Config.withHexlessPolicyBinding()
+                )
+        ).getManifest();
+
+        Manifest.PolicyBinding pb2 = (Manifest.PolicyBinding) manifest2.encryptionInformation.keyAccessObj.get(0).policyBinding;
+        byte[] decoded2 = Base64.getDecoder().decode(pb2.hash);
+        assertThat(decoded2).hasSize(64); // Legacy form in both orders
+        for (byte b : decoded2) {
+            assertThat(isHexChar(b)).isTrue();
+        }
+    }
+
+    @Test
+    void rewrapRequestCarriesLegacyBinding() throws Exception {
+        // Capture the keyAccess sent to KAS during unwrap
+        final Manifest.KeyAccess[] capturedKeyAccess = new Manifest.KeyAccess[1];
+
+        SDK.KAS capturingKas = new SDK.KAS() {
+            @Override
+            public void close() {}
+
+            @Override
+            public Config.KASInfo getPublicKey(Config.KASInfo kasInfo) {
+                return kas.getPublicKey(kasInfo);
+            }
+
+            @Override
+            public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy, KeyType sessionKeyType) {
+                capturedKeyAccess[0] = keyAccess;
+                return kas.unwrap(keyAccess, policy, sessionKeyType);
+            }
+
+            @Override
+            public KASKeyCache getKeyCache() {
+                return kas.getKeyCache();
+            }
+        };
+
+        var tdf = new TDF(new FakeServicesBuilder().setKas(capturingKas)
+                .setKeyAccessServerRegistryService(kasRegistryService).build());
+
+        // Create TDF with hexless policy binding
+        var tdfOutputStream = new ByteArrayOutputStream();
+        tdf.createTDF(
+                new ByteArrayInputStream("test data".getBytes()),
+                tdfOutputStream,
+                Config.newTDFConfig(
+                        Config.withAutoconfigure(false),
+                        Config.withKasInformation(getSingleRSAKASInfo()[0]),
+                        Config.withHexlessPolicyBinding()
+                )
+        );
+
+        // Read it back - this should trigger rewrap with legacy binding
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()), platformUrl);
+        var unwrappedData = new ByteArrayOutputStream();
+        reader.readPayload(unwrappedData);
+
+        // Verify the plaintext equals "test data"
+        assertThat(unwrappedData.toString()).isEqualTo("test data");
+
+        // Verify the manifest still holds the 32-byte binding after reading
+        Manifest.PolicyBinding manifestBinding = (Manifest.PolicyBinding) reader.getManifest().encryptionInformation.keyAccessObj.get(0).policyBinding;
+        byte[] manifestHash = Base64.getDecoder().decode(manifestBinding.hash);
+        assertThat(manifestHash).hasSize(32);
+
+        // Verify the KAS received a legacy binding (64 hex chars)
+        assertThat(capturedKeyAccess[0]).isNotNull();
+        Manifest.PolicyBinding sentBinding = (Manifest.PolicyBinding) capturedKeyAccess[0].policyBinding;
+        byte[] decoded = Base64.getDecoder().decode(sentBinding.hash);
+        assertThat(decoded).hasSize(64);
+
+        // Verify all bytes are valid hex characters
+        for (byte b : decoded) {
+            assertThat(isHexChar(b)).isTrue();
+        }
+
+        // Verify sent.hash.equals(TDF.legacyPolicyBindingHash(manifestHash))
+        assertThat(sentBinding.hash).isEqualTo(TDF.legacyPolicyBindingHash(manifestBinding.hash));
+    }
 }

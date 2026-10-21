@@ -83,4 +83,10 @@ class ConfigTest {
         Config.TDFConfig config = Config.newTDFConfig(Config.withMimeType(mimeType));
         assertEquals(mimeType, config.mimeType);
     }
+
+    @Test
+    void withHexlessPolicyBinding_shouldSetHexlessPolicyBinding() {
+        Config.TDFConfig config = Config.newTDFConfig(Config.withHexlessPolicyBinding());
+        assertTrue(config.hexlessPolicyBinding);
+    }
 }

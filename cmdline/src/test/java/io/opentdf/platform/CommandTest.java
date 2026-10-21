@@ -137,4 +137,17 @@ class CommandTest {
         assertThat(out.trim()).isEqualTo("{\"unknown_feature\":false}");
     }
 
+    @Test
+    void encrypt_hexlessPolicyBindingFlag_acceptedByPicocli() {
+        StringWriter err = new StringWriter();
+        CommandLine cli = new CommandLine(new Command());
+        cli.setErr(new PrintWriter(err));
+
+        int code = cli.execute("encrypt", "-k", "https://kas.example.com", "-f", "/dev/null", "--hexless-policy-binding");
+
+        // Picocli accepts the flag; command fails later on missing endpoint
+        assertThat(code).isEqualTo(CommandLine.ExitCode.USAGE);
+        assertThat(err.toString()).contains("Missing required option: '--platform-endpoint=<platformEndpoint>'");
+    }
+
 }

@@ -194,6 +194,7 @@ public class Config {
         public boolean hexEncodeRootAndSegmentHashes;
         public boolean renderVersionInfoInManifest;
         public boolean systemMetadataAssertion;
+        public boolean hexlessPolicyBinding;
 
         public TDFConfig() {
             this.autoconfigure = true;
@@ -211,6 +212,7 @@ public class Config {
             this.hexEncodeRootAndSegmentHashes = false;
             this.renderVersionInfoInManifest = true;
             this.systemMetadataAssertion = false;
+            this.hexlessPolicyBinding = false;
         }
     }
 
@@ -323,6 +325,19 @@ public class Config {
             config.renderVersionInfoInManifest = !legacyTDF;
             config.hexEncodeRootAndSegmentHashes = legacyTDF;
         };
+    }
+
+    /**
+     * Writes each key access object's policy binding hash as Base64(HMAC), dropping the hex layer of
+     * the legacy Base64(hex(HMAC)) written by default. Base64(HMAC) is the form the TDF spec defines.
+     * <p>
+     * Only a KAS carrying the policy binding dual-accept fix can verify the hexless form directly.
+     * This SDK's reader re-encodes it for older KAS, but other and older readers forward it unchanged,
+     * so a TDF written with this option may not decrypt through an older reader against an older KAS.
+     * A pre-4.3.0 {@link #withTargetMode(String)} overrides this option and keeps the legacy form.
+     */
+    public static Consumer<TDFConfig> withHexlessPolicyBinding() {
+        return (TDFConfig config) -> config.hexlessPolicyBinding = true;
     }
 
     public static Consumer<TDFConfig> WithWrappingKeyAlg(KeyType    keyType) {
