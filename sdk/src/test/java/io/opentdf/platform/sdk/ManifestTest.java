@@ -8,6 +8,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -269,6 +270,26 @@ public class ManifestTest {
         assertThatThrownBy(() -> Manifest.readManifest(manifest))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Invalid KeyAccess with null url in manifest");
+    }
+
+    @Test
+    void wrapsManifestReaderIoFailures() {
+        Reader failingReader = new Reader() {
+            @Override
+            public int read(char[] buffer, int offset, int length) throws IOException {
+                throw new IOException("manifest read failed");
+            }
+
+            @Override
+            public void close() {
+                // No resources to release.
+            }
+        };
+
+        assertThatThrownBy(() -> Manifest.readManifest(failingReader))
+                .isInstanceOf(SDKException.class)
+                .hasMessage("error reading manifest from zip file")
+                .hasRootCauseMessage("manifest read failed");
     }
 
     @Test

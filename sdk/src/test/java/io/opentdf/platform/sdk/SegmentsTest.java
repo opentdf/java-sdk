@@ -140,6 +140,31 @@ public class SegmentsTest {
     }
 
     @Test
+    void parsedCompactSegmentsPreserveElementAndListMutations() {
+        var manifest = Manifest.readManifest(manifestJson(uniformSegments(3)));
+        var parsed = manifest.encryptionInformation.integrityInformation.segments;
+        assertThat(parsed).isInstanceOf(Manifest.Segments.class);
+
+        Manifest.Segment first = parsed.get(0);
+        first.hash = hash(10);
+        first.segmentSize = 123;
+
+        Manifest.Segment replacement = segment(hash(11), 456, 484);
+        Manifest.Segment replaced = parsed.set(1, replacement);
+        Manifest.Segment added = segment(hash(12), 789, 817);
+        parsed.add(added);
+        Manifest.Segment removed = parsed.remove(2);
+
+        assertThat(replaced.hash).isEqualTo(hash(1));
+        assertThat(removed.hash).isEqualTo(hash(2));
+        assertThat(parsed).containsExactly(first, replacement, added);
+
+        var roundTripped = Manifest.readManifest(Manifest.toJson(manifest))
+                .encryptionInformation.integrityInformation.segments;
+        assertThat(roundTripped).containsExactlyElementsOf(parsed);
+    }
+
+    @Test
     void emptySegmentsAggregateToNothing() {
         assertThat(new Manifest.Segments().aggregate(true)).isEmpty();
         assertThat(new Manifest.Segments().aggregate(false)).isEmpty();

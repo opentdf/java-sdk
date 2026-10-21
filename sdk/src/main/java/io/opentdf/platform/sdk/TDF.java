@@ -407,7 +407,9 @@ class TDF {
 
             validateSegmentSizes();
 
-            for (Manifest.Segment segment : manifest.encryptionInformation.integrityInformation.segments) {
+            List<Manifest.Segment> segments = manifest.encryptionInformation.integrityInformation.segments;
+            for (int i = 0; i < segments.size(); i++) {
+                Manifest.Segment segment = Manifest.segmentAt(segments, i);
                 byte[] readBuf = new byte[(int) segment.encryptedSegmentSize];
                 int bytesRead = tdfReader.readPayloadBytes(readBuf);
 
@@ -462,7 +464,7 @@ class TDF {
 
             List<Manifest.Segment> segments = manifest.encryptionInformation.integrityInformation.segments;
             for (int i = 0; i < segments.size(); i++) {
-                long encryptedSegmentSize = segments.get(i).encryptedSegmentSize;
+                long encryptedSegmentSize = Manifest.segmentAt(segments, i).encryptedSegmentSize;
 
                 if (encryptedSegmentSize < minEncryptedSegmentSize) {
                     throw new IllegalStateException("invalid TDF: segment " + i

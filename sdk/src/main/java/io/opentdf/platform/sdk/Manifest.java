@@ -1,5 +1,7 @@
 package io.opentdf.platform.sdk;
 
+import com.google.gson.ExclusionStrategy;
+import com.google.gson.FieldAttributes;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonDeserializationContext;
@@ -36,8 +38,13 @@ import io.opentdf.platform.sdk.SDK.AssertionException;
 import org.apache.commons.codec.binary.Hex;
 import org.erdtman.jcs.JsonCanonicalizer;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.StringReader;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -49,7 +56,9 @@ import java.text.ParseException;
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -64,6 +73,7 @@ public class Manifest {
     private static final String kAssertionSignature = "assertionSig";
 
     private static final Gson gson = new GsonBuilder()
+            .addSerializationExclusionStrategy(new DeserializeOnlyExclusionStrategy())
             .registerTypeAdapter(AssertionConfig.Statement.class, new AssertionValueAdapter())
             .registerTypeAdapterFactory(new IntegrityInformationAdapterFactory())
             .registerTypeAdapterFactory(new SpecVersionAdapterFactory())
@@ -79,6 +89,27 @@ public class Manifest {
      */
     @SerializedName(value = "schemaVersion")
     String tdfVersion;
+
+    @DeserializeOnly
+    @SerializedName("tdf_spec_version")
+    JsonElement nonAlignedSpecVersion;
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.FIELD)
+    private @interface DeserializeOnly {
+    }
+
+    private static final class DeserializeOnlyExclusionStrategy implements ExclusionStrategy {
+        @Override
+        public boolean shouldSkipField(FieldAttributes field) {
+            return field.getAnnotation(DeserializeOnly.class) != null;
+        }
+
+        @Override
+        public boolean shouldSkipClass(Class<?> type) {
+            return false;
+        }
+    }
 
     public static String toJson(Manifest manifest) {
         return gson.toJson(manifest);
@@ -131,7 +162,9 @@ public class Manifest {
          * {@link IntegrityInformation#encryptedSegmentSizeDefault}.
          */
         public long encryptedSegmentSize;
+        @SuppressWarnings("java:S2065") // Gson uses transient to keep parser state out of manifest JSON.
         private transient boolean segmentSizePresent = true;
+        @SuppressWarnings("java:S2065") // Gson uses transient to keep parser state out of manifest JSON.
         private transient boolean encryptedSegmentSizePresent = true;
 
         @Override
@@ -184,6 +217,8 @@ public class Manifest {
         private static final int MAX_HASH_LENGTH = 1024;
 
         private final List<byte[]> chunks = new ArrayList<>();
+        private final Map<Integer, Segment> materializedSegments = new HashMap<>();
+        private List<Segment> mutableSegments;
         private int count;
         /** Length of every hash, in characters; established by the first append. */
         private int stride;
@@ -207,7 +242,7 @@ public class Manifest {
         }
 
         private boolean append(Segment segment) {
-            return append(segment.hash, segment.segmentSize, segment.encryptedSegmentSize,
+            return segment != null && append(segment.hash, segment.segmentSize, segment.encryptedSegmentSize,
                     segment.segmentSizePresent, segment.encryptedSegmentSizePresent);
         }
 
@@ -295,8 +330,11 @@ public class Manifest {
          * signature and the assertion signatures are computed over.
          */
         byte[] aggregate(boolean decodeBase64) {
-            if (count == 0) {
+            if (size() == 0) {
                 return new byte[0];
+            }
+            if (mutableSegments != null || !materializedSegments.isEmpty()) {
+                return aggregateMaterialized(decodeBase64);
             }
             byte[] scratch = new byte[stride];
             if (!decodeBase64) {
@@ -319,6 +357,18 @@ public class Manifest {
             return aggregate;
         }
 
+        private byte[] aggregateMaterialized(boolean decodeBase64) {
+            ByteArrayOutputStream aggregate = new ByteArrayOutputStream();
+            for (int i = 0; i < size(); i++) {
+                String hash = getForRead(i).hash;
+                byte[] bytes = decodeBase64
+                        ? Base64.getDecoder().decode(hash)
+                        : hash.getBytes(StandardCharsets.US_ASCII);
+                aggregate.write(bytes, 0, bytes.length);
+            }
+            return aggregate.toByteArray();
+        }
+
         private void copyHash(int index, byte[] destination, int destinationOffset) {
             byte[] chunk = chunks.get(index / SEGMENTS_PER_CHUNK);
             System.arraycopy(chunk, (index % SEGMENTS_PER_CHUNK) * stride, destination, destinationOffset, stride);
@@ -326,7 +376,23 @@ public class Manifest {
 
         @Override
         public Segment get(int index) {
+            if (mutableSegments != null) {
+                return mutableSegments.get(index);
+            }
             Objects.checkIndex(index, count);
+            return materializedSegments.computeIfAbsent(index, this::unpack);
+        }
+
+        Segment getForRead(int index) {
+            if (mutableSegments != null) {
+                return mutableSegments.get(index);
+            }
+            Objects.checkIndex(index, count);
+            Segment materialized = materializedSegments.get(index);
+            return materialized == null ? unpack(index) : materialized;
+        }
+
+        private Segment unpack(int index) {
             byte[] chunk = chunks.get(index / SEGMENTS_PER_CHUNK);
             Segment segment = new Segment();
             segment.hash = new String(chunk, (index % SEGMENTS_PER_CHUNK) * stride, stride, StandardCharsets.US_ASCII);
@@ -339,10 +405,52 @@ public class Manifest {
             return segment;
         }
 
+        private void materialize() {
+            if (mutableSegments != null) {
+                return;
+            }
+            List<Segment> copy = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                copy.add(getForRead(i));
+            }
+            mutableSegments = copy;
+            materializedSegments.clear();
+            chunks.clear();
+        }
+
+        @Override
+        public Segment set(int index, Segment element) {
+            materialize();
+            return mutableSegments.set(index, element);
+        }
+
+        @Override
+        public void add(int index, Segment element) {
+            materialize();
+            mutableSegments.add(index, element);
+            count = mutableSegments.size();
+            modCount++;
+        }
+
+        @Override
+        public Segment remove(int index) {
+            materialize();
+            Segment removed = mutableSegments.remove(index);
+            count = mutableSegments.size();
+            modCount++;
+            return removed;
+        }
+
         @Override
         public int size() {
-            return count;
+            return mutableSegments == null ? count : mutableSegments.size();
         }
+    }
+
+    static Segment segmentAt(List<Segment> segments, int index) {
+        return segments instanceof Segments
+                ? ((Segments) segments).getForRead(index)
+                : segments.get(index);
     }
 
     /**
@@ -356,55 +464,71 @@ public class Manifest {
         public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> type) {
             TypeAdapter<Segment> element = gson.getAdapter(Segment.class);
             TypeAdapter<JsonElement> jsonElement = gson.getAdapter(JsonElement.class);
-            return (TypeAdapter<T>) new TypeAdapter<List<Segment>>() {
-                @Override
-                public void write(JsonWriter out, List<Segment> value) throws IOException {
-                    if (value == null) {
-                        out.nullValue();
-                        return;
-                    }
-                    out.beginArray();
-                    for (Segment segment : value) {
-                        element.write(out, segment);
-                    }
-                    out.endArray();
-                }
-
-                @Override
-                @SuppressWarnings("java:S1168") // Preserve JSON null so manifest validation rejects it.
-                public List<Segment> read(JsonReader in) throws IOException {
-                    if (in.peek() == JsonToken.NULL) {
-                        in.nextNull();
-                        return null;
-                    }
-                    in.beginArray();
-                    Segments compact = new Segments();
-                    List<Segment> fallback = null;
-                    while (in.hasNext()) {
-                        JsonElement rawSegment = jsonElement.read(in);
-                        Segment segment = element.fromJsonTree(rawSegment);
-                        if (segment != null && rawSegment.isJsonObject()) {
-                            JsonObject object = rawSegment.getAsJsonObject();
-                            segment.segmentSizePresent = hasValue(object, "segmentSize");
-                            segment.encryptedSegmentSizePresent = hasValue(object, "encryptedSegmentSize");
-                        }
-                        if (fallback != null) {
-                            fallback.add(segment);
-                        } else if (segment == null
-                                || !compact.append(segment)) {
-                            fallback = new ArrayList<>(compact);
-                            fallback.add(segment);
-                        }
-                    }
-                    in.endArray();
-                    return fallback == null ? compact : fallback;
-                }
-            };
+            return (TypeAdapter<T>) new SegmentsTypeAdapter(element, jsonElement);
         }
 
         private static boolean hasValue(JsonObject object, String memberName) {
             JsonElement member = object.get(memberName);
             return member != null && !member.isJsonNull();
+        }
+    }
+
+    private static final class SegmentsTypeAdapter extends TypeAdapter<List<Segment>> {
+        private final TypeAdapter<Segment> elementAdapter;
+        private final TypeAdapter<JsonElement> jsonElementAdapter;
+
+        private SegmentsTypeAdapter(TypeAdapter<Segment> elementAdapter,
+                TypeAdapter<JsonElement> jsonElementAdapter) {
+            this.elementAdapter = elementAdapter;
+            this.jsonElementAdapter = jsonElementAdapter;
+        }
+
+        @Override
+        public void write(JsonWriter out, List<Segment> value) throws IOException {
+            if (value == null) {
+                out.nullValue();
+                return;
+            }
+            out.beginArray();
+            for (int i = 0; i < value.size(); i++) {
+                elementAdapter.write(out, segmentAt(value, i));
+            }
+            out.endArray();
+        }
+
+        @Override
+        @SuppressWarnings("java:S1168") // Preserve JSON null so manifest validation rejects it.
+        public List<Segment> read(JsonReader in) throws IOException {
+            if (in.peek() == JsonToken.NULL) {
+                in.nextNull();
+                return null;
+            }
+            in.beginArray();
+            Segments compact = new Segments();
+            List<Segment> fallback = null;
+            while (in.hasNext()) {
+                Segment segment = readSegment(in);
+                if (fallback != null) {
+                    fallback.add(segment);
+                } else if (!compact.append(segment)) {
+                    fallback = new ArrayList<>(compact);
+                    fallback.add(segment);
+                }
+            }
+            in.endArray();
+            return fallback == null ? compact : fallback;
+        }
+
+        private Segment readSegment(JsonReader in) throws IOException {
+            JsonElement rawSegment = jsonElementAdapter.read(in);
+            Segment segment = elementAdapter.fromJsonTree(rawSegment);
+            if (segment != null && rawSegment.isJsonObject()) {
+                JsonObject object = rawSegment.getAsJsonObject();
+                segment.segmentSizePresent = SegmentsAdapterFactory.hasValue(object, "segmentSize");
+                segment.encryptedSegmentSizePresent = SegmentsAdapterFactory.hasValue(
+                        object, "encryptedSegmentSize");
+            }
+            return segment;
         }
     }
 
@@ -561,16 +685,12 @@ public class Manifest {
      * document instead of preferring {@code schemaVersion}.
      */
     private static class SpecVersionAdapterFactory implements TypeAdapterFactory {
-        private static final String NON_ALIGNED_SPEC_VERSION = "tdf_spec_version";
-        private static final String PAYLOAD = "payload";
-
         @Override
         public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> type) {
             if (!Manifest.class.equals(type.getRawType())) {
                 return null;
             }
             final TypeAdapter<T> delegate = gson.getDelegateAdapter(this, type);
-            final TypeAdapter<JsonElement> elementAdapter = gson.getAdapter(JsonElement.class);
             return new TypeAdapter<T>() {
                 @Override
                 public void write(JsonWriter out, T value) throws IOException {
@@ -579,12 +699,11 @@ public class Manifest {
 
                 @Override
                 public T read(JsonReader in) throws IOException {
-                    JsonElement tree = elementAdapter.read(in);
-                    T value = delegate.fromJsonTree(tree);
-                    if (value instanceof Manifest && tree != null && tree.isJsonObject()) {
+                    T value = delegate.read(in);
+                    if (value instanceof Manifest) {
                         Manifest manifest = (Manifest) value;
                         if (manifest.tdfVersion == null || manifest.tdfVersion.isEmpty()) {
-                            String nonAligned = nonAlignedSpecVersion(tree.getAsJsonObject());
+                            String nonAligned = nonAlignedSpecVersion(manifest);
                             if (nonAligned != null) {
                                 manifest.tdfVersion = nonAligned;
                             }
@@ -596,16 +715,12 @@ public class Manifest {
         }
 
         /** The first non-empty string under the non-aligned name, root before payload, or null. */
-        private static String nonAlignedSpecVersion(JsonObject root) {
-            String atRoot = nonEmptyString(root.get(NON_ALIGNED_SPEC_VERSION));
+        private static String nonAlignedSpecVersion(Manifest manifest) {
+            String atRoot = nonEmptyString(manifest.nonAlignedSpecVersion);
             if (atRoot != null) {
                 return atRoot;
             }
-            JsonElement payload = root.get(PAYLOAD);
-            if (payload != null && payload.isJsonObject()) {
-                return nonEmptyString(payload.getAsJsonObject().get(NON_ALIGNED_SPEC_VERSION));
-            }
-            return null;
+            return manifest.payload == null ? null : nonEmptyString(manifest.payload.nonAlignedSpecVersion);
         }
 
         private static String nonEmptyString(JsonElement element) {
@@ -729,6 +844,9 @@ public class Manifest {
         public String protocol;
         public String mimeType;
         public boolean isEncrypted;
+        @DeserializeOnly
+        @SerializedName("tdf_spec_version")
+        JsonElement nonAlignedSpecVersion;
 
         @Override
         public boolean equals(Object o) {
@@ -1017,7 +1135,15 @@ public class Manifest {
      * manifest with tens of millions of segments cannot be.
      */
     protected static Manifest readManifest(java.io.Reader manifestJson) {
-        Manifest result = gson.fromJson(manifestJson, Manifest.class);
+        Manifest result;
+        try {
+            result = gson.fromJson(manifestJson, Manifest.class);
+        } catch (JsonParseException e) {
+            if (e.getCause() instanceof IOException) {
+                throw new SDKException("error reading manifest from zip file", (IOException) e.getCause());
+            }
+            throw e;
+        }
         if (result == null) {
             throw new IllegalArgumentException("Manifest is empty");
         }
