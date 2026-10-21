@@ -7,6 +7,7 @@ import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
 
 import static io.opentdf.platform.sdk.TDFWriter.TDF_MANIFEST_FILE_NAME;
 import static io.opentdf.platform.sdk.TDFWriter.TDF_MANIFEST_FILE_NAME_SPEC;
@@ -20,7 +21,13 @@ import static io.opentdf.platform.sdk.TDFWriter.TDF_PAYLOAD_FILE_NAME;
 public class TDFReader {
 
     private final ZipReader.Entry manifestEntry;
-    private final InputStream payload;
+    private final ZipReader.Entry payloadEntry;
+    /**
+     * Opened by the first payload read rather than here, so reading only the manifest never
+     * allocates an inflater for a deflated payload. Released by {@link #closePayload()}.
+     */
+    private InputStream payload;
+    private boolean payloadReleased = false;
 
     public TDFReader(SeekableByteChannel tdf) throws SDKException, IOException {
         // A zip may legally list the same name twice, and readers disagree about which copy
@@ -46,13 +53,18 @@ public class TDFReader {
         }
 
         manifestEntry = manifest;
-        payload = entries.get(TDF_PAYLOAD_FILE_NAME).getData();
+        payloadEntry = entries.get(TDF_PAYLOAD_FILE_NAME);
+        // check the payload now, so one that can't be read (an unsupported compression method,
+        // or a deflated size over its budget) is refused before any key is requested -- but
+        // without opening it, since a caller may only want the manifest
+        payloadEntry.checkReadable();
     }
 
     String manifest() {
         var out = new ByteArrayOutputStream();
-        try {
-            manifestEntry.getData().transferTo(out);
+        // closing releases the inflater when the manifest entry is deflated
+        try (var manifestData = manifestEntry.getData()) {
+            manifestData.transferTo(out);
         } catch (IOException e) {
             throw new SDKException("error retrieving manifest from zip file", e);
         }
@@ -60,17 +72,77 @@ public class TDFReader {
         return out.toString(StandardCharsets.UTF_8);
     }
 
+    /**
+     * Reads the next payload bytes into {@code buf}, opening the payload on the first call. A
+     * failed read releases the payload; once it has been released this reads nothing.
+     */
     int readPayloadBytes(byte[] buf) {
+        if (payloadReleased) {
+            return 0;
+        }
         int totalRead = 0;
         int nread;
+        boolean succeeded = false;
         try {
+            if (payload == null) {
+                payload = payloadEntry.getData();
+            }
             while (totalRead < buf.length && (nread = payload.read(buf, totalRead, buf.length - totalRead)) >= 0) {
                 totalRead += nread;
             }
+            succeeded = true;
         } catch (IOException e) {
             throw new SDKException("error reading from payload in TDF", e);
+        } finally {
+            if (!succeeded) {
+                closePayload();
+            }
         }
         return totalRead;
+    }
+
+    /**
+     * Called once every segment has been read. A deflated payload must end exactly there: a
+     * further read has to find the end of the entry, which for a deflated entry also confirms
+     * the deflate stream ends at its declared size. A stored payload is not checked, as before.
+     * Releases the payload either way.
+     *
+     * @throws InvalidZipException if a deflated payload holds data past its last segment
+     */
+    void finishPayload() {
+        try {
+            if (payloadEntry.getCompressionMethod() == ZipEntry.DEFLATED && !payloadReleased) {
+                if (payload == null) {
+                    payload = payloadEntry.getData();
+                }
+                if (payload.read() != -1) {
+                    throw new InvalidZipException("deflated entry [" + payloadEntry.getName()
+                            + "] holds data past the end of the TDF's last segment");
+                }
+            }
+        } catch (IOException e) {
+            throw new SDKException("error reading from payload in TDF", e);
+        } finally {
+            closePayload();
+        }
+    }
+
+    /**
+     * Releases the payload stream, and with it a deflated payload's inflater. Idempotent; after
+     * it, payload reads return nothing.
+     */
+    void closePayload() {
+        payloadReleased = true;
+        if (payload == null) {
+            return;
+        }
+        try {
+            payload.close();
+        } catch (IOException e) {
+            throw new SDKException("error closing payload in TDF", e);
+        } finally {
+            payload = null;
+        }
     }
 
     PolicyObject readPolicyObject() {

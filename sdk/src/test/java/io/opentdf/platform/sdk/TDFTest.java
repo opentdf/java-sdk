@@ -17,6 +17,7 @@ import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.annotation.Nonnull;
@@ -39,8 +40,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.zip.CRC32;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -914,6 +919,252 @@ public class TDFTest {
         var data = new ByteArrayOutputStream();
         entry.getData().transferTo(data);
         return data;
+    }
+
+    /**
+     * OpenTDF writers store both entries, but other TDF writers may deflate either one. Takes a
+     * TDF this SDK wrote, repacks it with the requested entries deflated, and decrypts it end to
+     * end. The entry contents are unchanged, so the segment hashes and root signature still have
+     * to verify against the inflated bytes. The payload spans several segments, so the reader
+     * walks the inflated stream across segment boundaries.
+     */
+    @ParameterizedTest
+    @CsvSource({
+            "manifest.json,   true,  true",
+            "0.manifest.json, true,  true",
+            "manifest.json,   true,  false",
+            "0.manifest.json, false, true",
+    })
+    public void testDecryptingATDFWithDeflatedEntries(String manifestName, boolean deflateManifest,
+                                                     boolean deflatePayload) throws Exception {
+        String metadata = "metadata for a deflated tdf";
+        var data = new byte[(int) (Config.MIN_SEGMENT_SIZE * 3.5)];
+        new Random(7741).nextBytes(data);
+        var tdf = new TDF(new FakeServicesBuilder().setKas(kas)
+                .setKeyAccessServerRegistryService(kasRegistryService).build());
+        var original = new ByteArrayOutputStream();
+        var tdfObject = tdf.createTDF(new ByteArrayInputStream(data), original,
+                Config.newTDFConfig(
+                        Config.withAutoconfigure(false),
+                        Config.withKasInformation(getRSAKASInfos()),
+                        Config.withSegmentSize(Config.MIN_SEGMENT_SIZE),
+                        Config.withMetaData(metadata)));
+        assertThat(tdfObject.getManifest().encryptionInformation.integrityInformation.segments)
+                .withFailMessage("the test needs more than one segment to be meaningful")
+                .hasSizeGreaterThan(1);
+
+        byte[] repacked = repackWithDeflate(original.toByteArray(), manifestName, deflateManifest, deflatePayload);
+        assertThat(ZipReaderTest.compressionMethodOf(repacked, manifestName))
+                .isEqualTo(deflateManifest ? ZipEntry.DEFLATED : ZipEntry.STORED);
+        assertThat(ZipReaderTest.compressionMethodOf(repacked, TDFWriter.TDF_PAYLOAD_FILE_NAME))
+                .isEqualTo(deflatePayload ? ZipEntry.DEFLATED : ZipEntry.STORED);
+
+        var unwrapped = new ByteArrayOutputStream();
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(repacked), platformUrl);
+        reader.readPayload(unwrapped);
+
+        assertThat(unwrapped.toByteArray())
+                .withFailMessage("extracted data does not match")
+                .containsExactly(data);
+        assertThat(reader.getMetadata()).isEqualTo(metadata);
+        assertThat(SDK.readManifest(new SeekableInMemoryByteChannel(repacked)).payload.isEncrypted).isTrue();
+    }
+
+    /**
+     * Repacks a TDF this SDK wrote using {@link ZipOutputStream}, deflating the entries asked
+     * for. That writer streams, so deflated entries carry their sizes in a data descriptor and
+     * the central directory, with zeros in the local header.
+     */
+    private static byte[] repackWithDeflate(byte[] tdfBytes, String manifestName, boolean deflateManifest,
+                                            boolean deflatePayload) throws IOException {
+        return repackWithDeflate(tdfBytes, manifestName, deflateManifest, deflatePayload, UnaryOperator.identity());
+    }
+
+    /** As above, with the payload bytes passed through {@code editPayload} on the way. */
+    private static byte[] repackWithDeflate(byte[] tdfBytes, String manifestName, boolean deflateManifest,
+                                            boolean deflatePayload, UnaryOperator<byte[]> editPayload)
+            throws IOException {
+        final byte[] manifest;
+        final byte[] payload;
+        try (var channel = new SeekableInMemoryByteChannel(tdfBytes)) {
+            var reader = new ZipReader(channel);
+            manifest = readZipEntry(reader, TDFWriter.TDF_MANIFEST_FILE_NAME).toByteArray();
+            payload = readZipEntry(reader, TDFWriter.TDF_PAYLOAD_FILE_NAME).toByteArray();
+        }
+
+        var out = new ByteArrayOutputStream();
+        try (var zip = new ZipOutputStream(out)) {
+            putZipEntry(zip, TDFWriter.TDF_PAYLOAD_FILE_NAME, editPayload.apply(payload), deflatePayload);
+            putZipEntry(zip, manifestName, manifest, deflateManifest);
+        }
+        return out.toByteArray();
+    }
+
+    /** A single-segment TDF of {@code plaintext}, written by this SDK. */
+    private static byte[] smallTdf(TDF tdf, String plaintext) throws Exception {
+        var out = new ByteArrayOutputStream();
+        tdf.createTDF(new ByteArrayInputStream(plaintext.getBytes(StandardCharsets.UTF_8)), out,
+                Config.newTDFConfig(
+                        Config.withAutoconfigure(false),
+                        Config.withKasInformation(getRSAKASInfos())));
+        return out.toByteArray();
+    }
+
+    private static byte[] withByteAppended(byte[] bytes, byte extra) {
+        byte[] longer = Arrays.copyOf(bytes, bytes.length + 1);
+        longer[bytes.length] = extra;
+        return longer;
+    }
+
+    private TDF tdfWithTestKas() {
+        return new TDF(new FakeServicesBuilder().setKas(kas)
+                .setKeyAccessServerRegistryService(kasRegistryService).build());
+    }
+
+    /**
+     * readPayload reads exactly the segment lengths the manifest lists, so by itself it never
+     * looks past them. A deflated payload has to end there. Here the entry inflates to the real
+     * ciphertext plus one extra byte, so every segment hash still verifies. Declaring the
+     * ciphertext's length leaves the extra byte in the deflate stream past the declared size;
+     * declaring one more leaves it inside the entry but past the last segment. Both are refused
+     * on the normal read path.
+     */
+    @ParameterizedTest
+    @ValueSource(ints = { 0, 1 })
+    public void testDeflatedPayloadWithDataPastTheLastSegmentIsRejected(int extraDeclared) throws Exception {
+        var tdf = tdfWithTestKas();
+        byte[] original = smallTdf(tdf, "hello");
+        int ciphertextLength;
+        try (var channel = new SeekableInMemoryByteChannel(original)) {
+            ciphertextLength = readZipEntry(new ZipReader(channel), TDFWriter.TDF_PAYLOAD_FILE_NAME).size();
+        }
+        byte[] withTail = repackWithDeflate(original, TDFWriter.TDF_MANIFEST_FILE_NAME, false, true,
+                payload -> withByteAppended(payload, (byte) '!'));
+        byte[] tampered = ZipReaderTest.withDeclaredUncompressedSize(
+                withTail, TDFWriter.TDF_PAYLOAD_FILE_NAME, (long) ciphertextLength + extraDeclared);
+
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tampered), platformUrl);
+        var unwrapped = new ByteArrayOutputStream();
+        assertThatThrownBy(() -> reader.readPayload(unwrapped))
+                .isInstanceOf(InvalidZipException.class)
+                .hasMessageContaining("[" + TDFWriter.TDF_PAYLOAD_FILE_NAME + "]");
+    }
+
+    /** A stored payload keeps its existing behavior: nothing past the last segment is examined. */
+    @Test
+    public void testStoredPayloadWithDataPastTheLastSegmentIsStillRead() throws Exception {
+        var tdf = tdfWithTestKas();
+        byte[] withTail = repackWithDeflate(smallTdf(tdf, "hello"), TDFWriter.TDF_MANIFEST_FILE_NAME, false, false,
+                payload -> withByteAppended(payload, (byte) '!'));
+
+        var unwrapped = new ByteArrayOutputStream();
+        tdf.loadTDF(new SeekableInMemoryByteChannel(withTail), platformUrl).readPayload(unwrapped);
+
+        assertThat(unwrapped.toString(StandardCharsets.UTF_8)).isEqualTo("hello");
+    }
+
+    /**
+     * The payload is opened by the first payload read and released once it has been read and
+     * verified, so reading only the manifest never creates its inflater. The manifest is stored
+     * here, so every inflater counted is the payload's.
+     */
+    @Test
+    public void testPayloadInflaterExistsOnlyWhileThePayloadIsRead() throws Exception {
+        var data = new byte[(int) (Config.MIN_SEGMENT_SIZE * 2.5)];
+        new Random(99).nextBytes(data);
+        var tdf = tdfWithTestKas();
+        var original = new ByteArrayOutputStream();
+        tdf.createTDF(new ByteArrayInputStream(data), original,
+                Config.newTDFConfig(
+                        Config.withAutoconfigure(false),
+                        Config.withKasInformation(getRSAKASInfos()),
+                        Config.withSegmentSize(Config.MIN_SEGMENT_SIZE)));
+        byte[] repacked = repackWithDeflate(original.toByteArray(), "manifest.json", false, true);
+        int createdBefore = ZipReader.inflatersCreated();
+        int openBefore = ZipReader.openInflaters();
+
+        SDK.readManifest(new SeekableInMemoryByteChannel(repacked));
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(repacked), platformUrl);
+        assertThat(ZipReader.inflatersCreated())
+                .withFailMessage("reading the manifest and loading the TDF created a payload inflater")
+                .isEqualTo(createdBefore);
+
+        List<Integer> openWhileWriting = new ArrayList<>();
+        var unwrapped = new ByteArrayOutputStream() {
+            @Override
+            public synchronized void write(byte[] b, int off, int len) {
+                openWhileWriting.add(ZipReader.openInflaters());
+                super.write(b, off, len);
+            }
+        };
+        reader.readPayload(unwrapped);
+
+        assertThat(unwrapped.toByteArray()).containsExactly(data);
+        assertThat(openWhileWriting).isNotEmpty().allMatch(open -> open == openBefore + 1);
+        assertThat(ZipReader.inflatersCreated()).isEqualTo(createdBefore + 1);
+        assertThat(ZipReader.openInflaters())
+                .withFailMessage("the payload inflater was not released after the payload was read")
+                .isEqualTo(openBefore);
+    }
+
+    /** A load that fails never opens the payload, and releases the deflated manifest's inflater. */
+    @Test
+    public void testFailedLoadLeavesNoInflaterBehind() throws Exception {
+        var tdf = tdfWithTestKas();
+        byte[] repacked = repackWithDeflate(smallTdf(tdf, "hello"), "manifest.json", true, true);
+        var readerConfig = Config.newTDFReaderConfig(Config.WithKasAllowlist("https://kas.invalid"));
+        int createdBefore = ZipReader.inflatersCreated();
+        int openBefore = ZipReader.openInflaters();
+
+        try (var channel = new SeekableInMemoryByteChannel(repacked)) {
+            assertThatThrownBy(() -> tdf.loadTDF(channel, readerConfig)).isInstanceOf(SDKException.class);
+        }
+
+        assertThat(ZipReader.inflatersCreated())
+                .withFailMessage("only the manifest should have been inflated")
+                .isEqualTo(createdBefore + 1);
+        assertThat(ZipReader.openInflaters()).isEqualTo(openBefore);
+    }
+
+    /**
+     * A payload read that fails part way releases the payload inflater. Flipping a ciphertext bit
+     * fails the segment's integrity check or its decryption, depending on the segment hash
+     * algorithm; either way the read fails.
+     */
+    @Test
+    public void testPayloadInflaterIsReleasedWhenAReadFails() throws Exception {
+        var tdf = tdfWithTestKas();
+        byte[] corrupted = repackWithDeflate(smallTdf(tdf, "hello"), "manifest.json", false, true, payload -> {
+            byte[] copy = payload.clone();
+            copy[copy.length / 2] ^= 1;
+            return copy;
+        });
+        int openBefore = ZipReader.openInflaters();
+
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(corrupted), platformUrl);
+        var unwrapped = new ByteArrayOutputStream();
+        assertThatThrownBy(() -> reader.readPayload(unwrapped)).isInstanceOf(SDKException.class);
+
+        assertThat(ZipReader.openInflaters()).isEqualTo(openBefore);
+    }
+
+    private static void putZipEntry(ZipOutputStream zip, String name, byte[] content, boolean deflate)
+            throws IOException {
+        var entry = new ZipEntry(name);
+        if (deflate) {
+            entry.setMethod(ZipEntry.DEFLATED);
+        } else {
+            // ZipOutputStream needs a stored entry's size and CRC before its data
+            var crc = new CRC32();
+            crc.update(content);
+            entry.setMethod(ZipEntry.STORED);
+            entry.setSize(content.length);
+            entry.setCompressedSize(content.length);
+            entry.setCrc(crc.getValue());
+        }
+        zip.putNextEntry(entry);
+        zip.write(content);
+        zip.closeEntry();
     }
 
 

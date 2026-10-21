@@ -398,6 +398,17 @@ class TDF {
 
             validateSegmentSizes();
 
+            try {
+                readSegments(outputStream, digest);
+                // the segment lengths are all the loop reads, so check a deflated payload ends there
+                tdfReader.finishPayload();
+            } finally {
+                // releases a deflated payload's inflater however the read ended
+                tdfReader.closePayload();
+            }
+        }
+
+        private void readSegments(OutputStream outputStream, MessageDigest digest) throws IOException {
             for (Manifest.Segment segment : manifest.encryptionInformation.integrityInformation.segments) {
                 byte[] readBuf = new byte[(int) segment.encryptedSegmentSize];
                 int bytesRead = tdfReader.readPayloadBytes(readBuf);
