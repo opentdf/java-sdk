@@ -157,7 +157,16 @@ public class SDK implements AutoCloseable {
      * Checks to see if this has the structure of a Z-TDF in that it is a zip file
      * containing
      * a `manifest.json` and a `0.payload`
-     * 
+     * <p>
+     * The non-aligned `0.manifest.json` that this SDK writes is also accepted, matching
+     * {@link TDFReader}. Entries beyond the manifest and payload are ignored rather than
+     * disqualifying: an archive carrying both manifest names holds three, and the reader
+     * accepts it, so a count check here would reject what the reader it screens for reads.
+     * <p>
+     * An archive that lists one name twice is rejected, again matching {@link TDFReader}:
+     * passing it here and then failing the read would hand callers an exception from the
+     * very check this method exists to spare them.
+     *
      * @param channel A channel containing the bytes of the potential Z-TDF
      * @return `true` if
      */
@@ -169,11 +178,13 @@ public class SDK implements AutoCloseable {
             return false;
         }
         var entries = zipReader.getEntries();
-        if (entries.size() != 2) {
+        var names = entries.stream().map(ZipReader.Entry::getName).collect(Collectors.toSet());
+        if (names.size() != entries.size()) {
             return false;
         }
-        return entries.stream().anyMatch(e -> "0.manifest.json".equals(e.getName()))
-                && entries.stream().anyMatch(e -> "0.payload".equals(e.getName()));
+        return (names.contains(TDFWriter.TDF_MANIFEST_FILE_NAME_SPEC)
+                || names.contains(TDFWriter.TDF_MANIFEST_FILE_NAME))
+                && names.contains(TDFWriter.TDF_PAYLOAD_FILE_NAME);
     }
 
     /**
@@ -406,6 +417,26 @@ public class SDK implements AutoCloseable {
     @Deprecated(since = "0.19.0", forRemoval = true)
     public static class DataSizeNotSupported extends SDKException {
         public DataSizeNotSupported(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    /**
+     * {@link AesGcmExhaustedException} is thrown during TDF creation when encrypting another
+     * payload segment would exceed the number of AES-GCM invocations allowed under a single
+     * data encryption key.
+     * <p>
+     * IVs are a random 64-bit fixed field followed by a 32-bit invocation counter (NIST SP
+     * 800-38D section 8.2.1), so at most 2^32 invocations can use one key without repeating an
+     * IV: one for the key access metadata and 2^32 - 1 for payload segments. The SDK throws this
+     * before encrypting the segment that would cross that limit. (The same budget keeps random
+     * 96-bit IVs, whose collision probability is roughly k^2 / 2^97, under the section 8 limit
+     * of 2^-32.) The TDF being written is
+     * incomplete and must be discarded; split the input across multiple TDFs or use a larger
+     * segment size.
+     */
+    public static class AesGcmExhaustedException extends SDKException {
+        public AesGcmExhaustedException(String errorMessage) {
             super(errorMessage);
         }
     }

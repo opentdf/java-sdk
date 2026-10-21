@@ -25,6 +25,8 @@ jobs:
 
     - name: Buf setup
       uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1.50.0
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Initialize the CodeQL tools for scanning
       uses: github/codeql-action/init@v3

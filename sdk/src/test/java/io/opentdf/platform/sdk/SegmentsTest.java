@@ -73,8 +73,9 @@ public class SegmentsTest {
         var manifest = Manifest.readManifest(json);
         var parsed = manifest.encryptionInformation.integrityInformation.segments;
 
-        assertThat(parsed).isInstanceOf(Manifest.Segments.class);
-        assertThat(parsed).containsExactlyElementsOf(segments);
+        assertThat(parsed)
+                .isInstanceOf(Manifest.Segments.class)
+                .containsExactlyElementsOf(segments);
         assertThat(Manifest.toJson(manifest)).isEqualTo(json);
     }
 
@@ -88,8 +89,9 @@ public class SegmentsTest {
         var manifest = Manifest.readManifest(json);
         var parsed = manifest.encryptionInformation.integrityInformation.segments;
 
-        assertThat(parsed).isNotInstanceOf(Manifest.Segments.class);
-        assertThat(parsed).containsExactlyElementsOf(segments);
+        assertThat(parsed)
+                .isNotInstanceOf(Manifest.Segments.class)
+                .containsExactlyElementsOf(segments);
         assertThat(Manifest.toJson(manifest)).isEqualTo(json);
     }
 
@@ -101,8 +103,9 @@ public class SegmentsTest {
 
         var parsed = Manifest.readManifest(json).encryptionInformation.integrityInformation.segments;
 
-        assertThat(parsed).isNotInstanceOf(Manifest.Segments.class);
-        assertThat(parsed).containsExactlyElementsOf(segments);
+        assertThat(parsed)
+                .isNotInstanceOf(Manifest.Segments.class)
+                .containsExactlyElementsOf(segments);
     }
 
     @Test
@@ -115,8 +118,9 @@ public class SegmentsTest {
         var parsed = Manifest.readManifest(manifestJson(segments))
                 .encryptionInformation.integrityInformation.segments;
 
-        assertThat(parsed).isNotInstanceOf(Manifest.Segments.class);
-        assertThat(parsed).containsExactlyElementsOf(segments);
+        assertThat(parsed)
+                .isNotInstanceOf(Manifest.Segments.class)
+                .containsExactlyElementsOf(segments);
     }
 
     @Test
@@ -157,8 +161,9 @@ public class SegmentsTest {
             manifest = Manifest.readManifest(json);
         }
         var segments = manifest.encryptionInformation.integrityInformation.segments;
-        assertThat(segments).isInstanceOf(Manifest.Segments.class);
-        assertThat(segments.size()).isEqualTo(count);
+        assertThat(segments)
+                .isInstanceOf(Manifest.Segments.class)
+                .hasSize(count);
         assertThat(segments.get(count - 1).hash).isEqualTo(hash(count - 1));
 
         var counting = new CountingWriter();
@@ -205,6 +210,7 @@ public class SegmentsTest {
 
         @Override
         public void close() {
+            // No resources to release.
         }
     }
 
@@ -218,10 +224,12 @@ public class SegmentsTest {
 
         @Override
         public void flush() {
+            // Nothing is buffered.
         }
 
         @Override
         public void close() {
+            // No resources to release.
         }
     }
 }

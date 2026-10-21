@@ -4,7 +4,7 @@
     <parent>
         <groupId>io.opentdf.platform</groupId>
         <artifactId>sdk-pom</artifactId>
-        <version>0.18.0</version>
+        <version>0.19.1</version>
     </parent>
     <artifactId>cmdline</artifactId>
     <properties>
@@ -86,7 +86,7 @@
         <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
-            <version>3.25.3</version>
+            <version>3.27.7</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

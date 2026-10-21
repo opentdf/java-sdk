@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonDeserializer;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
@@ -64,7 +65,18 @@ public class Manifest {
 
     private static final Gson gson = new GsonBuilder()
             .registerTypeAdapter(AssertionConfig.Statement.class, new AssertionValueAdapter())
+            .registerTypeAdapterFactory(new IntegrityInformationAdapterFactory())
+            .registerTypeAdapterFactory(new SpecVersionAdapterFactory())
             .create();
+
+    /**
+     * The TDF spec version the manifest records. Written as {@code schemaVersion} only; on read
+     * it may also come from the non-aligned {@code tdf_spec_version} name, see
+     * {@link SpecVersionAdapterFactory}.
+     * <p>
+     * The reader uses it to choose how the integrity digests are encoded: hex when no version is
+     * recorded (pre-4.3.0), raw bytes otherwise.
+     */
     @SerializedName(value = "schemaVersion")
     String tdfVersion;
 
@@ -106,8 +118,21 @@ public class Manifest {
 
     static public class Segment {
         public String hash;
+        /**
+         * The plaintext length of this segment. Optional when parsing: a producer that leaves the
+         * key out means {@link IntegrityInformation#segmentSizeDefault}, which is filled in during
+         * deserialization. Always written on serialization, so a manifest read and re-emitted by
+         * this SDK carries the value explicitly.
+         */
         public long segmentSize;
+        /**
+         * The on-the-wire length of this segment. Optional when parsing the same way
+         * {@link #segmentSize} is, defaulting to
+         * {@link IntegrityInformation#encryptedSegmentSizeDefault}.
+         */
         public long encryptedSegmentSize;
+        private transient boolean segmentSizePresent = true;
+        private transient boolean encryptedSegmentSizePresent = true;
 
         @Override
         public boolean equals(Object o) {
@@ -146,6 +171,7 @@ public class Manifest {
      * base64 of that array. Going past that needs a streaming Mac and streaming
      * base64, and a wire-format change for assertions.
      */
+    @SuppressWarnings("java:S2160") // AbstractList equality is the intended list-value equality.
     static final class Segments extends AbstractList<Segment> {
         private static final int SEGMENTS_PER_CHUNK = 4096;
         /**
@@ -165,14 +191,28 @@ public class Manifest {
         private int padding;
         private long defaultSegmentSize;
         private long defaultEncryptedSegmentSize;
+        private boolean defaultSegmentSizePresent;
+        private boolean defaultEncryptedSegmentSizePresent;
         private long lastSegmentSize;
         private long lastEncryptedSegmentSize;
+        private boolean lastSegmentSizePresent;
+        private boolean lastEncryptedSegmentSizePresent;
 
         /**
          * @return false if this segment cannot be represented compactly, in which
          *         case the segment was not appended and the caller must fall back
          */
         boolean append(String hash, long segmentSize, long encryptedSegmentSize) {
+            return append(hash, segmentSize, encryptedSegmentSize, true, true);
+        }
+
+        private boolean append(Segment segment) {
+            return append(segment.hash, segment.segmentSize, segment.encryptedSegmentSize,
+                    segment.segmentSizePresent, segment.encryptedSegmentSizePresent);
+        }
+
+        private boolean append(String hash, long segmentSize, long encryptedSegmentSize,
+                boolean segmentSizePresent, boolean encryptedSegmentSizePresent) {
             if (hash == null) {
                 return false;
             }
@@ -184,12 +224,16 @@ public class Manifest {
                 padding = trailingPadding(hash);
                 defaultSegmentSize = segmentSize;
                 defaultEncryptedSegmentSize = encryptedSegmentSize;
+                defaultSegmentSizePresent = segmentSizePresent;
+                defaultEncryptedSegmentSizePresent = encryptedSegmentSizePresent;
             } else if (hash.length() != stride
                     || trailingPadding(hash) != padding
                     // the previously appended segment is no longer the last one, so it
                     // has to match the defaults from here on
-                    || lastSegmentSize != defaultSegmentSize
-                    || lastEncryptedSegmentSize != defaultEncryptedSegmentSize) {
+                    || !sameValue(lastSegmentSize, lastSegmentSizePresent,
+                            defaultSegmentSize, defaultSegmentSizePresent)
+                    || !sameValue(lastEncryptedSegmentSize, lastEncryptedSegmentSizePresent,
+                            defaultEncryptedSegmentSize, defaultEncryptedSegmentSizePresent)) {
                 return false;
             }
 
@@ -208,8 +252,33 @@ public class Manifest {
 
             lastSegmentSize = segmentSize;
             lastEncryptedSegmentSize = encryptedSegmentSize;
+            lastSegmentSizePresent = segmentSizePresent;
+            lastEncryptedSegmentSizePresent = encryptedSegmentSizePresent;
             count++;
             return true;
+        }
+
+        private static boolean sameValue(long left, boolean leftPresent, long right, boolean rightPresent) {
+            return leftPresent == rightPresent && (!leftPresent || left == right);
+        }
+
+        private void applyDefaults(long segmentSize, long encryptedSegmentSize) {
+            if (!defaultSegmentSizePresent) {
+                defaultSegmentSize = segmentSize;
+                defaultSegmentSizePresent = true;
+            }
+            if (!defaultEncryptedSegmentSizePresent) {
+                defaultEncryptedSegmentSize = encryptedSegmentSize;
+                defaultEncryptedSegmentSizePresent = true;
+            }
+            if (!lastSegmentSizePresent) {
+                lastSegmentSize = segmentSize;
+                lastSegmentSizePresent = true;
+            }
+            if (!lastEncryptedSegmentSizePresent) {
+                lastEncryptedSegmentSize = encryptedSegmentSize;
+                lastEncryptedSegmentSizePresent = true;
+            }
         }
 
         private static int trailingPadding(String hash) {
@@ -264,6 +333,9 @@ public class Manifest {
             boolean last = index == count - 1;
             segment.segmentSize = last ? lastSegmentSize : defaultSegmentSize;
             segment.encryptedSegmentSize = last ? lastEncryptedSegmentSize : defaultEncryptedSegmentSize;
+            segment.segmentSizePresent = last ? lastSegmentSizePresent : defaultSegmentSizePresent;
+            segment.encryptedSegmentSizePresent = last
+                    ? lastEncryptedSegmentSizePresent : defaultEncryptedSegmentSizePresent;
             return segment;
         }
 
@@ -283,6 +355,7 @@ public class Manifest {
         @SuppressWarnings("unchecked")
         public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> type) {
             TypeAdapter<Segment> element = gson.getAdapter(Segment.class);
+            TypeAdapter<JsonElement> jsonElement = gson.getAdapter(JsonElement.class);
             return (TypeAdapter<T>) new TypeAdapter<List<Segment>>() {
                 @Override
                 public void write(JsonWriter out, List<Segment> value) throws IOException {
@@ -298,6 +371,7 @@ public class Manifest {
                 }
 
                 @Override
+                @SuppressWarnings("java:S1168") // Preserve JSON null so manifest validation rejects it.
                 public List<Segment> read(JsonReader in) throws IOException {
                     if (in.peek() == JsonToken.NULL) {
                         in.nextNull();
@@ -307,11 +381,17 @@ public class Manifest {
                     Segments compact = new Segments();
                     List<Segment> fallback = null;
                     while (in.hasNext()) {
-                        Segment segment = element.read(in);
+                        JsonElement rawSegment = jsonElement.read(in);
+                        Segment segment = element.fromJsonTree(rawSegment);
+                        if (segment != null && rawSegment.isJsonObject()) {
+                            JsonObject object = rawSegment.getAsJsonObject();
+                            segment.segmentSizePresent = hasValue(object, "segmentSize");
+                            segment.encryptedSegmentSizePresent = hasValue(object, "encryptedSegmentSize");
+                        }
                         if (fallback != null) {
                             fallback.add(segment);
                         } else if (segment == null
-                                || !compact.append(segment.hash, segment.segmentSize, segment.encryptedSegmentSize)) {
+                                || !compact.append(segment)) {
                             fallback = new ArrayList<>(compact);
                             fallback.add(segment);
                         }
@@ -320,6 +400,11 @@ public class Manifest {
                     return fallback == null ? compact : fallback;
                 }
             };
+        }
+
+        private static boolean hasValue(JsonObject object, String memberName) {
+            JsonElement member = object.get(memberName);
+            return member != null && !member.isJsonNull();
         }
     }
 
@@ -370,6 +455,165 @@ public class Manifest {
         public int hashCode() {
             return Objects.hash(rootSignature, segmentHashAlg, segmentSizeDefault, encryptedSegmentSizeDefault,
                     segments);
+        }
+    }
+
+    /**
+     * Applies {@code segmentSizeDefault} / {@code encryptedSegmentSizeDefault} to any segment
+     * that left the corresponding per-segment key out of its JSON.
+     * <p>
+     * The per-segment values are optional overrides. As of 2026-09,
+     * <a href="https://github.com/opentdf/spec/blob/main/schema/OpenTDF/json-schema/schema.json">the
+     * TDF schema</a> lists {@code segmentSizeDefault} and {@code encryptedSegmentSizeDefault} in
+     * {@code integrityInformation}'s {@code required} array but puts no {@code required} array on
+     * {@code segments/items}, and web-sdk omits a per-segment size whenever it equals the default
+     * -- which is every full segment of a payload larger than one segment. Gson leaves an absent
+     * key at {@code 0}, so before this the reader allocated a zero length buffer for those
+     * segments and failed inside the integrity check.
+     * <p>
+     * This runs as a post-deserialization fixup rather than by boxing the fields to {@code Long},
+     * which keeps {@link Segment#segmentSize} a primitive for callers and keeps the value/absence
+     * distinction out of the public API.
+     * <p>
+     * Two edge cases worth knowing: an explicit {@code null} is treated as absent and gets the
+     * default, while an explicit {@code 0} is a value and is left alone for the reader to reject.
+     * And if the manifest omits a <em>default</em> too then there is nothing to fall back to, so
+     * the segments keep their {@code 0}; {@code TDF.loadTDF} rejects that manifest when it checks
+     * the two defaults against each other.
+     */
+    private static class IntegrityInformationAdapterFactory implements TypeAdapterFactory {
+        @Override
+        public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> type) {
+            if (!IntegrityInformation.class.equals(type.getRawType())) {
+                return null;
+            }
+            final TypeAdapter<T> delegate = gson.getDelegateAdapter(this, type);
+            return new TypeAdapter<T>() {
+                @Override
+                public void write(JsonWriter out, T value) throws IOException {
+                    delegate.write(out, value);
+                }
+
+                @Override
+                public T read(JsonReader in) throws IOException {
+                    T value = delegate.read(in);
+                    if (value instanceof IntegrityInformation) {
+                        applySegmentSizeDefaults((IntegrityInformation) value);
+                    }
+                    return value;
+                }
+            };
+        }
+
+        private static void applySegmentSizeDefaults(IntegrityInformation integrityInformation) {
+            List<Segment> segments = integrityInformation.segments;
+            if (segments == null) {
+                // no segments to default; readManifest rejects this with its own message
+                return;
+            }
+            if (segments instanceof Segments) {
+                ((Segments) segments).applyDefaults(integrityInformation.segmentSizeDefault,
+                        integrityInformation.encryptedSegmentSizeDefault);
+                return;
+            }
+            for (int i = 0; i < segments.size(); i++) {
+                Segment segment = segments.get(i);
+                if (segment == null) {
+                    // a null entry in the array; readManifest rejects it with its own message
+                    continue;
+                }
+                if (!segment.segmentSizePresent) {
+                    segment.segmentSize = integrityInformation.segmentSizeDefault;
+                }
+                if (!segment.encryptedSegmentSizePresent) {
+                    segment.encryptedSegmentSize = integrityInformation.encryptedSegmentSizeDefault;
+                }
+            }
+        }
+    }
+
+    /**
+     * Reads {@code tdf_spec_version}, a non-aligned name for the spec-version field, when the
+     * canonical {@code schemaVersion} is absent, so that files written with that name stay
+     * readable.
+     * <p>
+     * {@code schemaVersion} is the canonical name. {@code tdf_spec_version} is not a former
+     * spelling that was renamed -- it entered some specification drafts and some older OpenTDF
+     * documentation in error, and writers built from those drafts emitted it. We read it so
+     * those files stay usable; we never write it.
+     * <p>
+     * Precedence is {@code schemaVersion}, then {@code tdf_spec_version} at the root, then
+     * {@code tdf_spec_version} under {@code payload}. Nothing is written back under the
+     * non-aligned name -- serializing a manifest always emits {@code schemaVersion} only, so a
+     * round trip normalizes the name rather than propagating it.
+     * <p>
+     * Both placements are probed because both occur in archival files. The root is where the
+     * spec's own manifest.md has always documented the field, and where web-sdk both wrote it
+     * and still reads it. Under {@code payload} is where revisions of the JSON schema declared it
+     * in error, which led at least one writer to emit the key there with a {@code null} value.
+     * <p>
+     * Only a non-empty JSON string counts. Any other value -- {@code null}, a number, an object
+     * -- is skipped rather than failing the decode: reporting malformed manifests is schema
+     * validation's job, not the decoder's.
+     * <p>
+     * Gson's {@code @SerializedName(alternate = ...)} cannot do this: it cannot reach into
+     * {@code payload}, and when both names are present it keeps whichever comes last in the
+     * document instead of preferring {@code schemaVersion}.
+     */
+    private static class SpecVersionAdapterFactory implements TypeAdapterFactory {
+        private static final String NON_ALIGNED_SPEC_VERSION = "tdf_spec_version";
+        private static final String PAYLOAD = "payload";
+
+        @Override
+        public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> type) {
+            if (!Manifest.class.equals(type.getRawType())) {
+                return null;
+            }
+            final TypeAdapter<T> delegate = gson.getDelegateAdapter(this, type);
+            final TypeAdapter<JsonElement> elementAdapter = gson.getAdapter(JsonElement.class);
+            return new TypeAdapter<T>() {
+                @Override
+                public void write(JsonWriter out, T value) throws IOException {
+                    delegate.write(out, value);
+                }
+
+                @Override
+                public T read(JsonReader in) throws IOException {
+                    JsonElement tree = elementAdapter.read(in);
+                    T value = delegate.fromJsonTree(tree);
+                    if (value instanceof Manifest && tree != null && tree.isJsonObject()) {
+                        Manifest manifest = (Manifest) value;
+                        if (manifest.tdfVersion == null || manifest.tdfVersion.isEmpty()) {
+                            String nonAligned = nonAlignedSpecVersion(tree.getAsJsonObject());
+                            if (nonAligned != null) {
+                                manifest.tdfVersion = nonAligned;
+                            }
+                        }
+                    }
+                    return value;
+                }
+            };
+        }
+
+        /** The first non-empty string under the non-aligned name, root before payload, or null. */
+        private static String nonAlignedSpecVersion(JsonObject root) {
+            String atRoot = nonEmptyString(root.get(NON_ALIGNED_SPEC_VERSION));
+            if (atRoot != null) {
+                return atRoot;
+            }
+            JsonElement payload = root.get(PAYLOAD);
+            if (payload != null && payload.isJsonObject()) {
+                return nonEmptyString(payload.getAsJsonObject().get(NON_ALIGNED_SPEC_VERSION));
+            }
+            return null;
+        }
+
+        private static String nonEmptyString(JsonElement element) {
+            if (element == null || !element.isJsonPrimitive() || !element.getAsJsonPrimitive().isString()) {
+                return null;
+            }
+            String value = element.getAsString();
+            return value.isEmpty() ? null : value;
         }
     }
 
@@ -774,45 +1018,65 @@ public class Manifest {
      */
     protected static Manifest readManifest(java.io.Reader manifestJson) {
         Manifest result = gson.fromJson(manifestJson, Manifest.class);
+        if (result == null) {
+            throw new IllegalArgumentException("Manifest is empty");
+        }
+        validateManifest(result);
+        return result;
+    }
+
+    private static void validateManifest(Manifest result) {
         if (result.assertions == null) {
             result.assertions = new ArrayList<>();
         }
 
-        if (result.payload == null) {
-            throw new IllegalArgumentException("Manifest with null payload");
-        } else if (result.encryptionInformation == null) {
-            throw new IllegalArgumentException("Manifest with null encryptionInformation");
-        } else if (result.encryptionInformation.integrityInformation == null) {
-            throw new IllegalArgumentException("Manifest with null integrityInformation");
-        } else if (result.encryptionInformation.integrityInformation.rootSignature == null) {
-            throw new IllegalArgumentException("Manifest with null rootSignature");
-        } else if (result.encryptionInformation.integrityInformation.rootSignature.algorithm == null
-                || result.encryptionInformation.integrityInformation.rootSignature.signature == null) {
+        requireManifestField(result.payload, "Manifest with null payload");
+        requireManifestField(result.encryptionInformation, "Manifest with null encryptionInformation");
+
+        var encryptionInformation = result.encryptionInformation;
+        requireManifestField(encryptionInformation.integrityInformation, "Manifest with null integrityInformation");
+        requireManifestField(encryptionInformation.keyAccessObj, "Manifest with null keyAccessObj");
+        requireManifestField(encryptionInformation.policy, "Manifest with null policy");
+
+        var integrityInformation = encryptionInformation.integrityInformation;
+        requireManifestField(integrityInformation.rootSignature, "Manifest with null rootSignature");
+        requireManifestField(integrityInformation.segments, "Manifest with null segments");
+
+        var rootSignature = integrityInformation.rootSignature;
+        if (rootSignature.algorithm == null || rootSignature.signature == null) {
             throw new IllegalArgumentException("Manifest with invalid rootSignature");
-        } else if (result.encryptionInformation.integrityInformation.segments == null) {
-            throw new IllegalArgumentException("Manifest with null segments");
-        } else if (result.encryptionInformation.keyAccessObj == null) {
-            throw new IllegalArgumentException("Manifest with null keyAccessObj");
-        } else if (result.encryptionInformation.policy == null) {
-            throw new IllegalArgumentException("Manifest with null policy");
         }
 
+        validateSegments(integrityInformation.segments);
+        validateKeyAccess(encryptionInformation.keyAccessObj);
+    }
+
+    private static void requireManifestField(Object field, String message) {
+        if (field == null) {
+            throw new IllegalArgumentException(message);
+        }
+    }
+
+    private static void validateSegments(List<Segment> segments) {
         // Segments rejects null segments and hashes as it is built, so only the
         // fallback representation needs checking here.
-        if (!(result.encryptionInformation.integrityInformation.segments instanceof Segments)) {
-            for (Manifest.Segment segment : result.encryptionInformation.integrityInformation.segments) {
+        if (!(segments instanceof Segments)) {
+            for (Manifest.Segment segment : segments) {
                 if (segment == null || segment.hash == null) {
                     throw new IllegalArgumentException("Invalid integrity segment");
                 }
             }
         }
-        for (Manifest.KeyAccess keyAccess : result.encryptionInformation.keyAccessObj) {
+    }
+
+    private static void validateKeyAccess(List<KeyAccess> keyAccessObjects) {
+        for (Manifest.KeyAccess keyAccess : keyAccessObjects) {
             if (keyAccess == null) {
                 throw new IllegalArgumentException("Invalid null KeyAccess in manifest");
+            } else if (keyAccess.url == null) {
+                throw new IllegalArgumentException("Invalid KeyAccess with null url in manifest");
             }
         }
-
-        return result;
     }
 
     static PolicyObject decodePolicyObject(Manifest manifest) {

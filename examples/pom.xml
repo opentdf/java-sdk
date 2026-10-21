@@ -4,7 +4,7 @@
   <parent>
     <artifactId>sdk-pom</artifactId>
     <groupId>io.opentdf.platform</groupId>
-    <version>0.18.0</version>
+    <version>0.19.1</version>
   </parent>
 
   <groupId>io.opentdf.platform</groupId>
@@ -53,7 +53,6 @@
     <dependency>
       <groupId>com.google.code.gson</groupId>
       <artifactId>gson</artifactId>
-      <version>2.11.0</version> 
     </dependency>
     <dependency>
         <groupId>org.apache.logging.log4j</groupId>
