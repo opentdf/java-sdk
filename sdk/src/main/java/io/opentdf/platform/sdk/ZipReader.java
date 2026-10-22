@@ -513,6 +513,11 @@ public class ZipReader {
         return value;
     }
 
+    /** The field as read, or the next zip64 value if the field holds the 0xFFFFFFFF sentinel. */
+    private long zip64ValueIfSentinel(long field, String what, long fieldEnd, long headerStart) throws IOException {
+        return field == ZIP64_MAGICVAL ? readZip64Value(what, fieldEnd, headerStart) : field;
+    }
+
     public Entry readCentralDirectoryFileHeader() throws IOException {
         return readCentralDirectoryFileHeader(zipChannel.size());
     }
@@ -586,15 +591,10 @@ public class ZipReader {
 
             if (headerId == ZIP64_EXTID) {
                 // APPNOTE 4.5.3 order: original size, compressed size, then local header offset
-                if (uncompressedSize == ZIP64_MAGICVAL) {
-                    uncompressedSize = readZip64Value("uncompressed size", dataEnd, headerStart);
-                }
-                if (compressedSize == ZIP64_MAGICVAL) {
-                    compressedSize = readZip64Value("compressed size", dataEnd, headerStart);
-                }
-                if (relativeOffsetOfLocalHeader == ZIP64_MAGICVAL) {
-                    relativeOffsetOfLocalHeader = readZip64Value("local header offset", dataEnd, headerStart);
-                }
+                uncompressedSize = zip64ValueIfSentinel(uncompressedSize, "uncompressed size", dataEnd, headerStart);
+                compressedSize = zip64ValueIfSentinel(compressedSize, "compressed size", dataEnd, headerStart);
+                relativeOffsetOfLocalHeader = zip64ValueIfSentinel(relativeOffsetOfLocalHeader,
+                        "local header offset", dataEnd, headerStart);
                 // a 2-byte field, so its sentinel is 0xFFFF rather than 0xFFFFFFFF
                 if (diskNumberStart == ZIP64_MAGIC_SHORT) {
                     requireWithinField("disk number", Integer.BYTES, dataEnd, headerStart);

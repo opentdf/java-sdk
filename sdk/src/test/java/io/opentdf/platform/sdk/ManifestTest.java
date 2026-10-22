@@ -17,6 +17,7 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -334,12 +335,7 @@ public class ManifestTest {
 
     @Test
     void testReadingManifestWithObjectStatementValue() throws IOException {
-        final Manifest manifest;
-        try (var mStream = getClass().getResourceAsStream("/io.opentdf.platform.sdk.TestData/manifest-with-object-statement-value.json")) {
-            assert mStream != null;
-            var manifestJson = new String(mStream.readAllBytes(), StandardCharsets.UTF_8);
-            manifest = Manifest.readManifest(manifestJson);
-        }
+        var manifest = Manifest.readManifest(manifestWithObjectStatementValue());
 
         assertThat(manifest.assertions).hasSize(2);
 
@@ -481,8 +477,8 @@ public class ManifestTest {
     }
 
     private String manifestWithObjectStatementValue() throws IOException {
-        try (var mStream = getClass().getResourceAsStream("/io.opentdf.platform.sdk.TestData/manifest-with-object-statement-value.json")) {
-            assert mStream != null;
+        try (var mStream = Objects.requireNonNull(getClass().getResourceAsStream(
+                "/io.opentdf.platform.sdk.TestData/manifest-with-object-statement-value.json"))) {
             return new String(mStream.readAllBytes(), StandardCharsets.UTF_8);
         }
     }
