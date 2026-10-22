@@ -766,14 +766,11 @@ public class ZipReaderTest {
     public void testHostileCentralDirectoryFieldsAreRejected() {
         HostileZips.hostileShapes().forEach((shape, hostile) -> {
             var archive = HostileZips.tdfWith(MANIFEST, hostile);
+            // reading every entry, not just the directory, so a shape that only fails once its
+            // data is read is caught too
             assertTimeoutPreemptively(Duration.ofSeconds(5), () ->
-                    assertThatThrownBy(() -> {
-                        try (var channel = new SeekableInMemoryByteChannel(archive)) {
-                            // reading every entry, not just the directory, so a shape that only
-                            // fails once its data is read is caught too
-                            testReadingZipChannel(channel, false);
-                        }
-                    }).as(shape).isInstanceOf(InvalidZipException.class),
+                    assertThatThrownBy(() -> testReadingZipChannel(new SeekableInMemoryByteChannel(archive), false))
+                            .as(shape).isInstanceOf(InvalidZipException.class),
                     shape);
         });
     }

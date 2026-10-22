@@ -16,6 +16,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Objects;
 import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,8 +28,7 @@ class SDKTest {
 
     @Test
     void testExaminingValidZTDF() throws IOException {
-        try (var ztdf = SDKTest.class.getClassLoader().getResourceAsStream("sample.txt.tdf")) {
-            assert ztdf != null;
+        try (var ztdf = Objects.requireNonNull(SDKTest.class.getClassLoader().getResourceAsStream("sample.txt.tdf"))) {
             var chan = new SeekableInMemoryByteChannel(ztdf.readAllBytes());
             assertThat(SDK.isTDF(chan)).isTrue();
         }
