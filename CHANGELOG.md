@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.20.0](https://github.com/opentdf/java-sdk/compare/v0.19.1...v0.20.0) (2026-10-22)
+
+
+### Features
+
+* **sdk:** DSPX-4584 stream the TDF manifest, remove the ~21.7M segment ceiling ([#399](https://github.com/opentdf/java-sdk/issues/399)) ([35da51f](https://github.com/opentdf/java-sdk/commit/35da51ff643b36f13aa00ac0af4db62b983b7aab))
+
+
+### Bug Fixes
+
+* **main:** bump org.bouncycastle:bcprov-jdk18on from 1.84 to 1.85 ([#408](https://github.com/opentdf/java-sdk/issues/408)) ([1daa64a](https://github.com/opentdf/java-sdk/commit/1daa64a3850ec93533b0a8bf4fa6e823d4b56e6a))
+* **sdk:** align TDF3 IV construction ([#412](https://github.com/opentdf/java-sdk/issues/412)) ([214e19e](https://github.com/opentdf/java-sdk/commit/214e19ea3e9538e7243010fdd542859fa5ede276))
+* **sdk:** don't re-run codegen when attaching sources ([#419](https://github.com/opentdf/java-sdk/issues/419)) ([8fc820c](https://github.com/opentdf/java-sdk/commit/8fc820cb09b7f18d64f50673decb750874e5f100))
+* **sdk:** DSPX-4589 zip64 EOCD sentinels, truncated archive detection, and UTF-8 entry names ([#398](https://github.com/opentdf/java-sdk/issues/398)) ([e31db09](https://github.com/opentdf/java-sdk/commit/e31db0989d62c132b666c730081eb454624f68b0))
+* **sdk:** missed one on the previous pull ([#415](https://github.com/opentdf/java-sdk/issues/415)) ([1ab8a3c](https://github.com/opentdf/java-sdk/commit/1ab8a3cd4e5a6a18a418a94679b57ae4ec31ab7c))
+* **sdk:** read a manifest.json entry from TDF archives ([#406](https://github.com/opentdf/java-sdk/issues/406)) ([f7e0c10](https://github.com/opentdf/java-sdk/commit/f7e0c10a87760d6c9e0823737ccb8165a90ff710))
+* **sdk:** read the TDF spec version from all three places ([#411](https://github.com/opentdf/java-sdk/issues/411)) ([0a10e74](https://github.com/opentdf/java-sdk/commit/0a10e745977bc21e8daa763a6e807d1011e8da8a))
+* **sdk:** reject empty TDF manifests ([#422](https://github.com/opentdf/java-sdk/issues/422)) ([762fe40](https://github.com/opentdf/java-sdk/commit/762fe40d192e17b16026850046264a36bb0bbeb4))
+* **sdk:** reject key access entries without URLs ([#423](https://github.com/opentdf/java-sdk/issues/423)) ([525e5b0](https://github.com/opentdf/java-sdk/commit/525e5b052d4187a10213bde39c86377330c3e5d7))
+* **sdk:** update dependencies ([#410](https://github.com/opentdf/java-sdk/issues/410)) ([b3f293e](https://github.com/opentdf/java-sdk/commit/b3f293e35f7a84d652a0fa2ef9461641b85ba74c))
+* **sdk:** without this the `enforcer` step fails ([#414](https://github.com/opentdf/java-sdk/issues/414)) ([1065499](https://github.com/opentdf/java-sdk/commit/10654999a90d11647927d350c0212d64aa722347))
+
 ## [0.19.1](https://github.com/opentdf/java-sdk/compare/v0.19.0...v0.19.1) (2026-09-21)
 
 
