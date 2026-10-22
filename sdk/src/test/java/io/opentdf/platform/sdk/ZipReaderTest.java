@@ -761,12 +761,7 @@ public class ZipReaderTest {
         }
     }
 
-    /**
-     * DSPX-5103: central directory fields that read as negative, or that point outside the
-     * archive or outside their own extra field, are zip errors. None of them may hang the reader
-     * (a data size of 0xFFFC once looped forever) or escape as an unchecked exception other than
-     * {@link InvalidZipException}.
-     */
+    /** Every hostile shape fails with {@link InvalidZipException}, without hanging. */
     @Test
     public void testHostileCentralDirectoryFieldsAreRejected() {
         HostileZips.hostileShapes().forEach((shape, hostile) -> {

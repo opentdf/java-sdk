@@ -193,10 +193,7 @@ public class TDFReaderTest {
         }
     }
 
-    /**
-     * A payload whose declared size runs past the end of the archive is only detected when it is
-     * read. Like a truncated manifest, it is a malformed TDF, not a raw zip reader exception.
-     */
+    /** An oversized payload is only detected on read, and still surfaces as a malformed TDF. */
     @Test
     void reportsATruncatedPayloadAsMalformed() throws IOException {
         var payload = new HostileZips.Entry(TDFWriter.TDF_PAYLOAD_FILE_NAME, PAYLOAD.getBytes(StandardCharsets.UTF_8));

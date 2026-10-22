@@ -495,11 +495,7 @@ public class ManifestTest {
         return new GsonBuilder().serializeNulls().create().toJson(root);
     }
 
-    /**
-     * DSPX-5103: an explicit JSON null in a statement field is the same as leaving it out. It
-     * used to throw UnsupportedOperationException for format and schema, which escaped manifest
-     * parsing, and to become the string "null" for value.
-     */
+    /** An explicit JSON null in a statement field reads as absent, not as the string "null". */
     @Test
     void testNullStatementFieldsReadAsNull() throws IOException {
         for (var member : List.of("format", "schema", "value")) {
@@ -511,7 +507,6 @@ public class ManifestTest {
         }
     }
 
-    /** A statement format or schema that is not a string is a parse error, not an unchecked crash. */
     @Test
     void testNonStringStatementFormatIsAParseError() throws IOException {
         for (var member : List.of("format", "schema")) {

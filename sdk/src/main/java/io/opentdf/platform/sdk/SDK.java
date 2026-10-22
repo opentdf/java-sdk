@@ -177,11 +177,8 @@ public class SDK implements AutoCloseable {
         } catch (IOException | InvalidZipException e) {
             return false;
         } catch (RuntimeException e) {
-            // ZipReader reports every malformation it knows about as InvalidZipException, and its
-            // tests hold it to that. This is a backstop for the contract of this method, which
-            // screens untrusted input and answers yes or no: a parse failure we did not foresee,
-            // or an unchecked exception from the caller's channel, still means "not a TDF"
-            // rather than an exception from the very check meant to spare callers one.
+            // backstop for the yes-or-no contract: an unforeseen parse failure, or an unchecked
+            // exception from the caller's channel, still means "not a TDF"
             ZipReader.logger.debug("unexpected exception checking whether a channel holds a TDF", e);
             return false;
         }
