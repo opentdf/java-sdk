@@ -181,6 +181,24 @@ public class TDFReaderTest {
         }
     }
 
+    /** A well formed zip that is not a TDF: no manifest, no payload, or a name listed twice. */
+    @Test
+    void openReportsAZipThatIsNotATDFAsMalformed() throws IOException {
+        var notTDFs = List.of(
+                new String[] { TDFWriter.TDF_PAYLOAD_FILE_NAME, PAYLOAD },
+                new String[] { "manifest.json", MANIFEST },
+                new String[] { TDFWriter.TDF_PAYLOAD_FILE_NAME, PAYLOAD,
+                        "manifest.json", MANIFEST, "manifest.json", MANIFEST });
+        for (var entries : notTDFs) {
+            try (var tdf = archiveOf(entries)) {
+                assertThatThrownBy(() -> TDFReader.open(tdf))
+                        .as(String.join(", ", entries))
+                        .isInstanceOf(SDK.MalformedTDFException.class)
+                        .hasCauseInstanceOf(IllegalArgumentException.class);
+            }
+        }
+    }
+
     /** The buffer is one byte longer than the payload, so a short read would show up. */
     @Test
     void readsThePayloadAlongsideASpecNamedManifest() throws IOException {

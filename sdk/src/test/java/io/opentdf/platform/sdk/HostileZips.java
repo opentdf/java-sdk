@@ -62,12 +62,14 @@ final class HostileZips {
             e.compressedSize = 0xFFFFFFFFL;
             e.centralExtra = extraRecord(0x0001, 8, longs(Long.MIN_VALUE));
         });
-        // both sizes carry the sentinel, but the record only has room for one of them; the
-        // second must not be read out of whatever follows the record
+        // both sizes use the sentinel, but the zip64 record holds only one value. the two empty
+        // records after it read as a compressed size of 16, which fits, so only the record bound
+        // rejects this
         shapes.put("zip64 extra field too short for its sentinels", e -> {
             e.uncompressedSize = 0xFFFFFFFFL;
             e.compressedSize = 0xFFFFFFFFL;
-            e.centralExtra = concat(extraRecord(0x0001, 8, longs(e.data.length)), extraRecord(0xCAFE, 4, new byte[4]));
+            e.centralExtra = concat(extraRecord(0x0001, 8, longs(e.data.length)),
+                    extraRecord(0x0010, 0, new byte[0]), extraRecord(0x0000, 0, new byte[0]));
         });
         shapes.put("file name length 0xFFFF", e -> e.fileNameLength = 0xFFFF);
         shapes.put("extra field length 0xFFFF", e -> e.extraFieldLength = 0xFFFF);
