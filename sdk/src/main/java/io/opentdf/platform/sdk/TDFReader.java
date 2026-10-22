@@ -21,7 +21,7 @@ public class TDFReader {
 
     private final ZipReader.Entry manifestEntry;
     private final ZipReader.Entry payloadEntry;
-    private final InputStream payload;
+    private InputStream payload;
 
     public TDFReader(SeekableByteChannel tdf) throws SDKException, IOException {
         // A zip may legally list the same name twice, and readers disagree about which copy
@@ -48,7 +48,6 @@ public class TDFReader {
 
         manifestEntry = manifest;
         payloadEntry = entries.get(TDF_PAYLOAD_FILE_NAME);
-        payload = payloadEntry.getData();
     }
 
     String manifest() {
@@ -74,6 +73,13 @@ public class TDFReader {
     }
 
     int readPayloadBytes(byte[] buf) {
+        if (payload == null) {
+            try {
+                payload = payloadEntry.getData();
+            } catch (IOException e) {
+                throw new SDKException("error reading from payload in TDF", e);
+            }
+        }
         return readPayloadBytes(payload, buf);
     }
 

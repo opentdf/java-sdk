@@ -444,14 +444,12 @@ class TDF {
                             throw new IllegalStateException("unable to skip segment of "
                                     + segment.encryptedSegmentSize + " bytes");
                         }
-                        plainStart = plainEnd;
-                        continue;
+                    } else {
+                        byte[] plain = readSegment(payload, segment, digest);
+                        int from = (int) Math.max(0, offset - plainStart);
+                        int to = (int) Math.min(plain.length, end - plainStart);
+                        outputStream.write(plain, from, to - from);
                     }
-
-                    byte[] plain = readSegment(payload, segment, digest);
-                    int from = (int) Math.max(0, offset - plainStart);
-                    int to = (int) Math.min(plain.length, end - plainStart);
-                    outputStream.write(plain, from, to - from);
                     plainStart = plainEnd;
                 }
             }

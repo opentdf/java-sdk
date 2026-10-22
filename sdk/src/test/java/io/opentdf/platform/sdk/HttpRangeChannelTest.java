@@ -124,7 +124,10 @@ class HttpRangeChannelTest {
     @Test
     void rejectsNonHttpSchemes() {
         var sdk = new SDK(new FakeServicesBuilder().build(), null, null, null, null, null);
-        assertThatThrownBy(() -> sdk.loadTDF(URI.create("file:///etc/passwd"), Config.newTDFReaderConfig()))
+        var uri = URI.create("file:///etc/passwd");
+        var config = Config.newTDFReaderConfig();
+
+        assertThatThrownBy(() -> sdk.loadTDF(uri, config))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

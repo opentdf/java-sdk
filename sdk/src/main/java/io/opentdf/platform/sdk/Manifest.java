@@ -765,6 +765,9 @@ public class Manifest {
     public List<Assertion> assertions = new ArrayList<>();
     protected static Manifest readManifest(String manifestJson) {
         Manifest result = gson.fromJson(manifestJson, Manifest.class);
+        if (result == null) {
+            throw new IllegalArgumentException("Manifest is empty");
+        }
         if (result.assertions == null) {
             result.assertions = new ArrayList<>();
         }
@@ -796,6 +799,8 @@ public class Manifest {
         for (Manifest.KeyAccess keyAccess : result.encryptionInformation.keyAccessObj) {
             if (keyAccess == null) {
                 throw new IllegalArgumentException("Invalid null KeyAccess in manifest");
+            } else if (keyAccess.url == null) {
+                throw new IllegalArgumentException("Invalid KeyAccess with null url in manifest");
             }
         }
 
