@@ -78,12 +78,8 @@ public class TDFReader {
         } catch (InvalidZipException e) {
             // the manifest entry runs past the end of the archive
             throw malformed("error retrieving manifest from zip file", e);
-        } catch (JsonParseException | IllegalArgumentException | IllegalStateException
-                 | UnsupportedOperationException e) {
-            // Gson reports a JSON value of the wrong type through IllegalStateException and
-            // UnsupportedOperationException (the JsonElement.getAsX accessors), and
-            // Manifest.readManifest reports missing required fields as IllegalArgumentException.
-            // Every one of these here means the manifest itself is malformed.
+        } catch (JsonParseException | IllegalArgumentException e) {
+            // Manifest.readManifest reports a missing or misshapen field as IllegalArgumentException
             throw malformed("tdf manifest is invalid", e);
         } catch (IOException e) {
             throw new SDKException("error reading manifest from zip file", e);
@@ -100,10 +96,8 @@ public class TDFReader {
      * segments exceeds the maximum size of a Java String.
      */
     Reader manifest() {
-        // deliberately no fixed size cap: very large payloads (DSPX-4502) have manifests well
-        // over a gigabyte. a hostile declared size cannot make this allocate more than the
-        // archive holds, because the stream stops at the end of the archive and reports the
-        // entry as truncated, and ZipReader rejects entries whose stored bytes do not fit
+        // no fixed size cap: manifests for very large payloads exceed 1 GiB. a hostile declared
+        // size is still bounded by the archive, since the entry's stream throws where it ends
         try {
             return new BufferedReader(
                     new InputStreamReader(manifestEntry.getData(), StandardCharsets.UTF_8), MANIFEST_BUFFER_SIZE);
