@@ -19,6 +19,7 @@ import com.google.gson.reflect.TypeToken;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import com.google.gson.stream.JsonWriter;
+import com.google.gson.stream.MalformedJsonException;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -39,6 +40,7 @@ import org.apache.commons.codec.binary.Hex;
 import org.erdtman.jcs.JsonCanonicalizer;
 
 import java.io.ByteArrayOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.StringReader;
 import java.lang.annotation.ElementType;
@@ -204,7 +206,6 @@ public class Manifest {
      * base64 of that array. Going past that needs a streaming Mac and streaming
      * base64, and a wire-format change for assertions.
      */
-    @SuppressWarnings("java:S2160") // AbstractList equality is the intended list-value equality.
     static final class Segments extends AbstractList<Segment> {
         private static final int SEGMENTS_PER_CHUNK = 4096;
         /**
@@ -444,6 +445,36 @@ public class Manifest {
         @Override
         public int size() {
             return mutableSegments == null ? count : mutableSegments.size();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof List) || size() != ((List<?>) other).size()) {
+                return false;
+            }
+            List<?> otherList = (List<?>) other;
+            for (int i = 0; i < size(); i++) {
+                Object otherSegment = otherList instanceof Segments
+                        ? ((Segments) otherList).getForRead(i)
+                        : otherList.get(i);
+                if (!Objects.equals(getForRead(i), otherSegment)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        @Override
+        public int hashCode() {
+            int hashCode = 1;
+            for (int i = 0; i < size(); i++) {
+                Segment segment = getForRead(i);
+                hashCode = 31 * hashCode + (segment == null ? 0 : segment.hashCode());
+            }
+            return hashCode;
         }
     }
 
@@ -1139,7 +1170,9 @@ public class Manifest {
         try {
             result = gson.fromJson(manifestJson, Manifest.class);
         } catch (JsonParseException e) {
-            if (e.getCause() instanceof IOException) {
+            if (e.getCause() instanceof IOException
+                    && !(e.getCause() instanceof MalformedJsonException)
+                    && !(e.getCause() instanceof EOFException)) {
                 throw new SDKException("error reading manifest from zip file", (IOException) e.getCause());
             }
             throw e;

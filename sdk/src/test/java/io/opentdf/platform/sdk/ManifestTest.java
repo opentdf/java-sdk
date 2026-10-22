@@ -1,6 +1,7 @@
 package io.opentdf.platform.sdk;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -290,6 +291,13 @@ public class ManifestTest {
                 .isInstanceOf(SDKException.class)
                 .hasMessage("error reading manifest from zip file")
                 .hasRootCauseMessage("manifest read failed");
+    }
+
+    @Test
+    void preservesMalformedJsonErrors() {
+        assertThatThrownBy(() -> Manifest.readManifest("{\"payload\":"))
+                .isInstanceOf(JsonParseException.class)
+                .isNotInstanceOf(SDKException.class);
     }
 
     @Test

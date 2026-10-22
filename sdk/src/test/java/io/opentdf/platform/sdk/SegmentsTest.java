@@ -170,6 +170,21 @@ public class SegmentsTest {
         assertThat(new Manifest.Segments().aggregate(false)).isEmpty();
     }
 
+    @Test
+    void compactSegmentsRetainListEqualityAndHashing() {
+        var left = new Manifest.Segments();
+        var right = new Manifest.Segments();
+        var expected = uniformSegments(3);
+        for (Manifest.Segment segment : expected) {
+            assertThat(left.append(segment.hash, segment.segmentSize, segment.encryptedSegmentSize)).isTrue();
+            assertThat(right.append(segment.hash, segment.segmentSize, segment.encryptedSegmentSize)).isTrue();
+        }
+
+        assertThat(left).isEqualTo(right);
+        assertThat(left.hashCode()).isEqualTo(right.hashCode());
+        assertThat(left).isEqualTo(new ArrayList<>(expected));
+    }
+
     /**
      * A manifest whose JSON is larger than {@code Integer.MAX_VALUE} cannot be held
      * as a String, so both directions have to stream. Opt in with
