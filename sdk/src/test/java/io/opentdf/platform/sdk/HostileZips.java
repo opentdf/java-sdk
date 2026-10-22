@@ -10,12 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
-/**
- * Builds small stored (uncompressed) zip archives by hand, so that a test can put any value it
- * likes into a central directory field. {@link ZipWriter} and other writers only produce honest
- * archives; these are for the hostile shapes from DSPX-5103, where lengths, sizes and offsets
- * read as negative or point outside the archive.
- */
+/** Hand-built stored zips whose central directory fields can be set to values no real writer produces. */
 final class HostileZips {
     private HostileZips() {
     }
@@ -52,8 +47,7 @@ final class HostileZips {
     /** The named hostile shapes, each applied to the manifest entry of {@link #tdfWith}. */
     static Map<String, Consumer<Entry>> hostileShapes() {
         var shapes = new LinkedHashMap<String, Consumer<Entry>>();
-        // the shape that looped forever when the data size was read signed: 0xFFFC is -4,
-        // which sent the position straight back to the start of the record
+        // 0xFFFC is -4 if read signed, which would rewind the walk to the start of the record
         shapes.put("extra field data size 0xFFFC", e -> e.centralExtra = extraRecord(0xCAFE, 0xFFFC, new byte[4]));
         shapes.put("extra field data size past the extra field", e -> e.centralExtra = extraRecord(0xCAFE, 16, new byte[4]));
         shapes.put("zip64 local header offset 0xFFFFFFFFFFFFFFFF", e -> {

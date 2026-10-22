@@ -848,7 +848,6 @@ class TDF {
 
     Reader loadTDF(SeekableByteChannel tdf, Config.TDFReaderConfig tdfReaderConfig) throws SDKException, IOException {
 
-        // a malformed container or manifest is reported as SDK.MalformedTDFException
         TDFReader tdfReader = TDFReader.open(tdf);
         Manifest manifest = tdfReader.readManifest();
 

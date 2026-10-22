@@ -111,10 +111,6 @@ class SDKTest {
         }
     }
 
-    /**
-     * DSPX-5103: {@link SDK#isTDF} answers a malformed archive with false. It used to hang on
-     * one of these shapes and let an unchecked exception escape on others.
-     */
     @Test
     void testExaminingHostileArchivesReturnsFalse() {
         HostileZips.hostileShapes().forEach((shape, hostile) -> {
@@ -131,7 +127,6 @@ class SDKTest {
         assertThat(SDK.isTDF(new SeekableInMemoryByteChannel(HostileZips.tdfWith("{}", e -> { })))).isTrue();
     }
 
-    /** A channel that throws something unchecked is not a TDF either, rather than a crash in the check. */
     @Test
     void testExaminingAChannelThatThrowsUncheckedReturnsFalse() {
         var channel = new SeekableInMemoryByteChannel(HostileZips.tdfWith("{}", e -> { })) {
@@ -143,7 +138,6 @@ class SDKTest {
         assertThat(SDK.isTDF(channel)).isFalse();
     }
 
-    /** {@link SDK#readManifest} reports the same archives as a malformed TDF. */
     @Test
     void testReadingTheManifestOfHostileArchivesThrowsMalformedTDF() {
         HostileZips.hostileShapes().forEach((shape, hostile) -> {

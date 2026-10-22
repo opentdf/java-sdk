@@ -1596,11 +1596,6 @@ public class TDFTest {
         return getKASInfos(i -> i == 0);
     }
 
-    /**
-     * DSPX-5103: a malformed container reaches the caller of {@code loadTDF} as a
-     * {@link SDK.MalformedTDFException}, never as a hang or an IllegalArgumentException,
-     * UnsupportedOperationException or other unchecked exception from inside the parser.
-     */
     @Test
     void loadTDFReportsHostileArchivesAsMalformed() {
         HostileZips.hostileShapes().forEach((shape, hostile) ->
@@ -1608,9 +1603,8 @@ public class TDFTest {
     }
 
     /**
-     * A manifest that claims more bytes than the archive holds is truncated, and is reported as
-     * malformed rather than read short or buffered without bound. This, not a size cap, is what
-     * stops a hostile declared size.
+     * A size past the end of the archive is malformed, not read short: an oversized uncompressed
+     * size fails when the manifest is read, an oversized compressed size when the archive is opened.
      */
     @Test
     void loadTDFReportsAManifestRunningPastTheArchiveAsMalformed() {
@@ -1628,11 +1622,7 @@ public class TDFTest {
                 .hasCauseInstanceOf(InvalidZipException.class);
     }
 
-    /**
-     * There is deliberately no fixed manifest size cap: very large payloads (DSPX-4502) have
-     * manifests far bigger than any fixed limit would allow. A manifest larger than the 10 MiB
-     * cap this reader briefly had is read whole.
-     */
+    /** Guards against reintroducing a fixed manifest size cap. */
     @Test
     void readsAManifestLargerThanTenMebibytes() throws IOException {
         var padding = "a".repeat(11 * 1024 * 1024);

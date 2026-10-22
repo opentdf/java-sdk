@@ -1144,7 +1144,7 @@ public class Manifest {
             statement.format = optionalString(obj, "format");
             statement.schema = optionalString(obj, "schema");
             var value = obj.get("value");
-            // an explicit JSON null is the same as no value at all, not the four character string "null"
+            // explicit JSON null means no value, not the string "null"
             if (value != null && !value.isJsonNull()) {
                 if (value.isJsonPrimitive()) {
                     // it's already a primitive (hopefully string) so we don't need its escaped value here
@@ -1156,13 +1156,7 @@ public class Manifest {
             return statement;
         }
 
-        /**
-         * Reads a member that has to be a JSON primitive if present. A missing member and an
-         * explicit {@code null} both come back as {@code null}; anything else, such as an object
-         * or array, is a malformed statement. Calling {@code getAsString} unchecked throws
-         * {@link UnsupportedOperationException} or {@link IllegalStateException} for these, which
-         * escapes manifest parsing as something other than a parse error.
-         */
+        /** The member as a string, or null if absent or JSON null; a non-primitive is a JsonParseException. */
         private static String optionalString(JsonObject obj, String member) {
             var element = obj.get(member);
             if (element == null || element.isJsonNull()) {

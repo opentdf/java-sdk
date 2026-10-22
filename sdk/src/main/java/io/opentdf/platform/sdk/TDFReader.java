@@ -56,11 +56,7 @@ public class TDFReader {
         payloadEntry = entries.get(TDF_PAYLOAD_FILE_NAME);
     }
 
-    /**
-     * Opens a TDF read from untrusted bytes, reporting a container that is not a well formed
-     * TDF as a {@link SDK.MalformedTDFException} rather than as whichever unchecked exception
-     * the zip reader or this class's own checks happened to raise.
-     */
+    /** Like the constructor, but reports a malformed container as {@link SDK.MalformedTDFException}. */
     static TDFReader open(SeekableByteChannel tdf) throws IOException {
         try {
             return new TDFReader(tdf);
