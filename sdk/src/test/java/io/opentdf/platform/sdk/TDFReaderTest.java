@@ -7,6 +7,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.Reader;
+import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -64,12 +66,20 @@ public class TDFReaderTest {
         return new SeekableInMemoryByteChannel(out.toByteArray());
     }
 
+    private static String manifest(TDFReader reader) throws IOException {
+        try (Reader manifest = reader.manifest()) {
+            var text = new StringWriter();
+            manifest.transferTo(text);
+            return text.toString();
+        }
+    }
+
     @Test
     void readsManifestUnderTheSpecName() throws IOException {
         try (var tdf = archiveOf(
                 TDFWriter.TDF_PAYLOAD_FILE_NAME, PAYLOAD,
                 "manifest.json", MANIFEST)) {
-            assertThat(new TDFReader(tdf).manifest()).isEqualTo(MANIFEST);
+            assertThat(manifest(new TDFReader(tdf))).isEqualTo(MANIFEST);
         }
     }
 
@@ -78,7 +88,7 @@ public class TDFReaderTest {
         try (var tdf = archiveOf(
                 TDFWriter.TDF_PAYLOAD_FILE_NAME, PAYLOAD,
                 "0.manifest.json", MANIFEST)) {
-            assertThat(new TDFReader(tdf).manifest()).isEqualTo(MANIFEST);
+            assertThat(manifest(new TDFReader(tdf))).isEqualTo(MANIFEST);
         }
     }
 
@@ -107,7 +117,7 @@ public class TDFReaderTest {
                 TDFWriter.TDF_PAYLOAD_FILE_NAME, PAYLOAD,
                 "0.manifest.json", OTHER_MANIFEST,
                 "manifest.json", MANIFEST)) {
-            assertThat(new TDFReader(tdf).manifest()).isEqualTo(MANIFEST);
+            assertThat(manifest(new TDFReader(tdf))).isEqualTo(MANIFEST);
         }
     }
 
