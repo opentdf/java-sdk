@@ -17,9 +17,10 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
-import java.nio.channels.FileChannel;
 import java.net.URI;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -451,9 +452,17 @@ class Command {
             try (OutputStream out = new BufferedOutputStream(Files.newOutputStream(tmp))) {
                 plaintext.writeTo(out);
             }
-            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            moveIntoPlace(tmp, target);
         } finally {
             Files.deleteIfExists(tmp);
+        }
+    }
+
+    static void moveIntoPlace(Path source, Path target) throws IOException {
+        try {
+            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException e) {
+            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 
