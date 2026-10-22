@@ -13,10 +13,12 @@ import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClie
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.sdk.TDF.Reader;
+import okhttp3.mockwebserver.MockWebServer;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.annotation.Nonnull;
@@ -37,6 +39,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -731,6 +734,94 @@ public class TDFTest {
                 .withFailMessage("extracted data does not match")
                 .containsExactly(data);
         assertThat(reader.getMetadata()).isEqualTo(metadata);
+    }
+
+    private static final int SEG = Config.MIN_SEGMENT_SIZE;
+
+    /** A TDF of {@code 2.5 * SEG} random bytes, so it has two full segments and a partial one. */
+    private static byte[][] partialReadFixture() throws Exception {
+        var data = new byte[SEG * 5 / 2];
+        new Random().nextBytes(data);
+        var tdfOutputStream = new ByteArrayOutputStream();
+        var tdf = new TDF(new FakeServicesBuilder().setKas(kas)
+                .setKeyAccessServerRegistryService(kasRegistryService).build());
+        tdf.createTDF(new ByteArrayInputStream(data), tdfOutputStream, Config.newTDFConfig(
+                Config.withAutoconfigure(false),
+                Config.withKasInformation(getSingleRSAKASInfo()),
+                Config.withSegmentSize(SEG)));
+        return new byte[][] { data, tdfOutputStream.toByteArray() };
+    }
+
+    private static Reader loadFixture(byte[] tdfBytes) throws Exception {
+        var tdf = new TDF(new FakeServicesBuilder().setKas(kas)
+                .setKeyAccessServerRegistryService(kasRegistryService).build());
+        return tdf.loadTDF(new SeekableInMemoryByteChannel(tdfBytes), platformUrl);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "0, -1",            // whole payload
+            "16334, 100",       // crosses the first segment boundary
+            "16384, 100",       // starts exactly where a segment ends
+            "16384, 16384",     // exactly the second segment
+            "100, 0",           // empty
+            "32768, -1",        // last segment to the end
+            "40950, 1000",      // runs past the end: clamped
+            "40960, -1",        // offset == size: empty
+    })
+    void readPayloadRange(long offset, long length) throws Exception {
+        var fixture = partialReadFixture();
+        byte[] data = fixture[0];
+        var out = new ByteArrayOutputStream();
+        loadFixture(fixture[1]).readPayload(out, offset, length);
+
+        int end = length < 0 ? data.length : (int) Math.min(data.length, offset + length);
+        assertThat(out.toByteArray()).containsExactly(Arrays.copyOfRange(data, (int) offset, end));
+    }
+
+    @Test
+    void readPayloadRangeCanBeRepeatedOnOneReader() throws Exception {
+        var fixture = partialReadFixture();
+        var reader = loadFixture(fixture[1]);
+        for (int i = 0; i < 2; i++) {
+            var out = new ByteArrayOutputStream();
+            reader.readPayload(out, SEG, 10);
+            assertThat(out.toByteArray()).containsExactly(Arrays.copyOfRange(fixture[0], SEG, SEG + 10));
+        }
+    }
+
+    @Test
+    void readPayloadRangeRejectsBadOffsetsBeforeWriting() throws Exception {
+        var fixture = partialReadFixture();
+        var reader = loadFixture(fixture[1]);
+        var out = new ByteArrayOutputStream();
+        assertThatThrownBy(() -> reader.readPayload(out, fixture[0].length + 1L, -1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("beyond the end");
+        assertThatThrownBy(() -> reader.readPayload(out, -1, -1))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(out.size()).isZero();
+    }
+
+    @Test
+    void readPayloadRangeOverHttpFetchesOnlyCoveringSegments() throws Exception {
+        var fixture = partialReadFixture();
+        var served = new AtomicLong();
+        try (var server = new MockWebServer()) {
+            server.setDispatcher(HttpRangeChannelTest.rangeDispatcher(() -> fixture[1], served));
+            var tdf = new TDF(new FakeServicesBuilder().setKas(kas)
+                    .setKeyAccessServerRegistryService(kasRegistryService).build());
+            var reader = tdf.loadTDF(new HttpRangeChannel(HttpRangeChannelTest.CLIENT, server.url("/x.tdf").uri()),
+                    Config.newTDFReaderConfig(), platformUrl);
+
+            served.set(0);
+            var out = new ByteArrayOutputStream();
+            reader.readPayload(out, 2L * SEG - 50, 100);
+            assertThat(out.toByteArray()).containsExactly(Arrays.copyOfRange(fixture[0], 2 * SEG - 50, 2 * SEG + 50));
+            // the second (full) and third (half) segments, plus the payload entry's local header
+            long encryptedSegments = (SEG + 28) + (SEG / 2 + 28);
+            assertThat(served.get()).isBetween(encryptedSegments, encryptedSegments + 1024);
+        }
     }
 
     /**

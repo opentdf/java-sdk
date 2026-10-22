@@ -20,7 +20,8 @@ import static io.opentdf.platform.sdk.TDFWriter.TDF_PAYLOAD_FILE_NAME;
 public class TDFReader {
 
     private final ZipReader.Entry manifestEntry;
-    private final InputStream payload;
+    private final ZipReader.Entry payloadEntry;
+    private InputStream payload;
 
     public TDFReader(SeekableByteChannel tdf) throws SDKException, IOException {
         // A zip may legally list the same name twice, and readers disagree about which copy
@@ -46,13 +47,19 @@ public class TDFReader {
         }
 
         manifestEntry = manifest;
-        payload = entries.get(TDF_PAYLOAD_FILE_NAME).getData();
+        payloadEntry = entries.get(TDF_PAYLOAD_FILE_NAME);
     }
 
     String manifest() {
         var out = new ByteArrayOutputStream();
-        try {
-            manifestEntry.getData().transferTo(out);
+        // Read in large chunks rather than transferTo's small ones: over HTTP every read
+        // is a range request.
+        var buf = new byte[1 << 20];
+        try (var in = manifestEntry.getData()) {
+            int n;
+            while ((n = in.read(buf)) >= 0) {
+                out.write(buf, 0, n);
+            }
         } catch (IOException e) {
             throw new SDKException("error retrieving manifest from zip file", e);
         }
@@ -60,7 +67,23 @@ public class TDFReader {
         return out.toString(StandardCharsets.UTF_8);
     }
 
+    /** A fresh stream over the payload, positioned at its start. */
+    InputStream payload() throws IOException {
+        return payloadEntry.getData();
+    }
+
     int readPayloadBytes(byte[] buf) {
+        if (payload == null) {
+            try {
+                payload = payloadEntry.getData();
+            } catch (IOException e) {
+                throw new SDKException("error reading from payload in TDF", e);
+            }
+        }
+        return readPayloadBytes(payload, buf);
+    }
+
+    static int readPayloadBytes(InputStream payload, byte[] buf) {
         int totalRead = 0;
         int nread;
         try {
