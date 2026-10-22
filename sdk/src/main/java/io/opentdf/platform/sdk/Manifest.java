@@ -19,7 +19,6 @@ import com.google.gson.reflect.TypeToken;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import com.google.gson.stream.JsonWriter;
-import com.google.gson.stream.MalformedJsonException;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -40,8 +39,8 @@ import org.apache.commons.codec.binary.Hex;
 import org.erdtman.jcs.JsonCanonicalizer;
 
 import java.io.ByteArrayOutputStream;
-import java.io.EOFException;
 import java.io.IOException;
+import java.io.Reader;
 import java.io.StringReader;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -59,6 +58,7 @@ import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -456,11 +456,17 @@ public class Manifest {
                 return false;
             }
             List<?> otherList = (List<?>) other;
+            if (!(otherList instanceof Segments)) {
+                Iterator<?> otherSegments = otherList.iterator();
+                for (int i = 0; i < size(); i++) {
+                    if (!Objects.equals(getForRead(i), otherSegments.next())) {
+                        return false;
+                    }
+                }
+                return true;
+            }
             for (int i = 0; i < size(); i++) {
-                Object otherSegment = otherList instanceof Segments
-                        ? ((Segments) otherList).getForRead(i)
-                        : otherList.get(i);
-                if (!Objects.equals(getForRead(i), otherSegment)) {
+                if (!Objects.equals(getForRead(i), ((Segments) otherList).getForRead(i))) {
                     return false;
                 }
             }
@@ -1165,15 +1171,14 @@ public class Manifest {
      * Parses a manifest without materializing it as a {@link String}, which a
      * manifest with tens of millions of segments cannot be.
      */
-    protected static Manifest readManifest(java.io.Reader manifestJson) {
+    protected static Manifest readManifest(Reader manifestJson) {
+        FailureTrackingReader reader = new FailureTrackingReader(manifestJson);
         Manifest result;
         try {
-            result = gson.fromJson(manifestJson, Manifest.class);
+            result = gson.fromJson(reader, Manifest.class);
         } catch (JsonParseException e) {
-            if (e.getCause() instanceof IOException
-                    && !(e.getCause() instanceof MalformedJsonException)
-                    && !(e.getCause() instanceof EOFException)) {
-                throw new SDKException("error reading manifest from zip file", (IOException) e.getCause());
+            if (reader.failure != null) {
+                throw new SDKException("error reading manifest from zip file", reader.failure);
             }
             throw e;
         }
@@ -1182,6 +1187,30 @@ public class Manifest {
         }
         validateManifest(result);
         return result;
+    }
+
+    private static final class FailureTrackingReader extends Reader {
+        private final Reader delegate;
+        private IOException failure;
+
+        private FailureTrackingReader(Reader delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public int read(char[] buffer, int offset, int length) throws IOException {
+            try {
+                return delegate.read(buffer, offset, length);
+            } catch (IOException e) {
+                failure = e;
+                throw e;
+            }
+        }
+
+        @Override
+        public void close() throws IOException {
+            delegate.close();
+        }
     }
 
     private static void validateManifest(Manifest result) {

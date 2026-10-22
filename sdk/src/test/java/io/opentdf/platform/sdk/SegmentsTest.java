@@ -181,8 +181,8 @@ public class SegmentsTest {
         }
 
         assertThat(left).isEqualTo(right);
-        assertThat(left.hashCode()).isEqualTo(right.hashCode());
-        assertThat(left).isEqualTo(new ArrayList<>(expected));
+        assertThat(left).hasSameHashCodeAs(right);
+        assertThat(left).containsExactlyElementsOf(expected);
     }
 
     /**
