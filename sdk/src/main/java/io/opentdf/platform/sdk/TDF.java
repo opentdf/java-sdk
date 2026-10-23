@@ -788,12 +788,8 @@ class TDF {
 
     Reader loadTDF(SeekableByteChannel tdf, Config.TDFReaderConfig tdfReaderConfig) throws SDKException, IOException {
 
-        TDFReader tdfReader = new TDFReader(tdf);
-        // use Manifest.readManifest in order to validate the Manifest input
-        Manifest manifest;
-        try (var manifestJson = tdfReader.manifest()) {
-            manifest = Manifest.readManifest(manifestJson);
-        }
+        TDFReader tdfReader = TDFReader.open(tdf);
+        Manifest manifest = tdfReader.readManifest();
 
         byte[] payloadKey = new byte[GCM_KEY_SIZE];
         String unencryptedMetadata = null;

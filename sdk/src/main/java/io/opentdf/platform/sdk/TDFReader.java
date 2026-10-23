@@ -1,5 +1,7 @@
 package io.opentdf.platform.sdk;
 
+import com.google.gson.JsonParseException;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -53,15 +55,50 @@ public class TDFReader {
         payload = entries.get(TDF_PAYLOAD_FILE_NAME).getData();
     }
 
+    /** Like the constructor, but reports a malformed container as {@link SDK.MalformedTDFException}. */
+    static TDFReader open(SeekableByteChannel tdf) throws IOException {
+        try {
+            return new TDFReader(tdf);
+        } catch (InvalidZipException | IllegalArgumentException e) {
+            throw malformed("tdf is not a valid zip container", e);
+        }
+    }
+
+    /**
+     * Reads and validates the manifest. Malformed JSON, and JSON that does not have the shape of
+     * a manifest, is reported as a {@link SDK.MalformedTDFException}.
+     */
+    Manifest readManifest() {
+        try (Reader manifestJson = manifest()) {
+            return Manifest.readManifest(manifestJson);
+        } catch (InvalidZipException e) {
+            // the manifest entry runs past the end of the archive
+            throw malformed("error retrieving manifest from zip file", e);
+        } catch (JsonParseException | IllegalArgumentException e) {
+            // Manifest.readManifest reports a missing or misshapen field as IllegalArgumentException
+            throw malformed("tdf manifest is invalid", e);
+        } catch (IOException e) {
+            throw new SDKException("error reading manifest from zip file", e);
+        }
+    }
+
+    private static SDK.MalformedTDFException malformed(String what, RuntimeException e) {
+        return new SDK.MalformedTDFException(what + ": " + e.getMessage(), e);
+    }
+
     /**
      * The manifest entry as a character stream; the caller must close it. Returned
      * as a stream rather than a String because a manifest with tens of millions of
      * segments exceeds the maximum size of a Java String.
      */
     Reader manifest() {
+        // no fixed size cap: manifests for very large payloads exceed 1 GiB. a hostile declared
+        // size is still bounded by the archive, since the entry's stream throws where it ends
         try {
             return new BufferedReader(
                     new InputStreamReader(manifestEntry.getData(), StandardCharsets.UTF_8), MANIFEST_BUFFER_SIZE);
+        } catch (InvalidZipException e) {
+            throw malformed("error retrieving manifest from zip file", e);
         } catch (IOException e) {
             throw new SDKException("error retrieving manifest from zip file", e);
         }
@@ -74,6 +111,9 @@ public class TDFReader {
             while (totalRead < buf.length && (nread = payload.read(buf, totalRead, buf.length - totalRead)) >= 0) {
                 totalRead += nread;
             }
+        } catch (InvalidZipException e) {
+            // the payload entry runs past the end of the archive
+            throw malformed("error reading from payload in TDF", e);
         } catch (IOException e) {
             throw new SDKException("error reading from payload in TDF", e);
         }
@@ -81,10 +121,7 @@ public class TDFReader {
     }
 
     PolicyObject readPolicyObject() {
-        try (Reader manifestRaw = manifest()) {
-            return Manifest.decodePolicyObject(Manifest.readManifest(manifestRaw));
-        } catch (IOException e) {
-            throw new SDKException("error reading manifest from zip file", e);
-        }
+        Manifest manifest = readManifest();
+        return Manifest.decodePolicyObject(manifest);
     }
 }

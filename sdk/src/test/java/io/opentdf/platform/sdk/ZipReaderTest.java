@@ -761,6 +761,114 @@ public class ZipReaderTest {
         }
     }
 
+    /** Every hostile shape fails with {@link InvalidZipException}, without hanging. */
+    @Test
+    public void testHostileCentralDirectoryFieldsAreRejected() {
+        HostileZips.hostileShapes().forEach((shape, hostile) -> {
+            var archive = HostileZips.tdfWith(MANIFEST, hostile);
+            try (var channel = new SeekableInMemoryByteChannel(archive)) {
+                // reading every entry, not just the directory, so a shape that only fails once its
+                // data is read is caught too
+                assertTimeoutPreemptively(Duration.ofSeconds(5), () ->
+                        assertThatThrownBy(() -> testReadingZipChannel(channel, false))
+                                .as(shape).isInstanceOf(InvalidZipException.class),
+                        shape);
+            }
+        });
+    }
+
+    /**
+     * The last central directory header claims a filename longer than the one it holds, so the
+     * name runs into the end of central directory record. Checked only against the end of the
+     * archive, that record's bytes would come back as part of the entry name.
+     */
+    @Test
+    public void testFilenameRunningPastTheCentralDirectoryIsRejected() {
+        var archive = HostileZips.tdfWith(MANIFEST, e -> e.fileNameLength = e.name.length() + 10);
+
+        assertThatThrownBy(() -> readArchive(archive))
+                .isInstanceOf(InvalidZipException.class)
+                .hasMessageContaining("past the end of the central directory");
+    }
+
+    /**
+     * A central directory whose declared size runs into the record after it, in both a plain
+     * archive and a zip64 one. With no other candidate record to fall back on, the scan reports
+     * why it passed over the real one.
+     */
+    @Test
+    public void testCentralDirectorySizeRunningIntoTheNextRecordIsRejected() throws IOException {
+        var plain = plainArchive();
+        var plainBuf = ByteBuffer.wrap(plain).order(ByteOrder.LITTLE_ENDIAN);
+        int sizeField = plain.length - EOCD_SIZE + 12;
+        plainBuf.putInt(sizeField, plainBuf.getInt(sizeField) + 1);
+
+        var zip64 = zip64Archive();
+        int zip64Eocd = zip64.length - (EOCD_SIZE + ZIP64_EOCD_LOCATOR_SIZE + ZIP64_EOCD_SIZE);
+        var zip64Buf = ByteBuffer.wrap(zip64).order(ByteOrder.LITTLE_ENDIAN);
+        assertThat(zip64Buf.getInt(zip64Eocd)).isEqualTo(ZIP64_EOCD_SIGNATURE);
+        zip64Buf.putLong(zip64Eocd + 40, zip64Buf.getLong(zip64Eocd + 40) + 1);
+
+        for (var archive : List.of(plain, zip64)) {
+            assertThatThrownBy(() -> readArchive(archive))
+                    .isInstanceOf(InvalidZipException.class)
+                    .hasMessageContaining("which does not end where that record starts");
+        }
+    }
+
+    /** The hand-built archives the hostile shapes start from are valid until a shape is applied. */
+    @Test
+    public void testHandBuiltArchiveReads() throws IOException {
+        var archive = HostileZips.tdfWith(MANIFEST, e -> { });
+        try (var channel = new SeekableInMemoryByteChannel(archive)) {
+            var reader = new ZipReader(channel);
+            assertThat(readEntry(reader, "0.manifest.json")).isEqualTo(MANIFEST);
+            assertThat(readEntry(reader, "0.payload")).isEqualTo("payload bytes");
+        }
+    }
+
+    /**
+     * The local header of an empty entry claims a filename long enough to put its data past the
+     * end of the archive. The central directory can't see that length, and an empty entry is
+     * never read, so without a check on the local header it would read as empty.
+     */
+    @Test
+    public void testEmptyEntryWhoseDataStartsPastTheEndIsRejected() throws IOException {
+        var archive = HostileZips.build(List.of(new HostileZips.Entry("empty", new byte[0])));
+        // the filename length of the first local file header, which starts at offset 0
+        ByteBuffer.wrap(archive).order(ByteOrder.LITTLE_ENDIAN).putShort(26, (short) 0xFFFF);
+
+        try (var channel = new SeekableInMemoryByteChannel(archive)) {
+            var entry = new ZipReader(channel).getEntries().get(0);
+            assertThatThrownBy(entry::getData)
+                    .isInstanceOf(InvalidZipException.class)
+                    .hasMessageContaining("past the end of this");
+        }
+    }
+
+    /**
+     * A zip64 record whose values are all within range is still honoured, after an unrelated
+     * record and followed by a few bytes too short to be a record, which readers ignore.
+     */
+    @Test
+    public void testZip64ExtraFieldAmongOtherRecordsStillReads() throws IOException {
+        var archive = HostileZips.tdfWith(MANIFEST, e -> {
+            e.uncompressedSize = 0xFFFFFFFFL;
+            e.compressedSize = 0xFFFFFFFFL;
+            e.localHeaderOffset = 0xFFFFFFFFL;
+            long offset = "0.payload".length() + 30 + "payload bytes".length();
+            e.centralExtra = HostileZips.concat(
+                    HostileZips.extraRecord(0xCAFE, 2, new byte[2]),
+                    HostileZips.extraRecord(0x0001, 24, HostileZips.longs(e.data.length, e.data.length, offset)),
+                    new byte[3]);
+        });
+        try (var channel = new SeekableInMemoryByteChannel(archive)) {
+            var reader = new ZipReader(channel);
+            assertThat(readEntry(reader, "0.manifest.json")).isEqualTo(MANIFEST);
+            assertThat(readEntry(reader, "0.payload")).isEqualTo("payload bytes");
+        }
+    }
+
     /** The same three entries as {@link #zip64Archive()}, written without anything zip64. */
     private static byte[] plainArchive() throws IOException {
         var out = new ByteArrayOutputStream();
