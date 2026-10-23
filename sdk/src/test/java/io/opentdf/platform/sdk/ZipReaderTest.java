@@ -828,6 +828,25 @@ public class ZipReaderTest {
     }
 
     /**
+     * The local header of an empty entry claims a filename long enough to put its data past the
+     * end of the archive. The central directory can't see that length, and an empty entry is
+     * never read, so without a check on the local header it would read as empty.
+     */
+    @Test
+    public void testEmptyEntryWhoseDataStartsPastTheEndIsRejected() throws IOException {
+        var archive = HostileZips.build(List.of(new HostileZips.Entry("empty", new byte[0])));
+        // the filename length of the first local file header, which starts at offset 0
+        ByteBuffer.wrap(archive).order(ByteOrder.LITTLE_ENDIAN).putShort(26, (short) 0xFFFF);
+
+        try (var channel = new SeekableInMemoryByteChannel(archive)) {
+            var entry = new ZipReader(channel).getEntries().get(0);
+            assertThatThrownBy(entry::getData)
+                    .isInstanceOf(InvalidZipException.class)
+                    .hasMessageContaining("past the end of this");
+        }
+    }
+
+    /**
      * A zip64 record whose values are all within range is still honoured, after an unrelated
      * record and followed by a few bytes too short to be a record, which readers ignore.
      */
