@@ -415,7 +415,16 @@ public class ZipReader {
             int filenameLength = readUnsignedShort();
             int extrafieldLength = readUnsignedShort();
 
-            return zipChannel.position() + filenameLength + extrafieldLength;
+            long startOfData = zipChannel.position() + filenameLength + extrafieldLength;
+            // the central directory can't see these two lengths, so this is the first place a
+            // start past the end shows. an empty entry is never read, so unchecked it would come
+            // back empty rather than fail as truncated
+            if (startOfData > zipChannel.size()) {
+                throw new InvalidZipException("The local file header of entry [" + fileName + "] at offset "
+                        + offsetToLocalHeader + " puts its data at offset " + startOfData
+                        + ", past the end of this " + zipChannel.size() + " byte archive");
+            }
+            return startOfData;
         }
 
         public InputStream getData() throws IOException {
@@ -599,8 +608,9 @@ public class ZipReader {
         long fileCommentEnd = extraFieldEnd + fileCommentLength;
         requireWithinCentralDirectory(fileCommentLength + " byte comment", fileCommentEnd,
                 centralDirectoryEnd, headerStart);
-        // the entry's stored bytes must fit after its local header; the uncompressed size is
-        // checked when the entry is read
+        // counted from the start of its local header, the entry's stored bytes must fit in the
+        // archive. where its data actually starts, and its uncompressed size, are checked when
+        // the entry is read
         if (relativeOffsetOfLocalHeader >= zipChannel.size()
                 || compressedSize > zipChannel.size() - relativeOffsetOfLocalHeader) {
             throw new InvalidZipException("Entry [" + new String(fileName.array(), StandardCharsets.UTF_8)
