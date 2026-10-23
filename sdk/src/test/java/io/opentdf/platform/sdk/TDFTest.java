@@ -1541,7 +1541,7 @@ public class TDFTest {
         try (var reader = TDFReader.open(new SeekableInMemoryByteChannel(archive)).manifest()) {
             reader.transferTo(read);
         }
-        assertThat(read.toString()).isEqualTo(manifest);
+        assertThat(read).hasToString(manifest);
     }
 
     @Test
