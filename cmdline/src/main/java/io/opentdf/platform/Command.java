@@ -61,7 +61,7 @@ class Versions {
 }
 
 @CommandLine.Command(name = "tdf", subcommands = { HelpCommand.class,
-        Command.Supports.class }, version = "{\"version\":\"" + Versions.SDK
+        Command.Supports.class, Command.Validate.class }, version = "{\"version\":\"" + Versions.SDK
                 + "\",\"tdfSpecVersion\":\"" + Versions.TDF_SPEC + "\"}")
 class Command {
     @Option(names = { "-V", "--version" }, versionHelp = true, description = "display version info")
@@ -77,7 +77,7 @@ class Command {
     static class Supports implements Callable<Integer> {
         // Static, always-on capabilities of this build. There is no "known but
         // unsupported" feature here: anything not in this list is simply unrecognized.
-        private static final List<String> FEATURES = List.of("dpop", "dpop_nonce_challenge");
+        private static final List<String> FEATURES = List.of("dpop", "dpop_nonce_challenge", "tdf_validity");
 
         @CommandLine.Parameters(index = "0", arity = "0..1", description = "Feature to check (e.g., dpop). Omit to list all supported features.")
         private String feature;
@@ -111,6 +111,45 @@ class Command {
             } else {
                 features.forEach(System.out::println);
             }
+        }
+    }
+
+    /**
+     * {@code tdf validate <file>}: {@link SDK#validateTdf} from the command line. The output and
+     * exit codes are shared with the Go and JavaScript CLIs, for the cross-SDK validity suite in
+     * opentdf/tests.
+     */
+    @CommandLine.Command(name = "validate",
+            description = { "Check whether a file is a valid TDF. Needs no platform connection or credentials.",
+                    "Prints one line of JSON: {\"valid\":true}, or {\"valid\":false,\"reason\":\"...\"}." },
+            exitCodeListHeading = "Exit codes:%n",
+            exitCodeList = { "0:The file is a valid TDF.", "3:The file is not a valid TDF.",
+                    "1:The check could not run, for example because the file could not be read.",
+                    "2:The command line was not valid." })
+    static class Validate implements Callable<Integer> {
+        /** The exit code for a file that is not a valid TDF; picocli already uses 1 and 2 for errors. */
+        static final int INVALID = 3;
+
+        private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
+
+        @CommandLine.Parameters(index = "0", paramLabel = "<file>", description = "The file to check")
+        private Path file;
+
+        @Override
+        public Integer call() throws IOException {
+            Map<String, Object> result = new LinkedHashMap<>();
+            int exitCode;
+            try (var tdf = FileChannel.open(file, StandardOpenOption.READ)) {
+                SDK.validateTdf(tdf);
+                result.put("valid", true);
+                exitCode = CommandLine.ExitCode.OK;
+            } catch (SDK.MalformedTDFException e) {
+                result.put("valid", false);
+                result.put("reason", e.getMessage());
+                exitCode = INVALID;
+            }
+            System.out.println(GSON.toJson(result));
+            return exitCode;
         }
     }
 

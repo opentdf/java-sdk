@@ -166,6 +166,12 @@ public class SDK implements AutoCloseable {
      * An archive that lists one name twice is rejected, again matching {@link TDFReader}:
      * passing it here and then failing the read would hand callers an exception from the
      * very check this method exists to spare them.
+     * <p>
+     * This looks only at the entry names in the central directory. It never reads the manifest,
+     * so an archive whose manifest is missing fields, or is not JSON at all, still passes. To
+     * check the manifest too, use {@link #isValidTdf}, which costs a read and parse of the
+     * manifest. Unlike that method, this one never throws: a channel that can't be read is
+     * reported as not a TDF.
      *
      * @param channel A channel containing the bytes of the potential Z-TDF
      * @return `true` if
@@ -190,6 +196,60 @@ public class SDK implements AutoCloseable {
         return (names.contains(TDFWriter.TDF_MANIFEST_FILE_NAME_SPEC)
                 || names.contains(TDFWriter.TDF_MANIFEST_FILE_NAME))
                 && names.contains(TDFWriter.TDF_PAYLOAD_FILE_NAME);
+    }
+
+    /**
+     * Checks whether the channel holds a valid TDF: an archive that {@link #readManifest} and
+     * {@link #loadTDF} can open, whose manifest is JSON that satisfies the lax manifest schema.
+     * This asks the same question as the Go SDK's {@code IsValidTdf} and the web SDK's
+     * {@code isValidTdf}, against the same schema. No platform connection or credentials are
+     * needed.
+     * <p>
+     * A TDF is valid if all of these hold:
+     * <ul>
+     *     <li>It is a zip archive that lists no entry name twice and has a {@code 0.payload}
+     *     entry.</li>
+     *     <li>It has a manifest entry. The spec name {@code manifest.json} is used if present, and
+     *     otherwise {@code 0.manifest.json}, the name this SDK writes. When {@code manifest.json}
+     *     is present but invalid, {@code 0.manifest.json} is not tried.</li>
+     *     <li>The manifest is exactly one RFC 8259 JSON value, in UTF-8, with no byte order mark
+     *     and nothing after the value, nested at most 10,000 deep.</li>
+     *     <li>The manifest satisfies {@code manifest-lax.schema.json} from the Go SDK v0.35.0.</li>
+     * </ul>
+     * Nothing is decrypted or verified: not the payload, the integrity information, the policy
+     * binding or the assertion signatures. The lax schema leaves out fields that decryption
+     * needs, so {@code true} does not promise that {@link #loadTDF} succeeds.
+     * <p>
+     * The manifest is parsed into memory and checked there. A typical manifest takes about 20 times
+     * its size in the file (about 2 KB per segment), and one built to inflate can take over 100
+     * times its size. Callers that check untrusted files should limit how large a file they accept.
+     *
+     * @param channel the bytes to check. They are read from wherever the archive structure
+     *                points, and the channel's position is not restored
+     * @return {@code true} if the channel holds a valid TDF, {@code false} if the archive or its
+     *     manifest is malformed
+     * @throws IOException if the channel can't be read
+     * @see #validateTdf(SeekableByteChannel) validateTdf, to find out why a TDF is not valid
+     */
+    public static boolean isValidTdf(SeekableByteChannel channel) throws IOException {
+        try {
+            validateTdf(channel);
+            return true;
+        } catch (MalformedTDFException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Makes the same check as {@link #isValidTdf}, and reports why a TDF is not valid.
+     *
+     * @param channel the bytes to check
+     * @throws MalformedTDFException if the channel does not hold a valid TDF. The message names
+     *     the first problem found, on a single line.
+     * @throws IOException if the channel can't be read
+     */
+    public static void validateTdf(SeekableByteChannel channel) throws IOException {
+        TDFValidator.validate(channel);
     }
 
     /**

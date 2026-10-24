@@ -1,14 +1,21 @@
 package io.opentdf.platform;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import io.opentdf.platform.sdk.ZipWriter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -95,7 +102,7 @@ class CommandTest {
         String out = captureStdout(() -> code[0] = new CommandLine(new Command()).execute("supports"));
 
         assertThat(code[0]).isEqualTo(0);
-        assertThat(out.lines()).containsExactlyInAnyOrder("dpop", "dpop_nonce_challenge");
+        assertThat(out.lines()).containsExactlyInAnyOrder("dpop", "dpop_nonce_challenge", "tdf_validity");
     }
 
     @Test
@@ -104,7 +111,7 @@ class CommandTest {
         String out = captureStdout(() -> code[0] = new CommandLine(new Command()).execute("supports", "--json"));
 
         assertThat(code[0]).isEqualTo(0);
-        assertThat(out.trim()).isEqualTo("{\"dpop\":true,\"dpop_nonce_challenge\":true}");
+        assertThat(out.trim()).isEqualTo("{\"dpop\":true,\"dpop_nonce_challenge\":true,\"tdf_validity\":true}");
     }
 
     @Test
@@ -135,6 +142,119 @@ class CommandTest {
 
         assertThat(code[0]).isEqualTo(1);
         assertThat(out.trim()).isEqualTo("{\"unknown_feature\":false}");
+    }
+
+    @Test
+    void supports_tdf_validity_exits_0() {
+        int code = new CommandLine(new Command()).execute("supports", "tdf_validity");
+        assertThat(code).isEqualTo(0);
+    }
+
+    private static final String MINIMAL_MANIFEST = "{\"payload\":{\"type\":\"reference\",\"url\":\"0.payload\","
+            + "\"protocol\":\"zip\",\"isEncrypted\":true},\"encryptionInformation\":{}}";
+
+    @TempDir
+    Path tempDir;
+
+    private Path tdfWithManifest(String manifest) throws IOException {
+        var out = new ByteArrayOutputStream();
+        var zip = new ZipWriter(out);
+        zip.data("0.payload", new byte[16]);
+        zip.data("0.manifest.json", manifest.getBytes(StandardCharsets.UTF_8));
+        zip.finish();
+        return Files.write(Files.createTempFile(tempDir, "validate", ".tdf"), out.toByteArray());
+    }
+
+    /** Runs {@code validate} the way the jar does, without platform options, and returns stdout. */
+    private String validate(int[] code, String... args) {
+        String[] command = new String[args.length + 1];
+        command[0] = "validate";
+        System.arraycopy(args, 0, command, 1, args.length);
+        return captureStdout(() -> code[0] = new CommandLine(new Command()).execute(command));
+    }
+
+    @Test
+    void validate_validTdf_printsValidAndExits0() throws IOException {
+        int[] code = new int[1];
+        String out = validate(code, tdfWithManifest(MINIMAL_MANIFEST).toString());
+
+        assertThat(code[0]).isEqualTo(0);
+        assertThat(out).isEqualTo("{\"valid\":true}" + System.lineSeparator());
+    }
+
+    @Test
+    void validate_invalidManifest_printsReasonAndExits3() throws IOException {
+        int[] code = new int[1];
+        String out = validate(code, tdfWithManifest("{\"encryptionInformation\":{}}").toString());
+
+        assertThat(code[0]).isEqualTo(3);
+        assertThat(out.lines()).hasSize(1);
+        JsonObject result = JsonParser.parseString(out).getAsJsonObject();
+        assertThat(result.keySet()).containsExactly("valid", "reason");
+        assertThat(result.get("valid").getAsBoolean()).isFalse();
+        assertThat(result.get("reason").getAsString()).contains("lax manifest schema");
+    }
+
+    @Test
+    void validate_fileThatIsNotAZip_exits3() throws IOException {
+        int[] code = new int[1];
+        Path notAZip = Files.writeString(tempDir.resolve("not-a-zip"), MINIMAL_MANIFEST);
+        String out = validate(code, notAZip.toString());
+
+        assertThat(code[0]).isEqualTo(3);
+        assertThat(JsonParser.parseString(out).getAsJsonObject().get("valid").getAsBoolean()).isFalse();
+    }
+
+    @Test
+    void validate_emptyFile_exits3() throws IOException {
+        int[] code = new int[1];
+        String out = validate(code, Files.createFile(tempDir.resolve("empty")).toString());
+
+        assertThat(code[0]).isEqualTo(3);
+        assertThat(JsonParser.parseString(out).getAsJsonObject().get("valid").getAsBoolean()).isFalse();
+    }
+
+    /** A reason with quotes, angle brackets and the like is still one line of JSON. */
+    @Test
+    void validate_reasonIsEscapedJson() throws IOException {
+        int[] code = new int[1];
+        String out = validate(code, tdfWithManifest("{\"<'quoted'>\": \"\\u0022\"").toString());
+
+        assertThat(code[0]).isEqualTo(3);
+        assertThat(out.lines()).hasSize(1);
+        assertThat(JsonParser.parseString(out).getAsJsonObject().get("reason").getAsString())
+                .startsWith("manifest is not valid JSON");
+    }
+
+    /** A file that can't be read is not an invalid TDF: the check didn't run. */
+    @Test
+    void validate_missingFile_exitsWithAnotherCodeAndPrintsNothing() {
+        int[] code = new int[1];
+        StringWriter err = new StringWriter();
+        String out = captureStdout(() -> {
+            CommandLine cli = new CommandLine(new Command());
+            cli.setErr(new PrintWriter(err));
+            code[0] = cli.execute("validate", tempDir.resolve("does-not-exist.tdf").toString());
+        });
+
+        assertThat(code[0]).isNotIn(0, 3);
+        assertThat(code[0]).isEqualTo(CommandLine.ExitCode.SOFTWARE);
+        assertThat(out).isEmpty();
+    }
+
+    @Test
+    void validate_withoutAFile_isAUsageError() {
+        int[] code = new int[1];
+        StringWriter err = new StringWriter();
+        String out = captureStdout(() -> {
+            CommandLine cli = new CommandLine(new Command());
+            cli.setErr(new PrintWriter(err));
+            code[0] = cli.execute("validate");
+        });
+
+        assertThat(code[0]).isEqualTo(CommandLine.ExitCode.USAGE);
+        assertThat(out).isEmpty();
+        assertThat(err.toString()).contains("Missing required parameter: '<file>'");
     }
 
 }

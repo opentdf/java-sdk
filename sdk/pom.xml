@@ -55,6 +55,13 @@
             <artifactId>java-json-canonicalization</artifactId>
             <version>1.1</version>
         </dependency>
+        <!-- JSON Schema validation of TDF manifests (SDK.isValidTdf). MIT licensed, no required
+             dependencies; it validates the Gson trees this SDK already parses -->
+        <dependency>
+            <groupId>dev.harrel</groupId>
+            <artifactId>json-schema</artifactId>
+            <version>1.9.1</version>
+        </dependency>
         <dependency>
             <groupId>build.buf</groupId>
             <artifactId>protovalidate</artifactId>

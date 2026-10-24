@@ -1,0 +1,686 @@
+{
+  "description": "Lax manifest schema cases. Each manifest is checked inside an otherwise well-formed TDF; valid is the answer the Go SDK v0.35.0 IsValidTdf gives.",
+  "source": "https://github.com/opentdf/web-sdk/blob/9ded9d69da75273be9f1540ba1e6380a1a6d8a40/lib/tests/mocks/validation/manifest-cases.ts (opentdf/web-sdk#1104), exported to JSON unchanged",
+  "note": "A snapshot. The cross-SDK validity suite in opentdf/tests (DSPX-5349) is meant to own this corpus; cut this file down to a smoke test once it does.",
+  "cases": [
+    {
+      "name": "minimal lax manifest",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {}
+      },
+      "valid": true
+    },
+    {
+      "name": "missing payload declaration",
+      "manifest": {
+        "encryptionInformation": {}
+      },
+      "valid": false
+    },
+    {
+      "name": "missing encryption information",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "null manifest",
+      "manifest": null,
+      "valid": false
+    },
+    {
+      "name": "array manifest",
+      "manifest": [],
+      "valid": false
+    },
+    {
+      "name": "empty object",
+      "manifest": {},
+      "valid": false
+    },
+    {
+      "name": "missing payload type",
+      "manifest": {
+        "payload": {
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {}
+      },
+      "valid": false
+    },
+    {
+      "name": "missing payload url",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {}
+      },
+      "valid": false
+    },
+    {
+      "name": "missing payload protocol",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {}
+      },
+      "valid": false
+    },
+    {
+      "name": "missing payload isEncrypted",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip"
+        },
+        "encryptionInformation": {}
+      },
+      "valid": false
+    },
+    {
+      "name": "wrong payload type type",
+      "manifest": {
+        "payload": {
+          "type": 3,
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {}
+      },
+      "valid": false
+    },
+    {
+      "name": "wrong payload url type",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": 3,
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {}
+      },
+      "valid": false
+    },
+    {
+      "name": "wrong payload mimeType type",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true,
+          "mimeType": 3
+        },
+        "encryptionInformation": {}
+      },
+      "valid": false
+    },
+    {
+      "name": "wrong encrypted flag type",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": "true"
+        },
+        "encryptionInformation": {}
+      },
+      "valid": false
+    },
+    {
+      "name": "unencrypted declaration",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": false
+        },
+        "encryptionInformation": {}
+      },
+      "valid": true
+    },
+    {
+      "name": "unconstrained protocol",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": 42,
+          "isEncrypted": true
+        },
+        "encryptionInformation": {}
+      },
+      "valid": true
+    },
+    {
+      "name": "unconstrained payload kind",
+      "manifest": {
+        "payload": {
+          "type": "other",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {}
+      },
+      "valid": true
+    },
+    {
+      "name": "nullable specification version",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true,
+          "tdf_spec_version": null
+        },
+        "encryptionInformation": {}
+      },
+      "valid": true
+    },
+    {
+      "name": "unknown fields allowed",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {},
+        "futureFeature": {
+          "enabled": true
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "null encryption information",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": null
+      },
+      "valid": false
+    },
+    {
+      "name": "invalid policy type",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {
+          "policy": {}
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "empty policy allowed",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {
+          "policy": ""
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "empty key access list",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {
+          "keyAccess": []
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "partial key access item",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {
+          "keyAccess": [
+            {}
+          ]
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "invalid key access kind",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {
+          "keyAccess": [
+            {
+              "type": "invalid"
+            }
+          ]
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "hybrid key access",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {
+          "keyAccess": [
+            {
+              "type": "hybrid-wrapped"
+            }
+          ]
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "invalid key access binding",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {
+          "keyAccess": [
+            {
+              "policyBinding": {
+                "alg": "HS256"
+              }
+            }
+          ]
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "string policy binding",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {
+          "keyAccess": [
+            {
+              "policyBinding": "hash"
+            }
+          ]
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "missing method streamable",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {
+          "method": {
+            "algorithm": "AES-256-GCM"
+          }
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "unconstrained encryption algorithm",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {
+          "method": {
+            "algorithm": "future",
+            "isStreamable": false
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "wrong streamable type",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {
+          "method": {
+            "algorithm": "AES-256-GCM",
+            "isStreamable": 1
+          }
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "lax integrity declarations",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {
+          "integrityInformation": {
+            "rootSignature": {
+              "alg": "future",
+              "sig": ""
+            },
+            "segmentSizeDefault": 1,
+            "encryptedSegmentSizeDefault": 29,
+            "segments": [
+              {
+                "encryptedSegmentSize": -1.5
+              }
+            ]
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "missing integrity rootSignature",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {
+          "integrityInformation": {
+            "segmentSizeDefault": 1,
+            "encryptedSegmentSizeDefault": 29,
+            "segments": [
+              {
+                "encryptedSegmentSize": -1.5
+              }
+            ]
+          }
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "missing integrity segmentSizeDefault",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {
+          "integrityInformation": {
+            "rootSignature": {
+              "alg": "future",
+              "sig": ""
+            },
+            "encryptedSegmentSizeDefault": 29,
+            "segments": [
+              {
+                "encryptedSegmentSize": -1.5
+              }
+            ]
+          }
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "missing integrity encryptedSegmentSizeDefault",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {
+          "integrityInformation": {
+            "rootSignature": {
+              "alg": "future",
+              "sig": ""
+            },
+            "segmentSizeDefault": 1,
+            "segments": [
+              {
+                "encryptedSegmentSize": -1.5
+              }
+            ]
+          }
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "missing integrity segments",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {
+          "integrityInformation": {
+            "rootSignature": {
+              "alg": "future",
+              "sig": ""
+            },
+            "segmentSizeDefault": 1,
+            "encryptedSegmentSizeDefault": 29
+          }
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "invalid segment field type",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {
+          "integrityInformation": {
+            "rootSignature": {
+              "alg": "future",
+              "sig": ""
+            },
+            "segmentSizeDefault": 1,
+            "encryptedSegmentSizeDefault": 29,
+            "segments": [
+              {
+                "hash": 3
+              }
+            ]
+          }
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "empty root signature",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {
+          "integrityInformation": {
+            "rootSignature": {},
+            "segmentSizeDefault": 1,
+            "encryptedSegmentSizeDefault": 29,
+            "segments": [
+              {
+                "encryptedSegmentSize": -1.5
+              }
+            ]
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "empty assertion list",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {},
+        "assertions": []
+      },
+      "valid": true
+    },
+    {
+      "name": "incomplete assertion",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {},
+        "assertions": [
+          {}
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "lax assertion",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {},
+        "assertions": [
+          {
+            "id": "a",
+            "type": "other",
+            "scope": "payload",
+            "appliesToState": null,
+            "statement": {
+              "value": {}
+            }
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "invalid assertion binding",
+      "manifest": {
+        "payload": {
+          "type": "reference",
+          "url": "0.payload",
+          "protocol": "zip",
+          "isEncrypted": true
+        },
+        "encryptionInformation": {},
+        "assertions": [
+          {
+            "id": "a",
+            "type": "other",
+            "scope": "payload",
+            "appliesToState": null,
+            "statement": {
+              "value": {}
+            },
+            "binding": {
+              "method": "jws"
+            }
+          }
+        ]
+      },
+      "valid": false
+    }
+  ]
+}
