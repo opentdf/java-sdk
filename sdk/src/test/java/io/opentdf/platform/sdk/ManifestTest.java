@@ -1,6 +1,7 @@
 package io.opentdf.platform.sdk;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -8,6 +9,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.io.EOFException;
+import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -269,6 +272,61 @@ public class ManifestTest {
         assertThatThrownBy(() -> Manifest.readManifest(manifest))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Invalid KeyAccess with null url in manifest");
+    }
+
+    @Test
+    void wrapsManifestReaderIoFailures() {
+        Reader failingReader = new Reader() {
+            @Override
+            public int read(char[] buffer, int offset, int length) throws IOException {
+                throw new IOException("manifest read failed");
+            }
+
+            @Override
+            public void close() {
+                // No resources to release.
+            }
+        };
+
+        assertThatThrownBy(() -> Manifest.readManifest(failingReader))
+                .isInstanceOf(SDKException.class)
+                .hasMessage("error reading manifest from zip file")
+                .hasRootCauseMessage("manifest read failed");
+    }
+
+    @Test
+    void preservesMalformedJsonErrors() {
+        assertThatThrownBy(() -> Manifest.readManifest("{\"payload\":"))
+                .isInstanceOf(JsonParseException.class)
+                .isNotInstanceOf(SDKException.class);
+    }
+
+    @Test
+    void wrapsEofThrownByTheSourceReader() {
+        Reader failingReader = new Reader() {
+            private final String partialManifest = "{\"payload\":";
+            private int position;
+
+            @Override
+            public int read(char[] buffer, int offset, int length) throws IOException {
+                if (position == partialManifest.length()) {
+                    throw new EOFException("archive ended early");
+                }
+                int copied = Math.min(length, partialManifest.length() - position);
+                partialManifest.getChars(position, position + copied, buffer, offset);
+                position += copied;
+                return copied;
+            }
+
+            @Override
+            public void close() {
+                // No resources to release.
+            }
+        };
+
+        assertThatThrownBy(() -> Manifest.readManifest(failingReader))
+                .isInstanceOf(SDKException.class)
+                .hasRootCauseMessage("archive ended early");
     }
 
     @Test

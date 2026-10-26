@@ -1,8 +1,10 @@
 package io.opentdf.platform.sdk;
 
-import java.io.ByteArrayOutputStream;
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -18,6 +20,8 @@ import static io.opentdf.platform.sdk.TDFWriter.TDF_PAYLOAD_FILE_NAME;
  * and provides methods to retrieve the manifest content, read payload bytes, and read policy objects.
  */
 public class TDFReader {
+
+    private static final int MANIFEST_BUFFER_SIZE = 1 << 16;
 
     private final ZipReader.Entry manifestEntry;
     private final ZipReader.Entry payloadEntry;
@@ -50,21 +54,18 @@ public class TDFReader {
         payloadEntry = entries.get(TDF_PAYLOAD_FILE_NAME);
     }
 
-    String manifest() {
-        var out = new ByteArrayOutputStream();
-        // Read in large chunks rather than transferTo's small ones: over HTTP every read
-        // is a range request.
-        var buf = new byte[1 << 20];
-        try (var in = manifestEntry.getData()) {
-            int n;
-            while ((n = in.read(buf)) >= 0) {
-                out.write(buf, 0, n);
-            }
+    /**
+     * The manifest entry as a character stream; the caller must close it. Returned
+     * as a stream rather than a String because a manifest with tens of millions of
+     * segments exceeds the maximum size of a Java String.
+     */
+    Reader manifest() {
+        try {
+            return new BufferedReader(
+                    new InputStreamReader(manifestEntry.getData(), StandardCharsets.UTF_8), MANIFEST_BUFFER_SIZE);
         } catch (IOException e) {
             throw new SDKException("error retrieving manifest from zip file", e);
         }
-
-        return out.toString(StandardCharsets.UTF_8);
     }
 
     /** A fresh stream over the payload, positioned at its start. */
@@ -97,8 +98,10 @@ public class TDFReader {
     }
 
     PolicyObject readPolicyObject() {
-        String manifestJson = manifest();
-        Manifest manifest = Manifest.readManifest(manifestJson);
-        return Manifest.decodePolicyObject(manifest);
+        try (Reader manifestRaw = manifest()) {
+            return Manifest.decodePolicyObject(Manifest.readManifest(manifestRaw));
+        } catch (IOException e) {
+            throw new SDKException("error reading manifest from zip file", e);
+        }
     }
 }

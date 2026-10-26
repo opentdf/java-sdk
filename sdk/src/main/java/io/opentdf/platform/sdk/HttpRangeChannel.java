@@ -20,8 +20,7 @@ import java.util.regex.Pattern;
  * Redirects are not followed: the client handed in must have redirects disabled, and a 3xx
  * is reported as an error so the caller can use the final URL.
  */
-// ponytail: no read cache, so ZipReader's small header reads cost a few dozen requests per
-// load; add a read-ahead window if that shows up over a real network
+// TODO: Add a read-ahead window if small ZIP header reads become a network bottleneck.
 class HttpRangeChannel implements SeekableByteChannel {
     private static final Pattern CONTENT_RANGE = Pattern.compile("bytes (\\d+)-(\\d+)/(\\d+)");
 
