@@ -13,6 +13,9 @@ import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 /**
  * The OpenTDF spec names the manifest entry {@code manifest.json}; this SDK writes
@@ -189,6 +192,20 @@ public class TDFReaderTest {
 
             assertThat(reader.readPayloadBytes(buf)).isEqualTo(expected.length);
             assertThat(buf).startsWith(expected);
+        }
+    }
+
+    @Test
+    void opensThePayloadOnlyWhenItIsRead() throws IOException {
+        try (var tdf = spy(archiveOf(
+                TDFWriter.TDF_PAYLOAD_FILE_NAME, PAYLOAD,
+                "manifest.json", MANIFEST))) {
+            var reader = new TDFReader(tdf);
+
+            verify(tdf, never()).position(0);
+
+            reader.readPayloadBytes(new byte[PAYLOAD.length()]);
+            verify(tdf).position(0);
         }
     }
 }

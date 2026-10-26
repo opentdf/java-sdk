@@ -483,7 +483,14 @@ public class SDKBuilder {
 
     public SDK build() {
         var services = buildServices();
-        return new SDK(services.services, services.trustManager, services.interceptor, services.protocolClient, platformEndpoint, services.srtSigner);
+        return new SDK(services.services, services.trustManager, services.interceptor, services.protocolClient, platformEndpoint, services.srtSigner,
+                // getHttpClient() carries the TLS settings but no credentials. Drop the h2c prior
+                // knowledge plaintext mode forces, since TDF hosts are ordinary HTTP servers.
+                getHttpClient().newBuilder()
+                        .protocols(List.of(Protocol.HTTP_2, Protocol.HTTP_1_1))
+                        .followRedirects(false)
+                        .followSslRedirects(false)
+                        .build());
     }
 
     private ProtocolClient getUnauthenticatedProtocolClient(String endpoint, OkHttpClient httpClient) {

@@ -439,6 +439,15 @@ public class ZipReader {
                     return offset >= fileSize;
                 }
 
+                // Moves the cursor without reading: the default skip reads and discards, which
+                // over HTTP would download everything skipped.
+                @Override
+                public long skip(long n) {
+                    long skipped = Math.max(0, Math.min(n, fileSize - offset));
+                    offset += skipped;
+                    return skipped;
+                }
+
                 /**
                  * The archive ended before this entry's data did. Reporting that as an ordinary
                  * end of stream would hand the caller a short entry with no sign anything is wrong.
