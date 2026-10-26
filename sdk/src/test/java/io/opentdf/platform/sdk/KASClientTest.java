@@ -31,9 +31,18 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.security.interfaces.RSAPublicKey;
 import java.text.ParseException;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Random;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.nio.charset.StandardCharsets;
@@ -185,6 +194,68 @@ public class KASClientTest {
                 rewrapServer.shutdownNow();
             }
         }
+    }
+
+    @Test
+    void testConcurrentFirstRsaUnwrapsShareOneSessionKey() throws Exception {
+        var dpopKeypair = CryptoUtils.generateRSAKeypair();
+        var dpopKey = new RSAKey.Builder((RSAPublicKey) dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate())
+                .build();
+        var serverKeypair = CryptoUtils.generateRSAKeypair();
+        List<String> receivedClientKeys = Collections.synchronizedList(new ArrayList<>());
+        AccessServiceGrpc.AccessServiceImplBase accessService = new AccessServiceGrpc.AccessServiceImplBase() {
+            @Override
+            public void rewrap(RewrapRequest request, StreamObserver<RewrapResponse> responseObserver) {
+                try {
+                    var requestBodyJson = SignedJWT.parse(request.getSignedRequestToken())
+                            .getJWTClaimsSet().getStringClaim("requestBody");
+                    var req = new Gson().fromJson(requestBodyJson, KASClient.RewrapRequestBody.class);
+                    receivedClientKeys.add(req.clientPublicKey);
+                    var dek = new AsymDecryption(serverKeypair.getPrivate())
+                            .decrypt(Base64.getDecoder().decode(req.keyAccess.wrappedKey));
+                    var rewrapped = new AsymEncryption(req.clientPublicKey).encrypt(dek);
+                    responseObserver.onNext(
+                            RewrapResponse.newBuilder().setEntityWrappedKey(ByteString.copyFrom(rewrapped)).build());
+                    responseObserver.onCompleted();
+                } catch (Exception e) {
+                    responseObserver.onError(e);
+                }
+            }
+        };
+
+        int callers = 8;
+        Server rewrapServer = startServer(accessService);
+        ExecutorService pool = Executors.newFixedThreadPool(callers);
+        try (var kas = new KASClient(httpClient, aclientFactory, new DefaultSrtSigner(dpopKey), true)) {
+            Manifest.KeyAccess keyAccess = new Manifest.KeyAccess();
+            keyAccess.url = "http://localhost:" + rewrapServer.getPort();
+            byte[] plaintextKey = new byte[32];
+            new Random().nextBytes(plaintextKey);
+            keyAccess.wrappedKey = Base64.getEncoder().encodeToString(
+                    new AsymEncryption(serverKeypair.getPublic()).encrypt(plaintextKey));
+
+            // Release all callers together so they race the lazy RSA keypair initialization.
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<byte[]>> results = new ArrayList<>();
+            for (int i = 0; i < callers; i++) {
+                results.add(pool.submit(() -> {
+                    start.await();
+                    return kas.unwrap(keyAccess, "the policy", KeyType.RSA2048Key);
+                }));
+            }
+            start.countDown();
+            for (Future<byte[]> result : results) {
+                assertThat(result.get(30, TimeUnit.SECONDS)).containsExactly(plaintextKey);
+            }
+        } finally {
+            pool.shutdownNow();
+            rewrapServer.shutdownNow();
+        }
+
+        // Every request carried a public key, and all of them the same one.
+        assertThat(receivedClientKeys.size()).isEqualTo(callers);
+        assertThat(receivedClientKeys.stream().allMatch(Objects::nonNull)).isTrue();
+        assertThat(new HashSet<>(receivedClientKeys).size()).isEqualTo(1);
     }
 
     @Test

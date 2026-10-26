@@ -34,6 +34,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 
 import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
@@ -49,8 +50,11 @@ class KASClient implements SDK.KAS {
     private final BiFunction<OkHttpClient, String, ProtocolClient> protocolClientFactory;
     private final boolean usePlaintext;
     private final JWSSigner signer;
-    private volatile AsymDecryption decryptor;
-    private volatile String clientPublicKey;
+    // RSA session keypair, generated on the first RSA unwrap() and reused after
+    // that. Both halves are published together through this one reference, so a
+    // thread can never see the private key without its matching public PEM.
+    private final AtomicReference<RsaSessionKey> rsaSessionKey = new AtomicReference<>();
+    private final Object rsaSessionKeyLock = new Object();
     private KASKeyCache kasKeyCache;
 
     private static final Logger log = LoggerFactory.getLogger(KASClient.class);
@@ -125,41 +129,60 @@ class KASClient implements SDK.KAS {
         final String publicKeyPem;
         final ECKeyPair ecKeyPair;
         final KemProvider.KeyPairPem kemKeyPair;
+        final AsymDecryption rsaDecryptor;
 
-        SessionKeyMaterial(String publicKeyPem, ECKeyPair ecKeyPair, KemProvider.KeyPairPem kemKeyPair) {
+        SessionKeyMaterial(String publicKeyPem, ECKeyPair ecKeyPair, KemProvider.KeyPairPem kemKeyPair,
+                AsymDecryption rsaDecryptor) {
             this.publicKeyPem = publicKeyPem;
             this.ecKeyPair = ecKeyPair;
             this.kemKeyPair = kemKeyPair;
+            this.rsaDecryptor = rsaDecryptor;
         }
+    }
+
+    /** The long-lived RSA session keypair: the decryptor for its private key and its public key as PEM. */
+    private static final class RsaSessionKey {
+        final AsymDecryption decryptor;
+        final String publicKeyPem;
+
+        RsaSessionKey(AsymDecryption decryptor, String publicKeyPem) {
+            this.decryptor = decryptor;
+            this.publicKeyPem = publicKeyPem;
+        }
+    }
+
+    // Double-checked locking on a single reference: the fast path returns an
+    // already-published keypair; the lock keeps two concurrent first callers
+    // from generating different keypairs.
+    private RsaSessionKey getOrCreateRsaSessionKey() {
+        RsaSessionKey key = rsaSessionKey.get();
+        if (key == null) {
+            synchronized (rsaSessionKeyLock) {
+                key = rsaSessionKey.get();
+                if (key == null) {
+                    var encryptionKeypair = CryptoUtils.generateRSAKeypair();
+                    key = new RsaSessionKey(
+                            new AsymDecryption(encryptionKeypair.getPrivate()),
+                            CryptoUtils.getRSAPublicKeyPEM(encryptionKeypair.getPublic()));
+                    rsaSessionKey.set(key);
+                }
+            }
+        }
+        return key;
     }
 
     private SessionKeyMaterial generateSessionKeyMaterial(KeyType sessionKeyType) {
         if (sessionKeyType.isEc()) {
             var curve = sessionKeyType.getECCurve();
             ECKeyPair ecKeyPair = new ECKeyPair(curve);
-            return new SessionKeyMaterial(ecKeyPair.publicKeyInPEMFormat(), ecKeyPair, null);
+            return new SessionKeyMaterial(ecKeyPair.publicKeyInPEMFormat(), ecKeyPair, null, null);
         }
         if (sessionKeyType.isMLKEM()) {
             KemProvider.KeyPairPem kemKeyPair = KemProviders.get(sessionKeyType).generateKeyPair(sessionKeyType);
-            return new SessionKeyMaterial(kemKeyPair.publicKeyPEM, null, kemKeyPair);
+            return new SessionKeyMaterial(kemKeyPair.publicKeyPEM, null, kemKeyPair, null);
         }
-        // Initialize the RSA key pair only once and reuse it for future unwrap
-        // operations. Double-checked locking: decryptor/clientPublicKey are
-        // volatile so the initializing thread's write is visible to others,
-        // and the synchronized block keeps two concurrent first-callers from
-        // generating distinct keypairs and racing to overwrite each other's
-        // fields (which would send one generation's public key while
-        // decrypting with another's private key).
-        if (decryptor == null) {
-            synchronized (this) {
-                if (decryptor == null) {
-                    var encryptionKeypair = CryptoUtils.generateRSAKeypair();
-                    decryptor = new AsymDecryption(encryptionKeypair.getPrivate());
-                    clientPublicKey = CryptoUtils.getRSAPublicKeyPEM(encryptionKeypair.getPublic());
-                }
-            }
-        }
-        return new SessionKeyMaterial(clientPublicKey, null, null);
+        RsaSessionKey rsaKey = getOrCreateRsaSessionKey();
+        return new SessionKeyMaterial(rsaKey.publicKeyPem, null, null, rsaKey.decryptor);
     }
 
     private byte[] unwrapResponseKey(
@@ -190,7 +213,7 @@ class KASClient implements SDK.KAS {
             }
             return KemProviders.get(sessionKeyType).unwrapDEK(sessionKeyType, keyMaterial.kemKeyPair.privateKeyPEM, wrappedKey);
         }
-        return decryptor.decrypt(wrappedKey);
+        return keyMaterial.rsaDecryptor.decrypt(wrappedKey);
     }
 
     @Override
