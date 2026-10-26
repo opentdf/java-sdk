@@ -259,6 +259,23 @@ public class KASClientTest {
     }
 
     @Test
+    void testMlkemSessionKeyWithoutProviderFailsBeforeRewrap() {
+        // sdk's own test classpath has no KemProvider (see KemProvidersTest), which is
+        // the fips deployment shape. Asking for an ML-KEM session key must fail with the
+        // actionable SDKException before any request is sent; the URL is never contacted.
+        var dpopKeypair = CryptoUtils.generateRSAKeypair();
+        var dpopKey = new RSAKey.Builder((RSAPublicKey) dpopKeypair.getPublic()).privateKey(dpopKeypair.getPrivate())
+                .build();
+        try (var kas = new KASClient(httpClient, aclientFactory, new DefaultSrtSigner(dpopKey), true)) {
+            Manifest.KeyAccess keyAccess = new Manifest.KeyAccess();
+            keyAccess.url = "http://localhost:1";
+            var thrown = assertThrows(SDKException.class,
+                    () -> kas.unwrap(keyAccess, "the policy", KeyType.MLKEM768Key));
+            assertThat(thrown.getMessage()).contains("sdk-pqc-bc");
+        }
+    }
+
+    @Test
     void testCustomSrtSignerIsUsed() throws IOException {
         var serverKeypair = CryptoUtils.generateRSAKeypair();
         var signingInput = new AtomicReference<byte[]>();
