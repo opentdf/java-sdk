@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class KemProviderTest {
 
-    /** A provider written against the SPI before generateKeyPair existed: it implements only the original methods. */
+    /** A provider written against the SPI before generateSessionKey existed: it implements only the original methods. */
     private static final class WrapOnlyProvider implements KemProvider {
         @Override
         public Set<KeyType> supportedKeyTypes() {
@@ -29,8 +29,8 @@ class KemProviderTest {
     }
 
     @Test
-    void generateKeyPairDefaultsToUnsupported() {
-        assertThatThrownBy(() -> new WrapOnlyProvider().generateKeyPair(KeyType.MLKEM768Key))
+    void generateSessionKeyDefaultsToUnsupported() {
+        assertThatThrownBy(() -> new WrapOnlyProvider().generateSessionKey(KeyType.MLKEM768Key))
                 .isInstanceOf(UnsupportedOperationException.class)
                 .hasMessageContaining(WrapOnlyProvider.class.getName())
                 .hasMessageContaining(KeyType.MLKEM768Key.toString());

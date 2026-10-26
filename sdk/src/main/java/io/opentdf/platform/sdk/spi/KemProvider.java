@@ -49,34 +49,48 @@ public interface KemProvider {
     byte[] unwrapDEK(KeyType keyType, String privateKeyPEM, byte[] wrapped);
 
     /**
-     * Generate a fresh ephemeral keypair for {@code keyType}. Used for the
-     * client's rewrap "session key" — the ephemeral key a client generates
-     * and sends with a rewrap request so KAS can wrap the response DEK back
-     * to it — as opposed to a KAS-managed wrapping key (see {@link #wrapDEK}).
+     * Generate a fresh ephemeral rewrap "session key" for {@code keyType} — the
+     * key a client generates and sends with a rewrap request so KAS can wrap
+     * the response DEK back to it — as opposed to a KAS-managed wrapping key
+     * (see {@link #wrapDEK}).
      *
      * <p>The default implementation throws {@link UnsupportedOperationException},
      * so providers written before this method existed keep compiling and
      * loading. They still serve {@link #wrapDEK} / {@link #unwrapDEK}; only a
      * rewrap that asks for a session key of their type fails. Providers that
-     * can generate keypairs should override it.
+     * can generate session keys should override it.
      *
      * @param keyType hybrid or pure-PQC algorithm; must be a member of {@link #supportedKeyTypes()}
-     * @return         the generated keypair, PEM-encoded
-     * @throws UnsupportedOperationException if this provider cannot generate keypairs
+     * @return         the generated session key; the caller must {@link KemSessionKey#close() close} it
+     * @throws UnsupportedOperationException if this provider cannot generate session keys
      */
-    default KeyPairPem generateKeyPair(KeyType keyType) {
+    default KemSessionKey generateSessionKey(KeyType keyType) {
         throw new UnsupportedOperationException(
-                getClass().getName() + " does not support generating " + keyType + " keypairs");
+                getClass().getName() + " does not support generating " + keyType + " session keys");
     }
 
-    /** A generated KEM keypair: SPKI public key PEM and PKCS#8 private key PEM. */
-    final class KeyPairPem {
-        public final String publicKeyPEM;
-        public final String privateKeyPEM;
+    /**
+     * An ephemeral rewrap session key. Only the public half is exposed; the
+     * private half stays inside the provider, which uses it to unwrap the
+     * rewrap response and erases it on {@link #close()}.
+     *
+     * <p>Erasure covers the key material the provider holds. Copies made
+     * inside a crypto library while unwrapping may not be erasable; they
+     * become unreachable once {@link #unwrapDEK} returns.
+     */
+    interface KemSessionKey extends AutoCloseable {
+        /** @return the public key to send to KAS, as an SPKI PEM */
+        String publicKeyPEM();
 
-        public KeyPairPem(String publicKeyPEM, String privateKeyPEM) {
-            this.publicKeyPEM = publicKeyPEM;
-            this.privateKeyPEM = privateKeyPEM;
-        }
+        /**
+         * Unwrap a DEK that KAS wrapped to {@link #publicKeyPEM()}.
+         *
+         * @throws IllegalStateException if this key has been closed
+         */
+        byte[] unwrapDEK(byte[] wrapped);
+
+        /** Erase the private key. Further {@link #unwrapDEK} calls fail. */
+        @Override
+        void close();
     }
 }

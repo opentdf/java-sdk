@@ -53,7 +53,7 @@ public final class BouncyCastleKemProvider implements KemProvider {
     }
 
     @Override
-    public KeyPairPem generateKeyPair(KeyType keyType) {
-        return HybridCrypto.generateKeyPair(keyType);
+    public KemSessionKey generateSessionKey(KeyType keyType) {
+        return HybridCrypto.generateSessionKey(keyType);
     }
 }

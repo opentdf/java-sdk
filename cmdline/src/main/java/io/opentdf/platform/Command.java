@@ -47,6 +47,8 @@ import io.opentdf.platform.sdk.Config;
 import io.opentdf.platform.sdk.KeyType;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
+import io.opentdf.platform.sdk.SDKException;
+import io.opentdf.platform.sdk.spi.KemProvider;
 import io.opentdf.platform.sdk.spi.KemProviders;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.config.Configurator;
@@ -85,16 +87,29 @@ class Command {
         private static final List<String> STATIC_FEATURES = List.of("dpop", "dpop_nonce_challenge",
                 "partial_decrypt", "http_range_source");
 
-        // session-key-mlkem additionally requires an ML-KEM KemProvider on the
-        // classpath (e.g. sdk-pqc-bc), which the fips Maven profile excludes.
-        // Check the live registry rather than assuming build-profile wiring, so
-        // this doesn't claim support on a classpath that would actually throw.
+        // session-key-mlkem additionally requires a KemProvider that can generate
+        // ML-KEM-768 and ML-KEM-1024 session keys (e.g. sdk-pqc-bc), which the
+        // fips Maven profile excludes. Probe by generating one of each rather
+        // than checking the registry: a provider can be registered for these
+        // types yet only wrap and unwrap, since generateSessionKey defaults to
+        // unsupported.
         private static List<String> features() {
             List<String> features = new ArrayList<>(STATIC_FEATURES);
-            if (KemProviders.registered().contains(KeyType.MLKEM768Key)) {
+            if (canGenerateSessionKey(KeyType.MLKEM768Key) && canGenerateSessionKey(KeyType.MLKEM1024Key)) {
                 features.add("session-key-mlkem");
             }
             return features;
+        }
+
+        private static boolean canGenerateSessionKey(KeyType keyType) {
+            KemProvider.KemSessionKey probe;
+            try {
+                probe = KemProviders.get(keyType).generateSessionKey(keyType);
+            } catch (SDKException | UnsupportedOperationException e) {
+                return false;
+            }
+            probe.close();
+            return true;
         }
 
         @CommandLine.Parameters(index = "0", arity = "0..1", description = "Feature to check (e.g., dpop). Omit to list all supported features.")

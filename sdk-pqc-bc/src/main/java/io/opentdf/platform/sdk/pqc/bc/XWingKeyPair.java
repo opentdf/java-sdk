@@ -62,6 +62,11 @@ public final class XWingKeyPair {
         return HybridSpki.encodePkcs8Pem(HybridSpki.OID_XWING, privateKey);
     }
 
+    /** A copy of the raw 32-byte private key seed, as {@link #unwrapDEK(byte[], byte[])} takes it. */
+    byte[] getPrivateKey() {
+        return privateKey.clone();
+    }
+
     public static byte[] pubKeyFromPem(String pem) {
         byte[] raw = HybridSpki.decodeSpkiPem(pem, HybridSpki.OID_XWING);
         if (raw.length != PUBLIC_KEY_SIZE) {

@@ -124,19 +124,29 @@ class KASClient implements SDK.KAS {
 
     private static final Gson gson = new Gson();
 
-    /** Session-key material generated for a single unwrap() call: the PEM to send to KAS, plus whichever private key is needed to process the response. */
-    private static final class SessionKeyMaterial {
+    /**
+     * Session-key material generated for a single unwrap() call: the PEM to send to KAS, plus whichever private key
+     * is needed to process the response. Closing it erases a KEM session key; the long-lived RSA key is untouched.
+     */
+    private static final class SessionKeyMaterial implements AutoCloseable {
         final String publicKeyPem;
         final ECKeyPair ecKeyPair;
-        final KemProvider.KeyPairPem kemKeyPair;
+        final KemProvider.KemSessionKey kemSessionKey;
         final AsymDecryption rsaDecryptor;
 
-        SessionKeyMaterial(String publicKeyPem, ECKeyPair ecKeyPair, KemProvider.KeyPairPem kemKeyPair,
+        SessionKeyMaterial(String publicKeyPem, ECKeyPair ecKeyPair, KemProvider.KemSessionKey kemSessionKey,
                 AsymDecryption rsaDecryptor) {
             this.publicKeyPem = publicKeyPem;
             this.ecKeyPair = ecKeyPair;
-            this.kemKeyPair = kemKeyPair;
+            this.kemSessionKey = kemSessionKey;
             this.rsaDecryptor = rsaDecryptor;
+        }
+
+        @Override
+        public void close() {
+            if (kemSessionKey != null) {
+                kemSessionKey.close();
+            }
         }
     }
 
@@ -178,13 +188,13 @@ class KASClient implements SDK.KAS {
             return new SessionKeyMaterial(ecKeyPair.publicKeyInPEMFormat(), ecKeyPair, null, null);
         }
         if (sessionKeyType.isMLKEM()) {
-            KemProvider.KeyPairPem kemKeyPair;
+            KemProvider.KemSessionKey kemSessionKey;
             try {
-                kemKeyPair = KemProviders.get(sessionKeyType).generateKeyPair(sessionKeyType);
+                kemSessionKey = KemProviders.get(sessionKeyType).generateSessionKey(sessionKeyType);
             } catch (UnsupportedOperationException e) {
                 throw new SDKException("cannot generate a " + sessionKeyType + " rewrap session key", e);
             }
-            return new SessionKeyMaterial(kemKeyPair.publicKeyPEM, null, kemKeyPair, null);
+            return new SessionKeyMaterial(kemSessionKey.publicKeyPEM(), null, kemSessionKey, null);
         }
         RsaSessionKey rsaKey = getOrCreateRsaSessionKey();
         return new SessionKeyMaterial(rsaKey.publicKeyPem, null, null, rsaKey.decryptor);
@@ -213,18 +223,23 @@ class KASClient implements SDK.KAS {
             return gcm.decrypt(encrypted);
         }
         if (sessionKeyType.isMLKEM()) {
-            if (keyMaterial.kemKeyPair == null) {
-                throw new SDKException("KEM keypair is null. Unable to proceed with the unwrap operation.");
+            if (keyMaterial.kemSessionKey == null) {
+                throw new SDKException("KEM session key is null. Unable to proceed with the unwrap operation.");
             }
-            return KemProviders.get(sessionKeyType).unwrapDEK(sessionKeyType, keyMaterial.kemKeyPair.privateKeyPEM, wrappedKey);
+            return keyMaterial.kemSessionKey.unwrapDEK(wrappedKey);
         }
         return keyMaterial.rsaDecryptor.decrypt(wrappedKey);
     }
 
     @Override
     public byte[] unwrap(Manifest.KeyAccess keyAccess, String policy,  KeyType sessionKeyType) {
-        SessionKeyMaterial keyMaterial = generateSessionKeyMaterial(sessionKeyType);
+        try (SessionKeyMaterial keyMaterial = generateSessionKeyMaterial(sessionKeyType)) {
+            return rewrap(keyAccess, policy, sessionKeyType, keyMaterial);
+        }
+    }
 
+    private byte[] rewrap(Manifest.KeyAccess keyAccess, String policy, KeyType sessionKeyType,
+            SessionKeyMaterial keyMaterial) {
         RewrapRequestBody body = new RewrapRequestBody();
         body.policy = policy;
         body.clientPublicKey = keyMaterial.publicKeyPem;
