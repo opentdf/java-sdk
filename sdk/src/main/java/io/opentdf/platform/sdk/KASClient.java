@@ -178,7 +178,12 @@ class KASClient implements SDK.KAS {
             return new SessionKeyMaterial(ecKeyPair.publicKeyInPEMFormat(), ecKeyPair, null, null);
         }
         if (sessionKeyType.isMLKEM()) {
-            KemProvider.KeyPairPem kemKeyPair = KemProviders.get(sessionKeyType).generateKeyPair(sessionKeyType);
+            KemProvider.KeyPairPem kemKeyPair;
+            try {
+                kemKeyPair = KemProviders.get(sessionKeyType).generateKeyPair(sessionKeyType);
+            } catch (UnsupportedOperationException e) {
+                throw new SDKException("cannot generate a " + sessionKeyType + " rewrap session key", e);
+            }
             return new SessionKeyMaterial(kemKeyPair.publicKeyPEM, null, kemKeyPair, null);
         }
         RsaSessionKey rsaKey = getOrCreateRsaSessionKey();

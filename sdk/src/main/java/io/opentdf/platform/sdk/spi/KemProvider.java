@@ -54,10 +54,20 @@ public interface KemProvider {
      * and sends with a rewrap request so KAS can wrap the response DEK back
      * to it — as opposed to a KAS-managed wrapping key (see {@link #wrapDEK}).
      *
+     * <p>The default implementation throws {@link UnsupportedOperationException},
+     * so providers written before this method existed keep compiling and
+     * loading. They still serve {@link #wrapDEK} / {@link #unwrapDEK}; only a
+     * rewrap that asks for a session key of their type fails. Providers that
+     * can generate keypairs should override it.
+     *
      * @param keyType hybrid or pure-PQC algorithm; must be a member of {@link #supportedKeyTypes()}
      * @return         the generated keypair, PEM-encoded
+     * @throws UnsupportedOperationException if this provider cannot generate keypairs
      */
-    KeyPairPem generateKeyPair(KeyType keyType);
+    default KeyPairPem generateKeyPair(KeyType keyType) {
+        throw new UnsupportedOperationException(
+                getClass().getName() + " does not support generating " + keyType + " keypairs");
+    }
 
     /** A generated KEM keypair: SPKI public key PEM and PKCS#8 private key PEM. */
     final class KeyPairPem {
