@@ -14,6 +14,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,6 +40,33 @@ class CommandTest {
         return captured.toString(StandardCharsets.UTF_8);
     }
 
+    // session-key-mlkem is reported only when an ML-KEM KemProvider is on the
+    // classpath: the default (non-fips) profile puts sdk-pqc-bc on cmdline's
+    // runtime classpath, the fips profile leaves it off, and CI runs these
+    // tests under fips. Probe for the provider class directly rather than via
+    // KemProviders, so the expectation doesn't just mirror Supports' own check
+    // (a provider jar whose ServiceLoader registration broke would still fail).
+    private static final boolean MLKEM_PROVIDER_ON_CLASSPATH =
+            isClassPresent("io.opentdf.platform.sdk.pqc.bc.BouncyCastleKemProvider");
+
+    private static boolean isClassPresent(String className) {
+        try {
+            Class.forName(className, false, CommandTest.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+
+    private static List<String> expectedFeatures() {
+        List<String> features = new ArrayList<>(
+                List.of("dpop", "dpop_nonce_challenge", "partial_decrypt", "http_range_source"));
+        if (MLKEM_PROVIDER_ON_CLASSPATH) {
+            features.add("session-key-mlkem");
+        }
+        return features;
+    }
+
     @Test
     void supports_dpop_exits_0() {
         int code = new CommandLine(new Command()).execute("supports", "dpop");
@@ -54,6 +83,12 @@ class CommandTest {
     void supports_partial_decrypt_and_http_range_source_exit_0() {
         assertThat(new CommandLine(new Command()).execute("supports", "partial_decrypt")).isEqualTo(0);
         assertThat(new CommandLine(new Command()).execute("supports", "http_range_source")).isEqualTo(0);
+    }
+
+    @Test
+    void supports_session_key_mlkem_exits_0_only_with_mlkem_provider() {
+        int code = new CommandLine(new Command()).execute("supports", "session-key-mlkem");
+        assertThat(code).isEqualTo(MLKEM_PROVIDER_ON_CLASSPATH ? 0 : 1);
     }
 
     @Test
@@ -107,8 +142,7 @@ class CommandTest {
         String out = captureStdout(() -> code[0] = new CommandLine(new Command()).execute("supports"));
 
         assertThat(code[0]).isEqualTo(0);
-        assertThat(out.lines()).containsExactlyInAnyOrder("dpop", "dpop_nonce_challenge",
-                "partial_decrypt", "http_range_source");
+        assertThat(out.lines()).containsExactlyInAnyOrderElementsOf(expectedFeatures());
     }
 
     @Test
@@ -117,8 +151,11 @@ class CommandTest {
         String out = captureStdout(() -> code[0] = new CommandLine(new Command()).execute("supports", "--json"));
 
         assertThat(code[0]).isEqualTo(0);
-        assertThat(out.trim()).isEqualTo("{\"dpop\":true,\"dpop_nonce_challenge\":true,"
-                + "\"partial_decrypt\":true,\"http_range_source\":true}");
+        String expected = "{\"dpop\":true,\"dpop_nonce_challenge\":true,"
+                + "\"partial_decrypt\":true,\"http_range_source\":true"
+                + (MLKEM_PROVIDER_ON_CLASSPATH ? ",\"session-key-mlkem\":true" : "")
+                + "}";
+        assertThat(out.trim()).isEqualTo(expected);
     }
 
     @Test

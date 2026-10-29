@@ -3,6 +3,7 @@ package io.opentdf.platform.sdk.pqc.bc;
 import io.opentdf.platform.sdk.ECKeyPair;
 import io.opentdf.platform.sdk.KeyType;
 import io.opentdf.platform.sdk.SDKException;
+import io.opentdf.platform.sdk.spi.KemProvider;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -91,6 +92,44 @@ final class HybridCrypto {
             case MLKEM1024Key:
                 return MLKEMAlgorithm.MLKEM_1024.unwrapDEK(
                         MLKEMAlgorithm.MLKEM_1024.privateKeyFromPem(privateKeyPEM), wrapped);
+            default:
+                throw new SDKException("unsupported PQC key type: " + keyType);
+        }
+    }
+
+    /**
+     * Generate a fresh ephemeral rewrap session key for {@code keyType}. Same
+     * dispatch table as {@link #wrapDEK} / {@link #unwrapDEK}. The raw private
+     * key goes straight into the returned {@link BouncyCastleKemSessionKey};
+     * it is never PEM-encoded.
+     */
+    static KemProvider.KemSessionKey generateSessionKey(KeyType keyType) {
+        switch (keyType) {
+            case HybridXWingKey: {
+                XWingKeyPair kp = XWingKeyPair.generate();
+                return new BouncyCastleKemSessionKey(kp.publicKeyInPemFormat(), kp.getPrivateKey(),
+                        XWingKeyPair::unwrapDEK);
+            }
+            case HybridSecp256r1MLKEM768Key: {
+                HybridNISTKeyPair kp = HybridNISTAlgorithm.P256_MLKEM768.generate();
+                return new BouncyCastleKemSessionKey(kp.publicKeyInPemFormat(), kp.getPrivateKey(),
+                        HybridNISTAlgorithm.P256_MLKEM768::unwrapDEK);
+            }
+            case HybridSecp384r1MLKEM1024Key: {
+                HybridNISTKeyPair kp = HybridNISTAlgorithm.P384_MLKEM1024.generate();
+                return new BouncyCastleKemSessionKey(kp.publicKeyInPemFormat(), kp.getPrivateKey(),
+                        HybridNISTAlgorithm.P384_MLKEM1024::unwrapDEK);
+            }
+            case MLKEM768Key: {
+                MLKEMKeyPair kp = MLKEMAlgorithm.MLKEM_768.generate();
+                return new BouncyCastleKemSessionKey(kp.publicKeyInPemFormat(), kp.getPrivateKey(),
+                        MLKEMAlgorithm.MLKEM_768::unwrapDEK);
+            }
+            case MLKEM1024Key: {
+                MLKEMKeyPair kp = MLKEMAlgorithm.MLKEM_1024.generate();
+                return new BouncyCastleKemSessionKey(kp.publicKeyInPemFormat(), kp.getPrivateKey(),
+                        MLKEMAlgorithm.MLKEM_1024::unwrapDEK);
+            }
             default:
                 throw new SDKException("unsupported PQC key type: " + keyType);
         }

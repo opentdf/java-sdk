@@ -47,6 +47,9 @@ import io.opentdf.platform.sdk.Config;
 import io.opentdf.platform.sdk.KeyType;
 import io.opentdf.platform.sdk.SDK;
 import io.opentdf.platform.sdk.SDKBuilder;
+import io.opentdf.platform.sdk.SDKException;
+import io.opentdf.platform.sdk.spi.KemProvider;
+import io.opentdf.platform.sdk.spi.KemProviders;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.config.Configurator;
 import picocli.CommandLine;
@@ -79,10 +82,35 @@ class Command {
 
     @CommandLine.Command(name = "supports", description = "Check if a feature is supported, or list all supported features")
     static class Supports implements Callable<Integer> {
-        // Static, always-on capabilities of this build. There is no "known but
+        // Always-on capabilities of this build. There is no "known but
         // unsupported" feature here: anything not in this list is simply unrecognized.
-        private static final List<String> FEATURES = List.of("dpop", "dpop_nonce_challenge",
+        private static final List<String> STATIC_FEATURES = List.of("dpop", "dpop_nonce_challenge",
                 "partial_decrypt", "http_range_source");
+
+        // session-key-mlkem additionally requires a KemProvider that can generate
+        // ML-KEM-768 and ML-KEM-1024 session keys (e.g. sdk-pqc-bc), which the
+        // fips Maven profile excludes. Probe by generating one of each rather
+        // than checking the registry: a provider can be registered for these
+        // types yet only wrap and unwrap, since generateSessionKey defaults to
+        // unsupported.
+        private static List<String> features() {
+            List<String> features = new ArrayList<>(STATIC_FEATURES);
+            if (canGenerateSessionKey(KeyType.MLKEM768Key) && canGenerateSessionKey(KeyType.MLKEM1024Key)) {
+                features.add("session-key-mlkem");
+            }
+            return features;
+        }
+
+        private static boolean canGenerateSessionKey(KeyType keyType) {
+            KemProvider.KemSessionKey probe;
+            try {
+                probe = KemProviders.get(keyType).generateSessionKey(keyType);
+            } catch (SDKException | UnsupportedOperationException e) {
+                return false;
+            }
+            probe.close();
+            return true;
+        }
 
         @CommandLine.Parameters(index = "0", arity = "0..1", description = "Feature to check (e.g., dpop). Omit to list all supported features.")
         private String feature;
@@ -92,12 +120,13 @@ class Command {
 
         @Override
         public Integer call() {
+            List<String> features = features();
             if (feature == null) {
-                printFeatures(FEATURES);
+                printFeatures(features);
                 return 0;
             }
 
-            Optional<String> canonical = FEATURES.stream().filter(f -> f.equalsIgnoreCase(feature)).findFirst();
+            Optional<String> canonical = features.stream().filter(f -> f.equalsIgnoreCase(feature)).findFirst();
             if (json) {
                 Map<String, Boolean> result = new LinkedHashMap<>();
                 // Emit the canonical feature name for recognized features so casing is stable
