@@ -107,13 +107,18 @@ public class TDFReader {
 
     /** A fresh stream over the payload, positioned at its start. */
     InputStream payload() throws IOException {
-        return payloadEntry.getData();
+        try {
+            return payloadEntry.getData();
+        } catch (InvalidZipException e) {
+            // the payload's local header puts its data past the end of the archive
+            throw malformed("error reading from payload in TDF", e);
+        }
     }
 
     int readPayloadBytes(byte[] buf) {
         if (payload == null) {
             try {
-                payload = payloadEntry.getData();
+                payload = payload();
             } catch (IOException e) {
                 throw new SDKException("error reading from payload in TDF", e);
             }

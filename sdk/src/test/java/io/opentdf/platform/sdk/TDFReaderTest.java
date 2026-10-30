@@ -9,6 +9,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.StringWriter;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -238,6 +240,26 @@ public class TDFReaderTest {
             var reader = new TDFReader(tdf);
 
             assertThatThrownBy(() -> reader.readPayloadBytes(new byte[1_000_000]))
+                    .isInstanceOf(SDK.MalformedTDFException.class)
+                    .hasCauseInstanceOf(InvalidZipException.class);
+        }
+    }
+
+    /** The check on the local header runs when the payload is opened, before any byte is read. */
+    @Test
+    void reportsAPayloadWhoseDataStartsPastTheEndAsMalformed() throws IOException {
+        var payload = new HostileZips.Entry(TDFWriter.TDF_PAYLOAD_FILE_NAME, new byte[0]);
+        var manifest = new HostileZips.Entry("0.manifest.json", MANIFEST.getBytes(StandardCharsets.UTF_8));
+        var archive = HostileZips.build(List.of(payload, manifest));
+        // the filename length of the first local file header, which starts at offset 0
+        ByteBuffer.wrap(archive).order(ByteOrder.LITTLE_ENDIAN).putShort(26, (short) 0xFFFF);
+        try (var tdf = new SeekableInMemoryByteChannel(archive)) {
+            var reader = new TDFReader(tdf);
+
+            assertThatThrownBy(reader::payload)
+                    .isInstanceOf(SDK.MalformedTDFException.class)
+                    .hasCauseInstanceOf(InvalidZipException.class);
+            assertThatThrownBy(() -> reader.readPayloadBytes(new byte[1]))
                     .isInstanceOf(SDK.MalformedTDFException.class)
                     .hasCauseInstanceOf(InvalidZipException.class);
         }
