@@ -9,7 +9,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.StringWriter;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -105,8 +108,8 @@ public class TDFReaderTest {
             var readerConfig = Config.newTDFReaderConfig();
 
             assertThatThrownBy(() -> tdf.loadTDF(tdfBytes, readerConfig))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage("Manifest is empty");
+                    .isInstanceOf(SDK.MalformedTDFException.class)
+                    .hasMessage("tdf manifest is invalid: Manifest is empty");
         }
     }
 
@@ -180,6 +183,24 @@ public class TDFReaderTest {
         }
     }
 
+    /** A well formed zip that is not a TDF: no manifest, no payload, or a name listed twice. */
+    @Test
+    void openReportsAZipThatIsNotATDFAsMalformed() throws IOException {
+        var notTDFs = List.of(
+                new String[] { TDFWriter.TDF_PAYLOAD_FILE_NAME, PAYLOAD },
+                new String[] { "manifest.json", MANIFEST },
+                new String[] { TDFWriter.TDF_PAYLOAD_FILE_NAME, PAYLOAD,
+                        "manifest.json", MANIFEST, "manifest.json", MANIFEST });
+        for (var entries : notTDFs) {
+            try (var tdf = archiveOf(entries)) {
+                assertThatThrownBy(() -> TDFReader.open(tdf))
+                        .as(String.join(", ", entries))
+                        .isInstanceOf(SDK.MalformedTDFException.class)
+                        .hasCauseInstanceOf(IllegalArgumentException.class);
+            }
+        }
+    }
+
     /** The buffer is one byte longer than the payload, so a short read would show up. */
     @Test
     void readsThePayloadAlongsideASpecNamedManifest() throws IOException {
@@ -206,6 +227,41 @@ public class TDFReaderTest {
 
             reader.readPayloadBytes(new byte[PAYLOAD.length()]);
             verify(tdf).position(0);
+        }
+    }
+
+    /** An oversized payload is only detected on read, and still surfaces as a malformed TDF. */
+    @Test
+    void reportsATruncatedPayloadAsMalformed() throws IOException {
+        var payload = new HostileZips.Entry(TDFWriter.TDF_PAYLOAD_FILE_NAME, PAYLOAD.getBytes(StandardCharsets.UTF_8));
+        payload.uncompressedSize = 1_000_000L;
+        var manifest = new HostileZips.Entry("0.manifest.json", MANIFEST.getBytes(StandardCharsets.UTF_8));
+        try (var tdf = new SeekableInMemoryByteChannel(HostileZips.build(List.of(payload, manifest)))) {
+            var reader = new TDFReader(tdf);
+
+            assertThatThrownBy(() -> reader.readPayloadBytes(new byte[1_000_000]))
+                    .isInstanceOf(SDK.MalformedTDFException.class)
+                    .hasCauseInstanceOf(InvalidZipException.class);
+        }
+    }
+
+    /** The check on the local header runs when the payload is opened, before any byte is read. */
+    @Test
+    void reportsAPayloadWhoseDataStartsPastTheEndAsMalformed() throws IOException {
+        var payload = new HostileZips.Entry(TDFWriter.TDF_PAYLOAD_FILE_NAME, new byte[0]);
+        var manifest = new HostileZips.Entry("0.manifest.json", MANIFEST.getBytes(StandardCharsets.UTF_8));
+        var archive = HostileZips.build(List.of(payload, manifest));
+        // the filename length of the first local file header, which starts at offset 0
+        ByteBuffer.wrap(archive).order(ByteOrder.LITTLE_ENDIAN).putShort(26, (short) 0xFFFF);
+        try (var tdf = new SeekableInMemoryByteChannel(archive)) {
+            var reader = new TDFReader(tdf);
+
+            assertThatThrownBy(reader::payload)
+                    .isInstanceOf(SDK.MalformedTDFException.class)
+                    .hasCauseInstanceOf(InvalidZipException.class);
+            assertThatThrownBy(() -> reader.readPayloadBytes(new byte[1]))
+                    .isInstanceOf(SDK.MalformedTDFException.class)
+                    .hasCauseInstanceOf(InvalidZipException.class);
         }
     }
 }

@@ -1141,14 +1141,11 @@ public class Manifest {
             }
             var obj = json.getAsJsonObject();
             var statement = new AssertionConfig.Statement();
-            if (obj.has("format")) {
-                statement.format = obj.get("format").getAsString();
-            }
-            if (obj.has("schema")) {
-                statement.schema = obj.get("schema").getAsString();
-            }
-            if (obj.has("value")) {
-                var value = obj.get("value");
+            statement.format = optionalString(obj, "format");
+            statement.schema = optionalString(obj, "schema");
+            var value = obj.get("value");
+            // explicit JSON null means no value, not the string "null"
+            if (value != null && !value.isJsonNull()) {
                 if (value.isJsonPrimitive()) {
                     // it's already a primitive (hopefully string) so we don't need its escaped value here
                     statement.value = value.getAsString();
@@ -1157,6 +1154,18 @@ public class Manifest {
                 }
             }
             return statement;
+        }
+
+        /** The member as a string, or null if absent or JSON null; a non-primitive is a JsonParseException. */
+        private static String optionalString(JsonObject obj, String member) {
+            var element = obj.get(member);
+            if (element == null || element.isJsonNull()) {
+                return null;
+            }
+            if (!element.isJsonPrimitive()) {
+                throw new JsonParseException(String.format("assertion statement %s must be a string", member));
+            }
+            return element.getAsString();
         }
     }
 

@@ -26,8 +26,10 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
+import java.time.Duration;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -48,6 +50,7 @@ import java.util.stream.Collectors;
 import static io.opentdf.platform.sdk.TDF.GLOBAL_KEY_SALT;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -1591,6 +1594,66 @@ public class TDFTest {
     @Nonnull
     private static Config.KASInfo[] getSingleRSAKASInfo() {
         return getKASInfos(i -> i == 0);
+    }
+
+    @Test
+    void loadTDFReportsHostileArchivesAsMalformed() {
+        HostileZips.hostileShapes().forEach((shape, hostile) ->
+                assertLoadTDFFailsAsMalformed(shape, HostileZips.tdfWith("{}", hostile)));
+    }
+
+    /**
+     * A size past the end of the archive is malformed, not read short: an oversized uncompressed
+     * size fails when the manifest is read, an oversized compressed size when the archive is opened.
+     */
+    @Test
+    void loadTDFReportsAManifestRunningPastTheArchiveAsMalformed() {
+        // the manifest opens a JSON comment, so the parser reads on to the end of the archive
+        // looking for its close, rather than failing at the first byte past the entry
+        var uncompressedPastTheEnd = HostileZips.tdfWith("/*", e -> e.uncompressedSize = 0x7FFFFFFFL);
+        assertThatThrownBy(() -> loadTDFFrom(uncompressedPastTheEnd))
+                .isInstanceOf(SDK.MalformedTDFException.class)
+                .hasCauseInstanceOf(InvalidZipException.class)
+                .hasMessageContaining("Archive ended");
+
+        var storedPastTheEnd = HostileZips.tdfWith("{}", e -> e.compressedSize = 0x7FFFFFFFL);
+        assertThatThrownBy(() -> loadTDFFrom(storedPastTheEnd))
+                .isInstanceOf(SDK.MalformedTDFException.class)
+                .hasCauseInstanceOf(InvalidZipException.class);
+    }
+
+    /** Guards against reintroducing a fixed manifest size cap. */
+    @Test
+    void readsAManifestLargerThanTenMebibytes() throws IOException {
+        var padding = "a".repeat(11 * 1024 * 1024);
+        var manifest = "{\"padding\":\"" + padding + "\"}";
+        var archive = HostileZips.tdfWith(manifest, e -> { });
+        var read = new StringWriter();
+        try (var reader = TDFReader.open(new SeekableInMemoryByteChannel(archive)).manifest()) {
+            reader.transferTo(read);
+        }
+        assertThat(read).hasToString(manifest);
+    }
+
+    @Test
+    void loadTDFReportsAnInvalidManifestAsMalformed() {
+        var assertionWithObjectFormat = "{\"payload\":{},\"assertions\":[{\"statement\":{\"format\":{}}}]}";
+        for (var manifest : List.of("not json", "[]", "{\"payload\": 5}", "{}", assertionWithObjectFormat)) {
+            assertLoadTDFFailsAsMalformed(manifest, HostileZips.tdfWith(manifest, e -> { }));
+        }
+    }
+
+    private static void assertLoadTDFFailsAsMalformed(String description, byte[] archive) {
+        assertTimeoutPreemptively(Duration.ofSeconds(5), () ->
+                assertThatThrownBy(() -> loadTDFFrom(archive))
+                        .as(description)
+                        .isInstanceOf(SDK.MalformedTDFException.class),
+                description);
+    }
+
+    private static void loadTDFFrom(byte[] archive) throws IOException {
+        new TDF(new FakeServicesBuilder().setKas(kas).build())
+                .loadTDF(new SeekableInMemoryByteChannel(archive), Config.newTDFReaderConfig());
     }
 
     private static boolean isHexChar(byte b) {

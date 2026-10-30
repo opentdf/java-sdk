@@ -15,17 +15,20 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.Objects;
 import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.mockito.Mockito.mock;
 
 class SDKTest {
 
     @Test
     void testExaminingValidZTDF() throws IOException {
-        try (var ztdf = SDKTest.class.getClassLoader().getResourceAsStream("sample.txt.tdf")) {
-            assert ztdf != null;
+        try (var ztdf = Objects.requireNonNull(SDKTest.class.getClassLoader().getResourceAsStream("sample.txt.tdf"))) {
             var chan = new SeekableInMemoryByteChannel(ztdf.readAllBytes());
             assertThat(SDK.isTDF(chan)).isTrue();
         }
@@ -106,6 +109,45 @@ class SDKTest {
         try (var chan = zipOf("0.payload", "manifest.json", "something-else", "something-else")) {
             assertThat(SDK.isTDF(chan)).isFalse();
         }
+    }
+
+    @Test
+    void testExaminingHostileArchivesReturnsFalse() {
+        HostileZips.hostileShapes().forEach((shape, hostile) -> {
+            var archive = HostileZips.tdfWith("{}", hostile);
+            boolean result = assertTimeoutPreemptively(Duration.ofSeconds(5),
+                    () -> SDK.isTDF(new SeekableInMemoryByteChannel(archive)), shape);
+            assertThat(result).as(shape).isFalse();
+        });
+    }
+
+    /** The unmodified hand-built archive those shapes start from is a TDF. */
+    @Test
+    void testExaminingHandBuiltTDF() {
+        assertThat(SDK.isTDF(new SeekableInMemoryByteChannel(HostileZips.tdfWith("{}", e -> { })))).isTrue();
+    }
+
+    @Test
+    void testExaminingAChannelThatThrowsUncheckedReturnsFalse() {
+        var channel = new SeekableInMemoryByteChannel(HostileZips.tdfWith("{}", e -> { })) {
+            @Override
+            public int read(ByteBuffer buf) {
+                throw new IllegalStateException("broken channel");
+            }
+        };
+        assertThat(SDK.isTDF(channel)).isFalse();
+    }
+
+    @Test
+    void testReadingTheManifestOfHostileArchivesThrowsMalformedTDF() {
+        HostileZips.hostileShapes().forEach((shape, hostile) -> {
+            var archive = HostileZips.tdfWith("{}", hostile);
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () ->
+                    assertThatThrownBy(() -> SDK.readManifest(new SeekableInMemoryByteChannel(archive)))
+                            .as(shape)
+                            .isInstanceOf(SDK.MalformedTDFException.class),
+                    shape);
+        });
     }
 
     /** Builds a zip holding the named entries; contents are irrelevant to {@link SDK#isTDF}. */

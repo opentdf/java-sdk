@@ -1,6 +1,9 @@
 package io.opentdf.platform.sdk;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonNull;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
@@ -14,6 +17,7 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -331,12 +335,7 @@ public class ManifestTest {
 
     @Test
     void testReadingManifestWithObjectStatementValue() throws IOException {
-        final Manifest manifest;
-        try (var mStream = getClass().getResourceAsStream("/io.opentdf.platform.sdk.TestData/manifest-with-object-statement-value.json")) {
-            assert mStream != null;
-            var manifestJson = new String(mStream.readAllBytes(), StandardCharsets.UTF_8);
-            manifest = Manifest.readManifest(manifestJson);
-        }
+        var manifest = Manifest.readManifest(manifestWithObjectStatementValue());
 
         assertThat(manifest.assertions).hasSize(2);
 
@@ -475,5 +474,43 @@ public class ManifestTest {
         return Stream.of(
                 Arguments.of("root", "", ",\"tdf_spec_version\":\"4.3.0\""),
                 Arguments.of("payload", ",\"tdf_spec_version\":\"4.3.0\"", ""));
+    }
+
+    private String manifestWithObjectStatementValue() throws IOException {
+        try (var mStream = Objects.requireNonNull(getClass().getResourceAsStream(
+                "/io.opentdf.platform.sdk.TestData/manifest-with-object-statement-value.json"))) {
+            return new String(mStream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    /** The first assertion's statement with {@code member} replaced, keeping explicit nulls. */
+    private String withStatementMember(String member, com.google.gson.JsonElement replacement) throws IOException {
+        var root = JsonParser.parseString(manifestWithObjectStatementValue()).getAsJsonObject();
+        var statement = root.getAsJsonArray("assertions").get(0).getAsJsonObject().getAsJsonObject("statement");
+        statement.add(member, replacement);
+        return new GsonBuilder().serializeNulls().create().toJson(root);
+    }
+
+    /** An explicit JSON null in a statement field reads as absent, not as the string "null". */
+    @Test
+    void testNullStatementFieldsReadAsNull() throws IOException {
+        for (var member : List.of("format", "schema", "value")) {
+            var manifest = Manifest.readManifest(withStatementMember(member, JsonNull.INSTANCE));
+            var statement = manifest.assertions.get(0).statement;
+            var actual = member.equals("format") ? statement.format
+                    : member.equals("schema") ? statement.schema : statement.value;
+            assertThat(actual).as(member).isNull();
+        }
+    }
+
+    @Test
+    void testNonStringStatementFormatIsAParseError() throws IOException {
+        for (var member : List.of("format", "schema")) {
+            var json = withStatementMember(member, new JsonObject());
+            assertThatThrownBy(() -> Manifest.readManifest(json))
+                    .as(member)
+                    .isInstanceOf(JsonParseException.class)
+                    .hasMessageContaining(member);
+        }
     }
 }
