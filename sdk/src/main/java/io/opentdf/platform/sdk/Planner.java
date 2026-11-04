@@ -1,11 +1,6 @@
 package io.opentdf.platform.sdk;
 
 import com.connectrpc.ConnectException;
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonSyntaxException;
-import com.google.gson.annotations.SerializedName;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
 import io.opentdf.platform.policy.Algorithm;
@@ -89,10 +84,10 @@ public class Planner {
     }
 
     /**
-     * Fetches the base key from structured configuration or the legacy JSON-string format.
+     * Fetches the base key from the platform's structured well-known configuration.
      *
-     * @return a supported base key, or empty when required field values are missing or invalid
-     * @throws SDKException if retrieval fails, legacy JSON is malformed, or a legacy algorithm sentinel is used
+     * @return a supported base key, or empty when the response type or required field values are invalid
+     * @throws SDKException if the configuration cannot be retrieved
      */
     static Optional<SimpleKasKey> fetchBaseKey(WellKnownServiceClientInterface wellknown) {
         var responseMessage = wellknown
@@ -111,119 +106,45 @@ public class Planner {
             return Optional.empty();
         }
 
-        BaseKey baseKey;
-        if (baseKeyValue.getKindCase() == Value.KindCase.STRUCT_VALUE) {
-            baseKey = baseKeyFromStruct(baseKeyValue.getStructValue());
-        } else if (baseKeyValue.getKindCase() == Value.KindCase.STRING_VALUE) {
-            // Preserve the JSON-string representation accepted by earlier SDK versions.
-            try {
-                baseKey = baseKeyFromLegacyJson(baseKeyValue.getStringValue());
-            } catch (JsonSyntaxException e) {
-                throw new SDKException("base key in well known configuration is malformed", e);
-            }
-        } else {
+        if (baseKeyValue.getKindCase() != Value.KindCase.STRUCT_VALUE) {
             logger.error("base key in well known configuration has an invalid type; base key will not be used");
             return Optional.empty();
         }
 
-        if (baseKey == null || isMissing(baseKey.kasUri) || baseKey.publicKey == null
-                || isMissing(baseKey.publicKey.kid) || isMissing(baseKey.publicKey.pem)
-                || isMissing(baseKey.publicKey.algorithm)) {
+        var baseKey = baseKeyValue.getStructValue();
+        var publicKeyValue = baseKey.getFieldsMap().get("public_key");
+        if (publicKeyValue == null || publicKeyValue.getKindCase() != Value.KindCase.STRUCT_VALUE) {
             logger.error("base key in well known configuration is missing valid required fields; base key will not be used");
             return Optional.empty();
         }
 
-        if (baseKeyValue.getKindCase() == Value.KindCase.STRING_VALUE
-                && ("ALGORITHM_UNSPECIFIED".equals(baseKey.publicKey.algorithm)
-                || "UNRECOGNIZED".equals(baseKey.publicKey.algorithm))) {
-            // These legacy enum values failed during planning or key construction.
-            // Do not turn them into an absent key that allows default-KAS fallback.
-            throw new SDKException("base key in well known configuration has an unsupported algorithm");
+        var publicKey = publicKeyValue.getStructValue();
+        var kasUri = stringField(baseKey, "kas_uri");
+        var kid = stringField(publicKey, "kid");
+        var pem = stringField(publicKey, "pem");
+        var algorithmName = stringField(publicKey, "algorithm");
+        if (isMissing(kasUri) || isMissing(kid) || isMissing(pem) || isMissing(algorithmName)) {
+            logger.error("base key in well known configuration is missing valid required fields; base key will not be used");
+            return Optional.empty();
         }
 
         Algorithm algorithm;
         try {
-            algorithm = baseKeyAlgorithm(baseKey.publicKey.algorithm);
+            algorithm = baseKeyAlgorithm(algorithmName);
         } catch (IllegalArgumentException e) {
             logger.error("base key in well known configuration has an unsupported algorithm; base key will not be used");
             return Optional.empty();
         }
 
         return Optional.of(SimpleKasKey.newBuilder()
-                .setKasUri(baseKey.kasUri)
+                .setKasUri(kasUri)
                 .setPublicKey(
                         SimpleKasPublicKey.newBuilder()
-                        .setKid(baseKey.publicKey.kid)
+                        .setKid(kid)
                         .setAlgorithm(algorithm)
-                        .setPem(baseKey.publicKey.pem)
+                        .setPem(pem)
                         .build())
                 .build());
-    }
-
-    /**
-     * Reads legacy fields without allowing Gson to coerce numbers or booleans into strings.
-     * Missing fields remain subject to the common required-field validation.
-     *
-     * @return the decoded fields, or null for absent input or non-string primitive field values
-     * @throws JsonSyntaxException for malformed JSON or incompatible object, array, or scalar shapes
-     */
-    private static BaseKey baseKeyFromLegacyJson(String json) {
-        var element = gson.fromJson(json, JsonElement.class);
-        if (element == null || element.isJsonNull()) {
-            return null;
-        }
-        if (!element.isJsonObject()) {
-            throw new JsonSyntaxException("expected an object for the legacy base key");
-        }
-        var fields = element.getAsJsonObject();
-        var valid = hasLegacyStringFields(fields, "kas_uri", "kas_url");
-        var publicKey = fields.get("public_key");
-        if (publicKey != null && !publicKey.isJsonNull()) {
-            if (!publicKey.isJsonObject()) {
-                throw new JsonSyntaxException("expected an object for the legacy public key");
-            }
-            valid &= hasLegacyStringFields(publicKey.getAsJsonObject(), "algorithm", "kid", "pem");
-        }
-        return valid ? gson.fromJson(json, BaseKey.class) : null;
-    }
-
-    /**
-     * Checks every named field before DTO conversion, allowing missing and null values.
-     * Structural errors retain the legacy exception behavior even if another field is invalid.
-     *
-     * @return false if a field contains a number or boolean
-     * @throws JsonSyntaxException if a field expected to hold a string contains an object or array
-     */
-    private static boolean hasLegacyStringFields(JsonObject fields, String... names) {
-        var valid = true;
-        for (var name : names) {
-            var value = fields.get(name);
-            if (value == null || value.isJsonNull()) {
-                continue;
-            }
-            if (!value.isJsonPrimitive()) {
-                throw new JsonSyntaxException("expected a string for legacy base key field: " + name);
-            }
-            valid &= value.getAsJsonPrimitive().isString();
-        }
-        return valid;
-    }
-
-    /**
-     * Extracts structured fields without coercion, leaving absent or wrongly typed fields unset.
-     */
-    private static BaseKey baseKeyFromStruct(Struct fields) {
-        var baseKey = new BaseKey();
-        baseKey.kasUri = stringField(fields, "kas_uri");
-        var publicKey = fields.getFieldsMap().get("public_key");
-        if (publicKey != null && publicKey.getKindCase() == Value.KindCase.STRUCT_VALUE) {
-            var keyFields = publicKey.getStructValue();
-            baseKey.publicKey = new BaseKey.Key();
-            baseKey.publicKey.kid = stringField(keyFields, "kid");
-            baseKey.publicKey.pem = stringField(keyFields, "pem");
-            baseKey.publicKey.algorithm = stringField(keyFields, "algorithm");
-        }
-        return baseKey;
     }
 
     /** Returns the named protobuf string value, or null when the field is absent or has another type. */
@@ -239,17 +160,11 @@ public class Planner {
     }
 
     /**
-     * Resolves supported platform algorithm names and legacy enum names.
+     * Resolves the platform's wire-format algorithm names to supported policy algorithms.
      *
      * @throws IllegalArgumentException if the value does not identify a supported key type
      */
     private static Algorithm baseKeyAlgorithm(String value) {
-        if (value.startsWith("ALGORITHM_")) {
-            var algorithm = Algorithm.valueOf(value);
-            KeyType.fromAlgorithm(algorithm);
-            return algorithm;
-        }
-
         switch (KeyType.fromString(value)) {
             case RSA2048Key:
                 return Algorithm.ALGORITHM_RSA_2048;
@@ -273,22 +188,6 @@ public class Planner {
                 return Algorithm.ALGORITHM_MLKEM_1024;
             default:
                 throw new IllegalArgumentException("Unsupported base key algorithm: " + value);
-        }
-    }
-
-    private static final Gson gson = new Gson();
-
-    private static class BaseKey {
-        @SerializedName(value = "kas_uri", alternate = {"kas_url"})
-        String kasUri;
-
-        @SerializedName("public_key")
-        Key publicKey;
-
-        private static class Key {
-            String kid;
-            String pem;
-            String algorithm;
         }
     }
 
