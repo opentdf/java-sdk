@@ -2,6 +2,8 @@ package io.opentdf.platform.sdk;
 
 import com.connectrpc.ConnectException;
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.annotations.SerializedName;
 import com.google.protobuf.Struct;
@@ -86,6 +88,12 @@ public class Planner {
         return splitPlan;
     }
 
+    /**
+     * Fetches the base key from structured configuration or the legacy JSON-string format.
+     *
+     * @return a supported base key, or empty when required field values are missing or invalid
+     * @throws SDKException if retrieval fails, legacy JSON is malformed, or a legacy algorithm sentinel is used
+     */
     static Optional<SimpleKasKey> fetchBaseKey(WellKnownServiceClientInterface wellknown) {
         var responseMessage = wellknown
                 .getWellKnownConfigurationBlocking(GetWellKnownConfigurationRequest.getDefaultInstance(), Collections.emptyMap())
@@ -109,7 +117,7 @@ public class Planner {
         } else if (baseKeyValue.getKindCase() == Value.KindCase.STRING_VALUE) {
             // Preserve the JSON-string representation accepted by earlier SDK versions.
             try {
-                baseKey = gson.fromJson(baseKeyValue.getStringValue(), BaseKey.class);
+                baseKey = baseKeyFromLegacyJson(baseKeyValue.getStringValue());
             } catch (JsonSyntaxException e) {
                 throw new SDKException("base key in well known configuration is malformed", e);
             }
@@ -152,6 +160,58 @@ public class Planner {
                 .build());
     }
 
+    /**
+     * Reads legacy fields without allowing Gson to coerce numbers or booleans into strings.
+     * Missing fields remain subject to the common required-field validation.
+     *
+     * @return the decoded fields, or null for absent input or non-string primitive field values
+     * @throws JsonSyntaxException for malformed JSON or incompatible object, array, or scalar shapes
+     */
+    private static BaseKey baseKeyFromLegacyJson(String json) {
+        var element = gson.fromJson(json, JsonElement.class);
+        if (element == null || element.isJsonNull()) {
+            return null;
+        }
+        if (!element.isJsonObject()) {
+            throw new JsonSyntaxException("expected an object for the legacy base key");
+        }
+        var fields = element.getAsJsonObject();
+        var valid = hasLegacyStringFields(fields, "kas_uri", "kas_url");
+        var publicKey = fields.get("public_key");
+        if (publicKey != null && !publicKey.isJsonNull()) {
+            if (!publicKey.isJsonObject()) {
+                throw new JsonSyntaxException("expected an object for the legacy public key");
+            }
+            valid &= hasLegacyStringFields(publicKey.getAsJsonObject(), "algorithm", "kid", "pem");
+        }
+        return valid ? gson.fromJson(json, BaseKey.class) : null;
+    }
+
+    /**
+     * Checks every named field before DTO conversion, allowing missing and null values.
+     * Structural errors retain the legacy exception behavior even if another field is invalid.
+     *
+     * @return false if a field contains a number or boolean
+     * @throws JsonSyntaxException if a field expected to hold a string contains an object or array
+     */
+    private static boolean hasLegacyStringFields(JsonObject fields, String... names) {
+        var valid = true;
+        for (var name : names) {
+            var value = fields.get(name);
+            if (value == null || value.isJsonNull()) {
+                continue;
+            }
+            if (!value.isJsonPrimitive()) {
+                throw new JsonSyntaxException("expected a string for legacy base key field: " + name);
+            }
+            valid &= value.getAsJsonPrimitive().isString();
+        }
+        return valid;
+    }
+
+    /**
+     * Extracts structured fields without coercion, leaving absent or wrongly typed fields unset.
+     */
     private static BaseKey baseKeyFromStruct(Struct fields) {
         var baseKey = new BaseKey();
         baseKey.kasUri = stringField(fields, "kas_uri");
@@ -166,16 +226,23 @@ public class Planner {
         return baseKey;
     }
 
+    /** Returns the named protobuf string value, or null when the field is absent or has another type. */
     private static String stringField(Struct fields, String name) {
         var value = fields.getFieldsMap().get(name);
         return value != null && value.getKindCase() == Value.KindCase.STRING_VALUE
                 ? value.getStringValue() : null;
     }
 
+    /** Treats null and blank strings as missing required field values. */
     private static boolean isMissing(String value) {
         return value == null || value.isBlank();
     }
 
+    /**
+     * Resolves supported platform algorithm names and legacy enum names.
+     *
+     * @throws IllegalArgumentException if the value does not identify a supported key type
+     */
     private static Algorithm baseKeyAlgorithm(String value) {
         if (value.startsWith("ALGORITHM_")) {
             var algorithm = Algorithm.valueOf(value);

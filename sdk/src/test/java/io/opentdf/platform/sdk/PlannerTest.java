@@ -1,5 +1,6 @@
 package io.opentdf.platform.sdk;
 
+import com.google.gson.JsonParser;
 import com.google.protobuf.ListValue;
 import com.google.protobuf.NullValue;
 import com.google.protobuf.Struct;
@@ -55,13 +56,10 @@ class PlannerTest {
         assertThat(simpleKasKey.getPublicKey().getPem()).isEqualTo("thepem");
     }
 
-    @Test
-    void fetchBaseKeyFromLegacyJsonString() {
-        var json = "{\"kas_url\":\"https://example.com/base_key\","
-                + "\"public_key\":{\"algorithm\":\"ALGORITHM_RSA_2048\",\"kid\":\"thekid\",\"pem\":\"thepem\"}}";
-        var configuration = Struct.newBuilder()
-                .putFields("base_key", Value.newBuilder().setStringValue(json).build())
-                .build();
+    @ParameterizedTest
+    @ValueSource(strings = {"kas_uri", "kas_url"})
+    void fetchBaseKeyFromLegacyJsonString(String kasUriField) {
+        var configuration = legacyBaseKeyConfiguration(legacyBaseKeyJson(kasUriField));
 
         var baseKey = Planner.fetchBaseKey(wellknownService(configuration));
 
@@ -70,6 +68,83 @@ class PlannerTest {
         assertThat(baseKey.get().getPublicKey().getAlgorithm()).isEqualTo(Algorithm.ALGORITHM_RSA_2048);
         assertThat(baseKey.get().getPublicKey().getKid()).isEqualTo("thekid");
         assertThat(baseKey.get().getPublicKey().getPem()).isEqualTo("thepem");
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "kas_uri, 123", "kas_uri, true",
+            "kas_url, 123", "kas_url, true",
+            "public_key.algorithm, 123", "public_key.algorithm, true",
+            "public_key.kid, 123", "public_key.kid, true",
+            "public_key.pem, 123", "public_key.pem, true"
+    })
+    void fetchBaseKeyRejectsNonStringLegacyField(String field, String jsonValue) {
+        var configuration = legacyBaseKeyConfiguration(legacyBaseKeyWithField(field, jsonValue));
+
+        assertThat(Planner.fetchBaseKey(wellknownService(configuration))).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", " ", "null", "{}", "{\"public_key\":null}"})
+    void fetchBaseKeyWithEmptyLegacyConfiguration(String json) {
+        assertThat(Planner.fetchBaseKey(wellknownService(legacyBaseKeyConfiguration(json)))).isEmpty();
+    }
+
+    @Test
+    void fetchBaseKeyPreservesLegacyAliasOrder() {
+        var json = "{\"kas_uri\":\"https://first.example.com/kas\","
+                + "\"kas_url\":\"https://second.example.com/kas\","
+                + legacyBaseKeyJson("kas_uri").substring(1);
+
+        var baseKey = Planner.fetchBaseKey(wellknownService(legacyBaseKeyConfiguration(json)));
+
+        assertThat(baseKey).isPresent();
+        assertThat(baseKey.get().getKasUri()).isEqualTo("https://example.com/base_key");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"123", "true", "[]", "\"base-key\""})
+    void fetchBaseKeyWithNonObjectLegacyRootStillThrows(String json) {
+        var service = wellknownService(legacyBaseKeyConfiguration(json));
+
+        assertThatThrownBy(() -> Planner.fetchBaseKey(service))
+                .isInstanceOf(SDKException.class)
+                .hasMessageContaining("malformed");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"123", "true", "[]", "\"public-key\""})
+    void fetchBaseKeyWithNonObjectLegacyPublicKeyStillThrows(String jsonValue) {
+        var configuration = legacyBaseKeyConfiguration(legacyBaseKeyWithField("public_key", jsonValue));
+        var service = wellknownService(configuration);
+
+        assertThatThrownBy(() -> Planner.fetchBaseKey(service))
+                .isInstanceOf(SDKException.class)
+                .hasMessageContaining("malformed");
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "kas_uri, {}", "kas_url, []", "public_key.algorithm, {}",
+            "public_key.kid, []", "public_key.pem, {}"
+    })
+    void fetchBaseKeyWithStructuredLegacyStringFieldStillThrows(String field, String jsonValue) {
+        var configuration = legacyBaseKeyConfiguration(legacyBaseKeyWithField(field, jsonValue));
+        var service = wellknownService(configuration);
+
+        assertThatThrownBy(() -> Planner.fetchBaseKey(service))
+                .isInstanceOf(SDKException.class)
+                .hasMessageContaining("malformed");
+    }
+
+    @Test
+    void fetchBaseKeyWithInvalidLegacyPrimitiveDoesNotHideMalformedPublicKey() {
+        var configuration = legacyBaseKeyConfiguration("{\"kas_uri\":123,\"public_key\":[]}");
+        var service = wellknownService(configuration);
+
+        assertThatThrownBy(() -> Planner.fetchBaseKey(service))
+                .isInstanceOf(SDKException.class)
+                .hasMessageContaining("malformed");
     }
 
     @Test
@@ -239,6 +314,31 @@ class PlannerTest {
                 .build();
     }
 
+    private static Struct legacyBaseKeyConfiguration(String json) {
+        return Struct.newBuilder()
+                .putFields("base_key", Value.newBuilder().setStringValue(json).build())
+                .build();
+    }
+
+    private static String legacyBaseKeyJson(String kasUriField) {
+        return "{\"" + kasUriField + "\":\"https://example.com/base_key\","
+                + "\"public_key\":{\"algorithm\":\"ALGORITHM_RSA_2048\",\"kid\":\"thekid\",\"pem\":\"thepem\"}}";
+    }
+
+    /** Replaces one legacy JSON field with a typed value, choosing the URI alias under test. */
+    private static String legacyBaseKeyWithField(String field, String jsonValue) {
+        var baseKey = JsonParser.parseString(legacyBaseKeyJson("kas_url".equals(field) ? "kas_url" : "kas_uri"))
+                .getAsJsonObject();
+        var fields = baseKey;
+        var name = field;
+        if (field.startsWith("public_key.")) {
+            fields = baseKey.getAsJsonObject("public_key");
+            name = field.substring("public_key.".length());
+        }
+        fields.add(name, JsonParser.parseString(jsonValue));
+        return baseKey.toString();
+    }
+
     private static Struct structuredBaseKey(String algorithm) {
         var publicKey = Struct.newBuilder()
                 .putFields("algorithm", Value.newBuilder().setStringValue(algorithm).build())
@@ -251,6 +351,7 @@ class PlannerTest {
                 .build();
     }
 
+    /** Replaces a top-level or nested public-key field; a null replacement removes the field. */
     private static Struct replaceBaseKeyField(Struct baseKey, String field, Value replacement) {
         var builder = baseKey.toBuilder();
         if (field.startsWith("public_key.")) {
