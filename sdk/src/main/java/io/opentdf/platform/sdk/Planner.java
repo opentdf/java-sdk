@@ -4,6 +4,8 @@ import com.connectrpc.ConnectException;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.annotations.SerializedName;
+import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
 import io.opentdf.platform.policy.Algorithm;
 import io.opentdf.platform.policy.SimpleKasKey;
 import io.opentdf.platform.policy.SimpleKasPublicKey;
@@ -95,45 +97,123 @@ public class Planner {
             throw new SDKException("unable to retrieve base key from well known endpoint", e);
         }
 
-        String baseKeyJson;
-        try {
-            baseKeyJson = response
-                    .getConfiguration()
-                    .getFieldsOrThrow(BASE_KEY)
-                    .getStringValue();
-        } catch (IllegalArgumentException e) {
-            logger.info( "no `" + BASE_KEY + "` found in well known configuration.", e);
+        var baseKeyValue = response.getConfiguration().getFieldsMap().get(BASE_KEY);
+        if (baseKeyValue == null) {
+            logger.info("no `{}` found in well known configuration", BASE_KEY);
             return Optional.empty();
         }
 
         BaseKey baseKey;
-        try {
-            baseKey = gson.fromJson(baseKeyJson, BaseKey.class);
-        } catch (JsonSyntaxException e) {
-            throw new SDKException("base key in well known configuration is malformed [" + baseKeyJson + "]", e);
+        if (baseKeyValue.getKindCase() == Value.KindCase.STRUCT_VALUE) {
+            baseKey = baseKeyFromStruct(baseKeyValue.getStructValue());
+        } else if (baseKeyValue.getKindCase() == Value.KindCase.STRING_VALUE) {
+            // Preserve the JSON-string representation accepted by earlier SDK versions.
+            try {
+                baseKey = gson.fromJson(baseKeyValue.getStringValue(), BaseKey.class);
+            } catch (JsonSyntaxException e) {
+                throw new SDKException("base key in well known configuration is malformed", e);
+            }
+        } else {
+            logger.error("base key in well known configuration has an invalid type; base key will not be used");
+            return Optional.empty();
         }
 
-        if (baseKey == null || baseKey.kasUrl == null || baseKey.publicKey == null || baseKey.publicKey.kid == null || baseKey.publicKey.pem == null || baseKey.publicKey.algorithm == null) {
-            logger.error("base key in well known configuration is missing required fields [{}]. base key will not be used", baseKeyJson);
+        if (baseKey == null || isMissing(baseKey.kasUri) || baseKey.publicKey == null
+                || isMissing(baseKey.publicKey.kid) || isMissing(baseKey.publicKey.pem)
+                || isMissing(baseKey.publicKey.algorithm)) {
+            logger.error("base key in well known configuration is missing valid required fields; base key will not be used");
+            return Optional.empty();
+        }
+
+        if (baseKeyValue.getKindCase() == Value.KindCase.STRING_VALUE
+                && ("ALGORITHM_UNSPECIFIED".equals(baseKey.publicKey.algorithm)
+                || "UNRECOGNIZED".equals(baseKey.publicKey.algorithm))) {
+            // These legacy enum values failed during planning or key construction.
+            // Do not turn them into an absent key that allows default-KAS fallback.
+            throw new SDKException("base key in well known configuration has an unsupported algorithm");
+        }
+
+        Algorithm algorithm;
+        try {
+            algorithm = baseKeyAlgorithm(baseKey.publicKey.algorithm);
+        } catch (IllegalArgumentException e) {
+            logger.error("base key in well known configuration has an unsupported algorithm; base key will not be used");
             return Optional.empty();
         }
 
         return Optional.of(SimpleKasKey.newBuilder()
-                .setKasUri(baseKey.kasUrl)
+                .setKasUri(baseKey.kasUri)
                 .setPublicKey(
                         SimpleKasPublicKey.newBuilder()
                         .setKid(baseKey.publicKey.kid)
-                        .setAlgorithm(baseKey.publicKey.algorithm)
+                        .setAlgorithm(algorithm)
                         .setPem(baseKey.publicKey.pem)
                         .build())
                 .build());
     }
 
+    private static BaseKey baseKeyFromStruct(Struct fields) {
+        var baseKey = new BaseKey();
+        baseKey.kasUri = stringField(fields, "kas_uri");
+        var publicKey = fields.getFieldsMap().get("public_key");
+        if (publicKey != null && publicKey.getKindCase() == Value.KindCase.STRUCT_VALUE) {
+            var keyFields = publicKey.getStructValue();
+            baseKey.publicKey = new BaseKey.Key();
+            baseKey.publicKey.kid = stringField(keyFields, "kid");
+            baseKey.publicKey.pem = stringField(keyFields, "pem");
+            baseKey.publicKey.algorithm = stringField(keyFields, "algorithm");
+        }
+        return baseKey;
+    }
+
+    private static String stringField(Struct fields, String name) {
+        var value = fields.getFieldsMap().get(name);
+        return value != null && value.getKindCase() == Value.KindCase.STRING_VALUE
+                ? value.getStringValue() : null;
+    }
+
+    private static boolean isMissing(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private static Algorithm baseKeyAlgorithm(String value) {
+        if (value.startsWith("ALGORITHM_")) {
+            var algorithm = Algorithm.valueOf(value);
+            KeyType.fromAlgorithm(algorithm);
+            return algorithm;
+        }
+
+        switch (KeyType.fromString(value)) {
+            case RSA2048Key:
+                return Algorithm.ALGORITHM_RSA_2048;
+            case RSA4096Key:
+                return Algorithm.ALGORITHM_RSA_4096;
+            case EC256Key:
+                return Algorithm.ALGORITHM_EC_P256;
+            case EC384Key:
+                return Algorithm.ALGORITHM_EC_P384;
+            case EC521Key:
+                return Algorithm.ALGORITHM_EC_P521;
+            case HybridXWingKey:
+                return Algorithm.ALGORITHM_HPQT_XWING;
+            case HybridSecp256r1MLKEM768Key:
+                return Algorithm.ALGORITHM_HPQT_SECP256R1_MLKEM768;
+            case HybridSecp384r1MLKEM1024Key:
+                return Algorithm.ALGORITHM_HPQT_SECP384R1_MLKEM1024;
+            case MLKEM768Key:
+                return Algorithm.ALGORITHM_MLKEM_768;
+            case MLKEM1024Key:
+                return Algorithm.ALGORITHM_MLKEM_1024;
+            default:
+                throw new IllegalArgumentException("Unsupported base key algorithm: " + value);
+        }
+    }
+
     private static final Gson gson = new Gson();
 
     private static class BaseKey {
-        @SerializedName("kas_url")
-        String kasUrl;
+        @SerializedName(value = "kas_uri", alternate = {"kas_url"})
+        String kasUri;
 
         @SerializedName("public_key")
         Key publicKey;
@@ -141,7 +221,7 @@ public class Planner {
         private static class Key {
             String kid;
             String pem;
-            Algorithm algorithm;
+            String algorithm;
         }
     }
 

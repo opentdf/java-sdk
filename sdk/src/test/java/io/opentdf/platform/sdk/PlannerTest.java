@@ -1,79 +1,273 @@
 package io.opentdf.platform.sdk;
 
+import com.google.protobuf.ListValue;
+import com.google.protobuf.NullValue;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
 import io.opentdf.platform.policy.Algorithm;
+import io.opentdf.platform.policy.Attribute;
+import io.opentdf.platform.policy.AttributeRuleTypeEnum;
 import io.opentdf.platform.wellknownconfiguration.GetWellKnownConfigurationResponse;
 import io.opentdf.platform.wellknownconfiguration.WellKnownServiceClientInterface;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PlannerTest {
 
-    @Test
-    void fetchBaseKey() {
-        var wellknownService = Mockito.mock(WellKnownServiceClientInterface.class);
-        var baseKeyJson = "{\"kas_url\":\"https://example.com/base_key\",\"public_key\":{\"algorithm\":\"ALGORITHM_RSA_2048\",\"kid\":\"thekid\",\"pem\": \"thepem\"}}";
-        var val = Value.newBuilder().setStringValue(baseKeyJson).build();
-        var config = Struct.newBuilder().putFields("base_key", val).build();
-        var response = GetWellKnownConfigurationResponse
-                .newBuilder()
-                .setConfiguration(config)
-                .build();
-
-        Mockito.when(wellknownService.getWellKnownConfigurationBlocking(Mockito.any(), Mockito.anyMap()))
-                .thenReturn(TestUtil.successfulUnaryCall(response));
-
+    @ParameterizedTest
+    @CsvSource({
+            "rsa:2048, ALGORITHM_RSA_2048",
+            "rsa:4096, ALGORITHM_RSA_4096",
+            "ec:secp256r1, ALGORITHM_EC_P256",
+            "ec:secp384r1, ALGORITHM_EC_P384",
+            "ec:secp521r1, ALGORITHM_EC_P521",
+            "hpqt:xwing, ALGORITHM_HPQT_XWING",
+            "hpqt:secp256r1-mlkem768, ALGORITHM_HPQT_SECP256R1_MLKEM768",
+            "hpqt:secp384r1-mlkem1024, ALGORITHM_HPQT_SECP384R1_MLKEM1024",
+            "mlkem:768, ALGORITHM_MLKEM_768",
+            "mlkem:1024, ALGORITHM_MLKEM_1024"
+    })
+    void fetchBaseKeyFromStructuredConfiguration(String wireAlgorithm, Algorithm expectedAlgorithm) {
+        var wellknownService = wellknownService(baseKeyConfiguration(structuredBaseKey(wireAlgorithm)));
 
         var baseKey = Planner.fetchBaseKey(wellknownService);
-        assertThat(baseKey).isNotEmpty();
+
+        assertThat(baseKey).isPresent();
         var simpleKasKey = baseKey.get();
         assertThat(simpleKasKey.getKasUri()).isEqualTo("https://example.com/base_key");
-        assertThat(simpleKasKey.getPublicKey().getAlgorithm()).isEqualTo(Algorithm.ALGORITHM_RSA_2048);
+        assertThat(simpleKasKey.getPublicKey().getAlgorithm()).isEqualTo(expectedAlgorithm);
         assertThat(simpleKasKey.getPublicKey().getKid()).isEqualTo("thekid");
         assertThat(simpleKasKey.getPublicKey().getPem()).isEqualTo("thepem");
     }
 
     @Test
-    void fetchBaseKeyWithNoBaseKey() {
-        var wellknownService = Mockito.mock(WellKnownServiceClientInterface.class);
-        var response = GetWellKnownConfigurationResponse
-                .newBuilder()
-                .setConfiguration(Struct.newBuilder().build())
+    void fetchBaseKeyFromLegacyJsonString() {
+        var json = "{\"kas_url\":\"https://example.com/base_key\","
+                + "\"public_key\":{\"algorithm\":\"ALGORITHM_RSA_2048\",\"kid\":\"thekid\",\"pem\":\"thepem\"}}";
+        var configuration = Struct.newBuilder()
+                .putFields("base_key", Value.newBuilder().setStringValue(json).build())
                 .build();
 
-        Mockito.when(wellknownService.getWellKnownConfigurationBlocking(Mockito.any(), Mockito.anyMap()))
-                .thenReturn(TestUtil.successfulUnaryCall(response));
+        var baseKey = Planner.fetchBaseKey(wellknownService(configuration));
 
-        var baseKey = Planner.fetchBaseKey(wellknownService);
-        assertThat(baseKey).isEmpty();
+        assertThat(baseKey).isPresent();
+        assertThat(baseKey.get().getKasUri()).isEqualTo("https://example.com/base_key");
+        assertThat(baseKey.get().getPublicKey().getAlgorithm()).isEqualTo(Algorithm.ALGORITHM_RSA_2048);
+        assertThat(baseKey.get().getPublicKey().getKid()).isEqualTo("thekid");
+        assertThat(baseKey.get().getPublicKey().getPem()).isEqualTo("thepem");
     }
 
     @Test
-    void fetchBaseKeyWithMissingFields() {
-        var wellknownService = Mockito.mock(WellKnownServiceClientInterface.class);
-        // Missing 'kid', 'pem', and 'algorithm' in public_key
-        var baseKeyJson = "{\"kas_url\":\"https://example.com/base_key\",\"public_key\":{}}";
-        var val = Value.newBuilder().setStringValue(baseKeyJson).build();
-        var config = Struct.newBuilder().putFields("base_key", val).build();
-        var response = GetWellKnownConfigurationResponse
-                .newBuilder()
-                .setConfiguration(config)
+    void fetchBaseKeyWithMalformedLegacyJsonStillThrows() {
+        var configuration = Struct.newBuilder()
+                .putFields("base_key", Value.newBuilder().setStringValue("{").build())
                 .build();
+        var service = wellknownService(configuration);
 
-        Mockito.when(wellknownService.getWellKnownConfigurationBlocking(Mockito.any(), Mockito.anyMap()))
+        assertThatThrownBy(() -> Planner.fetchBaseKey(service))
+                .isInstanceOf(SDKException.class)
+                .hasMessageContaining("malformed");
+    }
+
+    @Test
+    void fetchBaseKeyWithNoBaseKey() {
+        assertThat(Planner.fetchBaseKey(wellknownService(Struct.getDefaultInstance()))).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"kas_uri", "public_key", "public_key.algorithm", "public_key.kid", "public_key.pem"})
+    void fetchBaseKeyWithMissingRequiredField(String field) {
+        var baseKey = replaceBaseKeyField(structuredBaseKey("rsa:2048"), field, null);
+
+        assertThat(Planner.fetchBaseKey(wellknownService(baseKeyConfiguration(baseKey)))).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"kas_uri", "public_key", "public_key.algorithm", "public_key.kid", "public_key.pem"})
+    void fetchBaseKeyWithWrongRequiredFieldType(String field) {
+        var baseKey = replaceBaseKeyField(structuredBaseKey("rsa:2048"), field,
+                Value.newBuilder().setNumberValue(123).build());
+
+        assertThat(Planner.fetchBaseKey(wellknownService(baseKeyConfiguration(baseKey)))).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"kas_uri", "public_key.algorithm", "public_key.kid", "public_key.pem"})
+    void fetchBaseKeyWithBlankRequiredField(String field) {
+        var baseKey = replaceBaseKeyField(structuredBaseKey("rsa:2048"), field,
+                Value.newBuilder().setStringValue(" ").build());
+
+        assertThat(Planner.fetchBaseKey(wellknownService(baseKeyConfiguration(baseKey)))).isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidBaseKeyValues")
+    void fetchBaseKeyWithWrongValueType(Value baseKey) {
+        var configuration = Struct.newBuilder().putFields("base_key", baseKey).build();
+
+        assertThat(Planner.fetchBaseKey(wellknownService(configuration))).isEmpty();
+    }
+
+    private static Stream<Value> invalidBaseKeyValues() {
+        return Stream.of(
+                Value.getDefaultInstance(),
+                Value.newBuilder().setNullValue(NullValue.NULL_VALUE).build(),
+                Value.newBuilder().setNumberValue(123).build(),
+                Value.newBuilder().setBoolValue(true).build(),
+                Value.newBuilder().setListValue(ListValue.getDefaultInstance()).build());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"rsa:1024", "unknown", "ALGORITHM_UNSPECIFIED", "UNRECOGNIZED"})
+    void fetchBaseKeyRejectsUnsupportedAlgorithm(String algorithm) {
+        var wellknownService = wellknownService(baseKeyConfiguration(structuredBaseKey(algorithm)));
+
+        assertThat(Planner.fetchBaseKey(wellknownService)).isEmpty();
+    }
+
+    @Test
+    void autoconfigureUsesFetchedBaseKeyForUnmappedAttribute() {
+        var wellknownService = wellknownService(baseKeyConfiguration(structuredBaseKey("ec:secp256r1")));
+        var kas = Mockito.mock(SDK.KAS.class);
+        var resolvedKey = new Config.KASInfo();
+        resolvedKey.URL = "https://example.com/base_key";
+        resolvedKey.KID = "thekid";
+        resolvedKey.Algorithm = "ec:secp256r1";
+        resolvedKey.PublicKey = "thepem";
+        Mockito.when(kas.getPublicKey(Mockito.any())).thenReturn(resolvedKey);
+        var services = new FakeServicesBuilder().setWellknownService(wellknownService).setKas(kas).build();
+        var config = configWithUnmappedAttribute();
+        // A different configured default makes loss of the base key's algorithm observable.
+        config.wrappingKeyType = KeyType.RSA2048Key;
+        var planner = new Planner(config, services, Autoconfigure::createGranter);
+
+        var splits = planner.getSplits();
+
+        Assertions.assertThat(splits).containsOnlyKeys("");
+        Assertions.assertThat(splits.get("")).containsExactly(resolvedKey);
+        var request = ArgumentCaptor.forClass(Config.KASInfo.class);
+        Mockito.verify(kas).getPublicKey(request.capture());
+        assertThat(request.getValue().URL).isEqualTo("https://example.com/base_key");
+        assertThat(request.getValue().KID).isEqualTo("thekid");
+        assertThat(request.getValue().Algorithm).isEqualTo("ec:secp256r1");
+        Mockito.verify(wellknownService).getWellKnownConfigurationBlocking(Mockito.any(), Mockito.anyMap());
+    }
+
+    @Test
+    void autoconfigureFailsWithoutBaseKeyOrDefaultKasForUnmappedAttribute() {
+        var kas = Mockito.mock(SDK.KAS.class);
+        var services = new FakeServicesBuilder()
+                .setWellknownService(wellknownService(Struct.getDefaultInstance()))
+                .setKas(kas)
+                .build();
+        var planner = new Planner(configWithUnmappedAttribute(), services, Autoconfigure::createGranter);
+
+        assertThatThrownBy(planner::getSplits)
+                .isInstanceOf(AutoConfigureException.class)
+                .hasMessage("no default KAS specified; required for grantless plans");
+        Mockito.verify(kas, Mockito.never()).getPublicKey(Mockito.any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ALGORITHM_UNSPECIFIED", "UNRECOGNIZED"})
+    void autoconfigureRejectsLegacyAlgorithmSentinelsBeforeDefaultKasFallback(String algorithm) {
+        var json = "{\"kas_url\":\"https://example.com/base_key\","
+                + "\"public_key\":{\"algorithm\":\"" + algorithm + "\",\"kid\":\"thekid\",\"pem\":\"thepem\"}}";
+        var configuration = Struct.newBuilder()
+                .putFields("base_key", Value.newBuilder().setStringValue(json).build())
+                .build();
+        var kas = Mockito.mock(SDK.KAS.class);
+        var services = new FakeServicesBuilder()
+                .setWellknownService(wellknownService(configuration))
+                .setKas(kas)
+                .build();
+        var config = configWithUnmappedAttribute();
+        var defaultKas = new Config.KASInfo();
+        defaultKas.URL = "https://fallback.example.com/kas";
+        defaultKas.Default = true;
+        config.kasInfoList.add(defaultKas);
+        var planner = new Planner(config, services, Autoconfigure::createGranter);
+
+        assertThatThrownBy(planner::getSplits)
+                .isInstanceOf(SDKException.class)
+                .hasMessageContaining("unsupported algorithm");
+        Mockito.verify(kas, Mockito.never()).getPublicKey(Mockito.any());
+    }
+
+    private static Config.TDFConfig configWithUnmappedAttribute() {
+        var attribute = Attribute.newBuilder()
+                .setFqn("https://example.com/attr/classification")
+                .setRule(AttributeRuleTypeEnum.ATTRIBUTE_RULE_TYPE_ENUM_ANY_OF)
+                .build();
+        var value = io.opentdf.platform.policy.Value.newBuilder()
+                .setFqn("https://example.com/attr/classification/value/internal")
+                .setValue("internal")
+                .setAttribute(attribute)
+                .build();
+        var config = new Config.TDFConfig();
+        config.autoconfigure = true;
+        config.attributeValues = List.of(value);
+        return config;
+    }
+
+    private static WellKnownServiceClientInterface wellknownService(Struct configuration) {
+        var service = Mockito.mock(WellKnownServiceClientInterface.class);
+        var response = GetWellKnownConfigurationResponse.newBuilder().setConfiguration(configuration).build();
+        Mockito.when(service.getWellKnownConfigurationBlocking(Mockito.any(), Mockito.anyMap()))
                 .thenReturn(TestUtil.successfulUnaryCall(response));
+        return service;
+    }
 
-        var baseKey = Planner.fetchBaseKey(wellknownService);
-        assertThat(baseKey).isEmpty();
+    private static Struct baseKeyConfiguration(Struct baseKey) {
+        return Struct.newBuilder()
+                .putFields("base_key", Value.newBuilder().setStructValue(baseKey).build())
+                .build();
+    }
+
+    private static Struct structuredBaseKey(String algorithm) {
+        var publicKey = Struct.newBuilder()
+                .putFields("algorithm", Value.newBuilder().setStringValue(algorithm).build())
+                .putFields("kid", Value.newBuilder().setStringValue("thekid").build())
+                .putFields("pem", Value.newBuilder().setStringValue("thepem").build())
+                .build();
+        return Struct.newBuilder()
+                .putFields("kas_uri", Value.newBuilder().setStringValue("https://example.com/base_key").build())
+                .putFields("public_key", Value.newBuilder().setStructValue(publicKey).build())
+                .build();
+    }
+
+    private static Struct replaceBaseKeyField(Struct baseKey, String field, Value replacement) {
+        var builder = baseKey.toBuilder();
+        if (field.startsWith("public_key.")) {
+            var publicKey = baseKey.getFieldsOrThrow("public_key").getStructValue().toBuilder();
+            var name = field.substring("public_key.".length());
+            if (replacement == null) {
+                publicKey.removeFields(name);
+            } else {
+                publicKey.putFields(name, replacement);
+            }
+            builder.putFields("public_key", Value.newBuilder().setStructValue(publicKey).build());
+        } else if (replacement == null) {
+            builder.removeFields(field);
+        } else {
+            builder.putFields(field, replacement);
+        }
+        return builder.build();
     }
 
     @Test
