@@ -1,9 +1,8 @@
 package io.opentdf.platform.sdk;
 
 import com.connectrpc.ConnectException;
-import com.google.gson.Gson;
-import com.google.gson.JsonSyntaxException;
-import com.google.gson.annotations.SerializedName;
+import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
 import io.opentdf.platform.policy.Algorithm;
 import io.opentdf.platform.policy.SimpleKasKey;
 import io.opentdf.platform.policy.SimpleKasPublicKey;
@@ -84,6 +83,12 @@ public class Planner {
         return splitPlan;
     }
 
+    /**
+     * Fetches the base key from the platform's structured well-known configuration.
+     *
+     * @return a supported base key, or empty when the response type or required field values are invalid
+     * @throws SDKException if the configuration cannot be retrieved
+     */
     static Optional<SimpleKasKey> fetchBaseKey(WellKnownServiceClientInterface wellknown) {
         var responseMessage = wellknown
                 .getWellKnownConfigurationBlocking(GetWellKnownConfigurationRequest.getDefaultInstance(), Collections.emptyMap())
@@ -95,54 +100,63 @@ public class Planner {
             throw new SDKException("unable to retrieve base key from well known endpoint", e);
         }
 
-        String baseKeyJson;
-        try {
-            baseKeyJson = response
-                    .getConfiguration()
-                    .getFieldsOrThrow(BASE_KEY)
-                    .getStringValue();
-        } catch (IllegalArgumentException e) {
-            logger.info( "no `" + BASE_KEY + "` found in well known configuration.", e);
+        var baseKeyValue = response.getConfiguration().getFieldsMap().get(BASE_KEY);
+        if (baseKeyValue == null) {
+            logger.info("no `{}` found in well known configuration", BASE_KEY);
             return Optional.empty();
         }
 
-        BaseKey baseKey;
-        try {
-            baseKey = gson.fromJson(baseKeyJson, BaseKey.class);
-        } catch (JsonSyntaxException e) {
-            throw new SDKException("base key in well known configuration is malformed [" + baseKeyJson + "]", e);
+        if (baseKeyValue.getKindCase() != Value.KindCase.STRUCT_VALUE) {
+            logger.error("base key in well known configuration has an invalid type; base key will not be used");
+            return Optional.empty();
         }
 
-        if (baseKey == null || baseKey.kasUrl == null || baseKey.publicKey == null || baseKey.publicKey.kid == null || baseKey.publicKey.pem == null || baseKey.publicKey.algorithm == null) {
-            logger.error("base key in well known configuration is missing required fields [{}]. base key will not be used", baseKeyJson);
+        var baseKey = baseKeyValue.getStructValue();
+        var publicKeyValue = baseKey.getFieldsMap().get("public_key");
+        if (publicKeyValue == null || publicKeyValue.getKindCase() != Value.KindCase.STRUCT_VALUE) {
+            logger.error("base key in well known configuration is missing valid required fields; base key will not be used");
+            return Optional.empty();
+        }
+
+        var publicKey = publicKeyValue.getStructValue();
+        var kasUri = stringField(baseKey, "kas_uri");
+        var kid = stringField(publicKey, "kid");
+        var pem = stringField(publicKey, "pem");
+        var algorithmName = stringField(publicKey, "algorithm");
+        if (isMissing(kasUri) || isMissing(kid) || isMissing(pem) || isMissing(algorithmName)) {
+            logger.error("base key in well known configuration is missing valid required fields; base key will not be used");
+            return Optional.empty();
+        }
+
+        Algorithm algorithm;
+        try {
+            algorithm = KeyType.fromString(algorithmName).getAlgorithm();
+        } catch (IllegalArgumentException e) {
+            logger.error("base key in well known configuration has an unsupported algorithm; base key will not be used");
             return Optional.empty();
         }
 
         return Optional.of(SimpleKasKey.newBuilder()
-                .setKasUri(baseKey.kasUrl)
+                .setKasUri(kasUri)
                 .setPublicKey(
                         SimpleKasPublicKey.newBuilder()
-                        .setKid(baseKey.publicKey.kid)
-                        .setAlgorithm(baseKey.publicKey.algorithm)
-                        .setPem(baseKey.publicKey.pem)
+                        .setKid(kid)
+                        .setAlgorithm(algorithm)
+                        .setPem(pem)
                         .build())
                 .build());
     }
 
-    private static final Gson gson = new Gson();
+    /** Returns the named protobuf string value, or null when the field is absent or has another type. */
+    private static String stringField(Struct fields, String name) {
+        var value = fields.getFieldsMap().get(name);
+        return value != null && value.getKindCase() == Value.KindCase.STRING_VALUE
+                ? value.getStringValue() : null;
+    }
 
-    private static class BaseKey {
-        @SerializedName("kas_url")
-        String kasUrl;
-
-        @SerializedName("public_key")
-        Key publicKey;
-
-        private static class Key {
-            String kid;
-            String pem;
-            Algorithm algorithm;
-        }
+    /** Treats null and blank strings as missing required field values. */
+    private static boolean isMissing(String value) {
+        return value == null || value.isBlank();
     }
 
     Map<String, List<Config.KASInfo>> resolveKeys(List<Autoconfigure.KeySplitTemplate> splitPlan) {

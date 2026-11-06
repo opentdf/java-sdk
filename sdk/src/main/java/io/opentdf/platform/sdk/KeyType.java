@@ -10,52 +10,60 @@ import static io.opentdf.platform.sdk.ECCurve.SECP384R1;
 import static io.opentdf.platform.sdk.ECCurve.SECP521R1;
 
 public enum KeyType {
-    RSA2048Key("rsa:2048"),
-    RSA4096Key("rsa:4096"),
-    EC256Key("ec:secp256r1", SECP256R1),
-    EC384Key("ec:secp384r1", SECP384R1),
-    EC521Key("ec:secp521r1", SECP521R1),
+    RSA2048Key("rsa:2048", Algorithm.ALGORITHM_RSA_2048),
+    RSA4096Key("rsa:4096", Algorithm.ALGORITHM_RSA_4096),
+    EC256Key("ec:secp256r1", Algorithm.ALGORITHM_EC_P256, SECP256R1),
+    EC384Key("ec:secp384r1", Algorithm.ALGORITHM_EC_P384, SECP384R1),
+    EC521Key("ec:secp521r1", Algorithm.ALGORITHM_EC_P521, SECP521R1),
     /**
      * Hybrid X-Wing (X25519 + ML-KEM-768). Requires {@code sdk-pqc-bc} (or another
      * {@link io.opentdf.platform.sdk.spi.KemProvider} implementation) on the runtime
      * classpath; not available under the fips Maven profile.
      */
-    HybridXWingKey("hpqt:xwing"),
+    HybridXWingKey("hpqt:xwing", Algorithm.ALGORITHM_HPQT_XWING),
     /**
      * Hybrid P-256 + ML-KEM-768 per draft-ietf-lamps-pq-composite-kem-14. Requires
      * {@code sdk-pqc-bc} (or another {@link io.opentdf.platform.sdk.spi.KemProvider}
      * implementation) on the runtime classpath; not available under the fips Maven profile.
      */
-    HybridSecp256r1MLKEM768Key("hpqt:secp256r1-mlkem768"),
+    HybridSecp256r1MLKEM768Key("hpqt:secp256r1-mlkem768", Algorithm.ALGORITHM_HPQT_SECP256R1_MLKEM768),
     /**
      * Hybrid P-384 + ML-KEM-1024 per draft-ietf-lamps-pq-composite-kem-14. Requires
      * {@code sdk-pqc-bc} (or another {@link io.opentdf.platform.sdk.spi.KemProvider}
      * implementation) on the runtime classpath; not available under the fips Maven profile.
      */
-    HybridSecp384r1MLKEM1024Key("hpqt:secp384r1-mlkem1024"),
+    HybridSecp384r1MLKEM1024Key("hpqt:secp384r1-mlkem1024", Algorithm.ALGORITHM_HPQT_SECP384R1_MLKEM1024),
     /**
      * Pure ML-KEM-768 (FIPS 203). Requires {@code sdk-pqc-bc} (or another
      * {@link io.opentdf.platform.sdk.spi.KemProvider} implementation) on the runtime
      * classpath; not available under the fips Maven profile.
      */
-    MLKEM768Key("mlkem:768"),
+    MLKEM768Key("mlkem:768", Algorithm.ALGORITHM_MLKEM_768),
     /**
      * Pure ML-KEM-1024 (FIPS 203). Requires {@code sdk-pqc-bc} (or another
      * {@link io.opentdf.platform.sdk.spi.KemProvider} implementation) on the runtime
      * classpath; not available under the fips Maven profile.
      */
-    MLKEM1024Key("mlkem:1024");
+    MLKEM1024Key("mlkem:1024", Algorithm.ALGORITHM_MLKEM_1024);
 
     private final String keyType;
+    private final Algorithm algorithm;
     private final ECCurve curve;
 
-    KeyType(String keyType, ECCurve ecCurve) {
+    KeyType(String keyType, Algorithm algorithm, ECCurve ecCurve) {
         this.keyType = keyType;
+        this.algorithm = algorithm;
         this.curve = ecCurve;
     }
 
-    KeyType(String keyType) {
-        this(keyType, null);
+    KeyType(String keyType, Algorithm algorithm) {
+        this(keyType, algorithm, null);
+    }
+
+    /** Returns the policy algorithm represented by this key type. */
+    @Nonnull
+    public Algorithm getAlgorithm() {
+        return algorithm;
     }
 
     @Nonnull
@@ -80,34 +88,23 @@ public enum KeyType {
         throw new IllegalArgumentException("No enum constant for key type: " + keyType);
     }
 
+    /**
+     * Returns the key type associated with a policy algorithm.
+     *
+     * @param algorithm the policy algorithm to convert
+     * @return the corresponding key type
+     * @throws IllegalArgumentException if the algorithm is null or unsupported
+     */
     public static KeyType fromAlgorithm(Algorithm algorithm) {
         if (algorithm == null) {
             throw new IllegalArgumentException("Algorithm cannot be null");
         }
-        switch (algorithm) {
-            case ALGORITHM_RSA_2048:
-                return KeyType.RSA2048Key;
-            case ALGORITHM_RSA_4096:
-                return KeyType.RSA4096Key;
-            case ALGORITHM_EC_P256:
-                return KeyType.EC256Key;
-            case ALGORITHM_EC_P384:
-                return KeyType.EC384Key;
-            case ALGORITHM_EC_P521:
-                return KeyType.EC521Key;
-            case ALGORITHM_HPQT_XWING:
-                return KeyType.HybridXWingKey;
-            case ALGORITHM_HPQT_SECP256R1_MLKEM768:
-                return KeyType.HybridSecp256r1MLKEM768Key;
-            case ALGORITHM_HPQT_SECP384R1_MLKEM1024:
-                return KeyType.HybridSecp384r1MLKEM1024Key;
-            case ALGORITHM_MLKEM_768:
-                return KeyType.MLKEM768Key;
-            case ALGORITHM_MLKEM_1024:
-                return KeyType.MLKEM1024Key;
-            default:
-                throw new IllegalArgumentException("Unsupported algorithm: " + algorithm);
+        for (KeyType type : KeyType.values()) {
+            if (type.algorithm == algorithm) {
+                return type;
+            }
         }
+        throw new IllegalArgumentException("Unsupported algorithm: " + algorithm);
     }
 
     public static KeyType fromPublicKeyAlgorithm(KasPublicKeyAlgEnum algorithm) {

@@ -172,8 +172,16 @@ class SDKTest {
     void testGettingBaseKey() {
         var platformServicesClient = mock(ProtocolClient.class);
         var wellknownService = Mockito.mock(WellKnownServiceClientInterface.class);
-        var baseKeyJson = "{\"kas_url\":\"https://example.com/base_key\",\"public_key\":{\"algorithm\":\"ALGORITHM_RSA_2048\",\"kid\":\"thekid\",\"pem\": \"thepem\"}}";
-        var val = Value.newBuilder().setStringValue(baseKeyJson).build();
+        var publicKey = Struct.newBuilder()
+                .putFields("algorithm", Value.newBuilder().setStringValue("rsa:2048").build())
+                .putFields("kid", Value.newBuilder().setStringValue("thekid").build())
+                .putFields("pem", Value.newBuilder().setStringValue("thepem").build())
+                .build();
+        var baseKeyStruct = Struct.newBuilder()
+                .putFields("kas_uri", Value.newBuilder().setStringValue("https://example.com/base_key").build())
+                .putFields("public_key", Value.newBuilder().setStructValue(publicKey).build())
+                .build();
+        var val = Value.newBuilder().setStructValue(baseKeyStruct).build();
         var config = Struct.newBuilder().putFields("base_key", val).build();
         var response = GetWellKnownConfigurationResponse
                 .newBuilder()
