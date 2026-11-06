@@ -130,7 +130,7 @@ public class Planner {
 
         Algorithm algorithm;
         try {
-            algorithm = baseKeyAlgorithm(algorithmName);
+            algorithm = KeyType.fromString(algorithmName).getAlgorithm();
         } catch (IllegalArgumentException e) {
             logger.error("base key in well known configuration has an unsupported algorithm; base key will not be used");
             return Optional.empty();
@@ -157,38 +157,6 @@ public class Planner {
     /** Treats null and blank strings as missing required field values. */
     private static boolean isMissing(String value) {
         return value == null || value.isBlank();
-    }
-
-    /**
-     * Resolves the platform's wire-format algorithm names to supported policy algorithms.
-     *
-     * @throws IllegalArgumentException if the value does not identify a supported key type
-     */
-    private static Algorithm baseKeyAlgorithm(String value) {
-        switch (KeyType.fromString(value)) {
-            case RSA2048Key:
-                return Algorithm.ALGORITHM_RSA_2048;
-            case RSA4096Key:
-                return Algorithm.ALGORITHM_RSA_4096;
-            case EC256Key:
-                return Algorithm.ALGORITHM_EC_P256;
-            case EC384Key:
-                return Algorithm.ALGORITHM_EC_P384;
-            case EC521Key:
-                return Algorithm.ALGORITHM_EC_P521;
-            case HybridXWingKey:
-                return Algorithm.ALGORITHM_HPQT_XWING;
-            case HybridSecp256r1MLKEM768Key:
-                return Algorithm.ALGORITHM_HPQT_SECP256R1_MLKEM768;
-            case HybridSecp384r1MLKEM1024Key:
-                return Algorithm.ALGORITHM_HPQT_SECP384R1_MLKEM1024;
-            case MLKEM768Key:
-                return Algorithm.ALGORITHM_MLKEM_768;
-            case MLKEM1024Key:
-                return Algorithm.ALGORITHM_MLKEM_1024;
-            default:
-                throw new IllegalArgumentException("Unsupported base key algorithm: " + value);
-        }
     }
 
     Map<String, List<Config.KASInfo>> resolveKeys(List<Autoconfigure.KeySplitTemplate> splitPlan) {
