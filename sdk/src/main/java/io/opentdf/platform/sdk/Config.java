@@ -106,21 +106,60 @@ public class Config {
         }
     }
 
+    /**
+     * The keys a reader verifies assertion bindings with.
+     * <p>
+     * Each assertion is verified with exactly one key, chosen by its exact {@code id}: the entry
+     * in {@link #keys} for that id if there is one, otherwise {@link #defaultKey} if it is set,
+     * otherwise the TDF's payload key with HS256. The choice is final. An assertion that fails
+     * with its per-ID key is not retried with the default key or the payload key, and one that
+     * fails with the default key is not retried with the payload key. An entry that is present
+     * but empty or unusable is a configuration error, not a reason to fall through.
+     * <p>
+     * A key embedded in the assertion's JWS header ({@code jwk} or {@code x5c}) is never used in
+     * place of the chosen key: it must be the same public key, or verification fails.
+     * <p>
+     * RS256 keys are {@link java.security.interfaces.RSAPublicKey}s or RSA
+     * {@link com.nimbusds.jose.jwk.JWK}s; HS256 keys are {@code byte[]} secrets.
+     */
     public static class AssertionVerificationKeys {
+        /** Verifies assertions that have no entry in {@link #keys}. Null, or a key with no algorithm and no key, means none. */
         public AssertionConfig.AssertionKey defaultKey;
+        /** Per-assertion keys, by exact assertion {@code id}. */
         public Map<String, AssertionConfig.AssertionKey> keys = new HashMap<>();
 
+        /** True if no per-ID key and no default key is configured. */
         Boolean isEmpty() {
-            return this.defaultKey == null && this.keys.isEmpty();
+            return (keys == null || keys.isEmpty()) && !hasDefaultKey();
         }
 
-        AssertionConfig.AssertionKey getKey(String key) {
-            var assertionKey = keys.get(key);
-            if (assertionKey != null) {
-                return assertionKey;
-            }
+        /** True if there is an entry for this exact id, even an empty one. */
+        boolean hasKeyFor(String id) {
+            return keys != null && keys.containsKey(id);
+        }
 
-            return defaultKey;
+        /**
+         * True if a default key is configured. A default with any field set counts, valid or not;
+         * only {@code null} or a zero value (no algorithm, no key) is absent.
+         */
+        boolean hasDefaultKey() {
+            return defaultKey != null
+                    && (defaultKey.key != null
+                            || (defaultKey.alg != null && defaultKey.alg != AssertionConfig.AssertionKeyAlg.NotDefined)
+                            || defaultKey.jwk != null
+                            || defaultKey.x5c != null);
+        }
+
+        /**
+         * The configured key for the assertion with this exact id: its per-ID entry if it has one
+         * (possibly {@code null}, which is a configuration error), else the default key if one is
+         * configured, else {@code null}, meaning the payload key applies.
+         */
+        AssertionConfig.AssertionKey getKey(String id) {
+            if (hasKeyFor(id)) {
+                return keys.get(id);
+            }
+            return hasDefaultKey() ? defaultKey : null;
         }
     }
 

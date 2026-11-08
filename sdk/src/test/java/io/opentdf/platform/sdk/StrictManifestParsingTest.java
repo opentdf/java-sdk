@@ -123,6 +123,18 @@ class StrictManifestParsingTest {
                         e -> assertThat(e.getReason()).isEqualTo(AssertionFailureReason.INVALID_JSON));
     }
 
+    @Test
+    void reportsInvalidUtf8OutsideTheAssertionsAsInvalidJsonToo() throws IOException {
+        var valid = manifest(",'extra':'XY'").getBytes(StandardCharsets.UTF_8);
+        var invalid = valid.clone();
+        invalid[new String(valid, StandardCharsets.UTF_8).indexOf("XY")] = (byte) 0xFF;
+        assertThatThrownBy(() -> SDK.readManifest(new SeekableInMemoryByteChannel(tdfWithManifest(invalid))))
+                .isInstanceOfSatisfying(SDK.AssertionFailureException.class, e -> {
+                    assertThat(e.getReason()).isEqualTo(AssertionFailureReason.INVALID_JSON);
+                    assertThat(e).hasMessageContaining("reason=invalid-json");
+                });
+    }
+
     static byte[] tdfWithManifest(byte[] manifest) throws IOException {
         var out = new ByteArrayOutputStream();
         var writer = new TDFWriter(out);

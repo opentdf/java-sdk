@@ -26,7 +26,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.InvalidKeySpecException;
-import java.text.ParseException;
 import java.util.*;
 
 /**
@@ -982,55 +981,12 @@ class TDF {
                     "segment size mismatch. encrypted segment size differs from plaintext segment size. the TDF is invalid");
         }
 
-        // Validate assertions
-        for (var assertion : manifest.assertions) {
-            // Skip assertion verification if disabled
-            if (tdfReaderConfig.disableAssertionVerification) {
-                break;
-            }
-
-            // Set default to HS256
-            var assertionKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.HS256, payloadKey);
-            Config.AssertionVerificationKeys assertionVerificationKeys = tdfReaderConfig.assertionVerificationKeys;
-            if (!assertionVerificationKeys.isEmpty()) {
-                var keyForAssertion = assertionVerificationKeys.getKey(assertion.id);
-                if (keyForAssertion != null) {
-                    assertionKey = keyForAssertion;
-                }
-            }
-
-            Manifest.Assertion.HashValues hashValues;
-            try {
-                hashValues = assertion.verify(assertionKey);
-            } catch (ParseException | JOSEException | java.security.cert.CertificateException e) {
-                throw new SDKException("error validating assertion hash", e);
-            }
-            // the assertion exactly as received, never a re-serialization of the typed fields
-            var hashOfAssertionAsHex = AssertionJson.hash(assertion.received());
-
-            if (!Objects.equals(hashOfAssertionAsHex, hashValues.getAssertionHash())) {
-                throw new SDK.AssertionFailureException(assertion.id, AssertionFailureReason.BINDING_MISMATCH,
-                        "assertion hash mismatch");
-            }
-
-            byte[] hashOfAssertion;
-            if (isLegacyTdf) {
-                hashOfAssertion = hashOfAssertionAsHex.getBytes(StandardCharsets.UTF_8);
-            } else {
-                try {
-                    hashOfAssertion = Hex.decodeHex(hashOfAssertionAsHex);
-                } catch (DecoderException e) {
-                    throw new SDKException("error decoding assertion hash", e);
-                }
-            }
-            var signature = new byte[aggregateHash.length + hashOfAssertion.length];
-            System.arraycopy(aggregateHash, 0, signature, 0, aggregateHash.length);
-            System.arraycopy(hashOfAssertion, 0, signature, aggregateHash.length, hashOfAssertion.length);
-            var encodeSignature = Base64.getEncoder().encodeToString(signature);
-
-            if (!Objects.equals(encodeSignature, hashValues.getSignature())) {
-                throw new SDK.AssertionFailureException(assertion.id, AssertionFailureReason.BINDING_MISMATCH,
-                        "failed integrity check on assertion signature");
+        // Verify assertions (assertions spec, Section 8). Manifest parsing already applied the
+        // JSON profile of Section 3, which holds even when verification is disabled.
+        if (!tdfReaderConfig.disableAssertionVerification) {
+            for (var assertion : manifest.assertions) {
+                AssertionVerifier.verify(assertion, tdfReaderConfig.assertionVerificationKeys, payloadKey,
+                        aggregateHash, isLegacyTdf);
             }
         }
 
