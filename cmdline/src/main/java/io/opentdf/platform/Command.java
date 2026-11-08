@@ -7,6 +7,7 @@ import com.google.gson.JsonDeserializer;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
+import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 
@@ -179,7 +180,7 @@ class Command {
         }
     }
 
-    private Gson buildGson() {
+    private static Gson buildGson() {
         return new GsonBuilder()
                 .registerTypeAdapter(AssertionConfig.AssertionKey.class, new AssertionKeyDeserializer())
                 .create();
@@ -217,7 +218,7 @@ class Command {
     @Option(names = { "-p", "--platform-endpoint" })
     private String platformEndpoint;
 
-    private Object correctKeyType(AssertionConfig.AssertionKeyAlg alg, Object key, boolean publicKey)
+    private static Object correctKeyType(AssertionConfig.AssertionKeyAlg alg, Object key, boolean publicKey)
             throws RuntimeException {
         if (alg == AssertionConfig.AssertionKeyAlg.HS256) {
             if (key instanceof String) {
@@ -405,39 +406,8 @@ class Command {
         try (var sdk = buildSDK()) {
             var opts = new ArrayList<Consumer<Config.TDFReaderConfig>>();
             if (assertionVerification.isPresent()) {
-                var assertionVerificationInput = assertionVerification.get();
-                Gson gson = buildGson();
-
-                Config.AssertionVerificationKeys assertionVerificationKeys;
-                try {
-                    assertionVerificationKeys = gson.fromJson(assertionVerificationInput,
-                            Config.AssertionVerificationKeys.class);
-                } catch (JsonSyntaxException e) {
-                    // try it as a file path
-                    try {
-                        String fileJson = Files.readString(Paths.get(assertionVerificationInput));
-                        assertionVerificationKeys = gson.fromJson(fileJson,
-                                Config.AssertionVerificationKeys.class);
-                    } catch (JsonSyntaxException e2) {
-                        throw new RuntimeException("Failed to parse assertion verification keys from file", e2);
-                    } catch (Exception e3) {
-                        throw new RuntimeException(
-                                "Could not parse assertion verification keys as json string or path to file",
-                                e3);
-                    }
-                }
-
-                for (Map.Entry<String, AssertionConfig.AssertionKey> entry : assertionVerificationKeys.keys
-                        .entrySet()) {
-                    try {
-                        Object correctedKey = correctKeyType(entry.getValue().alg, entry.getValue().key, true);
-                        entry.setValue(new AssertionConfig.AssertionKey(entry.getValue().alg, correctedKey));
-                    } catch (Exception e) {
-                        throw new RuntimeException("Error with assertion verification key: " + e.getMessage(),
-                                e);
-                    }
-                }
-                opts.add(Config.withAssertionVerificationKeys(assertionVerificationKeys));
+                opts.add(Config.withAssertionVerificationKeys(
+                        parseAssertionVerificationKeys(assertionVerification.get())));
             }
 
             if (disableAssertionVerification) {
@@ -460,6 +430,138 @@ class Command {
                 }
             }
         }
+    }
+
+    /**
+     * Reads the assertion verification keys, given as JSON or as the path of a JSON file:
+     * <pre>
+     * { "keys": { "&lt;assertion id&gt;": { "alg": "RS256", "key": "&lt;PEM public key&gt;" } },
+     *   "defaultKey": { "alg": "HS256", "key": "&lt;secret&gt;" } }
+     * </pre>
+     * {@code DefaultKey} is accepted for {@code defaultKey}. An HS256 key is the UTF-8 bytes of
+     * its string, and must not be PEM text; an RS256 key is a PEM public key.
+     * <p>
+     * Anything that cannot be used as configured is an error with
+     * {@code reason=configuration-error}, never a key that silently goes missing: an unknown
+     * top-level member, an {@code alg} other than {@code RS256} or {@code HS256}, or a key with
+     * members but no {@code alg}. Only an absent, null or empty {@code defaultKey} means none.
+     */
+    static Config.AssertionVerificationKeys parseAssertionVerificationKeys(String jsonOrPath) {
+        JsonObject root = readKeysJson(jsonOrPath);
+        var assertionVerificationKeys = new Config.AssertionVerificationKeys();
+        String defaultKeyName = null;
+        JsonElement defaultKey = null;
+        for (Map.Entry<String, JsonElement> member : root.entrySet()) {
+            switch (member.getKey()) {
+                case "keys":
+                    readPerIdKeys(member.getValue(), assertionVerificationKeys.keys);
+                    break;
+                case "defaultKey":
+                case "DefaultKey":
+                    if (defaultKeyName != null) {
+                        throw keysFileError("both " + defaultKeyName + " and " + member.getKey() + " are given");
+                    }
+                    defaultKeyName = member.getKey();
+                    defaultKey = member.getValue();
+                    break;
+                default:
+                    throw keysFileError("unknown member \"" + member.getKey() + "\"");
+            }
+        }
+        if (defaultKey != null && !defaultKey.isJsonNull()) {
+            if (!defaultKey.isJsonObject()) {
+                throw keysFileError("the default key is not an object");
+            }
+            if (defaultKey.getAsJsonObject().size() > 0) {
+                assertionVerificationKeys.defaultKey = readKey(defaultKey.getAsJsonObject(), "default key");
+            }
+        }
+        return assertionVerificationKeys;
+    }
+
+    private static JsonObject readKeysJson(String jsonOrPath) {
+        JsonElement json;
+        try {
+            json = JsonParser.parseString(jsonOrPath);
+        } catch (JsonParseException e) {
+            json = null;
+        }
+        if (json == null || !json.isJsonObject()) {
+            // try it as a file path
+            String fileJson;
+            try {
+                fileJson = Files.readString(Paths.get(jsonOrPath));
+            } catch (Exception e) {
+                throw new RuntimeException(
+                        "Could not parse assertion verification keys as json string or path to file", e);
+            }
+            try {
+                json = JsonParser.parseString(fileJson);
+            } catch (JsonParseException e) {
+                throw new RuntimeException("Failed to parse assertion verification keys from file", e);
+            }
+            if (!json.isJsonObject()) {
+                throw keysFileError("the keys file is not a JSON object");
+            }
+        }
+        return json.getAsJsonObject();
+    }
+
+    private static void readPerIdKeys(JsonElement keys, Map<String, AssertionConfig.AssertionKey> into) {
+        if (keys == null || keys.isJsonNull()) {
+            return;
+        }
+        if (!keys.isJsonObject()) {
+            throw keysFileError("keys is not an object");
+        }
+        for (Map.Entry<String, JsonElement> entry : keys.getAsJsonObject().entrySet()) {
+            JsonElement key = entry.getValue();
+            if (key.isJsonNull()) {
+                // an empty entry; the SDK reports it as a configuration error if it is selected
+                into.put(entry.getKey(), null);
+            } else if (key.isJsonObject()) {
+                into.put(entry.getKey(), readKey(key.getAsJsonObject(), "assertion " + entry.getKey()));
+            } else {
+                throw keysFileError("the key for assertion " + entry.getKey() + " is not an object");
+            }
+        }
+    }
+
+    private static AssertionConfig.AssertionKey readKey(JsonObject json, String which) {
+        JsonElement alg = json.get("alg");
+        if (alg == null || alg.isJsonNull()) {
+            if (json.entrySet().stream().anyMatch(member -> !member.getValue().isJsonNull())) {
+                throw keysFileError("the " + which + " has no alg");
+            }
+            // nothing set: an empty per-ID entry, which the SDK rejects if it is selected
+            return new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.NotDefined, null);
+        }
+        boolean supported = alg.isJsonPrimitive() && alg.getAsJsonPrimitive().isString()
+                && ("RS256".equals(alg.getAsString()) || "HS256".equals(alg.getAsString()));
+        if (!supported) {
+            throw keysFileError("the " + which + " has an unsupported alg " + alg);
+        }
+        AssertionConfig.AssertionKey key;
+        try {
+            key = buildGson().fromJson(json, AssertionConfig.AssertionKey.class);
+        } catch (JsonParseException e) {
+            throw keysFileError("the " + which + " cannot be read: " + e.getMessage());
+        }
+        try {
+            key.key = correctKeyType(key.alg, key.key, true);
+        } catch (Exception e) {
+            throw keysFileError("the " + which + " cannot be read: " + e.getMessage());
+        }
+        if (key.key instanceof byte[]
+                && new String((byte[]) key.key, StandardCharsets.UTF_8).contains("-----BEGIN")) {
+            throw keysFileError("the " + which + " is HS256 but holds PEM text");
+        }
+        return key;
+    }
+
+    private static IllegalArgumentException keysFileError(String detail) {
+        return new IllegalArgumentException(
+                "invalid assertion verification keys: reason=configuration-error: " + detail);
     }
 
     // With an output file, write to a sibling temp file and move it into place only on
