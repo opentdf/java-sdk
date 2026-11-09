@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -224,6 +225,9 @@ public class SDK implements AutoCloseable {
      * @param tdfBytes A SeekableByteChannel containing the TDF data
      * @return The parsed {@link Manifest} object
      * @throws MalformedTDFException if the bytes are not a well formed TDF or its manifest is invalid
+     * @throws AssertionFailureException if the manifest is not valid UTF-8, or breaks the JSON
+     *         profile the assertions specification requires (for example duplicate member names).
+     *         This does not verify the assertions themselves.
      * @throws SDKException if an SDK-specific error occurs
      * @throws IOException if an I/O error occurs
      */
@@ -559,6 +563,109 @@ public class SDK implements AutoCloseable {
     public static class AssertionException extends TamperException {
         public AssertionException(String errorMessage, String id) {
             super("assertion id: "+ id + "; " + errorMessage);
+        }
+
+        /** For subclasses that format the whole message themselves. */
+        protected AssertionException(String errorMessage) {
+            super(errorMessage);
+        }
+    }
+
+    /**
+     * {@link AssertionFailureException} is thrown when an assertion fails verification, or when
+     * the manifest that carries the assertions cannot be parsed under the JSON profile the
+     * assertions specification requires (duplicate member names, case variants of modelled
+     * member names, or non-I-JSON content in an assertion).
+     * <p>
+     * It carries the exact {@code id} of the failing assertion when one could be read, and one
+     * {@link AssertionFailureReason}. The message contains {@code reason=<code>}, and
+     * {@code id: <id>} when the id is known.
+     */
+    public static class AssertionFailureException extends AssertionException {
+        private final String assertionId;
+        private final AssertionFailureReason reason;
+
+        public AssertionFailureException(String assertionId, AssertionFailureReason reason, String detail) {
+            super(formatMessage(assertionId, reason, detail));
+            this.assertionId = assertionId;
+            this.reason = Objects.requireNonNull(reason, "reason");
+        }
+
+        /**
+         * The exact {@code id} of the failing assertion, or {@code null} when the failure is not
+         * tied to an assertion with a valid id (for example a duplicate member elsewhere in the
+         * manifest, or an assertion whose {@code id} is itself invalid).
+         */
+        public String getAssertionId() {
+            return assertionId;
+        }
+
+        public AssertionFailureReason getReason() {
+            return reason;
+        }
+
+        /** Rendered ids are cut to this many code points, then marked with an ellipsis. */
+        static final int MAX_RENDERED_ID = 256;
+        /** Details quote manifest content, such as member names and paths, so they are cut too. */
+        static final int MAX_RENDERED_DETAIL = 512;
+
+        private static String formatMessage(String assertionId, AssertionFailureReason reason, String detail) {
+            StringBuilder message = new StringBuilder("tdf: issue verifying assertions");
+            if (assertionId != null) {
+                message.append(", id: ");
+                render(assertionId, MAX_RENDERED_ID, message);
+            }
+            message.append(", reason=").append(reason.code());
+            if (detail != null && !detail.isEmpty()) {
+                message.append(": ");
+                render(detail, MAX_RENDERED_DETAIL, message);
+            }
+            return message.toString();
+        }
+
+        /**
+         * Appends untrusted manifest text for a message: {@code \} and the control characters
+         * U+0000 to U+001F and U+007F to U+009F escaped as in JSON, and at most
+         * {@code maxCodePoints} code points of the text, followed by an ellipsis when it is
+         * longer. An id read from a manifest then cannot start a new log line or end the message.
+         */
+        static void render(String text, int maxCodePoints, StringBuilder out) {
+            int codePoints = 0;
+            for (int i = 0; i < text.length(); ) {
+                if (codePoints == maxCodePoints) {
+                    out.append('\u2026');
+                    return;
+                }
+                int codePoint = text.codePointAt(i);
+                i += Character.charCount(codePoint);
+                codePoints++;
+                switch (codePoint) {
+                    case '\\':
+                        out.append("\\\\");
+                        break;
+                    case '\b':
+                        out.append("\\b");
+                        break;
+                    case '\t':
+                        out.append("\\t");
+                        break;
+                    case '\n':
+                        out.append("\\n");
+                        break;
+                    case '\f':
+                        out.append("\\f");
+                        break;
+                    case '\r':
+                        out.append("\\r");
+                        break;
+                    default:
+                        if (codePoint < 0x20 || (codePoint >= 0x7f && codePoint <= 0x9f)) {
+                            out.append(String.format("\\u%04x", codePoint));
+                        } else {
+                            out.appendCodePoint(codePoint);
+                        }
+                }
+            }
         }
     }
 

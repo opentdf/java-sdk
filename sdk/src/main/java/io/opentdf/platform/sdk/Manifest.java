@@ -11,6 +11,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
+import com.google.gson.JsonSyntaxException;
 import com.google.gson.TypeAdapter;
 import com.google.gson.TypeAdapterFactory;
 import com.google.gson.annotations.JsonAdapter;
@@ -47,6 +48,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.lang.reflect.Type;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -1179,23 +1181,54 @@ public class Manifest {
     /**
      * Parses a manifest without materializing it as a {@link String}, which a
      * manifest with tens of millions of segments cannot be.
+     * <p>
+     * The JSON must be strict (RFC 8259) and must meet the JSON profile of the ZTDF assertions
+     * specification, Section 3, which this checks in the same single pass: no duplicate member
+     * names in any object, no case variants of modelled member names (such as
+     * {@code Assertions} or an assertion's {@code ID}), and I-JSON content in every assertion.
+     * Those checks apply whether or not assertions are later verified.
+     *
+     * @throws SDK.AssertionFailureException if the manifest breaks that profile, or if
+     *                                       {@code manifestJson} reports undecodable input
      */
     protected static Manifest readManifest(Reader manifestJson) {
         FailureTrackingReader reader = new FailureTrackingReader(manifestJson);
+        StrictJsonReader jsonReader = new StrictJsonReader(reader, StrictJsonReader.Mode.MANIFEST);
         Manifest result;
         try {
-            result = gson.fromJson(reader, Manifest.class);
-        } catch (JsonParseException e) {
-            if (reader.failure != null) {
-                throw new SDKException("error reading manifest from zip file", reader.failure);
+            result = gson.fromJson(jsonReader, TypeToken.get(Manifest.class));
+            if (result != null && jsonReader.peek() != JsonToken.END_DOCUMENT) {
+                throw new JsonSyntaxException("unexpected content after the manifest object");
             }
-            throw e;
+        } catch (JsonParseException e) {
+            throw readFailure(reader, e);
+        } catch (IOException e) {
+            throw readFailure(reader, new JsonSyntaxException(e));
         }
         if (result == null) {
             throw new IllegalArgumentException("Manifest is empty");
         }
         validateManifest(result);
         return result;
+    }
+
+    /**
+     * Applies only the manifest-level parsing rules of the assertions specification, Section 3,
+     * without building the typed manifest. Malformed JSON is reported as {@code invalid-json}.
+     */
+    static void checkManifestJson(String manifestJson) {
+        AssertionJson.checkManifest(new StringReader(manifestJson));
+    }
+
+    private static RuntimeException readFailure(FailureTrackingReader reader, JsonParseException e) {
+        if (reader.failure instanceof CharacterCodingException) {
+            return new SDK.AssertionFailureException(null, AssertionFailureReason.INVALID_JSON,
+                    "the manifest is not valid UTF-8");
+        }
+        if (reader.failure != null) {
+            return new SDKException("error reading manifest from zip file", reader.failure);
+        }
+        return e;
     }
 
     private static final class FailureTrackingReader extends Reader {
