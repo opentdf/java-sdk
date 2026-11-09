@@ -106,8 +106,25 @@ public class Config {
         }
     }
 
+    /**
+     * The keys a reader verifies assertion bindings with. Each assertion uses the entry in
+     * {@link #keys} for its exact {@code id} if there is one, otherwise {@link #defaultKey} if it
+     * is set, otherwise the TDF's payload key with HS256.
+     * <p>
+     * RS256 keys are {@link java.security.interfaces.RSAPublicKey}s or RSA
+     * {@link com.nimbusds.jose.jwk.JWK}s; HS256 keys are {@code byte[]} secrets.
+     */
     public static class AssertionVerificationKeys {
+        /**
+         * Verifies every assertion that has no entry in {@link #keys}. Null means none.
+         * <p>
+         * That includes assertions bound with the payload key, such as the
+         * {@code system-metadata} assertion this SDK's writer adds, so a TDF that carries one
+         * fails verification when a default key is set. To verify those alongside signed
+         * assertions, configure a key per assertion id in {@link #keys} instead of a default key.
+         */
         public AssertionConfig.AssertionKey defaultKey;
+        /** Per-assertion keys, by exact assertion {@code id}. */
         public Map<String, AssertionConfig.AssertionKey> keys = new HashMap<>();
 
         Boolean isEmpty() {
@@ -145,6 +162,12 @@ public class Config {
         return config;
     }
 
+    /**
+     * The keys assertion bindings are verified with. See {@link AssertionVerificationKeys}: each
+     * assertion uses its per-ID key, else the default key, else the payload key. A default key
+     * also applies to payload-key assertions such as {@code system-metadata}, which then fail;
+     * use per-ID keys where a TDF carries both kinds.
+     */
     public static Consumer<TDFReaderConfig> withAssertionVerificationKeys(
             AssertionVerificationKeys assertionVerificationKeys) {
         return (TDFReaderConfig config) -> config.assertionVerificationKeys = assertionVerificationKeys;
