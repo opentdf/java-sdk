@@ -398,7 +398,13 @@ class Command {
             @Option(names = {
                     "--with-assertion-verification-disabled" }, defaultValue = "false") boolean disableAssertionVerification,
             @Option(names = {
-                    "--with-assertion-verification-keys" }, defaultValue = Option.NULL_VALUE) Optional<String> assertionVerification,
+                    "--with-assertion-verification-keys" }, defaultValue = Option.NULL_VALUE, description = "JSON, or the "
+                            + "path of a JSON file, giving the keys assertions are verified with: "
+                            + "{\"keys\": {\"<assertion id>\": {\"alg\": \"RS256\", \"key\": \"<PEM public key>\"}}, "
+                            + "\"defaultKey\": {\"alg\": \"HS256\", \"key\": \"<secret>\"}}. "
+                            + "Each assertion uses its per-ID key, else the default key, else the payload key. "
+                            + "A default key also applies to payload-key assertions, such as the system-metadata "
+                            + "assertion this tool writes, so those fail verification; set per-ID keys instead.") Optional<String> assertionVerification,
             @Option(names = { "--kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<String> kasAllowlistStr,
             @Option(names = {
                     "--ignore-kas-allowlist" }, defaultValue = Option.NULL_VALUE) Optional<Boolean> ignoreAllowlist)
@@ -445,6 +451,10 @@ class Command {
      * {@code reason=configuration-error}, never a key that silently goes missing: an unknown
      * top-level member, an {@code alg} other than {@code RS256} or {@code HS256}, or a key with
      * members but no {@code alg}. Only an absent, null or empty {@code defaultKey} means none.
+     * <p>
+     * A default key applies to every assertion without a per-ID key, including payload-key
+     * assertions such as the {@code system-metadata} assertion this tool writes, so those fail
+     * verification; use per-ID keys for files that carry them.
      */
     static Config.AssertionVerificationKeys parseAssertionVerificationKeys(String jsonOrPath) {
         JsonObject root = readKeysJson(jsonOrPath);
