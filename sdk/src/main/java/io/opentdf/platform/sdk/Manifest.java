@@ -24,17 +24,11 @@ import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.JWSSigner;
-import com.nimbusds.jose.JWSVerifier;
 import com.nimbusds.jose.KeyLengthException;
 import com.nimbusds.jose.crypto.MACSigner;
-import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jose.crypto.RSASSASigner;
-import com.nimbusds.jose.crypto.RSASSAVerifier;
-import com.nimbusds.jose.jwk.JWK;
-import com.nimbusds.jose.util.X509CertUtils;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
-import io.opentdf.platform.sdk.SDK.AssertionException;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -48,8 +42,6 @@ import java.lang.reflect.Type;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
-import java.security.interfaces.RSAPublicKey;
-import java.security.cert.X509Certificate;
 import java.text.ParseException;
 import java.util.AbstractList;
 import java.util.ArrayList;
@@ -1000,8 +992,9 @@ public class Manifest {
         /**
          * The {@code assertionHash} of this assertion as it would be written to a manifest now:
          * for an unmodified assertion read from a manifest, the hash of the assertion as
-         * received; after a typed field has been changed, the hash with that change. Reading a
-         * TDF never uses this: {@code loadTDF} verifies each assertion exactly as received.
+         * received; after a typed field has been changed, the hash with that change.
+         * {@link #verify} reads the same form. Reading a TDF uses neither: {@code loadTDF}
+         * verifies each assertion exactly as received.
          *
          * @throws SDK.AssertionFailureException if the assertion cannot be represented as I-JSON
          */
@@ -1170,59 +1163,28 @@ public class Manifest {
             this.binding.signature = signedJWT.serialize();
         }
 
-        // Checks the binding signature of the assertion and
-        // returns the hash and the signature. It returns an error if the verification
-        // fails.
+        /**
+         * Checks this assertion's binding with exactly the given key and its algorithm, and
+         * returns the signed claims for the caller to compare with the recomputed hash and
+         * signature. A key embedded in the JWS header ({@code jwk} or {@code x5c}) is accepted
+         * only if it is the same public key as {@code assertionKey}; it is never used instead.
+         * This has no side effects on the assertion.
+         * <p>
+         * Like {@link #hash()}, this reads the assertion as it would be written now, so a
+         * changed {@link #binding} is the binding checked; for an unmodified assertion read from
+         * a manifest that is the binding as received. Readers verify assertions in
+         * {@code loadTDF}, which uses the assertion exactly as received, selects the key, and
+         * compares the claims; this method is for callers that do the comparison themselves.
+         *
+         * @throws SDK.AssertionFailureException if the binding does not verify with the key, or
+         *                                       the key is not usable ({@code configuration-error})
+         */
         public Assertion.HashValues verify(AssertionConfig.AssertionKey assertionKey)
                 throws ParseException, JOSEException, java.security.cert.CertificateException {
-            if (binding == null) {
-                throw new AssertionException("Binding is null in assertion", this.id);
-            }
-
-            String signatureString = binding.signature;
-
-            SignedJWT signedJWT = SignedJWT.parse(signatureString);
-            JWSHeader header = signedJWT.getHeader();
-            JWSVerifier verifier = null;
-
-            // Check for JWK in header
-            if (header.getJWK() != null) {
-                try {
-                    verifier = createVerifier(header.getJWK());
-                } catch (JOSEException e) {
-                    throw new SDKException("Invalid JWK in JWT header", e);
-                }
-            }
-
-            // Check for X.509 certificate chain in header
-            if (verifier == null && header.getX509CertChain() != null && !header.getX509CertChain().isEmpty()) {
-                try {
-                    X509Certificate cert = X509CertUtils.parse(header.getX509CertChain().get(0).decode());
-                    if (cert.getPublicKey() instanceof RSAPublicKey) {
-                        verifier = createVerifier((RSAPublicKey) cert.getPublicKey());
-                    } else {
-                        throw new SDKException("Unsupported public key type in X.509 certificate");
-                    }
-                } catch (IllegalArgumentException e) {
-                    throw new SDKException("Invalid Base64 in X.509 certificate in JWT header", e);
-                }
-            }
-
-
-            if (verifier == null) {
-                verifier = createVerifier(assertionKey);
-            }
-
-
-            if (!signedJWT.verify(verifier)) {
-                throw new SDKException("Unable to verify assertion signature");
-            }
-
-            JWTClaimsSet claimsSet = signedJWT.getJWTClaimsSet();
-            String assertionHash = claimsSet.getStringClaim(kAssertionHash);
-            String signature = claimsSet.getStringClaim(kAssertionSignature);
-
-            return new Assertion.HashValues(assertionHash, signature);
+            JsonObject json = toJsonTree();
+            String validId = id != null && !id.isEmpty() ? id : null;
+            return AssertionVerifier.verifyBinding(json, validId,
+                    AssertionVerifier.configuredKey(assertionKey, validId, "the given key"));
         }
 
         private SignedJWT createSignedJWT(final JWTClaimsSet claims, final AssertionConfig.AssertionKey assertionKey)
@@ -1266,34 +1228,6 @@ public class Manifest {
                 default:
                     throw new SDKException("Unknown signing algorithm: " + assertionKey.alg);
             }
-        }
-
-        private JWSVerifier createVerifier(AssertionConfig.AssertionKey assertionKey) throws JOSEException {
-            switch (assertionKey.alg) {
-                case RS256:
-                    if (assertionKey.key instanceof JWK) {
-                        return createVerifier((JWK) assertionKey.key);
-                    } else if (assertionKey.key instanceof RSAPublicKey) {
-                        return createVerifier((RSAPublicKey) assertionKey.key);
-                    } else {
-                        throw new SDKException("Expected JWK or RSAPublicKey for RS256 algorithm");
-                    }
-                case HS256:
-                    return new MACVerifier((byte[]) assertionKey.key);
-                default:
-                    throw new SDKException("Unknown verify key, unable to verify assertion signature");
-            }
-        }
-
-        private JWSVerifier createVerifier(JWK jwk) throws JOSEException {
-            if (jwk instanceof com.nimbusds.jose.jwk.RSAKey) {
-                return new RSASSAVerifier(jwk.toRSAKey());
-            }
-            throw new JOSEException("Unsupported JWK type: " + jwk.getKeyType() + ". Only RSA keys are supported.");
-        }
-
-        private JWSVerifier createVerifier(RSAPublicKey publicKey) {
-            return new RSASSAVerifier(publicKey);
         }
     }
 
@@ -1406,9 +1340,9 @@ public class Manifest {
                 throw new JsonSyntaxException("unexpected content after the manifest object");
             }
         } catch (JsonParseException e) {
-            throw readFailure(reader, e);
+            throw readFailure(reader, jsonReader, e);
         } catch (IOException e) {
-            throw readFailure(reader, new JsonSyntaxException(e));
+            throw readFailure(reader, jsonReader, new JsonSyntaxException(e));
         }
         if (result == null) {
             throw new IllegalArgumentException("Manifest is empty");
@@ -1425,13 +1359,21 @@ public class Manifest {
         AssertionJson.checkManifest(new StringReader(manifestJson));
     }
 
-    private static RuntimeException readFailure(FailureTrackingReader reader, JsonParseException e) {
+    private static RuntimeException readFailure(FailureTrackingReader reader, StrictJsonReader jsonReader,
+            JsonParseException e) {
         if (reader.failure instanceof CharacterCodingException) {
             return new SDK.AssertionFailureException(null, AssertionFailureReason.INVALID_JSON,
                     "the manifest is not valid UTF-8");
         }
         if (reader.failure != null) {
             return new SDKException("error reading manifest from zip file", reader.failure);
+        }
+        if (e.getCause() instanceof IOException && jsonReader.inAssertion()) {
+            // JSON that does not parse inside an assertion object is not I-JSON there. This also
+            // covers integer literals that Gson's lexer cannot read: it accumulates digits in a
+            // long, and treats a 20+ digit integer whose prefix wraps to zero as malformed.
+            return new SDK.AssertionFailureException(jsonReader.openAssertionId(), AssertionFailureReason.INVALID_JSON,
+                    "an assertion is not valid JSON");
         }
         return e;
     }

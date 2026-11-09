@@ -3,7 +3,6 @@ package io.opentdf.platform.sdk;
 import com.connectrpc.ResponseMessage;
 import com.connectrpc.UnaryBlockingCall;
 import com.google.gson.reflect.TypeToken;
-import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.JWK;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -456,11 +455,39 @@ public class TDFTest {
                         .setKeyAccessServerRegistryService(kasRegistryService).build());
         tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
 
-        var unwrappedData = new ByteArrayOutputStream();
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()),
-                Config.newTDFReaderConfig(), platformUrl);
-        reader.readPayload(unwrappedData);
+        assertEmbeddedKeyAddsNoTrust(tdf, tdfOutputStream.toByteArray(), keypair, plainText);
+    }
 
+    /**
+     * A TDF whose assertion was signed by {@code signer} and carries the signer's public key in
+     * its JWS header. The embedded key grants nothing by itself: with no key configured the
+     * payload key with HS256 is selected and the RS256 binding fails; configuring the signer's
+     * key, per ID or as the default, is what makes it verify.
+     */
+    private void assertEmbeddedKeyAddsNoTrust(TDF tdf, byte[] tdfBytes, KeyPair signer, String plainText)
+            throws Exception {
+        assertThatThrownBy(() -> tdf.loadTDF(new SeekableInMemoryByteChannel(tdfBytes), Config.newTDFReaderConfig(),
+                platformUrl))
+                .isInstanceOfSatisfying(SDK.AssertionFailureException.class, e -> {
+                    assertThat(e.getReason()).isEqualTo(AssertionFailureReason.ALGORITHM_MISMATCH);
+                    assertThat(e).hasMessageContaining("reason=algorithm-mismatch");
+                });
+
+        var unrelated = new Config.AssertionVerificationKeys();
+        unrelated.defaultKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256,
+                CryptoUtils.generateRSAKeypair().getPublic());
+        assertThatThrownBy(() -> tdf.loadTDF(new SeekableInMemoryByteChannel(tdfBytes),
+                Config.newTDFReaderConfig(Config.withAssertionVerificationKeys(unrelated)), platformUrl))
+                .isInstanceOfSatisfying(SDK.AssertionFailureException.class, e ->
+                        assertThat(e.getReason()).isEqualTo(AssertionFailureReason.SIGNER_NOT_PERMITTED));
+
+        var configured = new Config.AssertionVerificationKeys();
+        configured.defaultKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256,
+                signer.getPublic());
+        var unwrappedData = new ByteArrayOutputStream();
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfBytes),
+                Config.newTDFReaderConfig(Config.withAssertionVerificationKeys(configured)), platformUrl);
+        reader.readPayload(unwrappedData);
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
                 .withFailMessage("extracted data does not match")
                 .isEqualTo(plainText);
@@ -504,14 +531,7 @@ public class TDFTest {
                         .setKeyAccessServerRegistryService(kasRegistryService).build());
         tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
 
-        var unwrappedData = new ByteArrayOutputStream();
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()),
-                Config.newTDFReaderConfig(), platformUrl);
-        reader.readPayload(unwrappedData);
-
-        assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
-                .withFailMessage("extracted data does not match")
-                .isEqualTo(plainText);
+        assertEmbeddedKeyAddsNoTrust(tdf, tdfOutputStream.toByteArray(), keypair, plainText);
     }
 
     @Test
@@ -552,10 +572,12 @@ public class TDFTest {
         var unwrappedData = new ByteArrayOutputStream();
         var dataToUnwrap = new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray());
         var emptyConfig = Config.newTDFReaderConfig();
-        var thrown = assertThrows(SDKException.class, () -> {
+        var thrown = assertThrows(SDK.AssertionFailureException.class, () -> {
             tdf.loadTDF(dataToUnwrap, emptyConfig, platformUrl);
         });
-        assertThat(thrown.getCause()).isInstanceOf(JOSEException.class);
+        // no key configured, so the payload key with HS256 is selected, and the RS256 binding fails
+        assertThat(thrown.getReason()).isEqualTo(AssertionFailureReason.ALGORITHM_MISMATCH);
+        assertThat(thrown.getAssertionId()).isEqualTo(assertion1Id);
 
         // try with assertion verification disabled and not passing the assertion
         // verification keys
