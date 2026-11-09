@@ -1,5 +1,7 @@
 package io.opentdf.platform.sdk;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -91,7 +93,9 @@ class StrictManifestParsingTest {
             // the I-JSON checks are required only inside assertions
             ",'extra':{'n':1e400,'s':'\\uDEAD'}",
             // case variants are only checked at the four modelled levels
-            ",'payload2':{'Assertions':1},'assertions':[{'id':'a','statement':{'value':{'ID':1}},'extensions':{'Binding':1}}]"
+            ",'payload2':{'Assertions':1},'assertions':[{'id':'a','statement':{'value':{'ID':1}},'extensions':{'Binding':1}}]",
+            // values the typed model coerces or ignores still parse
+            ",'assertions':[{'id':5,'type':{},'binding':'not an object'}]"
     })
     void accepts(String rootExtra) {
         var manifest = manifest(rootExtra);
@@ -133,12 +137,81 @@ class StrictManifestParsingTest {
     }
 
     @Test
+    void keepsEachAssertionAsReceived() {
+        var assertion = "{'id':'a','type':'handling','scope':'payload','appliesToState':null,"
+                + "'statement':{'format':'json-structured','schema':'s','value':{'n':1.50,'ocl':{'cls':'SECRET'}},'extra':[1]},"
+                + "'extensions':{'note':'coi'},'binding':{'method':'JWS','signature':'a.b.c'}}";
+        var manifest = Manifest.readManifest(withAssertions("[" + assertion + "]"));
+        var read = manifest.assertions.get(0);
+        assertThat(read.id).isEqualTo("a");
+        assertThat(read.statement.value).isEqualTo("{\"n\":1.50,\"ocl\":{\"cls\":\"SECRET\"}}");
+        assertThat(read.binding.method).isEqualTo("JWS");
+
+        String expectedHash = Manifest.Assertion.computeAssertionHash(json(assertion));
+        assertThat(AssertionJson.hash(read.received())).isEqualTo(expectedHash);
+
+        // serializing writes the assertion back as received, unmodelled members and nulls included
+        var written = JsonParser.parseString(Manifest.toJson(manifest)).getAsJsonObject()
+                .getAsJsonArray("assertions").get(0);
+        assertThat(written).isEqualTo(JsonParser.parseString(json(assertion)));
+        assertThat(Manifest.Assertion.computeAssertionHash(written.toString())).isEqualTo(expectedHash);
+
+        // and so does the plain Gson the TDF writer uses
+        var plain = JsonParser.parseString(new com.google.gson.Gson().toJson(manifest)).getAsJsonObject()
+                .getAsJsonArray("assertions").get(0);
+        assertThat(plain).isEqualTo(JsonParser.parseString(json(assertion)));
+    }
+
+    @Test
+    void aChangedTypedFieldReplacesOnlyItsMember() throws IOException {
+        var assertion = "{'id':'a','statement':{'format':'f','value':{'x':1},'extra':true},'extensions':{'note':'coi'}}";
+        var manifest = Manifest.readManifest(withAssertions("[" + assertion + "]"));
+        var read = manifest.assertions.get(0);
+        read.statement.format = "g";
+        read.scope = "tdo";
+
+        JsonObject written = JsonParser.parseString(Manifest.toJson(manifest)).getAsJsonObject()
+                .getAsJsonArray("assertions").get(0).getAsJsonObject();
+        assertThat(written).isEqualTo(JsonParser.parseString(
+                json("{'id':'a','statement':{'format':'g','value':{'x':1},'extra':true},'extensions':{'note':'coi'},'scope':'tdo'}")));
+        assertThat(read.hash()).isEqualTo(Manifest.Assertion.computeAssertionHash(written.toString()));
+        // the received object itself is never modified
+        assertThat(AssertionJson.hash(read.received())).isEqualTo(Manifest.Assertion.computeAssertionHash(json(assertion)));
+    }
+
+    @Test
+    void anAssertionBuiltInCodeSerializesItsNonNullFields() throws IOException {
+        var assertion = new Manifest.Assertion();
+        assertion.id = "a";
+        assertion.type = "handling";
+        assertion.statement = new AssertionConfig.Statement();
+        assertion.statement.value = "{\"x\":1}";
+        assertion.binding = new Manifest.Binding();
+        assertion.binding.method = "jws";
+        assertion.binding.signature = "a.b.c";
+
+        var written = JsonParser.parseString(new com.google.gson.Gson().toJson(assertion));
+        assertThat(written).isEqualTo(JsonParser.parseString(
+                json("{'id':'a','type':'handling','statement':{'value':'{\\'x\\':1}'},'binding':{'method':'jws','signature':'a.b.c'}}")));
+        assertThat(assertion.hash()).isEqualTo(Manifest.Assertion.computeAssertionHash(written.toString()));
+    }
+
+    @Test
+    void nullAssertionsAreMalformed() {
+        assertThatThrownBy(() -> Manifest.readManifest(withAssertions("[null]")))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void rejectsAByteOrderMark() throws IOException {
         var withBom = ("\uFEFF" + manifest("")).getBytes(StandardCharsets.UTF_8);
         assertThatThrownBy(() -> SDK.readManifest(new SeekableInMemoryByteChannel(tdfWithManifest(withBom))))
                 .isInstanceOfSatisfying(SDK.AssertionFailureException.class,
                         e -> assertThat(e.getReason()).isEqualTo(AssertionFailureReason.INVALID_JSON));
         assertThatThrownBy(() -> Manifest.checkManifestJson("\uFEFF" + manifest("")))
+                .isInstanceOfSatisfying(SDK.AssertionFailureException.class,
+                        e -> assertThat(e.getReason()).isEqualTo(AssertionFailureReason.INVALID_JSON));
+        assertThatThrownBy(() -> Manifest.Assertion.computeAssertionHash("\uFEFF{\"id\":\"a\"}"))
                 .isInstanceOfSatisfying(SDK.AssertionFailureException.class,
                         e -> assertThat(e.getReason()).isEqualTo(AssertionFailureReason.INVALID_JSON));
         // a byte order mark is ordinary content anywhere else
