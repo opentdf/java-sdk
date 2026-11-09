@@ -134,9 +134,7 @@ public class SegmentsTest {
         for (int i = 0; i < 3; i++) {
             System.arraycopy(Base64.getDecoder().decode(hash(i)), 0, decoded, i * 16, 16);
         }
-        assertThat(segments.aggregate(true)).isEqualTo(decoded);
-        assertThat(segments.aggregate(false))
-                .isEqualTo((hash(0) + hash(1) + hash(2)).getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        assertThat(segments.aggregate()).isEqualTo(decoded);
     }
 
     @Test
@@ -166,8 +164,7 @@ public class SegmentsTest {
 
     @Test
     void emptySegmentsAggregateToNothing() {
-        assertThat(new Manifest.Segments().aggregate(true)).isEmpty();
-        assertThat(new Manifest.Segments().aggregate(false)).isEmpty();
+        assertThat(new Manifest.Segments().aggregate()).isEmpty();
     }
 
     @Test

@@ -433,13 +433,6 @@ class TDF {
                 return;
             }
 
-            MessageDigest digest = null;
-            try {
-                digest = MessageDigest.getInstance("SHA-256");
-            } catch (NoSuchAlgorithmException e) {
-                throw new IllegalStateException("error getting instance of SHA-256", e);
-            }
-
             try (var payload = tdfReader.payload()) {
                 long plainStart = 0;
                 for (int i = 0; i < segments.size(); i++) {
@@ -455,7 +448,7 @@ class TDF {
                                     + segment.encryptedSegmentSize + " bytes");
                         }
                     } else {
-                        byte[] plain = readSegment(payload, segment, digest);
+                        byte[] plain = readSegment(payload, segment);
                         int from = (int) Math.max(0, offset - plainStart);
                         int to = (int) Math.min(plain.length, end - plainStart);
                         outputStream.write(plain, from, to - from);
@@ -468,11 +461,10 @@ class TDF {
         // Derived from the ciphertext length rather than trusting the manifest's segmentSize,
         // so a range lands on the bytes decryption actually produces.
         private long plaintextSize(Manifest.Segment segment) {
-            return segment.encryptedSegmentSize
-                    - (manifest.payload.isEncrypted ? kGcmIvSize + AesGcm.GCM_TAG_LENGTH : 0);
+            return segment.encryptedSegmentSize - (kGcmIvSize + AesGcm.GCM_TAG_LENGTH);
         }
 
-        private byte[] readSegment(InputStream payload, Manifest.Segment segment, MessageDigest digest) {
+        private byte[] readSegment(InputStream payload, Manifest.Segment segment) {
             byte[] readBuf = new byte[(int) segment.encryptedSegmentSize];
             int bytesRead = TDFReader.readPayloadBytes(payload, readBuf);
 
@@ -483,28 +475,19 @@ class TDF {
 
             var isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
 
-            if (manifest.payload.isEncrypted) {
-                var sigAlg = segmentIntegrityAlgorithmFromManifest(
-                        manifest.encryptionInformation.integrityInformation.segmentHashAlg);
+            var sigAlg = segmentIntegrityAlgorithmFromManifest(
+                    manifest.encryptionInformation.integrityInformation.segmentHashAlg);
 
-                var payloadSig = calculateSignature(readBuf, payloadKey, sigAlg);
-                if (isLegacyTdf) {
-                    payloadSig = Hex.encodeHexString(payloadSig).getBytes(StandardCharsets.UTF_8);
-                }
-
-                if (segment.hash.compareTo(Base64.getEncoder().encodeToString(payloadSig)) != 0) {
-                    throw new SDK.SegmentSignatureMismatch("segment signature miss match");
-                }
-
-                return aesGcm.decrypt(new AesGcm.Encrypted(readBuf));
-            } else {
-                String segmentSig = Hex.encodeHexString(digest.digest(readBuf));
-                if (segment.hash.compareTo(segmentSig) != 0) {
-                    throw new SDK.SegmentSignatureMismatch("segment signature miss match");
-                }
-
-                return readBuf;
+            var payloadSig = calculateSignature(readBuf, payloadKey, sigAlg);
+            if (isLegacyTdf) {
+                payloadSig = Hex.encodeHexString(payloadSig).getBytes(StandardCharsets.UTF_8);
             }
+
+            if (segment.hash.compareTo(Base64.getEncoder().encodeToString(payloadSig)) != 0) {
+                throw new SDK.SegmentSignatureMismatch("segment signature miss match");
+            }
+
+            return aesGcm.decrypt(new AesGcm.Encrypted(readBuf));
         }
 
         /**
@@ -518,9 +501,8 @@ class TDF {
          */
         private void validateSegmentSizes() {
             // an encrypted segment carries an IV and an auth tag on top of its plaintext, so it
-            // can never be shorter than the two of them together. an unencrypted payload is stored
-            // as-is, where the only impossible length is a non-positive one
-            long minEncryptedSegmentSize = manifest.payload.isEncrypted ? kGcmIvSize + AesGcm.GCM_TAG_LENGTH : 1;
+            // can never be shorter than the two of them together
+            long minEncryptedSegmentSize = kGcmIvSize + AesGcm.GCM_TAG_LENGTH;
 
             List<Manifest.Segment> segments = manifest.encryptionInformation.integrityInformation.segments;
             for (int i = 0; i < segments.size(); i++) {
@@ -573,15 +555,13 @@ class TDF {
      * Concatenates every segment hash, which is what the root signature and the
      * assertion signatures are computed over.
      */
-    private static byte[] aggregateSegmentHashes(List<Manifest.Segment> segments, boolean isEncrypted) {
+    private static byte[] aggregateSegmentHashes(List<Manifest.Segment> segments) {
         if (segments instanceof Manifest.Segments) {
-            return ((Manifest.Segments) segments).aggregate(isEncrypted);
+            return ((Manifest.Segments) segments).aggregate();
         }
         var aggregateHash = new ByteArrayOutputStream();
         for (Manifest.Segment segment : segments) {
-            aggregateHash.writeBytes(isEncrypted
-                    ? Base64.getDecoder().decode(segment.hash)
-                    : segment.hash.getBytes());
+            aggregateHash.writeBytes(Base64.getDecoder().decode(segment.hash));
         }
         return aggregateHash.toByteArray();
     }
@@ -727,7 +707,7 @@ class TDF {
 
         // Materialized once and reused by the root signature and every assertion below;
         // it is proportional to the number of segments.
-        byte[] aggregateHash = segments.aggregate(true);
+        byte[] aggregateHash = segments.aggregate();
 
         Manifest.RootSignature rootSignature = new Manifest.RootSignature();
 
@@ -851,6 +831,14 @@ class TDF {
         TDFReader tdfReader = TDFReader.open(tdf);
         Manifest manifest = tdfReader.readManifest();
 
+        // Only encrypted payloads are supported. A manifest that does not declare one, whether
+        // the flag is false, null or absent (Gson leaves an absent primitive at false), is
+        // refused here, before any key access, integrity or assertion processing.
+        if (!manifest.payload.isEncrypted) {
+            throw new SDK.MalformedTDFException(
+                    "tdf manifest is invalid: payload.isEncrypted must be true; unencrypted payloads are not supported");
+        }
+
         byte[] payloadKey = new byte[GCM_KEY_SIZE];
         String unencryptedMetadata = null;
 
@@ -859,75 +847,73 @@ class TDF {
 
         Map<Autoconfigure.KeySplitStep, Exception> skippedSplits = new HashMap<>();
 
-        if (manifest.payload.isEncrypted) {
-            for (Manifest.KeyAccess keyAccess : manifest.encryptionInformation.keyAccessObj) {
-                String splitId = keyAccess.sid == null || keyAccess.sid.isEmpty() ? EMPTY_SPLIT_ID : keyAccess.sid;
-                Autoconfigure.KeySplitStep ss = new Autoconfigure.KeySplitStep(keyAccess.url, splitId);
-                byte[] unwrappedKey;
-                if (foundSplits.contains(ss.splitID)) {
-                    continue;
+        for (Manifest.KeyAccess keyAccess : manifest.encryptionInformation.keyAccessObj) {
+            String splitId = keyAccess.sid == null || keyAccess.sid.isEmpty() ? EMPTY_SPLIT_ID : keyAccess.sid;
+            Autoconfigure.KeySplitStep ss = new Autoconfigure.KeySplitStep(keyAccess.url, splitId);
+            byte[] unwrappedKey;
+            if (foundSplits.contains(ss.splitID)) {
+                continue;
+            }
+            knownSplits.add(ss.splitID);
+            try {
+                var realAddress = Config.getKasAddress(keyAccess.url);
+                if (tdfReaderConfig.ignoreKasAllowlist) {
+                    logger.warn("Ignoring KasAllowlist for url {}", realAddress);
+                } else if (tdfReaderConfig.kasAllowlist == null || tdfReaderConfig.kasAllowlist.isEmpty()) {
+                    logger.error(
+                            "KasAllowlist: No KAS allowlist provided and no KeyAccessServerRegistry available, {} is not allowed",
+                            realAddress);
+                    throw new SDK.KasAllowlistException(
+                            "No KAS allowlist provided and no KeyAccessServerRegistry available");
+                } else if (!tdfReaderConfig.kasAllowlist.contains(realAddress)) {
+                    logger.error("KasAllowlist: kas url {} is not allowed", realAddress);
+                    throw new SDK.KasAllowlistException("KasAllowlist: kas url " + realAddress + " is not allowed");
                 }
-                knownSplits.add(ss.splitID);
-                try {
-                    var realAddress = Config.getKasAddress(keyAccess.url);
-                    if (tdfReaderConfig.ignoreKasAllowlist) {
-                        logger.warn("Ignoring KasAllowlist for url {}", realAddress);
-                    } else if (tdfReaderConfig.kasAllowlist == null || tdfReaderConfig.kasAllowlist.isEmpty()) {
-                        logger.error(
-                                "KasAllowlist: No KAS allowlist provided and no KeyAccessServerRegistry available, {} is not allowed",
-                                realAddress);
-                        throw new SDK.KasAllowlistException(
-                                "No KAS allowlist provided and no KeyAccessServerRegistry available");
-                    } else if (!tdfReaderConfig.kasAllowlist.contains(realAddress)) {
-                        logger.error("KasAllowlist: kas url {} is not allowed", realAddress);
-                        throw new SDK.KasAllowlistException("KasAllowlist: kas url " + realAddress + " is not allowed");
-                    }
-                    unwrappedKey = services.kas().unwrap(keyAccess, manifest.encryptionInformation.policy,
-                            tdfReaderConfig.sessionKeyType);
-                } catch (Exception e) {
-                    skippedSplits.put(ss, e);
-                    continue;
-                }
-
-                for (int index = 0; index < unwrappedKey.length; index++) {
-                    payloadKey[index] ^= unwrappedKey[index];
-                }
-                foundSplits.add(ss.splitID);
-
-                if (keyAccess.encryptedMetadata != null && !keyAccess.encryptedMetadata.isEmpty()) {
-                    AesGcm aesGcm = new AesGcm(unwrappedKey);
-
-                    String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata),
-                            StandardCharsets.UTF_8);
-                    EncryptedMetadata encryptedMetadata = gson.fromJson(decodedMetadata, EncryptedMetadata.class);
-
-                    var encryptedData = new AesGcm.Encrypted(
-                            decoder.decode(encryptedMetadata.ciphertext));
-
-                    byte[] decrypted = aesGcm.decrypt(encryptedData);
-                    // this is a little bit weird... the last unencrypted metadata we get from a KAS
-                    // is the one
-                    // that we return to the user. This is OK because we can't have different
-                    // metadata per-KAS
-                    unencryptedMetadata = new String(decrypted, StandardCharsets.UTF_8);
-                }
+                unwrappedKey = services.kas().unwrap(keyAccess, manifest.encryptionInformation.policy,
+                        tdfReaderConfig.sessionKeyType);
+            } catch (Exception e) {
+                skippedSplits.put(ss, e);
+                continue;
             }
 
-            if (knownSplits.size() > foundSplits.size()) {
-                List<Exception> exceptionList = new ArrayList<>(skippedSplits.size() + 1);
-                exceptionList.add(new Exception("splitKey.unable to reconstruct split key: " + skippedSplits));
-
-                for (Map.Entry<Autoconfigure.KeySplitStep, Exception> entry : skippedSplits.entrySet()) {
-                    exceptionList.add(entry.getValue());
-                }
-
-                StringBuilder combinedMessage = new StringBuilder();
-                for (Exception e : exceptionList) {
-                    combinedMessage.append(e.getMessage()).append("\n");
-                }
-
-                throw new SDK.SplitKeyException(combinedMessage.toString());
+            for (int index = 0; index < unwrappedKey.length; index++) {
+                payloadKey[index] ^= unwrappedKey[index];
             }
+            foundSplits.add(ss.splitID);
+
+            if (keyAccess.encryptedMetadata != null && !keyAccess.encryptedMetadata.isEmpty()) {
+                AesGcm aesGcm = new AesGcm(unwrappedKey);
+
+                String decodedMetadata = new String(Base64.getDecoder().decode(keyAccess.encryptedMetadata),
+                        StandardCharsets.UTF_8);
+                EncryptedMetadata encryptedMetadata = gson.fromJson(decodedMetadata, EncryptedMetadata.class);
+
+                var encryptedData = new AesGcm.Encrypted(
+                        decoder.decode(encryptedMetadata.ciphertext));
+
+                byte[] decrypted = aesGcm.decrypt(encryptedData);
+                // this is a little bit weird... the last unencrypted metadata we get from a KAS
+                // is the one
+                // that we return to the user. This is OK because we can't have different
+                // metadata per-KAS
+                unencryptedMetadata = new String(decrypted, StandardCharsets.UTF_8);
+            }
+        }
+
+        if (knownSplits.size() > foundSplits.size()) {
+            List<Exception> exceptionList = new ArrayList<>(skippedSplits.size() + 1);
+            exceptionList.add(new Exception("splitKey.unable to reconstruct split key: " + skippedSplits));
+
+            for (Map.Entry<Autoconfigure.KeySplitStep, Exception> entry : skippedSplits.entrySet()) {
+                exceptionList.add(entry.getValue());
+            }
+
+            StringBuilder combinedMessage = new StringBuilder();
+            for (Exception e : exceptionList) {
+                combinedMessage.append(e.getMessage()).append("\n");
+            }
+
+            throw new SDK.SplitKeyException(combinedMessage.toString());
         }
 
         // Validate root signature
@@ -935,37 +921,16 @@ class TDF {
         String rootSignature = manifest.encryptionInformation.integrityInformation.rootSignature.signature;
 
         byte[] aggregateHash = aggregateSegmentHashes(
-                manifest.encryptionInformation.integrityInformation.segments, manifest.payload.isEncrypted);
+                manifest.encryptionInformation.integrityInformation.segments);
 
-        String rootSigValue;
         boolean isLegacyTdf = manifest.tdfVersion == null || manifest.tdfVersion.isEmpty();
-        if (manifest.payload.isEncrypted) {
-            var sigAlg = rootIntegrityAlgorithmFromManifest(rootAlgorithm);
+        var sigAlg = rootIntegrityAlgorithmFromManifest(rootAlgorithm);
 
-            var sig = calculateSignature(aggregateHash, payloadKey, sigAlg);
-            if (isLegacyTdf) {
-                sig = Hex.encodeHexString(sig).getBytes();
-            }
-            rootSigValue = Base64.getEncoder().encodeToString(sig);
-        } else {
-            // KNOWN GAP, untouched by this change and tracked separately: this branch is a
-            // bare SHA-256, so it authenticates nothing. `payload.isEncrypted` is itself
-            // unauthenticated manifest data, so flipping it to false selects a keyless
-            // verification path that anyone can satisfy -- and readPayload then emits the
-            // segment bytes without decrypting them. Same downgrade shape as a GMAC root.
-            // Left alone here because closing it means deciding whether unencrypted TDFs
-            // are supported at all, which is a wider question than this fix.
-            MessageDigest digest;
-            try {
-                digest = MessageDigest.getInstance("SHA-256");
-            } catch (NoSuchAlgorithmException e) {
-                throw new IllegalStateException("error getting instance of SHA-256 digest", e);
-            }
-
-            // the round trip through the platform default charset is a no-op for the
-            // hex hashes this branch sees, and is kept so the digest is unchanged
-            rootSigValue = Base64.getEncoder().encodeToString(digest.digest(new String(aggregateHash).getBytes()));
+        var sig = calculateSignature(aggregateHash, payloadKey, sigAlg);
+        if (isLegacyTdf) {
+            sig = Hex.encodeHexString(sig).getBytes();
         }
+        String rootSigValue = Base64.getEncoder().encodeToString(sig);
 
         if (rootSignature.compareTo(rootSigValue) != 0) {
             throw new SDK.RootSignatureValidationException("root signature validation failed");

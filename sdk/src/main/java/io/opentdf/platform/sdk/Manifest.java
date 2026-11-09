@@ -326,26 +326,17 @@ public class Manifest {
         }
 
         /**
-         * Every segment hash concatenated, base64-decoded if {@code decodeBase64}
-         * and taken as raw ASCII otherwise. This is the aggregate hash that the root
-         * signature and the assertion signatures are computed over.
+         * Every segment hash base64-decoded and concatenated. This is the aggregate
+         * hash that the root signature and the assertion signatures are computed over.
          */
-        byte[] aggregate(boolean decodeBase64) {
+        byte[] aggregate() {
             if (size() == 0) {
                 return new byte[0];
             }
             if (mutableSegments != null || !materializedSegments.isEmpty()) {
-                return aggregateMaterialized(decodeBase64);
+                return aggregateMaterialized();
             }
             byte[] scratch = new byte[stride];
-            if (!decodeBase64) {
-                byte[] aggregate = new byte[Math.multiplyExact(count, stride)];
-                for (int i = 0; i < count; i++) {
-                    copyHash(i, aggregate, i * stride);
-                }
-                return aggregate;
-            }
-
             copyHash(0, scratch, 0);
             int decodedStride = Base64.getDecoder().decode(scratch).length;
             byte[] aggregate = new byte[Math.multiplyExact(count, decodedStride)];
@@ -358,13 +349,10 @@ public class Manifest {
             return aggregate;
         }
 
-        private byte[] aggregateMaterialized(boolean decodeBase64) {
+        private byte[] aggregateMaterialized() {
             ByteArrayOutputStream aggregate = new ByteArrayOutputStream();
             for (int i = 0; i < size(); i++) {
-                String hash = getForRead(i).hash;
-                byte[] bytes = decodeBase64
-                        ? Base64.getDecoder().decode(hash)
-                        : hash.getBytes(StandardCharsets.US_ASCII);
+                byte[] bytes = Base64.getDecoder().decode(getForRead(i).hash);
                 aggregate.write(bytes, 0, bytes.length);
             }
             return aggregate.toByteArray();
