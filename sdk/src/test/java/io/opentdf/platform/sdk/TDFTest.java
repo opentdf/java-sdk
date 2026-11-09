@@ -465,15 +465,17 @@ public class TDFTest {
      */
     private void assertEmbeddedKeyAddsNoTrust(TDF tdf, byte[] tdfBytes, KeyPair signer, String plainText)
             throws Exception {
-        assertThatThrownBy(() -> tdf.loadTDF(new SeekableInMemoryByteChannel(tdfBytes), Config.newTDFReaderConfig(),
-                platformUrl))
+        var noKeyChannel = new SeekableInMemoryByteChannel(tdfBytes);
+        var noKeyConfig = Config.newTDFReaderConfig();
+        assertThatThrownBy(() -> tdf.loadTDF(noKeyChannel, noKeyConfig, platformUrl))
                 .isInstanceOf(SDK.AssertionException.class);
 
         var unrelated = new Config.AssertionVerificationKeys();
         unrelated.defaultKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256,
                 CryptoUtils.generateRSAKeypair().getPublic());
-        assertThatThrownBy(() -> tdf.loadTDF(new SeekableInMemoryByteChannel(tdfBytes),
-                Config.newTDFReaderConfig(Config.withAssertionVerificationKeys(unrelated)), platformUrl))
+        var unrelatedChannel = new SeekableInMemoryByteChannel(tdfBytes);
+        var unrelatedConfig = Config.newTDFReaderConfig(Config.withAssertionVerificationKeys(unrelated));
+        assertThatThrownBy(() -> tdf.loadTDF(unrelatedChannel, unrelatedConfig, platformUrl))
                 .isInstanceOf(SDKException.class);
 
         var configured = new Config.AssertionVerificationKeys();

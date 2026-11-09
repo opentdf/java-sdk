@@ -83,8 +83,9 @@ class AssertionConfiguredKeyTest {
         var configured = CryptoUtils.generateRSAKeypair();
         var other = CryptoUtils.generateRSAKeypair();
         var assertion = signedWith(rs256(other.getPrivate()).withJwk(publicJwk(other)));
+        var verificationKey = rs256(configured.getPublic());
 
-        assertThatThrownBy(() -> assertion.verify(rs256(configured.getPublic())))
+        assertThatThrownBy(() -> assertion.verify(verificationKey))
                 .isInstanceOf(SDKException.class);
     }
 
@@ -95,8 +96,9 @@ class AssertionConfiguredKeyTest {
         var cert = TestUtil.createTestCertificate(other.getPublic(), other.getPrivate());
         var x5c = List.of(com.nimbusds.jose.util.Base64.encode(cert.getEncoded()));
         var assertion = signedWith(rs256(other.getPrivate()).withX5c(x5c));
+        var verificationKey = rs256(configured.getPublic());
 
-        assertThatThrownBy(() -> assertion.verify(rs256(configured.getPublic())))
+        assertThatThrownBy(() -> assertion.verify(verificationKey))
                 .isInstanceOf(SDKException.class);
     }
 
@@ -105,8 +107,9 @@ class AssertionConfiguredKeyTest {
         // With no key configured, the reader selects the payload key with HS256.
         var signer = CryptoUtils.generateRSAKeypair();
         var assertion = signedWith(rs256(signer.getPrivate()).withJwk(publicJwk(signer)));
+        var verificationKey = hs256(secret(32));
 
-        assertThatThrownBy(() -> assertion.verify(hs256(secret(32))))
+        assertThatThrownBy(() -> assertion.verify(verificationKey))
                 .isInstanceOf(SDK.AssertionException.class)
                 .hasMessageContaining(ID);
     }
@@ -125,9 +128,10 @@ class AssertionConfiguredKeyTest {
     @Test
     void headerAlgMustEqualTheRsaKeyAlg() throws Exception {
         var signer = CryptoUtils.generateRSAKeypair();
+        var verificationKey = rs256(signer.getPublic());
         for (var alg : List.of(JWSAlgorithm.RS384, JWSAlgorithm.RS512, JWSAlgorithm.PS256)) {
             var assertion = boundWith(alg, new RSASSASigner(signer.getPrivate()));
-            assertThatThrownBy(() -> assertion.verify(rs256(signer.getPublic())))
+            assertThatThrownBy(() -> assertion.verify(verificationKey))
                     .as(alg.getName())
                     .isInstanceOf(SDK.AssertionException.class);
         }
@@ -138,9 +142,10 @@ class AssertionConfiguredKeyTest {
     @Test
     void headerAlgMustEqualTheHmacKeyAlg() throws Exception {
         var key = secret(64);
+        var verificationKey = hs256(key);
         for (var alg : List.of(JWSAlgorithm.HS384, JWSAlgorithm.HS512)) {
             var assertion = boundWith(alg, new MACSigner(key));
-            assertThatThrownBy(() -> assertion.verify(hs256(key)))
+            assertThatThrownBy(() -> assertion.verify(verificationKey))
                     .as(alg.getName())
                     .isInstanceOf(SDK.AssertionException.class);
         }
