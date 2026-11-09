@@ -388,6 +388,16 @@ final class StrictJsonReader extends JsonReader {
         }
     }
 
+    /** True while the reader is inside an assertion object, as when a syntax error stopped it there. */
+    boolean inAssertion() {
+        return assertionDepth >= 0;
+    }
+
+    /** The exact {@code id} of the open assertion object, if one has been read; otherwise null. */
+    String openAssertionId() {
+        return assertionDepth >= 0 ? frames[assertionDepth].exactId() : null;
+    }
+
     private void fail(AssertionFailureReason reason, String detail) {
         if (assertionDepth >= 0) {
             Frame assertion = frames[assertionDepth];

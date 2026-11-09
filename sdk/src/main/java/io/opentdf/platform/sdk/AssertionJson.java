@@ -11,6 +11,10 @@ import org.erdtman.jcs.JsonCanonicalizer;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Map;
@@ -54,6 +58,23 @@ final class AssertionJson {
     }
 
     /**
+     * Decodes JSON text from strict UTF-8.
+     *
+     * @throws SDK.AssertionFailureException ({@code invalid-json}) if the bytes are not UTF-8
+     */
+    static String decodeUtf8(byte[] json) {
+        try {
+            return StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(json))
+                    .toString();
+        } catch (CharacterCodingException e) {
+            throw invalidJson("the JSON text is not valid UTF-8");
+        }
+    }
+
+    /**
      * Applies only the manifest-level checks of Section 3 to a whole manifest, without building
      * the typed manifest. Malformed JSON is reported as {@code invalid-json} here; the manifest
      * reader proper reports it as a malformed TDF.
@@ -62,6 +83,9 @@ final class AssertionJson {
      */
     static void checkManifest(Reader manifestJson) {
         try (StrictJsonReader reader = new StrictJsonReader(manifestJson, StrictJsonReader.Mode.MANIFEST)) {
+            if (reader.peek() != JsonToken.BEGIN_OBJECT) {
+                throw invalidJson("a manifest must be a JSON object");
+            }
             reader.skipValue();
             if (reader.peek() != JsonToken.END_DOCUMENT) {
                 throw invalidJson("unexpected content after the manifest");
