@@ -654,7 +654,9 @@ class TDF {
 
     /**
      * @throws IllegalArgumentException if {@code tdfConfig} selects an integrity algorithm
-     *                                  that cannot be written. Unchecked and not an
+     *                                  that cannot be written, or holds an assertion that a
+     *                                  reader would reject while parsing (its wire form is not
+     *                                  I-JSON). Unchecked and not an
      *                                  {@link SDKException}, matching how the config layer
      *                                  already reports out-of-range values (see
      *                                  {@link Config#withSegmentSize}): this is a caller
@@ -772,7 +774,8 @@ class TDF {
             assertion.statement = assertionConfig.statement;
             assertion.appliesToState = assertionConfig.appliesToState.toString();
 
-            var assertionHashAsHex = assertion.hash();
+            // the wire form written below is exactly what is hashed here, minus the binding
+            String assertionHashAsHex = assertion.hashForWriting();
             byte[] assertionHash;
             if (tdfConfig.hexEncodeRootAndSegmentHashes) {
                 assertionHash = assertionHashAsHex.getBytes(StandardCharsets.UTF_8);
@@ -1002,10 +1005,12 @@ class TDF {
             } catch (ParseException | JOSEException | java.security.cert.CertificateException e) {
                 throw new SDKException("error validating assertion hash", e);
             }
-            var hashOfAssertionAsHex = assertion.hash();
+            // the assertion exactly as received, never a re-serialization of the typed fields
+            var hashOfAssertionAsHex = AssertionJson.hash(assertion.received());
 
             if (!Objects.equals(hashOfAssertionAsHex, hashValues.getAssertionHash())) {
-                throw new SDK.AssertionException("assertion hash mismatch", assertion.id);
+                throw new SDK.AssertionFailureException(assertion.id, AssertionFailureReason.BINDING_MISMATCH,
+                        "assertion hash mismatch");
             }
 
             byte[] hashOfAssertion;
@@ -1024,7 +1029,8 @@ class TDF {
             var encodeSignature = Base64.getEncoder().encodeToString(signature);
 
             if (!Objects.equals(encodeSignature, hashValues.getSignature())) {
-                throw new SDK.AssertionException("failed integrity check on assertion signature", assertion.id);
+                throw new SDK.AssertionFailureException(assertion.id, AssertionFailureReason.BINDING_MISMATCH,
+                        "failed integrity check on assertion signature");
             }
         }
 

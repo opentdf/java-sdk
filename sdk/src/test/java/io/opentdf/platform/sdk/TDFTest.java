@@ -642,6 +642,74 @@ public class TDFTest {
         }
     }
 
+    /**
+     * The writer hashes the wire form it then writes, emits {@code "method": "jws"}, and keeps
+     * statement values as strings.
+     */
+    @Test
+    void writerEmitsJwsBindingsOverTheWrittenAssertion() throws Exception {
+        var assertionConfig = new AssertionConfig();
+        assertionConfig.id = "assertion1";
+        assertionConfig.type = AssertionConfig.Type.HandlingAssertion;
+        assertionConfig.scope = AssertionConfig.Scope.Payload;
+        assertionConfig.appliesToState = AssertionConfig.AppliesToState.Encrypted;
+        assertionConfig.statement = new AssertionConfig.Statement();
+        assertionConfig.statement.format = "json";
+        assertionConfig.statement.schema = "urn:nato:stanag:5636:A:1:elements:json";
+        assertionConfig.statement.value = "{\"ocl\":{\"cls\":\"SECRET\"},\"n\":1e21}";
+
+        var rsaKasInfo = new Config.KASInfo();
+        rsaKasInfo.URL = "https://example.com/kas" + 0;
+        var tdfOutputStream = new ByteArrayOutputStream();
+        new TDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build())
+                .createTDF(new ByteArrayInputStream("hello".getBytes(StandardCharsets.UTF_8)), tdfOutputStream,
+                        Config.newTDFConfig(Config.withAutoconfigure(false), Config.withKasInformation(rsaKasInfo),
+                                Config.withSystemMetadataAssertion(), Config.withAssertionConfig(assertionConfig)));
+
+        var manifestJson = new StringWriter();
+        try (var manifestReader = TDFReader.open(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray())).manifest()) {
+            manifestReader.transferTo(manifestJson);
+        }
+        var assertions = JsonParser.parseString(manifestJson.toString()).getAsJsonObject().getAsJsonArray("assertions");
+        assertThat(assertions).hasSize(2);
+        for (var written : assertions) {
+            var binding = written.getAsJsonObject().getAsJsonObject("binding");
+            assertThat(binding.get("method").getAsString()).isEqualTo("jws");
+            assertThat(written.getAsJsonObject().getAsJsonObject("statement").get("value").getAsJsonPrimitive().isString())
+                    .isTrue();
+            var claims = com.nimbusds.jwt.SignedJWT.parse(binding.get("signature").getAsString()).getJWTClaimsSet();
+            assertThat(claims.getStringClaim("assertionHash"))
+                    .isEqualTo(Manifest.Assertion.computeAssertionHash(written.toString()));
+        }
+    }
+
+    /** The writer refuses an assertion a reader would reject while parsing, as a configuration error. */
+    @Test
+    void writerRefusesAnAssertionThatIsNotIJson() {
+        var rsaKasInfo = new Config.KASInfo();
+        rsaKasInfo.URL = "https://example.com/kas" + 0;
+        for (var bad : List.of("value", "id")) {
+            var assertionConfig = new AssertionConfig();
+            assertionConfig.id = "id".equals(bad) ? "assertion\uD800" : "assertion1";
+            assertionConfig.type = AssertionConfig.Type.BaseAssertion;
+            assertionConfig.scope = AssertionConfig.Scope.Payload;
+            assertionConfig.appliesToState = AssertionConfig.AppliesToState.Unencrypted;
+            assertionConfig.statement = new AssertionConfig.Statement();
+            assertionConfig.statement.format = "string";
+            assertionConfig.statement.value = "value".equals(bad) ? "lone \uDC00 surrogate" : "fine";
+            var config = Config.newTDFConfig(Config.withAutoconfigure(false), Config.withKasInformation(rsaKasInfo),
+                    Config.withAssertionConfig(assertionConfig));
+            var tdf = new TDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build());
+            assertThatThrownBy(() -> tdf.createTDF(new ByteArrayInputStream("hello".getBytes(StandardCharsets.UTF_8)),
+                    new ByteArrayOutputStream(), config))
+                    .as(bad)
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .isNotInstanceOf(SDK.TamperException.class)
+                    .hasNoCause()
+                    .hasMessageContaining("reason=invalid-json");
+        }
+    }
+
     @Test
     void testSimpleTDFWithAssertionWithHS256Failure() throws Exception {
         // var keypair = CryptoUtils.generateRSAKeypair();
