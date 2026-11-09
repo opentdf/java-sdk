@@ -852,6 +852,12 @@ class TDF {
 
         TDFReader tdfReader = TDFReader.open(tdf);
         Manifest manifest = tdfReader.readManifest();
+        // The payload key is assembled only from key access objects; without one there is no key,
+        // so refuse before any KAS, integrity or assertion step.
+        if (manifest.encryptionInformation.keyAccessObj.isEmpty()) {
+            throw new SDK.MalformedTDFException(
+                    "tdf manifest is invalid: encryptionInformation.keyAccess has no key access objects");
+        }
 
         byte[] payloadKey = new byte[GCM_KEY_SIZE];
         String unencryptedMetadata = null;
@@ -929,6 +935,10 @@ class TDF {
                 }
 
                 throw new SDK.SplitKeyException(combinedMessage.toString());
+            }
+            // never continue with the all-zero starting value of the payload key
+            if (foundSplits.isEmpty()) {
+                throw new SDK.SplitKeyException("unable to reconstruct split key: no key access objects yielded a split");
             }
         }
 
