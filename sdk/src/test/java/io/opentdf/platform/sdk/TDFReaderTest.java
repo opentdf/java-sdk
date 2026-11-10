@@ -16,9 +16,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
 
 /**
  * The OpenTDF spec names the manifest entry {@code manifest.json}; this SDK writes
@@ -216,20 +213,6 @@ public class TDFReaderTest {
         }
     }
 
-    @Test
-    void opensThePayloadOnlyWhenItIsRead() throws IOException {
-        try (var tdf = spy(archiveOf(
-                TDFWriter.TDF_PAYLOAD_FILE_NAME, PAYLOAD,
-                "manifest.json", MANIFEST))) {
-            var reader = new TDFReader(tdf);
-
-            verify(tdf, never()).position(0);
-
-            reader.readPayloadBytes(new byte[PAYLOAD.length()]);
-            verify(tdf).position(0);
-        }
-    }
-
     /** An oversized payload is only detected on read, and still surfaces as a malformed TDF. */
     @Test
     void reportsATruncatedPayloadAsMalformed() throws IOException {
@@ -245,7 +228,10 @@ public class TDFReaderTest {
         }
     }
 
-    /** The check on the local header runs when the payload is opened, before any byte is read. */
+    /**
+     * The check on the local header runs when the payload stream is opened, which the
+     * constructor does, so the whole TDF is rejected before any byte is read.
+     */
     @Test
     void reportsAPayloadWhoseDataStartsPastTheEndAsMalformed() throws IOException {
         var payload = new HostileZips.Entry(TDFWriter.TDF_PAYLOAD_FILE_NAME, new byte[0]);
@@ -254,12 +240,7 @@ public class TDFReaderTest {
         // the filename length of the first local file header, which starts at offset 0
         ByteBuffer.wrap(archive).order(ByteOrder.LITTLE_ENDIAN).putShort(26, (short) 0xFFFF);
         try (var tdf = new SeekableInMemoryByteChannel(archive)) {
-            var reader = new TDFReader(tdf);
-
-            assertThatThrownBy(reader::payload)
-                    .isInstanceOf(SDK.MalformedTDFException.class)
-                    .hasCauseInstanceOf(InvalidZipException.class);
-            assertThatThrownBy(() -> reader.readPayloadBytes(new byte[1]))
+            assertThatThrownBy(() -> TDFReader.open(tdf))
                     .isInstanceOf(SDK.MalformedTDFException.class)
                     .hasCauseInstanceOf(InvalidZipException.class);
         }

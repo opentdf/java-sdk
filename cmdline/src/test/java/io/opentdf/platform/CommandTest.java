@@ -2,21 +2,15 @@ package io.opentdf.platform;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileSystems;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -60,7 +54,7 @@ class CommandTest {
 
     private static List<String> expectedFeatures() {
         List<String> features = new ArrayList<>(
-                List.of("dpop", "dpop_nonce_challenge", "partial_decrypt", "http_range_source"));
+                List.of("dpop", "dpop_nonce_challenge", "http_range_source"));
         if (MLKEM_PROVIDER_ON_CLASSPATH) {
             features.add("session-key-mlkem");
         }
@@ -80,8 +74,7 @@ class CommandTest {
     }
 
     @Test
-    void supports_partial_decrypt_and_http_range_source_exit_0() {
-        assertThat(new CommandLine(new Command()).execute("supports", "partial_decrypt")).isEqualTo(0);
+    void supports_http_range_source_exit_0() {
         assertThat(new CommandLine(new Command()).execute("supports", "http_range_source")).isEqualTo(0);
     }
 
@@ -152,7 +145,7 @@ class CommandTest {
 
         assertThat(code[0]).isEqualTo(0);
         String expected = "{\"dpop\":true,\"dpop_nonce_challenge\":true,"
-                + "\"partial_decrypt\":true,\"http_range_source\":true"
+                + "\"http_range_source\":true"
                 + (MLKEM_PROVIDER_ON_CLASSPATH ? ",\"session-key-mlkem\":true" : "")
                 + "}";
         assertThat(out.trim()).isEqualTo(expected);
@@ -186,22 +179,6 @@ class CommandTest {
 
         assertThat(code[0]).isEqualTo(1);
         assertThat(out.trim()).isEqualTo("{\"unknown_feature\":false}");
-    }
-
-    @Test
-    void moveIntoPlaceFallsBackWhenAtomicMoveIsUnsupported(@TempDir Path tempDir) throws Exception {
-        Path source = Files.writeString(tempDir.resolve("plaintext.tmp"), "plaintext");
-        Path archive = tempDir.resolve("output.zip");
-
-        try (var zip = FileSystems.newFileSystem(
-                URI.create("jar:" + archive.toUri()), Map.of("create", "true"))) {
-            Path target = zip.getPath("/plaintext.txt");
-
-            Command.moveIntoPlace(source, target);
-
-            assertThat(Files.readString(target)).isEqualTo("plaintext");
-            assertThat(source).doesNotExist();
-        }
     }
 
 }

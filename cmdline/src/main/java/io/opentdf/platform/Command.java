@@ -15,16 +15,14 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.URI;
 import java.nio.channels.FileChannel;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
@@ -85,7 +83,7 @@ class Command {
         // Always-on capabilities of this build. There is no "known but
         // unsupported" feature here: anything not in this list is simply unrecognized.
         private static final List<String> STATIC_FEATURES = List.of("dpop", "dpop_nonce_challenge",
-                "partial_decrypt", "http_range_source");
+                "http_range_source");
 
         // session-key-mlkem additionally requires a KemProvider that can generate
         // ML-KEM-768 and ML-KEM-1024 session keys (e.g. sdk-pqc-bc), which the
@@ -388,10 +386,8 @@ class Command {
 
     @CommandLine.Command(name = "decrypt")
     void decrypt(
-            @Option(names = { "-f", "--file" }, required = true, description = "TDF file path, or an http(s):// URL read with range requests") String tdfFile,
-            @Option(names = { "-o", "--output" }, defaultValue = Option.NULL_VALUE, description = "Write plaintext here, only on success (default: stdout)") Optional<Path> output,
-            @Option(names = { "--offset" }, defaultValue = "0", description = "Plaintext byte offset to start decrypting from") long offset,
-            @Option(names = { "--length" }, defaultValue = "-1", description = "Plaintext bytes to decrypt from --offset; negative decrypts to the end") long length,
+            @Option(names = { "-f",
+                    "--file" }, required = true, description = "TDF file path, or an http(s):// URL read with range requests") String tdfFile,
             @Option(names = {
                     "--rewrap-key-type" }, defaultValue = Option.NULL_VALUE, description = "Preferred rewrap algorithm, one of ${COMPLETION-CANDIDATES}") Optional<KeyType> rewrapKeyType,
             @Option(names = {
@@ -404,95 +400,69 @@ class Command {
             throws Exception {
         try (var sdk = buildSDK()) {
             var opts = new ArrayList<Consumer<Config.TDFReaderConfig>>();
-            if (assertionVerification.isPresent()) {
-                var assertionVerificationInput = assertionVerification.get();
-                Gson gson = buildGson();
+            try (var in = openTdf(sdk, tdfFile)) {
+                try (var stdout = new BufferedOutputStream(System.out)) {
+                    if (assertionVerification.isPresent()) {
+                        var assertionVerificationInput = assertionVerification.get();
+                        Gson gson = buildGson();
 
-                Config.AssertionVerificationKeys assertionVerificationKeys;
-                try {
-                    assertionVerificationKeys = gson.fromJson(assertionVerificationInput,
-                            Config.AssertionVerificationKeys.class);
-                } catch (JsonSyntaxException e) {
-                    // try it as a file path
-                    try {
-                        String fileJson = Files.readString(Paths.get(assertionVerificationInput));
-                        assertionVerificationKeys = gson.fromJson(fileJson,
-                                Config.AssertionVerificationKeys.class);
-                    } catch (JsonSyntaxException e2) {
-                        throw new RuntimeException("Failed to parse assertion verification keys from file", e2);
-                    } catch (Exception e3) {
-                        throw new RuntimeException(
-                                "Could not parse assertion verification keys as json string or path to file",
-                                e3);
+                        Config.AssertionVerificationKeys assertionVerificationKeys;
+                        try {
+                            assertionVerificationKeys = gson.fromJson(assertionVerificationInput,
+                                    Config.AssertionVerificationKeys.class);
+                        } catch (JsonSyntaxException e) {
+                            // try it as a file path
+                            try {
+                                String fileJson = Files.readString(Paths.get(assertionVerificationInput));
+                                assertionVerificationKeys = gson.fromJson(fileJson,
+                                        Config.AssertionVerificationKeys.class);
+                            } catch (JsonSyntaxException e2) {
+                                throw new RuntimeException("Failed to parse assertion verification keys from file", e2);
+                            } catch (Exception e3) {
+                                throw new RuntimeException(
+                                        "Could not parse assertion verification keys as json string or path to file",
+                                        e3);
+                            }
+                        }
+
+                        for (Map.Entry<String, AssertionConfig.AssertionKey> entry : assertionVerificationKeys.keys
+                                .entrySet()) {
+                            try {
+                                Object correctedKey = correctKeyType(entry.getValue().alg, entry.getValue().key, true);
+                                entry.setValue(new AssertionConfig.AssertionKey(entry.getValue().alg, correctedKey));
+                            } catch (Exception e) {
+                                throw new RuntimeException("Error with assertion verification key: " + e.getMessage(),
+                                        e);
+                            }
+                        }
+                        opts.add(Config.withAssertionVerificationKeys(assertionVerificationKeys));
                     }
-                }
 
-                for (Map.Entry<String, AssertionConfig.AssertionKey> entry : assertionVerificationKeys.keys
-                        .entrySet()) {
-                    try {
-                        Object correctedKey = correctKeyType(entry.getValue().alg, entry.getValue().key, true);
-                        entry.setValue(new AssertionConfig.AssertionKey(entry.getValue().alg, correctedKey));
-                    } catch (Exception e) {
-                        throw new RuntimeException("Error with assertion verification key: " + e.getMessage(),
-                                e);
+                    if (disableAssertionVerification) {
+                        opts.add(Config.withDisableAssertionVerification(true));
                     }
-                }
-                opts.add(Config.withAssertionVerificationKeys(assertionVerificationKeys));
-            }
+                    rewrapKeyType.map(Config::WithSessionKeyType).ifPresent(opts::add);
 
-            if (disableAssertionVerification) {
-                opts.add(Config.withDisableAssertionVerification(true));
-            }
-            rewrapKeyType.map(Config::WithSessionKeyType).ifPresent(opts::add);
+                    ignoreAllowlist.ifPresent(aBoolean -> opts.add(Config.WithIgnoreKasAllowlist(aBoolean)));
+                    kasAllowlistStr.ifPresent(s -> opts.add(Config.WithKasAllowlist(s.split(","))));
 
-            ignoreAllowlist.ifPresent(aBoolean -> opts.add(Config.WithIgnoreKasAllowlist(aBoolean)));
-            kasAllowlistStr.ifPresent(s -> opts.add(Config.WithKasAllowlist(s.split(","))));
-
-            var readerConfig = Config.newTDFReaderConfig(opts.toArray(new Consumer[0]));
-
-            if (tdfFile.startsWith("http://") || tdfFile.startsWith("https://")) {
-                var reader = sdk.loadTDF(URI.create(tdfFile), readerConfig);
-                writePlaintext(out -> reader.readPayload(out, offset, length), output);
-            } else {
-                try (var in = FileChannel.open(Path.of(tdfFile), StandardOpenOption.READ)) {
+                    var readerConfig = Config.newTDFReaderConfig(opts.toArray(new Consumer[0]));
                     var reader = sdk.loadTDF(in, readerConfig);
-                    writePlaintext(out -> reader.readPayload(out, offset, length), output);
+                    reader.readPayload(stdout);
                 }
             }
         }
     }
 
-    // With an output file, write to a sibling temp file and move it into place only on
-    // success, so a failed decrypt (e.g. an offset past the end) leaves no file behind.
-    private interface PlaintextWriter {
-        void writeTo(OutputStream out) throws Exception;
-    }
-
-    private static void writePlaintext(PlaintextWriter plaintext, Optional<Path> output) throws Exception {
-        if (output.isEmpty()) {
-            try (var stdout = new BufferedOutputStream(System.out)) {
-                plaintext.writeTo(stdout);
-            }
-            return;
+    /**
+     * Opens the TDF named by {@code -f}: an {@code http(s)://} URL, read in place with range
+     * requests, or anything else as a local file path.
+     */
+    private static SeekableByteChannel openTdf(SDK sdk, String tdfFile) throws IOException {
+        if (tdfFile.startsWith("http://") || tdfFile.startsWith("https://")) {
+            return HttpRangeChannel.open(sdk, URI.create(tdfFile));
         }
-        Path target = output.get().toAbsolutePath();
-        Path tmp = Files.createTempFile(target.getParent(), target.getFileName() + ".", ".tmp");
-        try {
-            try (OutputStream out = new BufferedOutputStream(Files.newOutputStream(tmp))) {
-                plaintext.writeTo(out);
-            }
-            moveIntoPlace(tmp, target);
-        } finally {
-            Files.deleteIfExists(tmp);
-        }
-    }
-
-    static void moveIntoPlace(Path source, Path target) throws IOException {
-        try {
-            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException e) {
-            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-        }
+        return FileChannel.open(Path.of(tdfFile), StandardOpenOption.READ);
     }
 
     @CommandLine.Command(name = "metadata")

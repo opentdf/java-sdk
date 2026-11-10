@@ -26,8 +26,7 @@ public class TDFReader {
     private static final int MANIFEST_BUFFER_SIZE = 1 << 16;
 
     private final ZipReader.Entry manifestEntry;
-    private final ZipReader.Entry payloadEntry;
-    private InputStream payload;
+    private final InputStream payload;
 
     public TDFReader(SeekableByteChannel tdf) throws SDKException, IOException {
         // A zip may legally list the same name twice, and readers disagree about which copy
@@ -53,7 +52,7 @@ public class TDFReader {
         }
 
         manifestEntry = manifest;
-        payloadEntry = entries.get(TDF_PAYLOAD_FILE_NAME);
+        payload = entries.get(TDF_PAYLOAD_FILE_NAME).getData();
     }
 
     /** Like the constructor, but reports a malformed container as {@link SDK.MalformedTDFException}. */
@@ -105,28 +104,7 @@ public class TDFReader {
         }
     }
 
-    /** A fresh stream over the payload, positioned at its start. */
-    InputStream payload() throws IOException {
-        try {
-            return payloadEntry.getData();
-        } catch (InvalidZipException e) {
-            // the payload's local header puts its data past the end of the archive
-            throw malformed("error reading from payload in TDF", e);
-        }
-    }
-
     int readPayloadBytes(byte[] buf) {
-        if (payload == null) {
-            try {
-                payload = payload();
-            } catch (IOException e) {
-                throw new SDKException("error reading from payload in TDF", e);
-            }
-        }
-        return readPayloadBytes(payload, buf);
-    }
-
-    static int readPayloadBytes(InputStream payload, byte[] buf) {
         int totalRead = 0;
         int nread;
         try {
