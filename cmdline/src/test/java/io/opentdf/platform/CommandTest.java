@@ -188,7 +188,6 @@ class CommandTest {
         assertThat(out.trim()).isEqualTo("{\"unknown_feature\":false}");
     }
 
-
     @Test
     void moveIntoPlaceFallsBackWhenAtomicMoveIsUnsupported(@TempDir Path tempDir) throws Exception {
         Path source = Files.writeString(tempDir.resolve("plaintext.tmp"), "plaintext");
