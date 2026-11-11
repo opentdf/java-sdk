@@ -416,13 +416,17 @@ public class ZipReader {
             int extrafieldLength = readUnsignedShort();
 
             long startOfData = zipChannel.position() + filenameLength + extrafieldLength;
-            // the central directory can't see these two lengths, so this is the first place a
-            // start past the end shows. an empty entry is never read, so unchecked it would come
-            // back empty rather than fail as truncated
-            if (startOfData > zipChannel.size()) {
+            // The central directory can't see these two lengths, so this is the first place a
+            // bad extent shows. The whole extent is checked, not just where it starts: an entry
+            // declaring more bytes than it holds would otherwise read, or skip over, whatever
+            // record follows it. Bounded by the end of entry data rather than by the archive --
+            // the archive also holds the central directory, so a small overrun still fits
+            // inside the file. Written as a subtraction so a huge declared size cannot overflow.
+            if (startOfData > endOfEntryData - fileSize) {
                 throw new InvalidZipException("The local file header of entry [" + fileName + "] at offset "
-                        + offsetToLocalHeader + " puts its data at offset " + startOfData
-                        + ", past the end of this " + zipChannel.size() + " byte archive");
+                        + offsetToLocalHeader + " puts its " + fileSize + " bytes of data at offset "
+                        + startOfData + ", running past the end of this archive's entry data at "
+                        + endOfEntryData);
             }
             return startOfData;
         }
@@ -455,19 +459,13 @@ public class ZipReader {
                  * Moves the cursor without reading: the default skip reads and discards, which
                  * over a channel that fetches on demand would download everything skipped.
                  * <p>
-                 * Reading is what normally discovers that the archive ends early, so the bytes
-                 * being stepped over are checked against the channel here. Without that, a
-                 * truncated entry skipped to its end would report a clean EOF and never reach
-                 * {@link #truncated()}.
+                 * Safe because {@link #findStartOfData()} has already bounded this entry's
+                 * extent to the region before the central directory, so clamping to what the
+                 * entry declares cannot step over bytes belonging to another record.
                  */
                 @Override
-                public long skip(long n) throws IOException {
+                public long skip(long n) {
                     long skipped = Math.max(0, Math.min(n, fileSize - offset));
-                    long available = zipChannel.size() - (startPosition + offset);
-                    if (skipped > available) {
-                        offset += Math.max(0, available);
-                        throw truncated();
-                    }
                     offset += skipped;
                     return skipped;
                 }
@@ -646,6 +644,7 @@ public class ZipReader {
     public ZipReader(SeekableByteChannel channel) throws IOException {
         zipChannel = channel;
         var centralDirectoryRecord = readEndOfCentralDirectory();
+        endOfEntryData = centralDirectoryRecord.offsetToStart;
         seekWithinArchive("the central directory", centralDirectoryRecord.offsetToStart);
         long centralDirectoryEnd = centralDirectoryRecord.offsetToStart + centralDirectoryRecord.size;
         // a corrupt zip64 count can be negative, which would read as an empty archive; an
@@ -662,6 +661,12 @@ public class ZipReader {
     }
 
     final SeekableByteChannel zipChannel;
+    /**
+     * Where entry data ends and the central directory begins. Every entry's data lies before
+     * it, which makes it the real bound on an entry's extent; {@link #zipChannel}'s size is a
+     * weaker one, since the archive also holds the directory and the records after it.
+     */
+    private long endOfEntryData;
     final ArrayList<Entry> entries = new ArrayList<>();
 
     public List<Entry> getEntries() {

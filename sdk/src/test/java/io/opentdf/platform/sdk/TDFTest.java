@@ -1627,13 +1627,15 @@ public class TDFTest {
      */
     @Test
     void loadTDFReportsAManifestRunningPastTheArchiveAsMalformed() {
-        // the manifest opens a JSON comment, so the parser reads on to the end of the archive
-        // looking for its close, rather than failing at the first byte past the entry
+        // Rejected when the entry is opened, before a byte is read: the declared extent runs
+        // past where this archive's entry data ends. The manifest opens a JSON comment, so a
+        // reader that got as far as parsing would run to the end of the archive looking for
+        // its close rather than stop at the first byte past the entry.
         var uncompressedPastTheEnd = HostileZips.tdfWith("/*", e -> e.uncompressedSize = 0x7FFFFFFFL);
         assertThatThrownBy(() -> loadTDFFrom(uncompressedPastTheEnd))
                 .isInstanceOf(SDK.MalformedTDFException.class)
                 .hasCauseInstanceOf(InvalidZipException.class)
-                .hasMessageContaining("Archive ended");
+                .hasMessageContaining("running past the end of this archive's entry data");
 
         var storedPastTheEnd = HostileZips.tdfWith("{}", e -> e.compressedSize = 0x7FFFFFFFL);
         assertThatThrownBy(() -> loadTDFFrom(storedPastTheEnd))
