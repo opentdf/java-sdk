@@ -452,6 +452,27 @@ public class ZipReader {
                 }
 
                 /**
+                 * Moves the cursor without reading: the default skip reads and discards, which
+                 * over a channel that fetches on demand would download everything skipped.
+                 * <p>
+                 * Reading is what normally discovers that the archive ends early, so the bytes
+                 * being stepped over are checked against the channel here. Without that, a
+                 * truncated entry skipped to its end would report a clean EOF and never reach
+                 * {@link #truncated()}.
+                 */
+                @Override
+                public long skip(long n) throws IOException {
+                    long skipped = Math.max(0, Math.min(n, fileSize - offset));
+                    long available = zipChannel.size() - (startPosition + offset);
+                    if (skipped > available) {
+                        offset += Math.max(0, available);
+                        throw truncated();
+                    }
+                    offset += skipped;
+                    return skipped;
+                }
+
+                /**
                  * The archive ended before this entry's data did. Reporting that as an ordinary
                  * end of stream would hand the caller a short entry with no sign anything is wrong.
                  */

@@ -1007,4 +1007,39 @@ public class ZipReaderTest {
         zip.getInputStream(zip.getEntry(name)).transferTo(data);
         return data.toString(StandardCharsets.UTF_8);
     }
+
+    /**
+     * skip() moves the cursor instead of reading, so it has to check the bytes it steps over
+     * are really there. Otherwise a truncated entry skipped to its end reports a clean EOF.
+     */
+    @Test
+    public void skipPastTheEndOfATruncatedEntryIsReportedAsInvalid() throws Exception {
+        var entry = new HostileZips.Entry("0.payload", "0123456789".getBytes(StandardCharsets.UTF_8));
+        entry.uncompressedSize = 1_000_000L;
+        try (var channel = new SeekableInMemoryByteChannel(HostileZips.build(List.of(entry)))) {
+            var data = new ZipReader(channel).getEntries().get(0).getData();
+
+            assertThatThrownBy(() -> data.skip(1_000_000L))
+                    .isInstanceOf(InvalidZipException.class)
+                    .hasMessageContaining("1000000 byte entry");
+        }
+    }
+
+    /** A skip wholly inside the entry still just moves the cursor, and lands on the right bytes. */
+    @Test
+    public void skipWithinAnIntactEntryMovesTheCursor() throws Exception {
+        var payload = new byte[5000];
+        new Random(7).nextBytes(payload);
+        var archive = HostileZips.build(List.of(new HostileZips.Entry("0.payload", payload)));
+        try (var channel = new SeekableInMemoryByteChannel(archive)) {
+            var data = new ZipReader(channel).getEntries().get(0).getData();
+
+            assertThat(data.skip(4000)).isEqualTo(4000);
+            assertThat(data.readAllBytes()).isEqualTo(Arrays.copyOfRange(payload, 4000, 5000));
+            // clamped to what is left, and a negative request is a no-op
+            assertThat(data.skip(10)).isZero();
+            assertThat(data.skip(-5)).isZero();
+        }
+    }
+
 }
