@@ -389,14 +389,10 @@ class Command {
 
     @CommandLine.Command(name = "decrypt")
     void decrypt(
-            @Option(names = { "-f",
-                    "--file" }, required = true, description = "TDF file path, or an http(s):// URL read with range requests") String tdfFile,
-            @Option(names = { "-o",
-                    "--output" }, defaultValue = Option.NULL_VALUE, description = "Write plaintext here, only on success (default: stdout)") Optional<Path> output,
-            @Option(names = {
-                    "--offset" }, defaultValue = "0", description = "Plaintext byte offset to start decrypting from") long offset,
-            @Option(names = {
-                    "--length" }, defaultValue = "-1", description = "Plaintext bytes to decrypt from --offset; negative decrypts to the end") long length,
+            @Option(names = { "-f", "--file" }, required = true, description = "TDF file path, or an http(s):// URL read with range requests") String tdfFile,
+            @Option(names = { "-o", "--output" }, defaultValue = Option.NULL_VALUE, description = "Write plaintext here, only on success (default: stdout)") Optional<Path> output,
+            @Option(names = { "--offset" }, defaultValue = "0", description = "Plaintext byte offset to start decrypting from") long offset,
+            @Option(names = { "--length" }, defaultValue = "-1", description = "Plaintext bytes to decrypt from --offset; negative decrypts to the end") long length,
             @Option(names = {
                     "--rewrap-key-type" }, defaultValue = Option.NULL_VALUE, description = "Preferred rewrap algorithm, one of ${COMPLETION-CANDIDATES}") Optional<KeyType> rewrapKeyType,
             @Option(names = {
