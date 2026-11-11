@@ -405,52 +405,55 @@ class Command {
             throws Exception {
         try (var sdk = buildSDK()) {
             var opts = new ArrayList<Consumer<Config.TDFReaderConfig>>();
-            try (var in = openTdf(sdk, tdfFile)) {
-                if (assertionVerification.isPresent()) {
-                    var assertionVerificationInput = assertionVerification.get();
-                    Gson gson = buildGson();
+            if (assertionVerification.isPresent()) {
+                var assertionVerificationInput = assertionVerification.get();
+                Gson gson = buildGson();
 
-                    Config.AssertionVerificationKeys assertionVerificationKeys;
+                Config.AssertionVerificationKeys assertionVerificationKeys;
+                try {
+                    assertionVerificationKeys = gson.fromJson(assertionVerificationInput,
+                            Config.AssertionVerificationKeys.class);
+                } catch (JsonSyntaxException e) {
+                    // try it as a file path
                     try {
-                        assertionVerificationKeys = gson.fromJson(assertionVerificationInput,
+                        String fileJson = Files.readString(Paths.get(assertionVerificationInput));
+                        assertionVerificationKeys = gson.fromJson(fileJson,
                                 Config.AssertionVerificationKeys.class);
-                    } catch (JsonSyntaxException e) {
-                        // try it as a file path
-                        try {
-                            String fileJson = Files.readString(Paths.get(assertionVerificationInput));
-                            assertionVerificationKeys = gson.fromJson(fileJson,
-                                    Config.AssertionVerificationKeys.class);
-                        } catch (JsonSyntaxException e2) {
-                            throw new RuntimeException("Failed to parse assertion verification keys from file", e2);
-                        } catch (Exception e3) {
-                            throw new RuntimeException(
-                                    "Could not parse assertion verification keys as json string or path to file",
-                                    e3);
-                        }
+                    } catch (JsonSyntaxException e2) {
+                        throw new RuntimeException("Failed to parse assertion verification keys from file", e2);
+                    } catch (Exception e3) {
+                        throw new RuntimeException(
+                                "Could not parse assertion verification keys as json string or path to file",
+                                e3);
                     }
-
-                    for (Map.Entry<String, AssertionConfig.AssertionKey> entry : assertionVerificationKeys.keys
-                            .entrySet()) {
-                        try {
-                            Object correctedKey = correctKeyType(entry.getValue().alg, entry.getValue().key, true);
-                            entry.setValue(new AssertionConfig.AssertionKey(entry.getValue().alg, correctedKey));
-                        } catch (Exception e) {
-                            throw new RuntimeException("Error with assertion verification key: " + e.getMessage(),
-                                    e);
-                        }
-                    }
-                    opts.add(Config.withAssertionVerificationKeys(assertionVerificationKeys));
                 }
 
-                if (disableAssertionVerification) {
-                    opts.add(Config.withDisableAssertionVerification(true));
+                for (Map.Entry<String, AssertionConfig.AssertionKey> entry : assertionVerificationKeys.keys
+                        .entrySet()) {
+                    try {
+                        Object correctedKey = correctKeyType(entry.getValue().alg, entry.getValue().key, true);
+                        entry.setValue(new AssertionConfig.AssertionKey(entry.getValue().alg, correctedKey));
+                    } catch (Exception e) {
+                        throw new RuntimeException("Error with assertion verification key: " + e.getMessage(),
+                                e);
+                    }
                 }
-                rewrapKeyType.map(Config::WithSessionKeyType).ifPresent(opts::add);
+                opts.add(Config.withAssertionVerificationKeys(assertionVerificationKeys));
+            }
 
-                ignoreAllowlist.ifPresent(aBoolean -> opts.add(Config.WithIgnoreKasAllowlist(aBoolean)));
-                kasAllowlistStr.ifPresent(s -> opts.add(Config.WithKasAllowlist(s.split(","))));
+            if (disableAssertionVerification) {
+                opts.add(Config.withDisableAssertionVerification(true));
+            }
+            rewrapKeyType.map(Config::WithSessionKeyType).ifPresent(opts::add);
 
-                var readerConfig = Config.newTDFReaderConfig(opts.toArray(new Consumer[0]));
+            ignoreAllowlist.ifPresent(aBoolean -> opts.add(Config.WithIgnoreKasAllowlist(aBoolean)));
+            kasAllowlistStr.ifPresent(s -> opts.add(Config.WithKasAllowlist(s.split(","))));
+
+            var readerConfig = Config.newTDFReaderConfig(opts.toArray(new Consumer[0]));
+
+            // Opened last: a bad --with-assertion-verification-keys should fail before the
+            // TDF is touched, which over a URL means before any request goes out.
+            try (var in = openTdf(sdk, tdfFile)) {
                 var reader = sdk.loadTDF(in, readerConfig);
                 writePlaintext(out -> reader.readPayload(out, offset, length), output);
             }
