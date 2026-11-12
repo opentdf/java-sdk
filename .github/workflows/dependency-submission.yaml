@@ -1,0 +1,48 @@
+name: "Dependency Submission"
+
+# Submits the full Maven dependency tree, transitive dependencies included, to the GitHub dependency graph.
+# Without it, the graph only holds what GitHub reads statically from the pom.xml files, so Dependabot alerts
+# miss vulnerable transitive dependencies such as those pulled in by grpc or okhttp. The default develop
+# profile builds every module, so one snapshot covers both sdk-fips-bc (bc-fips) and sdk-pqc-bc (bcprov).
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "**/pom.xml"
+      - ".github/workflows/dependency-submission.yaml"
+  # exercise changes to this workflow before they merge
+  pull_request:
+    paths:
+      - ".github/workflows/dependency-submission.yaml"
+  workflow_dispatch:
+
+concurrency:
+  group: dependency-submission-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    name: Submit Maven dependency snapshot
+    # fork pull requests get a read-only token, which can't submit a snapshot
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      # the dependency submission API requires write access to repository contents
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up JDK
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          java-version: "17"
+          distribution: "temurin"
+      # depgraph-maven-plugin only resolves dependencies, so neither buf nor generated sources are needed
+      - name: Submit dependency snapshot
+        uses: advanced-security/maven-dependency-submission-action@a64327a7329c9939cf675e458452febe1894a70c # v6.0.1
