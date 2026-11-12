@@ -3,7 +3,6 @@ package io.opentdf.platform.sdk;
 import com.connectrpc.ResponseMessage;
 import com.connectrpc.UnaryBlockingCall;
 import com.google.gson.reflect.TypeToken;
-import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.JWK;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -26,6 +25,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
@@ -455,11 +455,39 @@ public class TDFTest {
                         .setKeyAccessServerRegistryService(kasRegistryService).build());
         tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
 
-        var unwrappedData = new ByteArrayOutputStream();
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()),
-                Config.newTDFReaderConfig(), platformUrl);
-        reader.readPayload(unwrappedData);
+        assertEmbeddedKeyAddsNoTrust(tdf, tdfOutputStream.toByteArray(), keypair, plainText);
+    }
 
+    /**
+     * A TDF whose assertion was signed by {@code signer} and carries the signer's public key in
+     * its JWS header. The embedded key grants nothing by itself: with no key configured the
+     * payload key with HS256 is selected and the RS256 binding fails; configuring the signer's
+     * key, per ID or as the default, is what makes it verify.
+     */
+    private void assertEmbeddedKeyAddsNoTrust(TDF tdf, byte[] tdfBytes, KeyPair signer, String plainText)
+            throws Exception {
+        assertThatThrownBy(() -> tdf.loadTDF(new SeekableInMemoryByteChannel(tdfBytes), Config.newTDFReaderConfig(),
+                platformUrl))
+                .isInstanceOfSatisfying(SDK.AssertionFailureException.class, e -> {
+                    assertThat(e.getReason()).isEqualTo(AssertionFailureReason.ALGORITHM_MISMATCH);
+                    assertThat(e).hasMessageContaining("reason=algorithm-mismatch");
+                });
+
+        var unrelated = new Config.AssertionVerificationKeys();
+        unrelated.defaultKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256,
+                CryptoUtils.generateRSAKeypair().getPublic());
+        assertThatThrownBy(() -> tdf.loadTDF(new SeekableInMemoryByteChannel(tdfBytes),
+                Config.newTDFReaderConfig(Config.withAssertionVerificationKeys(unrelated)), platformUrl))
+                .isInstanceOfSatisfying(SDK.AssertionFailureException.class, e ->
+                        assertThat(e.getReason()).isEqualTo(AssertionFailureReason.SIGNER_NOT_PERMITTED));
+
+        var configured = new Config.AssertionVerificationKeys();
+        configured.defaultKey = new AssertionConfig.AssertionKey(AssertionConfig.AssertionKeyAlg.RS256,
+                signer.getPublic());
+        var unwrappedData = new ByteArrayOutputStream();
+        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfBytes),
+                Config.newTDFReaderConfig(Config.withAssertionVerificationKeys(configured)), platformUrl);
+        reader.readPayload(unwrappedData);
         assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
                 .withFailMessage("extracted data does not match")
                 .isEqualTo(plainText);
@@ -503,14 +531,7 @@ public class TDFTest {
                         .setKeyAccessServerRegistryService(kasRegistryService).build());
         tdf.createTDF(plainTextInputStream, tdfOutputStream, config);
 
-        var unwrappedData = new ByteArrayOutputStream();
-        var reader = tdf.loadTDF(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray()),
-                Config.newTDFReaderConfig(), platformUrl);
-        reader.readPayload(unwrappedData);
-
-        assertThat(unwrappedData.toString(StandardCharsets.UTF_8))
-                .withFailMessage("extracted data does not match")
-                .isEqualTo(plainText);
+        assertEmbeddedKeyAddsNoTrust(tdf, tdfOutputStream.toByteArray(), keypair, plainText);
     }
 
     @Test
@@ -551,10 +572,12 @@ public class TDFTest {
         var unwrappedData = new ByteArrayOutputStream();
         var dataToUnwrap = new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray());
         var emptyConfig = Config.newTDFReaderConfig();
-        var thrown = assertThrows(SDKException.class, () -> {
+        var thrown = assertThrows(SDK.AssertionFailureException.class, () -> {
             tdf.loadTDF(dataToUnwrap, emptyConfig, platformUrl);
         });
-        assertThat(thrown.getCause()).isInstanceOf(JOSEException.class);
+        // no key configured, so the payload key with HS256 is selected, and the RS256 binding fails
+        assertThat(thrown.getReason()).isEqualTo(AssertionFailureReason.ALGORITHM_MISMATCH);
+        assertThat(thrown.getAssertionId()).isEqualTo(assertion1Id);
 
         // try with assertion verification disabled and not passing the assertion
         // verification keys
@@ -638,6 +661,74 @@ public class TDFTest {
             } else {
                 throw new RuntimeException("unexpected assertion id: " + assertion.id);
             }
+        }
+    }
+
+    /**
+     * The writer hashes the wire form it then writes, emits {@code "method": "jws"}, and keeps
+     * statement values as strings.
+     */
+    @Test
+    void writerEmitsJwsBindingsOverTheWrittenAssertion() throws Exception {
+        var assertionConfig = new AssertionConfig();
+        assertionConfig.id = "assertion1";
+        assertionConfig.type = AssertionConfig.Type.HandlingAssertion;
+        assertionConfig.scope = AssertionConfig.Scope.Payload;
+        assertionConfig.appliesToState = AssertionConfig.AppliesToState.Encrypted;
+        assertionConfig.statement = new AssertionConfig.Statement();
+        assertionConfig.statement.format = "json";
+        assertionConfig.statement.schema = "urn:nato:stanag:5636:A:1:elements:json";
+        assertionConfig.statement.value = "{\"ocl\":{\"cls\":\"SECRET\"},\"n\":1e21}";
+
+        var rsaKasInfo = new Config.KASInfo();
+        rsaKasInfo.URL = "https://example.com/kas" + 0;
+        var tdfOutputStream = new ByteArrayOutputStream();
+        new TDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build())
+                .createTDF(new ByteArrayInputStream("hello".getBytes(StandardCharsets.UTF_8)), tdfOutputStream,
+                        Config.newTDFConfig(Config.withAutoconfigure(false), Config.withKasInformation(rsaKasInfo),
+                                Config.withSystemMetadataAssertion(), Config.withAssertionConfig(assertionConfig)));
+
+        var manifestJson = new StringWriter();
+        try (var manifestReader = TDFReader.open(new SeekableInMemoryByteChannel(tdfOutputStream.toByteArray())).manifest()) {
+            manifestReader.transferTo(manifestJson);
+        }
+        var assertions = JsonParser.parseString(manifestJson.toString()).getAsJsonObject().getAsJsonArray("assertions");
+        assertThat(assertions).hasSize(2);
+        for (var written : assertions) {
+            var binding = written.getAsJsonObject().getAsJsonObject("binding");
+            assertThat(binding.get("method").getAsString()).isEqualTo("jws");
+            assertThat(written.getAsJsonObject().getAsJsonObject("statement").get("value").getAsJsonPrimitive().isString())
+                    .isTrue();
+            var claims = com.nimbusds.jwt.SignedJWT.parse(binding.get("signature").getAsString()).getJWTClaimsSet();
+            assertThat(claims.getStringClaim("assertionHash"))
+                    .isEqualTo(Manifest.Assertion.computeAssertionHash(written.toString()));
+        }
+    }
+
+    /** The writer refuses an assertion a reader would reject while parsing, as a configuration error. */
+    @Test
+    void writerRefusesAnAssertionThatIsNotIJson() {
+        var rsaKasInfo = new Config.KASInfo();
+        rsaKasInfo.URL = "https://example.com/kas" + 0;
+        for (var bad : List.of("value", "id")) {
+            var assertionConfig = new AssertionConfig();
+            assertionConfig.id = "id".equals(bad) ? "assertion\uD800" : "assertion1";
+            assertionConfig.type = AssertionConfig.Type.BaseAssertion;
+            assertionConfig.scope = AssertionConfig.Scope.Payload;
+            assertionConfig.appliesToState = AssertionConfig.AppliesToState.Unencrypted;
+            assertionConfig.statement = new AssertionConfig.Statement();
+            assertionConfig.statement.format = "string";
+            assertionConfig.statement.value = "value".equals(bad) ? "lone \uDC00 surrogate" : "fine";
+            var config = Config.newTDFConfig(Config.withAutoconfigure(false), Config.withKasInformation(rsaKasInfo),
+                    Config.withAssertionConfig(assertionConfig));
+            var tdf = new TDF(new FakeServicesBuilder().setKas(kas).setKeyAccessServerRegistryService(kasRegistryService).build());
+            assertThatThrownBy(() -> tdf.createTDF(new ByteArrayInputStream("hello".getBytes(StandardCharsets.UTF_8)),
+                    new ByteArrayOutputStream(), config))
+                    .as(bad)
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .isNotInstanceOf(SDK.TamperException.class)
+                    .hasNoCause()
+                    .hasMessageContaining("reason=invalid-json");
         }
     }
 
@@ -1607,14 +1698,21 @@ public class TDFTest {
      * size fails when the manifest is read, an oversized compressed size when the archive is opened.
      */
     @Test
-    void loadTDFReportsAManifestRunningPastTheArchiveAsMalformed() {
-        // the manifest opens a JSON comment, so the parser reads on to the end of the archive
-        // looking for its close, rather than failing at the first byte past the entry
-        var uncompressedPastTheEnd = HostileZips.tdfWith("/*", e -> e.uncompressedSize = 0x7FFFFFFFL);
+    void loadTDFReportsAManifestRunningPastTheArchiveAsMalformed() throws IOException {
+        // the entry runs on through the central directory, whose binary fields are not UTF-8,
+        // and the manifest decoder refuses them rather than substituting U+FFFD
+        var uncompressedPastTheEnd = HostileZips.tdfWith("{\"a\":\"", e -> e.uncompressedSize = 0x7FFFFFFFL);
         assertThatThrownBy(() -> loadTDFFrom(uncompressedPastTheEnd))
-                .isInstanceOf(SDK.MalformedTDFException.class)
-                .hasCauseInstanceOf(InvalidZipException.class)
-                .hasMessageContaining("Archive ended");
+                .isInstanceOfSatisfying(SDK.AssertionFailureException.class, e ->
+                        assertThat(e.getReason()).isEqualTo(AssertionFailureReason.INVALID_JSON));
+        // and the entry itself still ends in an error at the end of the archive, not a short read
+        var manifestEntry = new ZipReader(new SeekableInMemoryByteChannel(uncompressedPastTheEnd)).getEntries()
+                .stream().filter(e -> e.getName().equals(TDFWriter.TDF_MANIFEST_FILE_NAME)).findFirst().orElseThrow();
+        assertThatThrownBy(() -> {
+            try (var data = manifestEntry.getData()) {
+                data.transferTo(OutputStream.nullOutputStream());
+            }
+        }).isInstanceOf(InvalidZipException.class).hasMessageContaining("Archive ended");
 
         var storedPastTheEnd = HostileZips.tdfWith("{}", e -> e.compressedSize = 0x7FFFFFFFL);
         assertThatThrownBy(() -> loadTDFFrom(storedPastTheEnd))

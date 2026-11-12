@@ -11,6 +11,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
+import com.google.gson.JsonSyntaxException;
 import com.google.gson.TypeAdapter;
 import com.google.gson.TypeAdapterFactory;
 import com.google.gson.annotations.JsonAdapter;
@@ -23,20 +24,11 @@ import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.JWSSigner;
-import com.nimbusds.jose.JWSVerifier;
 import com.nimbusds.jose.KeyLengthException;
 import com.nimbusds.jose.crypto.MACSigner;
-import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jose.crypto.RSASSASigner;
-import com.nimbusds.jose.crypto.RSASSAVerifier;
-import com.nimbusds.jose.crypto.factories.DefaultJWSVerifierFactory;
-import com.nimbusds.jose.jwk.JWK;
-import com.nimbusds.jose.util.X509CertUtils;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
-import io.opentdf.platform.sdk.SDK.AssertionException;
-import org.apache.commons.codec.binary.Hex;
-import org.erdtman.jcs.JsonCanonicalizer;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -47,12 +39,9 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.lang.reflect.Type;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
-import java.security.interfaces.RSAPublicKey;
-import java.security.cert.X509Certificate;
 import java.text.ParseException;
 import java.util.AbstractList;
 import java.util.ArrayList;
@@ -923,6 +912,18 @@ public class Manifest {
         }
     }
 
+    /**
+     * An assertion in the manifest.
+     * <p>
+     * An assertion read from a manifest keeps the JSON object it was parsed from. That object,
+     * and not these typed fields, is what is hashed and verified, and what is written back when
+     * the manifest is serialized, so members this SDK does not model and the JSON type of
+     * {@code statement.value} survive. The typed fields are a convenience view of it: object
+     * statement values, for example, appear in {@link AssertionConfig.Statement#value} as JSON
+     * text. Changing a typed field changes that member, and only that member, in the serialized
+     * form and in {@link #hash()}.
+     */
+    @JsonAdapter(AssertionTypeAdapter.class)
     static public class Assertion {
         public String id;
         public String type;
@@ -930,6 +931,10 @@ public class Manifest {
         public String appliesToState;
         public AssertionConfig.Statement statement;
         public Binding binding;
+
+        /** The object this assertion was parsed from, never modified; null if built in code. */
+        private transient JsonObject received;
+
         static public class HashValues {
             private final String assertionHash;
             private final String signature;
@@ -965,17 +970,170 @@ public class Manifest {
             return Objects.hash(id, type, scope, appliesToState, statement, binding);
         }
 
+        /**
+         * Computes {@code assertionHash} for the raw JSON text of one assertion wire object, as
+         * Section 4 of the ZTDF assertions specification defines it: the lowercase hex SHA-256
+         * of the RFC 8785 (JCS) canonical form of the object with only its top-level
+         * {@code binding} member removed. No other member is dropped or reinterpreted.
+         * <p>
+         * The text is first parsed under Section 3 of the specification. Use this to check an
+         * assertion's binding outside the SDK; it does not check the {@code id} or the binding.
+         *
+         * @param wireJson the assertion object exactly as it appears in a manifest
+         * @return 64 lowercase hexadecimal characters
+         * @throws SDK.AssertionFailureException if the text has duplicate member names, case
+         *                                       variants of modelled member names, content that is
+         *                                       not I-JSON, or is not a JSON object at all
+         */
+        public static String computeAssertionHash(String wireJson) {
+            return AssertionJson.hash(AssertionJson.parseAssertion(wireJson));
+        }
+
+        /**
+         * The {@code assertionHash} of this assertion as it would be written to a manifest now:
+         * for an unmodified assertion read from a manifest, the hash of the assertion as
+         * received; after a typed field has been changed, the hash with that change.
+         * {@link #verify} reads the same form. Reading a TDF uses neither: {@code loadTDF}
+         * verifies each assertion exactly as received.
+         *
+         * @throws SDK.AssertionFailureException if the assertion cannot be represented as I-JSON
+         */
         public String hash() throws IOException {
-            MessageDigest digest;
+            return computeAssertionHash(toJsonTree().toString());
+        }
+
+        /**
+         * The hash a writer signs, after checking that the wire form would pass the reader's
+         * Section 3 parsing and id check.
+         *
+         * @throws IllegalArgumentException if it would not; a writer-side configuration error,
+         *                                  not a tamper error
+         */
+        String hashForWriting() {
+            if (id == null || id.isEmpty()) {
+                throw new IllegalArgumentException("an assertion cannot be written without an id: reason="
+                        + AssertionFailureReason.INVALID_ID.code());
+            }
             try {
-                digest = MessageDigest.getInstance("SHA-256");
-            } catch (NoSuchAlgorithmException e) {
-                throw new SDKException("error creating SHA-256 message digest", e);
+                return computeAssertionHash(toJsonTree().toString());
+            } catch (SDK.AssertionFailureException e) {
+                throw new IllegalArgumentException("assertion " + id + " cannot be written: reason="
+                        + e.getReason().code());
+            }
+        }
+
+        /** Reads an assertion from the object parsed out of a manifest. */
+        static Assertion fromJson(JsonObject json) {
+            Assertion assertion = new Assertion();
+            assertion.received = json;
+            TypedView view = TypedView.of(json);
+            assertion.id = view.id;
+            assertion.type = view.type;
+            assertion.scope = view.scope;
+            assertion.appliesToState = view.appliesToState;
+            assertion.statement = view.statement;
+            assertion.binding = view.binding;
+            return assertion;
+        }
+
+        /** The object this assertion was parsed from, or null if it was built in code. Do not modify it. */
+        JsonObject received() {
+            return received;
+        }
+
+        /**
+         * The wire form of this assertion: the object it was parsed from, with any typed field
+         * that has since been changed written over the corresponding member, or, for an assertion
+         * built in code, an object holding its non-null typed fields.
+         */
+        JsonObject toJsonTree() {
+            JsonObject json = received == null ? new JsonObject() : received.deepCopy();
+            TypedView original = received == null ? TypedView.EMPTY : TypedView.of(received);
+            overlay(json, "id", id, original.id);
+            overlay(json, "type", type, original.type);
+            overlay(json, "scope", scope, original.scope);
+            overlay(json, "appliesToState", appliesToState, original.appliesToState);
+            if (!Objects.equals(statement, original.statement)) {
+                if (statement == null) {
+                    json.remove("statement");
+                } else {
+                    JsonObject target = original.statement == null
+                            ? new JsonObject()
+                            : json.getAsJsonObject("statement");
+                    overlay(target, "format", statement.format, original.statement == null ? null : original.statement.format);
+                    overlay(target, "schema", statement.schema, original.statement == null ? null : original.statement.schema);
+                    overlay(target, "value", statement.value, original.statement == null ? null : original.statement.value);
+                    json.add("statement", target);
+                }
+            }
+            if (!Objects.equals(binding, original.binding)) {
+                if (binding == null) {
+                    json.remove("binding");
+                } else {
+                    JsonObject target = original.binding == null ? new JsonObject() : json.getAsJsonObject("binding");
+                    overlay(target, "method", binding.method, original.binding == null ? null : original.binding.method);
+                    overlay(target, "signature", binding.signature, original.binding == null ? null : original.binding.signature);
+                    json.add("binding", target);
+                }
+            }
+            return json;
+        }
+
+        private static void overlay(JsonObject json, String member, String value, String original) {
+            if (Objects.equals(value, original)) {
+                return;
+            }
+            if (value == null) {
+                json.remove(member);
+            } else {
+                json.addProperty(member, value);
+            }
+        }
+
+        /** The typed fields as they are read from an assertion object. */
+        private static final class TypedView {
+            static final TypedView EMPTY = new TypedView();
+
+            String id;
+            String type;
+            String scope;
+            String appliesToState;
+            AssertionConfig.Statement statement;
+            Binding binding;
+
+            static TypedView of(JsonObject json) {
+                TypedView view = new TypedView();
+                // only a JSON string is an id; anything else fails verification with invalid-id
+                view.id = stringMember(json, "id");
+                view.type = textMember(json, "type");
+                view.scope = textMember(json, "scope");
+                view.appliesToState = textMember(json, "appliesToState");
+                JsonElement statement = json.get("statement");
+                if (statement != null && !statement.isJsonNull()) {
+                    view.statement = STATEMENT_ADAPTER.deserialize(statement, AssertionConfig.Statement.class, null);
+                }
+                JsonElement binding = json.get("binding");
+                if (binding != null && binding.isJsonObject()) {
+                    // the binding's shape is checked when the assertion is verified
+                    view.binding = new Binding();
+                    view.binding.method = stringMember(binding.getAsJsonObject(), "method");
+                    view.binding.signature = stringMember(binding.getAsJsonObject(), "signature");
+                }
+                return view;
             }
 
-            var assertionAsJson = gson.toJson(this);
-            JsonCanonicalizer jc = new JsonCanonicalizer(assertionAsJson);
-            return Hex.encodeHexString(digest.digest(jc.getEncodedUTF8()));
+            private static String stringMember(JsonObject json, String member) {
+                JsonElement element = json.get(member);
+                return element != null && element.isJsonPrimitive() && element.getAsJsonPrimitive().isString()
+                        ? element.getAsString()
+                        : null;
+            }
+
+            /** A string, or a number or boolean as its JSON text, as the reflective reader gave them. */
+            private static String textMember(JsonObject json, String member) {
+                JsonElement element = json.get(member);
+                return element != null && element.isJsonPrimitive() ? element.getAsString() : null;
+            }
         }
 
         // Sign the assertion with the given hash and signature using the key.
@@ -1001,64 +1159,32 @@ public class Manifest {
 
             // Store the binding and signature
             this.binding = new Binding();
-            this.binding.method = AssertionConfig.BindingMethod.JWS.name();
+            this.binding.method = AssertionConfig.BindingMethod.JWS.toString();
             this.binding.signature = signedJWT.serialize();
         }
 
-        // Checks the binding signature of the assertion and
-        // returns the hash and the signature. It returns an error if the verification
-        // fails.
+        /**
+         * Checks this assertion's binding with exactly the given key and its algorithm, and
+         * returns the signed claims for the caller to compare with the recomputed hash and
+         * signature. A key embedded in the JWS header ({@code jwk} or {@code x5c}) is accepted
+         * only if it is the same public key as {@code assertionKey}; it is never used instead.
+         * This has no side effects on the assertion.
+         * <p>
+         * Like {@link #hash()}, this reads the assertion as it would be written now, so a
+         * changed {@link #binding} is the binding checked; for an unmodified assertion read from
+         * a manifest that is the binding as received. Readers verify assertions in
+         * {@code loadTDF}, which uses the assertion exactly as received, selects the key, and
+         * compares the claims; this method is for callers that do the comparison themselves.
+         *
+         * @throws SDK.AssertionFailureException if the binding does not verify with the key, or
+         *                                       the key is not usable ({@code configuration-error})
+         */
         public Assertion.HashValues verify(AssertionConfig.AssertionKey assertionKey)
                 throws ParseException, JOSEException, java.security.cert.CertificateException {
-            if (binding == null) {
-                throw new AssertionException("Binding is null in assertion", this.id);
-            }
-
-            String signatureString = binding.signature;
-            binding = null; // Clear the binding after use
-
-            SignedJWT signedJWT = SignedJWT.parse(signatureString);
-            JWSHeader header = signedJWT.getHeader();
-            JWSVerifier verifier = null;
-
-            // Check for JWK in header
-            if (header.getJWK() != null) {
-                try {
-                    verifier = createVerifier(header.getJWK());
-                } catch (JOSEException e) {
-                    throw new SDKException("Invalid JWK in JWT header", e);
-                }
-            }
-
-            // Check for X.509 certificate chain in header
-            if (verifier == null && header.getX509CertChain() != null && !header.getX509CertChain().isEmpty()) {
-                try {
-                    X509Certificate cert = X509CertUtils.parse(header.getX509CertChain().get(0).decode());
-                    if (cert.getPublicKey() instanceof RSAPublicKey) {
-                        verifier = createVerifier((RSAPublicKey) cert.getPublicKey());
-                    } else {
-                        throw new SDKException("Unsupported public key type in X.509 certificate");
-                    }
-                } catch (IllegalArgumentException e) {
-                    throw new SDKException("Invalid Base64 in X.509 certificate in JWT header", e);
-                }
-            }
-
-
-            if (verifier == null) {
-                verifier = createVerifier(assertionKey);
-            }
-
-
-            if (!signedJWT.verify(verifier)) {
-                throw new SDKException("Unable to verify assertion signature");
-            }
-
-            JWTClaimsSet claimsSet = signedJWT.getJWTClaimsSet();
-            String assertionHash = claimsSet.getStringClaim(kAssertionHash);
-            String signature = claimsSet.getStringClaim(kAssertionSignature);
-
-            return new Assertion.HashValues(assertionHash, signature);
+            JsonObject json = toJsonTree();
+            String validId = id != null && !id.isEmpty() ? id : null;
+            return AssertionVerifier.verifyBinding(json, validId,
+                    AssertionVerifier.configuredKey(assertionKey, validId, "the given key"));
         }
 
         private SignedJWT createSignedJWT(final JWTClaimsSet claims, final AssertionConfig.AssertionKey assertionKey)
@@ -1103,33 +1229,48 @@ public class Manifest {
                     throw new SDKException("Unknown signing algorithm: " + assertionKey.alg);
             }
         }
+    }
 
-        private JWSVerifier createVerifier(AssertionConfig.AssertionKey assertionKey) throws JOSEException {
-            switch (assertionKey.alg) {
-                case RS256:
-                    if (assertionKey.key instanceof JWK) {
-                        return createVerifier((JWK) assertionKey.key);
-                    } else if (assertionKey.key instanceof RSAPublicKey) {
-                        return createVerifier((RSAPublicKey) assertionKey.key);
-                    } else {
-                        throw new SDKException("Expected JWK or RSAPublicKey for RS256 algorithm");
-                    }
-                case HS256:
-                    return new MACVerifier((byte[]) assertionKey.key);
-                default:
-                    throw new SDKException("Unknown verify key, unable to verify assertion signature");
+    private static final AssertionValueAdapter STATEMENT_ADAPTER = new AssertionValueAdapter();
+
+    /**
+     * Reads each assertion as a JSON tree and keeps that tree, so verification hashes the
+     * assertion as received rather than a re-serialization of the typed fields; writes the
+     * assertion's wire form. Attached to {@link Assertion} itself so that every {@link Gson}
+     * instance, including the plain one the TDF writer uses, serializes assertions this way.
+     */
+    static final class AssertionTypeAdapter extends TypeAdapter<Assertion> {
+        AssertionTypeAdapter() {
+            // instantiated by Gson through @JsonAdapter
+        }
+
+        @Override
+        public void write(JsonWriter out, Assertion assertion) throws IOException {
+            if (assertion == null) {
+                out.nullValue();
+                return;
+            }
+            // a member that is JSON null is part of what was hashed, so it has to be written
+            boolean serializeNulls = out.getSerializeNulls();
+            out.setSerializeNulls(true);
+            try {
+                AssertionJson.JSON_ELEMENT.write(out, assertion.toJsonTree());
+            } finally {
+                out.setSerializeNulls(serializeNulls);
             }
         }
 
-        private JWSVerifier createVerifier(JWK jwk) throws JOSEException {
-            if (jwk instanceof com.nimbusds.jose.jwk.RSAKey) {
-                return new RSASSAVerifier(jwk.toRSAKey());
+        @Override
+        public Assertion read(JsonReader in) throws IOException {
+            if (in.peek() == JsonToken.NULL) {
+                in.nextNull();
+                return null;
             }
-            throw new JOSEException("Unsupported JWK type: " + jwk.getKeyType() + ". Only RSA keys are supported.");
-        }
-
-        private JWSVerifier createVerifier(RSAPublicKey publicKey) {
-            return new RSASSAVerifier(publicKey);
+            JsonElement json = AssertionJson.JSON_ELEMENT.read(in);
+            if (!json.isJsonObject()) {
+                throw new JsonParseException("an assertion must be a JSON object, at " + in.getPreviousPath());
+            }
+            return Assertion.fromJson(json.getAsJsonObject());
         }
     }
 
@@ -1179,23 +1320,62 @@ public class Manifest {
     /**
      * Parses a manifest without materializing it as a {@link String}, which a
      * manifest with tens of millions of segments cannot be.
+     * <p>
+     * The JSON must be strict (RFC 8259) and must meet the JSON profile of the ZTDF assertions
+     * specification, Section 3, which this checks in the same single pass: no duplicate member
+     * names in any object, no case variants of modelled member names (such as
+     * {@code Assertions} or an assertion's {@code ID}), and I-JSON content in every assertion.
+     * Those checks apply whether or not assertions are later verified.
+     *
+     * @throws SDK.AssertionFailureException if the manifest breaks that profile, or if
+     *                                       {@code manifestJson} reports undecodable input
      */
     protected static Manifest readManifest(Reader manifestJson) {
         FailureTrackingReader reader = new FailureTrackingReader(manifestJson);
+        StrictJsonReader jsonReader = new StrictJsonReader(reader, StrictJsonReader.Mode.MANIFEST);
         Manifest result;
         try {
-            result = gson.fromJson(reader, Manifest.class);
-        } catch (JsonParseException e) {
-            if (reader.failure != null) {
-                throw new SDKException("error reading manifest from zip file", reader.failure);
+            result = gson.fromJson(jsonReader, TypeToken.get(Manifest.class));
+            if (result != null && jsonReader.peek() != JsonToken.END_DOCUMENT) {
+                throw new JsonSyntaxException("unexpected content after the manifest object");
             }
-            throw e;
+        } catch (JsonParseException e) {
+            throw readFailure(reader, jsonReader, e);
+        } catch (IOException e) {
+            throw readFailure(reader, jsonReader, new JsonSyntaxException(e));
         }
         if (result == null) {
             throw new IllegalArgumentException("Manifest is empty");
         }
         validateManifest(result);
         return result;
+    }
+
+    /**
+     * Applies only the manifest-level parsing rules of the assertions specification, Section 3,
+     * without building the typed manifest. Malformed JSON is reported as {@code invalid-json}.
+     */
+    static void checkManifestJson(String manifestJson) {
+        AssertionJson.checkManifest(new StringReader(manifestJson));
+    }
+
+    private static RuntimeException readFailure(FailureTrackingReader reader, StrictJsonReader jsonReader,
+            JsonParseException e) {
+        if (reader.failure instanceof CharacterCodingException) {
+            return new SDK.AssertionFailureException(null, AssertionFailureReason.INVALID_JSON,
+                    "the manifest is not valid UTF-8");
+        }
+        if (reader.failure != null) {
+            return new SDKException("error reading manifest from zip file", reader.failure);
+        }
+        if (e.getCause() instanceof IOException && jsonReader.inAssertion()) {
+            // JSON that does not parse inside an assertion object is not I-JSON there. This also
+            // covers integer literals that Gson's lexer cannot read: it accumulates digits in a
+            // long, and treats a 20+ digit integer whose prefix wraps to zero as malformed.
+            return new SDK.AssertionFailureException(jsonReader.openAssertionId(), AssertionFailureReason.INVALID_JSON,
+                    "an assertion is not valid JSON");
+        }
+        return e;
     }
 
     private static final class FailureTrackingReader extends Reader {
@@ -1225,6 +1405,11 @@ public class Manifest {
     private static void validateManifest(Manifest result) {
         if (result.assertions == null) {
             result.assertions = new ArrayList<>();
+        }
+        for (Assertion assertion : result.assertions) {
+            if (assertion == null) {
+                throw new IllegalArgumentException("Invalid null assertion in manifest");
+            }
         }
 
         requireManifestField(result.payload, "Manifest with null payload");
