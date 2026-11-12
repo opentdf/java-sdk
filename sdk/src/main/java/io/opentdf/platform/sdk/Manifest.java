@@ -31,7 +31,6 @@ import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jose.crypto.factories.DefaultJWSVerifierFactory;
 import com.nimbusds.jose.jwk.JWK;
-import com.nimbusds.jose.util.X509CertUtils;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import io.opentdf.platform.sdk.SDK.AssertionException;
@@ -52,7 +51,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.interfaces.RSAPublicKey;
-import java.security.cert.X509Certificate;
 import java.text.ParseException;
 import java.util.AbstractList;
 import java.util.ArrayList;
@@ -1008,6 +1006,11 @@ public class Manifest {
         // Checks the binding signature of the assertion and
         // returns the hash and the signature. It returns an error if the verification
         // fails.
+        //
+        // assertionKey is the key the reader selected for this assertion: a configured
+        // key, or the payload key with HS256. It is the only key used, and only with its
+        // own algorithm. A jwk or x5c in the JWS header never supplies the verification
+        // key, and the header's alg must equal the key's algorithm.
         public Assertion.HashValues verify(AssertionConfig.AssertionKey assertionKey)
                 throws ParseException, JOSEException, java.security.cert.CertificateException {
             if (binding == null) {
@@ -1018,37 +1021,15 @@ public class Manifest {
             binding = null; // Clear the binding after use
 
             SignedJWT signedJWT = SignedJWT.parse(signatureString);
-            JWSHeader header = signedJWT.getHeader();
-            JWSVerifier verifier = null;
+            JWSVerifier verifier = createVerifier(assertionKey);
 
-            // Check for JWK in header
-            if (header.getJWK() != null) {
-                try {
-                    verifier = createVerifier(header.getJWK());
-                } catch (JOSEException e) {
-                    throw new SDKException("Invalid JWK in JWT header", e);
-                }
+            // RSASSAVerifier and MACVerifier accept every RS* or HS* algorithm, so pin it here.
+            JWSAlgorithm keyAlg = JWSAlgorithm.parse(assertionKey.alg.name());
+            JWSAlgorithm headerAlg = signedJWT.getHeader().getAlgorithm();
+            if (!keyAlg.equals(headerAlg)) {
+                throw new AssertionException("binding alg " + headerAlg
+                        + " does not match the verification key's alg " + keyAlg, this.id);
             }
-
-            // Check for X.509 certificate chain in header
-            if (verifier == null && header.getX509CertChain() != null && !header.getX509CertChain().isEmpty()) {
-                try {
-                    X509Certificate cert = X509CertUtils.parse(header.getX509CertChain().get(0).decode());
-                    if (cert.getPublicKey() instanceof RSAPublicKey) {
-                        verifier = createVerifier((RSAPublicKey) cert.getPublicKey());
-                    } else {
-                        throw new SDKException("Unsupported public key type in X.509 certificate");
-                    }
-                } catch (IllegalArgumentException e) {
-                    throw new SDKException("Invalid Base64 in X.509 certificate in JWT header", e);
-                }
-            }
-
-
-            if (verifier == null) {
-                verifier = createVerifier(assertionKey);
-            }
-
 
             if (!signedJWT.verify(verifier)) {
                 throw new SDKException("Unable to verify assertion signature");
