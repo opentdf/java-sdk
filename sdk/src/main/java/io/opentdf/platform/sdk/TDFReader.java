@@ -8,6 +8,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.channels.SeekableByteChannel;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -67,7 +69,10 @@ public class TDFReader {
 
     /**
      * Reads and validates the manifest. Malformed JSON, and JSON that does not have the shape of
-     * a manifest, is reported as a {@link SDK.MalformedTDFException}.
+     * a manifest, is reported as a {@link SDK.MalformedTDFException}. A manifest that is not valid
+     * UTF-8, or that breaks the JSON profile of the assertions specification (duplicate member
+     * names, case variants of modelled member names, non-I-JSON assertion content), is reported
+     * as a {@link SDK.AssertionFailureException}.
      */
     Manifest readManifest() {
         try (Reader manifestJson = manifest()) {
@@ -96,8 +101,12 @@ public class TDFReader {
         // no fixed size cap: manifests for very large payloads exceed 1 GiB. a hostile declared
         // size is still bounded by the archive, since the entry's stream throws where it ends
         try {
-            return new BufferedReader(
-                    new InputStreamReader(manifestEntry.getData(), StandardCharsets.UTF_8), MANIFEST_BUFFER_SIZE);
+            // REPORT, not the default REPLACE: invalid UTF-8 must fail rather than turn silently
+            // into U+FFFD, which would hash and verify as if the writer had written it
+            CharsetDecoder utf8 = StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT);
+            return new BufferedReader(new InputStreamReader(manifestEntry.getData(), utf8), MANIFEST_BUFFER_SIZE);
         } catch (InvalidZipException e) {
             throw malformed("error retrieving manifest from zip file", e);
         } catch (IOException e) {

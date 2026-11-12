@@ -26,6 +26,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
@@ -1607,14 +1608,21 @@ public class TDFTest {
      * size fails when the manifest is read, an oversized compressed size when the archive is opened.
      */
     @Test
-    void loadTDFReportsAManifestRunningPastTheArchiveAsMalformed() {
-        // the manifest opens a JSON comment, so the parser reads on to the end of the archive
-        // looking for its close, rather than failing at the first byte past the entry
-        var uncompressedPastTheEnd = HostileZips.tdfWith("/*", e -> e.uncompressedSize = 0x7FFFFFFFL);
+    void loadTDFReportsAManifestRunningPastTheArchiveAsMalformed() throws IOException {
+        // the entry runs on through the central directory, whose binary fields are not UTF-8,
+        // and the manifest decoder refuses them rather than substituting U+FFFD
+        var uncompressedPastTheEnd = HostileZips.tdfWith("{\"a\":\"", e -> e.uncompressedSize = 0x7FFFFFFFL);
         assertThatThrownBy(() -> loadTDFFrom(uncompressedPastTheEnd))
-                .isInstanceOf(SDK.MalformedTDFException.class)
-                .hasCauseInstanceOf(InvalidZipException.class)
-                .hasMessageContaining("Archive ended");
+                .isInstanceOfSatisfying(SDK.AssertionFailureException.class, e ->
+                        assertThat(e.getReason()).isEqualTo(AssertionFailureReason.INVALID_JSON));
+        // and the entry itself still ends in an error at the end of the archive, not a short read
+        var manifestEntry = new ZipReader(new SeekableInMemoryByteChannel(uncompressedPastTheEnd)).getEntries()
+                .stream().filter(e -> e.getName().equals(TDFWriter.TDF_MANIFEST_FILE_NAME)).findFirst().orElseThrow();
+        assertThatThrownBy(() -> {
+            try (var data = manifestEntry.getData()) {
+                data.transferTo(OutputStream.nullOutputStream());
+            }
+        }).isInstanceOf(InvalidZipException.class).hasMessageContaining("Archive ended");
 
         var storedPastTheEnd = HostileZips.tdfWith("{}", e -> e.compressedSize = 0x7FFFFFFFL);
         assertThatThrownBy(() -> loadTDFFrom(storedPastTheEnd))
