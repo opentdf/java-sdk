@@ -45,6 +45,8 @@ import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.security.cert.X509Certificate;
@@ -68,6 +70,7 @@ public class SDKBuilder {
     private SrtSigner srtSigner;
     private JWK dpopKey;
     private JWSAlgorithm dpopAlg;
+    private DPoPMode dpopMode = DPoPMode.AUTO;
 
     private static final Logger logger = LoggerFactory.getLogger(SDKBuilder.class);
 
@@ -247,6 +250,24 @@ public class SDKBuilder {
         return this;
     }
 
+    /**
+     * Choose how DPoP-bound tokens are presented to platform services and KAS. The default,
+     * {@link DPoPMode#AUTO}, discovers per server whether it accepts RFC 9449 or only the legacy
+     * style of older platforms; set {@link DPoPMode#RFC9449} or {@link DPoPMode#LEGACY} to skip
+     * discovery.
+     *
+     * @param dpopMode the DPoP presentation mode
+     * @return this builder instance for method chaining
+     * @throws IllegalArgumentException if dpopMode is null
+     */
+    public SDKBuilder dpopMode(DPoPMode dpopMode) {
+        if (dpopMode == null) {
+            throw new IllegalArgumentException("DPoPMode cannot be null");
+        }
+        this.dpopMode = dpopMode;
+        return this;
+    }
+
     private AuthInterceptor getAuthInterceptor(JWK dpopJwk, JWSAlgorithm dpopAlgorithm) {
         if (platformEndpoint == null) {
             throw new SDKException("cannot build an SDK without specifying the platform endpoint");
@@ -304,7 +325,18 @@ public class SDKBuilder {
         if (this.authzGrant == null) {
             this.authzGrant = new ClientCredentialsGrant();
         }
-        var ts = new TokenSource(clientAuth, dpopJwk, dpopAlgorithm, providerMetadata.getTokenEndpointURI(), this.authzGrant, sslSocketFactory);
+        // Discovery reuses the unauthenticated bootstrap client so it never sends credentials.
+        var dpopModeResolver = new DPoPModeResolver(dpopMode, httpClient);
+        // Reuse the configuration fetched above rather than discovering the platform again. Only
+        // a positive is seeded: RFC 9728 metadata may still advertise.
+        if (DPoPModeResolver.advertisesRfc9449(config.getConfiguration())) {
+            try {
+                dpopModeResolver.recordRfc9449(new URL(platformEndpoint));
+            } catch (MalformedURLException e) {
+                throw new SDKException("invalid platform endpoint: " + platformEndpoint, e);
+            }
+        }
+        var ts = new TokenSource(clientAuth, dpopJwk, dpopAlgorithm, providerMetadata.getTokenEndpointURI(), this.authzGrant, sslSocketFactory, dpopModeResolver);
         return new AuthInterceptor(ts);
     }
 

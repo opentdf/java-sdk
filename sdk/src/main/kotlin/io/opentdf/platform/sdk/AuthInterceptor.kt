@@ -123,7 +123,7 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
             if (dpopNonce != null) {
                 response.close()
                 ts.cacheNonce(url, dpopNonce)
-                val authHeaders = ts.getAuthHeaders(url, chain.request().method)
+                val authHeaders = ts.getAuthHeaders(url, chain.request().method, null, isRpc(chain.request()))
                 val newRequestBuilder = chain.request().newBuilder()
                     .header("Authorization", authHeaders.authHeader)
                     .removeHeader("DPoP")
@@ -167,6 +167,13 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
         if (nonce != null) {
             ts.cacheNonce(url, nonce)
         }
+    }
+
+    // Connect and gRPC calls get the legacy procedure htu; anything else keeps the full URI.
+    private fun isRpc(request: okhttp3.Request): Boolean {
+        if (request.header("Connect-Protocol-Version") != null) return true
+        val contentType = request.header("Content-Type") ?: request.body?.contentType()?.toString() ?: return false
+        return contentType.startsWith("application/grpc") || contentType.startsWith("application/connect+")
     }
 
     private fun isDpopNonceChallenge(response: okhttp3.Response): Boolean {
