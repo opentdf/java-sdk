@@ -1232,7 +1232,7 @@ public class Manifest {
 
         var encryptionInformation = result.encryptionInformation;
         requireManifestField(encryptionInformation.integrityInformation, "Manifest with null integrityInformation");
-        requireManifestField(encryptionInformation.keyAccessObj, "Manifest with null keyAccessObj");
+        requireManifestField(encryptionInformation.keyAccessObj, "Manifest with no key access objects: keyAccess is absent");
         requireManifestField(encryptionInformation.policy, "Manifest with null policy");
 
         var integrityInformation = encryptionInformation.integrityInformation;
