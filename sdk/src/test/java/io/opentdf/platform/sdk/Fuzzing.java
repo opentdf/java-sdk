@@ -56,4 +56,14 @@ public class Fuzzing {
             // bug for the fuzzer to find
         }
     }
+
+    /**
+     * {@link SDK#isValidTdf} answers yes or no for malformed input and throws only when the
+     * channel can't be read. An in-memory channel can always be read, so any exception at all is
+     * a bug, including an IOException.
+     */
+    @FuzzTest(maxDuration=TEST_DURATION)
+    public void fuzzIsValidTdf(FuzzedDataProvider data) throws IOException {
+        SDK.isValidTdf(new SeekableInMemoryByteChannel(data.consumeRemainingAsBytes()));
+    }
 }
