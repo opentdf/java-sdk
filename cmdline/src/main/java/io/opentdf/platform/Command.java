@@ -19,6 +19,7 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.URI;
 import java.nio.channels.FileChannel;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -450,14 +451,11 @@ class Command {
 
             var readerConfig = Config.newTDFReaderConfig(opts.toArray(new Consumer[0]));
 
-            if (tdfFile.startsWith("http://") || tdfFile.startsWith("https://")) {
-                var reader = sdk.loadTDF(URI.create(tdfFile), readerConfig);
+            // Opened last: a bad --with-assertion-verification-keys should fail before the
+            // TDF is touched, which over a URL means before any request goes out.
+            try (var in = openTdf(sdk, tdfFile)) {
+                var reader = sdk.loadTDF(in, readerConfig);
                 writePlaintext(out -> reader.readPayload(out, offset, length), output);
-            } else {
-                try (var in = FileChannel.open(Path.of(tdfFile), StandardOpenOption.READ)) {
-                    var reader = sdk.loadTDF(in, readerConfig);
-                    writePlaintext(out -> reader.readPayload(out, offset, length), output);
-                }
             }
         }
     }
@@ -493,6 +491,17 @@ class Command {
         } catch (AtomicMoveNotSupportedException e) {
             Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
         }
+    }
+
+    /**
+     * Opens the TDF named by {@code -f}: an {@code http(s)://} URL, read in place with range
+     * requests, or anything else as a local file path.
+     */
+    private static SeekableByteChannel openTdf(SDK sdk, String tdfFile) throws IOException {
+        if (tdfFile.startsWith("http://") || tdfFile.startsWith("https://")) {
+            return HttpRangeChannel.open(sdk, URI.create(tdfFile));
+        }
+        return FileChannel.open(Path.of(tdfFile), StandardOpenOption.READ);
     }
 
     @CommandLine.Command(name = "metadata")

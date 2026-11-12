@@ -15,7 +15,6 @@
             https://github.com/CodeIntelligenceTesting/jazzer/releases/download/v${jazzer.version}</jazzer.baseurl>
         <kotlin.version>2.1.0</kotlin.version>
         <connect.version>0.7.2</connect.version>
-        <okhttp.version>4.12.0</okhttp.version>
         <platform.branch>protocol/go/v0.39.0</platform.branch>
         <!-- in the non-FIPS case we don't need to pass anything to the jvm -->
         <java.security.properties.test/>

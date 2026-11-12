@@ -1007,4 +1007,83 @@ public class ZipReaderTest {
         zip.getInputStream(zip.getEntry(name)).transferTo(data);
         return data.toString(StandardCharsets.UTF_8);
     }
+
+    private static byte[] payloadArchive(byte[] data, Long declaredSize) {
+        var entry = new HostileZips.Entry("0.payload", data);
+        entry.uncompressedSize = declaredSize;
+        return HostileZips.build(List.of(entry));
+    }
+
+    /** Where {@code data} sits in {@code archive}, so a test can talk about absolute offsets. */
+    private static int offsetOf(byte[] archive, byte[] data) {
+        for (int i = 0; i + data.length <= archive.length; i++) {
+            if (Arrays.equals(Arrays.copyOfRange(archive, i, i + data.length), data)) {
+                return i;
+            }
+        }
+        throw new AssertionError("entry data not found in the archive");
+    }
+
+    /**
+     * The bound on an entry's extent is where entry data ends, not the archive. The central
+     * directory follows the data, so an entry declaring one byte more than it holds still
+     * fits inside the file -- and an archive-sized bound would hand that directory byte back
+     * as entry data, or let skip() step over it and report a clean EOF.
+     */
+    @Test
+    public void aDeclaredSizeOverrunningIntoTheCentralDirectoryIsInvalid() throws Exception {
+        var data = "0123456789".getBytes(StandardCharsets.UTF_8);
+        var archive = payloadArchive(data, data.length + 1L);
+
+        // the excess byte is comfortably inside the file: this is the case the weaker bound misses
+        assertThat(offsetOf(archive, data) + data.length + 1).isLessThan(archive.length);
+
+        try (var channel = new SeekableInMemoryByteChannel(archive)) {
+            var entry = new ZipReader(channel).getEntries().get(0);
+
+            assertThatThrownBy(entry::getData)
+                    .isInstanceOf(InvalidZipException.class)
+                    .hasMessageContaining("running past the end of this archive's entry data");
+        }
+    }
+
+    /** The same check covers a size past the end of the whole archive. */
+    @Test
+    public void aDeclaredSizePastTheEndOfTheArchiveIsInvalid() throws Exception {
+        var archive = payloadArchive("0123456789".getBytes(StandardCharsets.UTF_8), 1_000_000L);
+        try (var channel = new SeekableInMemoryByteChannel(archive)) {
+            var entry = new ZipReader(channel).getEntries().get(0);
+
+            assertThatThrownBy(entry::getData).isInstanceOf(InvalidZipException.class);
+        }
+    }
+
+    /** The control: the same archive with an honest size reads its bytes back. */
+    @Test
+    public void aDeclaredSizeMatchingTheEntryDataReads() throws Exception {
+        var data = "0123456789".getBytes(StandardCharsets.UTF_8);
+        try (var channel = new SeekableInMemoryByteChannel(payloadArchive(data, null))) {
+            var entry = new ZipReader(channel).getEntries().get(0);
+
+            assertThat(entry.getData().readAllBytes()).isEqualTo(data);
+        }
+    }
+
+    /** A skip wholly inside the entry still just moves the cursor, and lands on the right bytes. */
+    @Test
+    public void skipWithinAnIntactEntryMovesTheCursor() throws Exception {
+        var payload = new byte[5000];
+        new Random(7).nextBytes(payload);
+        var archive = HostileZips.build(List.of(new HostileZips.Entry("0.payload", payload)));
+        try (var channel = new SeekableInMemoryByteChannel(archive)) {
+            var data = new ZipReader(channel).getEntries().get(0).getData();
+
+            assertThat(data.skip(4000)).isEqualTo(4000);
+            assertThat(data.readAllBytes()).isEqualTo(Arrays.copyOfRange(payload, 4000, 5000));
+            // clamped to what is left, and a negative request is a no-op
+            assertThat(data.skip(10)).isZero();
+            assertThat(data.skip(-5)).isZero();
+        }
+    }
+
 }

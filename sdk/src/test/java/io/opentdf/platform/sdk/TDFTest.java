@@ -13,7 +13,6 @@ import io.opentdf.platform.policy.kasregistry.KeyAccessServerRegistryServiceClie
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersRequest;
 import io.opentdf.platform.policy.kasregistry.ListKeyAccessServersResponse;
 import io.opentdf.platform.sdk.TDF.Reader;
-import okhttp3.mockwebserver.MockWebServer;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -806,25 +805,45 @@ public class TDFTest {
         assertThat(out.size()).isZero();
     }
 
-    @Test
-    void readPayloadRangeOverHttpFetchesOnlyCoveringSegments() throws Exception {
-        var fixture = partialReadFixture();
-        var served = new AtomicLong();
-        try (var server = new MockWebServer()) {
-            server.setDispatcher(HttpRangeChannelTest.rangeDispatcher(() -> fixture[1], served));
-            var tdf = new TDF(new FakeServicesBuilder().setKas(kas)
-                    .setKeyAccessServerRegistryService(kasRegistryService).build());
-            var reader = tdf.loadTDF(new HttpRangeChannel(HttpRangeChannelTest.CLIENT, server.url("/x.tdf").uri()),
-                    Config.newTDFReaderConfig(), platformUrl);
+    /** Counts the bytes actually pulled from the archive, whatever the channel is backed by. */
+    private static class CountingChannel extends SeekableInMemoryByteChannel {
+        final AtomicLong read = new AtomicLong();
 
-            served.set(0);
-            var out = new ByteArrayOutputStream();
-            reader.readPayload(out, 2L * SEG - 50, 100);
-            assertThat(out.toByteArray()).containsExactly(Arrays.copyOfRange(fixture[0], 2 * SEG - 50, 2 * SEG + 50));
-            // the second (full) and third (half) segments, plus the payload entry's local header
-            long encryptedSegments = (SEG + 28) + (SEG / 2 + 28);
-            assertThat(served.get()).isBetween(encryptedSegments, encryptedSegments + 1024);
+        CountingChannel(byte[] data) {
+            super(data);
         }
+
+        @Override
+        public int read(java.nio.ByteBuffer buf) throws IOException {
+            int n = super.read(buf);
+            if (n > 0) {
+                read.addAndGet(n);
+            }
+            return n;
+        }
+    }
+
+    /**
+     * The point of the ranged read: segments before the range are stepped over rather than
+     * pulled in. Over a channel that fetches on demand this is the difference between reading
+     * a slice and downloading the whole payload.
+     */
+    @Test
+    void readPayloadRangeReadsOnlyCoveringSegments() throws Exception {
+        var fixture = partialReadFixture();
+        var channel = new CountingChannel(fixture[1]);
+        var tdf = new TDF(new FakeServicesBuilder().setKas(kas)
+                .setKeyAccessServerRegistryService(kasRegistryService).build());
+        var reader = tdf.loadTDF(channel, Config.newTDFReaderConfig(), platformUrl);
+
+        channel.read.set(0);
+        var out = new ByteArrayOutputStream();
+        reader.readPayload(out, 2L * SEG - 50, 100);
+
+        assertThat(out.toByteArray()).containsExactly(Arrays.copyOfRange(fixture[0], 2 * SEG - 50, 2 * SEG + 50));
+        // the second (full) and third (half) segments, plus the payload entry's local header
+        long encryptedSegments = (SEG + 28) + (SEG / 2 + 28);
+        assertThat(channel.read.get()).isBetween(encryptedSegments, encryptedSegments + 1024);
     }
 
     /**
@@ -1608,13 +1627,15 @@ public class TDFTest {
      */
     @Test
     void loadTDFReportsAManifestRunningPastTheArchiveAsMalformed() {
-        // the manifest opens a JSON comment, so the parser reads on to the end of the archive
-        // looking for its close, rather than failing at the first byte past the entry
+        // Rejected when the entry is opened, before a byte is read: the declared extent runs
+        // past where this archive's entry data ends. The manifest opens a JSON comment, so a
+        // reader that got as far as parsing would run to the end of the archive looking for
+        // its close rather than stop at the first byte past the entry.
         var uncompressedPastTheEnd = HostileZips.tdfWith("/*", e -> e.uncompressedSize = 0x7FFFFFFFL);
         assertThatThrownBy(() -> loadTDFFrom(uncompressedPastTheEnd))
                 .isInstanceOf(SDK.MalformedTDFException.class)
                 .hasCauseInstanceOf(InvalidZipException.class)
-                .hasMessageContaining("Archive ended");
+                .hasMessageContaining("running past the end of this archive's entry data");
 
         var storedPastTheEnd = HostileZips.tdfWith("{}", e -> e.compressedSize = 0x7FFFFFFFL);
         assertThatThrownBy(() -> loadTDFFrom(storedPastTheEnd))

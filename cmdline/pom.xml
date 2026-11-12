@@ -77,7 +77,40 @@
             <artifactId>sdk</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- Used directly by HttpRangeChannel; exclusions mirror sdk/pom.xml so the okio and
+             kotlin-stdlib versions declared there stay the ones that win. -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp</artifactId>
+            <version>${okhttp.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.squareup.okio</groupId>
+                    <artifactId>okio-jvm</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.jetbrains.kotlin</groupId>
+                    <artifactId>kotlin-stdlib-jdk8</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
         <!-- Test Dependencies -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>mockwebserver</artifactId>
+            <version>${okhttp.version}</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.squareup.okio</groupId>
+                    <artifactId>okio-jvm</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.jetbrains.kotlin</groupId>
+                    <artifactId>kotlin-stdlib-jdk8</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

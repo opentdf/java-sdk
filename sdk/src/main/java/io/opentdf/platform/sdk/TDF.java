@@ -402,8 +402,8 @@ class TDF {
 
         /**
          * Writes the plaintext bytes {@code [offset, offset + length)} to {@code outputStream}.
-         * Only the segments covering the range are read, verified and decrypted, so over
-         * {@link SDK#loadTDF(java.net.URI, Config.TDFReaderConfig)} only those are downloaded.
+         * Only the segments covering the range are read, verified and decrypted, so over a
+         * channel that fetches on demand only those bytes are pulled from the source.
          *
          * @param offset plaintext offset to start at; equal to the payload size writes nothing
          * @param length number of bytes to write; negative means to the end of the payload, and
