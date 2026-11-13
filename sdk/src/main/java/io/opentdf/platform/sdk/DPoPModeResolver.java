@@ -122,8 +122,9 @@ class DPoPModeResolver {
         try {
             JsonObject wellKnown = fetchJson(origin + OPENTDF_CONFIGURATION_PATH);
             if (wellKnown != null) {
-                JsonObject config = wellKnown.has("configuration") && wellKnown.get("configuration").isJsonObject()
-                        ? wellKnown.getAsJsonObject("configuration")
+                JsonElement configuration = wellKnown.get("configuration");
+                JsonObject config = configuration != null && configuration.isJsonObject()
+                        ? configuration.getAsJsonObject()
                         : wellKnown;
                 if (advertisesRfc9449(config)) {
                     return logResolved(origin, DPoPMode.RFC9449, "opentdf-configuration");
@@ -144,10 +145,12 @@ class DPoPModeResolver {
             resourceError = e;
         }
 
-        if (wellKnownError != null) {
-            logger.warn("DPoP server discovery failed for {}; using legacy proofs for this request"
-                            + " (well-known error: {}, protected-resource error: {})",
-                    origin, wellKnownError.toString(), resourceError);
+        if (wellKnownError != null || resourceError != null) {
+            if (logger.isWarnEnabled()) {
+                logger.warn("DPoP server discovery failed for {}; using legacy proofs for this request"
+                                + " (well-known error: {}, protected-resource error: {})",
+                        origin, String.valueOf(wellKnownError), String.valueOf(resourceError));
+            }
             return null;
         }
         return logResolved(origin, DPoPMode.LEGACY, "no RFC 9449 advertisement");

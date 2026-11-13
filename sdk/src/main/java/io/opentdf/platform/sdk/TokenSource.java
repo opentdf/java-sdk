@@ -224,11 +224,16 @@ class TokenSource {
     // token endpoint proofs.
     private static URI legacyHtuOf(URI uri) {
         String path = uri.getRawPath() == null ? "" : uri.getRawPath();
-        String[] segments = path.replaceAll("^/+|/+$", "").split("/");
-        if (segments.length < 2) {
+        int end = path.length();
+        while (end > 0 && path.charAt(end - 1) == '/') {
+            end--;
+        }
+        int methodSeparator = path.lastIndexOf('/', end - 1);
+        if (methodSeparator <= 0) {
             return htuOf(uri);
         }
-        return URI.create("/" + segments[segments.length - 2] + "/" + segments[segments.length - 1]);
+        int serviceSeparator = path.lastIndexOf('/', methodSeparator - 1);
+        return URI.create("/" + path.substring(serviceSeparator + 1, end));
     }
 
     /** Get the origin (scheme://host:port) from a URL, used as the nonce and DPoP mode cache key. */

@@ -105,28 +105,28 @@ class DPoPModeTest {
     }
 
     @Test
-    void wellKnownDpopBlockOnly() throws Exception {
+    void wellKnownDpopBlockOnly() {
         wellKnown.put(OPENTDF_CONFIGURATION_PATH, json("{\"configuration\":{\"dpop\":{\"rfc9449\":true}}}"));
         assertThat(autoResolver().modeFor(rpcUrl())).isEqualTo(DPoPMode.RFC9449);
         assertThat(discoveredPaths()).containsExactly(OPENTDF_CONFIGURATION_PATH);
     }
 
     @Test
-    void wellKnownDpopBlockOverridesTopLevelAlgs() throws Exception {
+    void wellKnownDpopBlockOverridesTopLevelAlgs() {
         wellKnown.put(OPENTDF_CONFIGURATION_PATH,
                 json("{\"configuration\":{\"dpop\":{\"rfc9449\":false}," + ALGS + "}}"));
         assertThat(autoResolver().modeFor(rpcUrl())).isEqualTo(DPoPMode.LEGACY);
     }
 
     @Test
-    void wellKnownTopLevelAlgsOnly() throws Exception {
+    void wellKnownTopLevelAlgsOnly() {
         wellKnown.put(OPENTDF_CONFIGURATION_PATH, json("{\"configuration\":{\"platform_issuer\":\"x\"," + ALGS + "}}"));
         assertThat(autoResolver().modeFor(rpcUrl())).isEqualTo(DPoPMode.RFC9449);
         assertThat(discoveredPaths()).containsExactly(OPENTDF_CONFIGURATION_PATH);
     }
 
     @Test
-    void wellKnownEmptyAlgsIsNotAnAdvertisement() throws Exception {
+    void wellKnownEmptyAlgsIsNotAnAdvertisement() {
         wellKnown.put(OPENTDF_CONFIGURATION_PATH,
                 json("{\"configuration\":{\"dpop_signing_alg_values_supported\":[]}}"));
         assertThat(autoResolver().modeFor(rpcUrl())).isEqualTo(DPoPMode.LEGACY);
@@ -134,7 +134,7 @@ class DPoPModeTest {
     }
 
     @Test
-    void protectedResourceMetadataOnly() throws Exception {
+    void protectedResourceMetadataOnly() {
         wellKnown.put(OPENTDF_CONFIGURATION_PATH, json("{\"configuration\":{\"platform_issuer\":\"x\"}}"));
         wellKnown.put(PROTECTED_RESOURCE_PATH, json("{\"resource\":\"x\"," + ALGS + "}"));
         assertThat(autoResolver().modeFor(rpcUrl())).isEqualTo(DPoPMode.RFC9449);
@@ -142,13 +142,13 @@ class DPoPModeTest {
     }
 
     @Test
-    void protectedResourceMetadataWithoutOpentdfConfiguration() throws Exception {
+    void protectedResourceMetadataWithoutOpentdfConfiguration() {
         wellKnown.put(PROTECTED_RESOURCE_PATH, json("{" + ALGS + "}"));
         assertThat(autoResolver().modeFor(rpcUrl())).isEqualTo(DPoPMode.RFC9449);
     }
 
     @Test
-    void bothAdvertisedStopsAtWellKnown() throws Exception {
+    void bothAdvertisedStopsAtWellKnown() {
         wellKnown.put(OPENTDF_CONFIGURATION_PATH, json("{\"configuration\":{\"dpop\":{\"rfc9449\":true}," + ALGS + "}}"));
         wellKnown.put(PROTECTED_RESOURCE_PATH, json("{" + ALGS + "}"));
         assertThat(autoResolver().modeFor(rpcUrl())).isEqualTo(DPoPMode.RFC9449);
@@ -174,6 +174,8 @@ class DPoPModeTest {
         assertThat(htuOf(ts.getAuthHeaders(plain, "POST", null, false))).isEqualTo(plain.toString());
         URL shortPath = resourceServer.url("/kas").url();
         assertThat(htuOf(ts.getAuthHeaders(shortPath, "POST"))).isEqualTo(shortPath.toString());
+        URL trailingSlashes = resourceServer.url("/proxy" + RPC_PATH + "///").url();
+        assertThat(htuOf(ts.getAuthHeaders(trailingSlashes, "POST"))).isEqualTo(RPC_PATH);
         // Discovery is unauthenticated and its definitive answer is cached per origin.
         assertThat(discoveredPaths()).containsExactly(OPENTDF_CONFIGURATION_PATH, PROTECTED_RESOURCE_PATH);
         for (RecordedRequest r : discoveryRequests) {
@@ -211,13 +213,28 @@ class DPoPModeTest {
     }
 
     @Test
-    void discoveryFailureStillHonorsProtectedResourceMetadata() throws Exception {
+    void discoveryFailureStillHonorsProtectedResourceMetadata() {
         wellKnown.put(OPENTDF_CONFIGURATION_PATH, new MockResponse().setResponseCode(503));
         wellKnown.put(PROTECTED_RESOURCE_PATH, json("{" + ALGS + "}"));
         DPoPModeResolver resolver = autoResolver();
         assertThat(resolver.modeFor(rpcUrl())).isEqualTo(DPoPMode.RFC9449);
         assertThat(resolver.modeFor(rpcUrl())).isEqualTo(DPoPMode.RFC9449);
         assertThat(discoveredPaths()).containsExactly(OPENTDF_CONFIGURATION_PATH, PROTECTED_RESOURCE_PATH);
+    }
+
+    @Test
+    void protectedResourceFailureIsLegacyForThatRequestOnly() throws Exception {
+        wellKnown.put(PROTECTED_RESOURCE_PATH, new MockResponse().setResponseCode(503));
+        TokenSource ts = tokenSource(autoResolver());
+
+        assertThat(htuOf(ts.getAuthHeaders(rpcUrl(), "POST"))).isEqualTo(RPC_PATH);
+
+        // A transient metadata error must not pin an RFC 9449 server to legacy.
+        wellKnown.put(PROTECTED_RESOURCE_PATH, json("{" + ALGS + "}"));
+        assertThat(htuOf(ts.getAuthHeaders(rpcUrl(), "POST"))).isEqualTo(rpcUrl().toString());
+        assertThat(discoveredPaths()).containsExactly(
+                OPENTDF_CONFIGURATION_PATH, PROTECTED_RESOURCE_PATH,
+                OPENTDF_CONFIGURATION_PATH, PROTECTED_RESOURCE_PATH);
     }
 
     @Test
@@ -228,7 +245,7 @@ class DPoPModeTest {
     }
 
     @Test
-    void unparseableDocumentIsDefinitivelyLegacy() throws Exception {
+    void unparseableDocumentIsDefinitivelyLegacy() {
         wellKnown.put(OPENTDF_CONFIGURATION_PATH, json("<html>not json</html>"));
         DPoPModeResolver resolver = autoResolver();
         assertThat(resolver.modeFor(rpcUrl())).isEqualTo(DPoPMode.LEGACY);
@@ -237,7 +254,7 @@ class DPoPModeTest {
     }
 
     @Test
-    void notFoundIsDefinitivelyLegacy() throws Exception {
+    void notFoundIsDefinitivelyLegacy() {
         // service v0.11.x: no RFC 9449 advertisement anywhere.
         DPoPModeResolver resolver = autoResolver();
         assertThat(resolver.modeFor(rpcUrl())).isEqualTo(DPoPMode.LEGACY);
@@ -246,7 +263,7 @@ class DPoPModeTest {
     }
 
     @Test
-    void bootstrapAdvertisementSeedsPlatformWithoutDiscovery() throws Exception {
+    void bootstrapAdvertisementSeedsPlatformWithoutDiscovery() {
         Struct algs = Struct.newBuilder().putFields("dpop_signing_alg_values_supported",
                 Value.newBuilder().setListValue(ListValue.newBuilder()
                         .addValues(Value.newBuilder().setStringValue("ES256"))).build()).build();
@@ -315,7 +332,7 @@ class DPoPModeTest {
     }
 
     @Test
-    void bearerTokenSkipsDiscoveryAndProof() throws Exception {
+    void bearerTokenSkipsDiscoveryAndProof() {
         tokenServer.setDispatcher(new Dispatcher() {
             @Override
             public MockResponse dispatch(RecordedRequest request) {
@@ -332,7 +349,8 @@ class DPoPModeTest {
     void autoRequiresHttpClientAndBuilderRejectsNull() {
         assertThatThrownBy(() -> new DPoPModeResolver(DPoPMode.AUTO, null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> SDKBuilder.newBuilder().dpopMode(null))
+        SDKBuilder builder = SDKBuilder.newBuilder();
+        assertThatThrownBy(() -> builder.dpopMode(null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
