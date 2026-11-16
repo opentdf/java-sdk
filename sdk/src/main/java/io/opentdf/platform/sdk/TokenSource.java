@@ -132,24 +132,29 @@ class TokenSource {
         return getAuthHeaders(url, method, null);
     }
 
-    public AuthHeaders getAuthHeaders(URL url, String method, String nonce) {
-        // Every authenticated SDK request is a Connect/gRPC call.
-        return getAuthHeaders(url, method, nonce, true);
-    }
-
     /**
-     * Get authorization headers for a request. When the token is DPoP-bound this includes
-     * a freshly minted DPoP proof; if the AS issued a plain Bearer token the DPoP header is
-     * null (see the Bearer fallback below). The proof's htu follows the {@link DPoPMode} resolved
-     * for the URL's origin: the full URL for RFC 9449, or the legacy form (see legacyHtuOf).
+     * Get authorization headers for a Connect/gRPC request. When the token is DPoP-bound this
+     * includes a freshly minted DPoP proof; if the AS issued a plain Bearer token the DPoP header
+     * is null. The proof's htu follows the {@link DPoPMode} resolved for the URL's origin: the full
+     * URL without query or fragment for RFC 9449, or the procedure path for legacy.
      *
      * @param url The URL being accessed
      * @param method The HTTP method
      * @param nonce Optional server-issued nonce to include in the proof
-     * @param rpcRequest whether the request is a Connect/gRPC call, which selects the legacy htu form
      * @return AuthHeaders with the Authorization header, and a DPoP proof header when DPoP-bound
      */
-    AuthHeaders getAuthHeaders(URL url, String method, String nonce, boolean rpcRequest) {
+    public AuthHeaders getAuthHeaders(URL url, String method, String nonce) {
+        return getAuthHeaders(url, method, nonce, null);
+    }
+
+    /**
+     * As {@link #getAuthHeaders(URL, String, String)}, optionally forcing the htu form.
+     *
+     * @param legacyHtu true for the legacy htu, false for RFC 9449, or null to use the mode
+     *                  resolved for the URL's origin. A nonce retry passes the form of the
+     *                  challenged proof so both attempts are signed the same way.
+     */
+    AuthHeaders getAuthHeaders(URL url, String method, String nonce, @Nullable Boolean legacyHtu) {
         // Snapshot the token and its scheme together under getToken()'s lock so the
         // Authorization value and the DPoP/Bearer decision always come from the same
         // token generation.
@@ -163,7 +168,7 @@ class TokenSource {
             return new AuthHeaders(TokenScheme.BEARER.headerPrefix + " " + t.getValue(), null);
         }
 
-        boolean legacy = rpcRequest && dpopModeResolver.modeFor(url) == DPoPMode.LEGACY;
+        boolean legacy = legacyHtu != null ? legacyHtu : dpopModeResolver.modeFor(url) == DPoPMode.LEGACY;
 
         // Build the DPoP proof for each request
         String dpopProof;
@@ -218,10 +223,10 @@ class TokenSource {
         }
     }
 
-    // Legacy (service v0.11.x) servers compare an RPC's htu against its procedure
+    // Servers before service v0.18.0 compare an RPC's htu against its procedure
     // ("/package.Service/Method"), i.e. the last two path segments, which also drops any
-    // reverse-proxy prefix; they reject a full URL. Non-RPC requests keep the full URI, as do
-    // token endpoint proofs.
+    // reverse-proxy prefix; they reject a full URL. Trailing slashes are ignored, and a path
+    // with fewer than two segments keeps the full URI.
     private static URI legacyHtuOf(URI uri) {
         String path = uri.getRawPath() == null ? "" : uri.getRawPath();
         int end = path.length();

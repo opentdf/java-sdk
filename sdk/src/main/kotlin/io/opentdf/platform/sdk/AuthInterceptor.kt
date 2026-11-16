@@ -123,7 +123,8 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
             if (dpopNonce != null) {
                 response.close()
                 ts.cacheNonce(url, dpopNonce)
-                val authHeaders = ts.getAuthHeaders(url, chain.request().method, null, isRpc(chain.request()))
+                val authHeaders = ts.getAuthHeaders(url, chain.request().method, null,
+                        legacyHtuOf(chain.request().header("DPoP")))
                 val newRequestBuilder = chain.request().newBuilder()
                     .header("Authorization", authHeaders.authHeader)
                     .removeHeader("DPoP")
@@ -169,11 +170,16 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
         }
     }
 
-    // Connect and gRPC calls get the legacy procedure htu; anything else keeps the full URI.
-    private fun isRpc(request: okhttp3.Request): Boolean {
-        if (request.header("Connect-Protocol-Version") != null) return true
-        val contentType = request.header("Content-Type") ?: request.body?.contentType()?.toString() ?: return false
-        return contentType.startsWith("application/grpc") || contentType.startsWith("application/connect+")
+    // Whether the challenged proof used the legacy (path-only) htu, so the retry is signed the
+    // same way even if the origin's cached DPoP mode changed in between. Null when there was no
+    // readable proof, leaving the choice to the origin's mode.
+    private fun legacyHtuOf(dpopProof: String?): Boolean? {
+        if (dpopProof == null) return null
+        return try {
+            SignedJWT.parse(dpopProof).jwtClaimsSet.getStringClaim("htu")?.startsWith("/")
+        } catch (e: java.text.ParseException) {
+            null
+        }
     }
 
     private fun isDpopNonceChallenge(response: okhttp3.Response): Boolean {
