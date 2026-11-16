@@ -437,6 +437,18 @@ class DPoPModeTest {
     }
 
     @Test
+    void zeroTtlDisablesTheCache() {
+        DPoPModeResolver resolver = new DPoPModeResolver(DPoPMode.AUTO, new OkHttpClient(), Duration.ZERO, nanos::get,
+                DPoPModeResolver.DISCOVERY_TIMEOUT);
+        assertThat(resolver.modeFor(rpcUrl())).isEqualTo(DPoPMode.LEGACY);
+        resolver.recordRfc9449(resourceServer.url("/").url());
+        assertThat(resolver.modeFor(rpcUrl())).isEqualTo(DPoPMode.LEGACY);
+        assertThat(discoveredPaths()).containsExactly(
+                WELL_KNOWN_CONFIGURATION_PROCEDURE, PROTECTED_RESOURCE_PATH,
+                WELL_KNOWN_CONFIGURATION_PROCEDURE, PROTECTED_RESOURCE_PATH);
+    }
+
+    @Test
     void bootstrapAdvertisementSeedsPlatformWithoutDiscovery() {
         Struct algs = Struct.newBuilder().putFields("dpop_signing_alg_values_supported",
                 Value.newBuilder().setListValue(ListValue.newBuilder()
@@ -553,6 +565,11 @@ class DPoPModeTest {
         SDKBuilder builder = SDKBuilder.newBuilder();
         assertThatThrownBy(() -> builder.dpopMode(null))
                 .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> builder.dpopDiscoveryCacheTtl(null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> builder.dpopDiscoveryCacheTtl(Duration.ofSeconds(-1)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(builder.dpopDiscoveryCacheTtl(Duration.ZERO)).isSameAs(builder);
     }
 
     private DPoPModeResolver autoResolver() {

@@ -14,9 +14,9 @@ public enum DPoPMode {
      * {@code /.well-known/oauth-protected-resource}. Servers that advertise neither get
      * {@link #LEGACY}. A discovery that gets no usable answer (a network error, timeout, redirect,
      * or a status other than 200, 404, 405 and 501) uses legacy for 30 seconds before the server is
-     * asked again. Answers are cached per origin for a few minutes, then rediscovered, so a server
-     * that is upgraded or reconfigured is picked up without restarting the client. This is the
-     * default.
+     * asked again. Answers are cached per origin for a few minutes (see
+     * {@link SDKBuilder#dpopDiscoveryCacheTtl}), then rediscovered, so a server that is upgraded or
+     * reconfigured is picked up without restarting the client. This is the default.
      */
     AUTO,
     /**
