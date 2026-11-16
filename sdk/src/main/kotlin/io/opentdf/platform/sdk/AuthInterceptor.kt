@@ -123,7 +123,8 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
             if (dpopNonce != null) {
                 response.close()
                 ts.cacheNonce(url, dpopNonce)
-                val authHeaders = ts.getAuthHeaders(url, chain.request().method)
+                val authHeaders = ts.getAuthHeaders(url, chain.request().method, null,
+                        legacyHtuOf(chain.request().header("DPoP")))
                 val newRequestBuilder = chain.request().newBuilder()
                     .header("Authorization", authHeaders.authHeader)
                     .removeHeader("DPoP")
@@ -166,6 +167,18 @@ internal class AuthInterceptor(private val ts: TokenSource) : Interceptor {
         val nonce = response.header("dpop-nonce") ?: response.header("DPoP-Nonce")
         if (nonce != null) {
             ts.cacheNonce(url, nonce)
+        }
+    }
+
+    // Whether the challenged proof used the legacy (path-only) htu, so the retry is signed the
+    // same way even if the origin's cached DPoP mode changed in between. Null when there was no
+    // readable proof, leaving the choice to the origin's mode.
+    private fun legacyHtuOf(dpopProof: String?): Boolean? {
+        if (dpopProof == null) return null
+        return try {
+            SignedJWT.parse(dpopProof).jwtClaimsSet.getStringClaim("htu")?.startsWith("/")
+        } catch (e: java.text.ParseException) {
+            null
         }
     }
 

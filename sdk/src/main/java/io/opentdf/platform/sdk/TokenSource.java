@@ -55,6 +55,7 @@ class TokenSource {
     private final URI tokenEndpointURI;
     private final AuthorizationGrant authzGrant;
     private final SSLSocketFactory sslSocketFactory;
+    private final DPoPModeResolver dpopModeResolver;
     // Cache for server-issued nonces, keyed by origin (scheme://host:port)
     private final Map<String, String> nonceCache = new ConcurrentHashMap<>();
     private static final Logger logger = LoggerFactory.getLogger(TokenSource.class);
@@ -69,7 +70,18 @@ class TokenSource {
      * @param sslSocketFactory  Optional SSLSocketFactory for token endpoint requests
      */
     public TokenSource(ClientAuthentication clientAuth, JWK dpopJwk, JWSAlgorithm dpopAlg, URI tokenEndpointURI, AuthorizationGrant authzGrant, SSLSocketFactory sslSocketFactory) {
+        this(clientAuth, dpopJwk, dpopAlg, tokenEndpointURI, authzGrant, sslSocketFactory,
+                DPoPModeResolver.fixed(DPoPMode.RFC9449));
+    }
+
+    /**
+     * As above, choosing per resource-server origin between the RFC 9449 and legacy DPoP htu.
+     *
+     * @param dpopModeResolver  decides the DPoP style for each request URL's origin
+     */
+    TokenSource(ClientAuthentication clientAuth, JWK dpopJwk, JWSAlgorithm dpopAlg, URI tokenEndpointURI, AuthorizationGrant authzGrant, SSLSocketFactory sslSocketFactory, DPoPModeResolver dpopModeResolver) {
         DpopKeyValidation.validate(dpopJwk, dpopAlg);
+        this.dpopModeResolver = dpopModeResolver;
         this.clientAuth = clientAuth;
         this.dpopJwk = dpopJwk;
         this.dpopAlg = dpopAlg;
@@ -121,9 +133,10 @@ class TokenSource {
     }
 
     /**
-     * Get authorization headers for a request. When the token is DPoP-bound this includes
-     * a freshly minted DPoP proof; if the AS issued a plain Bearer token the DPoP header is
-     * null (see the Bearer fallback below).
+     * Get authorization headers for a Connect/gRPC request. When the token is DPoP-bound this
+     * includes a freshly minted DPoP proof; if the AS issued a plain Bearer token the DPoP header
+     * is null. The proof's htu follows the {@link DPoPMode} resolved for the URL's origin: the full
+     * URL without query or fragment for RFC 9449, or the procedure path for legacy.
      *
      * @param url The URL being accessed
      * @param method The HTTP method
@@ -131,6 +144,17 @@ class TokenSource {
      * @return AuthHeaders with the Authorization header, and a DPoP proof header when DPoP-bound
      */
     public AuthHeaders getAuthHeaders(URL url, String method, String nonce) {
+        return getAuthHeaders(url, method, nonce, null);
+    }
+
+    /**
+     * As {@link #getAuthHeaders(URL, String, String)}, optionally forcing the htu form.
+     *
+     * @param legacyHtu true for the legacy htu, false for RFC 9449, or null to use the mode
+     *                  resolved for the URL's origin. A nonce retry passes the form of the
+     *                  challenged proof so both attempts are signed the same way.
+     */
+    AuthHeaders getAuthHeaders(URL url, String method, String nonce, @Nullable Boolean legacyHtu) {
         // Snapshot the token and its scheme together under getToken()'s lock so the
         // Authorization value and the DPoP/Bearer decision always come from the same
         // token generation.
@@ -144,6 +168,8 @@ class TokenSource {
             return new AuthHeaders(TokenScheme.BEARER.headerPrefix + " " + t.getValue(), null);
         }
 
+        boolean legacy = legacyHtu != null ? legacyHtu : dpopModeResolver.modeFor(url) == DPoPMode.LEGACY;
+
         // Build the DPoP proof for each request
         String dpopProof;
         try {
@@ -156,7 +182,7 @@ class TokenSource {
             }
 
             SignedJWT proof;
-            URI htu = htuOf(url.toURI());
+            URI htu = legacy ? legacyHtuOf(url.toURI()) : htuOf(url.toURI());
             if (nonce != null) {
                 proof = dpopFactory.createDPoPJWT(method, htu, t, new Nonce(nonce));
             } else {
@@ -169,6 +195,7 @@ class TokenSource {
             throw new SDKException("Error creating DPoP proof", e);
         }
 
+        // The DPoP scheme is accepted by legacy servers too; only the htu differs.
         return new AuthHeaders(
                 TokenScheme.DPOP.headerPrefix + " " + t.getValue(),
                 dpopProof);
@@ -196,8 +223,26 @@ class TokenSource {
         }
     }
 
-    /** Get the origin (scheme://host:port) from a URL, used as the nonce cache key. */
-    private String getOrigin(URL url) {
+    // Servers before service v0.18.0 compare an RPC's htu against its procedure
+    // ("/package.Service/Method"), i.e. the last two path segments, which also drops any
+    // reverse-proxy prefix; they reject a full URL. Trailing slashes are ignored, and a path
+    // with fewer than two segments keeps the full URI.
+    private static URI legacyHtuOf(URI uri) {
+        String path = uri.getRawPath() == null ? "" : uri.getRawPath();
+        int end = path.length();
+        while (end > 0 && path.charAt(end - 1) == '/') {
+            end--;
+        }
+        int methodSeparator = path.lastIndexOf('/', end - 1);
+        if (methodSeparator <= 0) {
+            return htuOf(uri);
+        }
+        int serviceSeparator = path.lastIndexOf('/', methodSeparator - 1);
+        return URI.create("/" + path.substring(serviceSeparator + 1, end));
+    }
+
+    /** Get the origin (scheme://host:port) from a URL, used as the nonce and DPoP mode cache key. */
+    static String getOrigin(URL url) {
         int port = url.getPort();
         if (port == -1) {
             port = url.getDefaultPort();

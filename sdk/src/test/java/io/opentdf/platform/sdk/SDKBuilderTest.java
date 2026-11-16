@@ -3,6 +3,7 @@ package io.opentdf.platform.sdk;
 import com.connectrpc.ResponseMessageKt;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
+import com.nimbusds.jwt.SignedJWT;
 import io.grpc.Metadata;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
@@ -353,7 +354,13 @@ public class SDKBuilderTest {
                 public void getWellKnownConfiguration(GetWellKnownConfigurationRequest request,
                                                       StreamObserver<GetWellKnownConfigurationResponse> responseObserver) {
                     var val = Value.newBuilder().setStringValue(issuer).build();
-                    var config = Struct.newBuilder().putFields("platform_issuer", val).build();
+                    // advertising RFC 9449 here seeds the platform's DPoP style (DSPX-5640)
+                    var algs = Value.newBuilder().setListValue(com.google.protobuf.ListValue.newBuilder()
+                            .addValues(Value.newBuilder().setStringValue("RS256"))).build();
+                    var config = Struct.newBuilder()
+                            .putFields("platform_issuer", val)
+                            .putFields("dpop_signing_alg_values_supported", algs)
+                            .build();
                     var response = GetWellKnownConfigurationResponse
                             .newBuilder()
                             .setConfiguration(config)
@@ -440,10 +447,11 @@ public class SDKBuilderTest {
             kasServer = kasServerBuilder.build()
                     .start();
 
+            String platformEndpointUrl = "http" + (useSSLPlatform ? "s" : "") + "://localhost:" + platformServicesServer.getPort();
             SDKBuilder servicesBuilder = SDKBuilder
                     .newBuilder()
                     .clientSecret("client-id", "client-secret")
-                    .platformEndpoint("http" + (useSSLPlatform ? "s" : "") + "://localhost:" + platformServicesServer.getPort())
+                    .platformEndpoint(platformEndpointUrl)
                     .protocol(ProtocolType.GRPC); // Use gRPC protocol for test servers
 
             if (!useSSLPlatform) {
@@ -503,6 +511,9 @@ public class SDKBuilderTest {
             }
             assertThat(servicesDPoPHeader.get()).isNotNull();
             assertThat(servicesAuthHeader.get()).isEqualTo("DPoP hereisthetoken");
+            // the platform advertised RFC 9449 at bootstrap, so its proofs carry the full URL
+            assertThat(SignedJWT.parse(servicesDPoPHeader.get()).getJWTClaimsSet().getStringClaim("htu"))
+                    .isEqualTo(platformEndpointUrl + "/policy.namespaces.NamespaceService/GetNamespace");
 
             var body = new String(accessTokenRequest.getBody().readByteArray(), StandardCharsets.UTF_8);
             assertThat(body).contains("grant_type=client_credentials");
@@ -529,6 +540,9 @@ public class SDKBuilderTest {
             }
             assertThat(kasDPoPHeader.get()).isNotNull();
             assertThat(kasAuthHeader.get()).isEqualTo("DPoP hereisthetoken");
+            // the KAS publishes no well-known documents, so it gets the legacy procedure htu
+            assertThat(SignedJWT.parse(kasDPoPHeader.get()).getJWTClaimsSet().getStringClaim("htu"))
+                    .isEqualTo("/kas.AccessService/Rewrap");
         } finally {
             if (platformServicesServer != null) {
                 platformServicesServer.shutdownNow();
