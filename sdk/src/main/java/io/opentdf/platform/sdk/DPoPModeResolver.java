@@ -15,15 +15,19 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 import java.io.IOException;
 import java.net.URL;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.LongSupplier;
 
 /**
  * Decides, per server origin, whether DPoP proofs for resource requests use the RFC 9449 htu or
  * the legacy htu older platforms expect (see {@link DPoPMode}). In {@link DPoPMode#AUTO} the
- * server's advertisement is fetched once per origin and cached; a discovery that got no answer
- * from the server falls back to legacy for that request only and is retried next time. Mirrors
+ * server's advertisement is fetched per origin and cached for {@link #DEFAULT_CACHE_TTL}, since
+ * the KAS, gateway, and IdP in front of an origin can change independently of a long-lived
+ * client. A discovery that got no answer from the server falls back to legacy for that request
+ * only and is retried next time. Mirrors
  * the Go SDK's {@code sdk/auth/dpop_mode.go}. It is thread-safe.
  */
 class DPoPModeResolver {
@@ -31,14 +35,27 @@ class DPoPModeResolver {
     static final String PROTECTED_RESOURCE_PATH = "/.well-known/oauth-protected-resource";
     private static final String DPOP_ALGS_KEY = "dpop_signing_alg_values_supported";
     private static final long MAX_DOCUMENT_BYTES = 1 << 20;
+    static final Duration DEFAULT_CACHE_TTL = Duration.ofMinutes(5);
 
     private static final Logger logger = LoggerFactory.getLogger(DPoPModeResolver.class);
 
     private final DPoPMode configured;
     @Nullable
     private final OkHttpClient httpClient;
+    private final long cacheTtlNanos;
+    private final LongSupplier nanoClock;
     // Definitive answers only (never AUTO), keyed by origin (scheme://host:port)
-    private final Map<String, DPoPMode> modeByOrigin = new ConcurrentHashMap<>();
+    private final Map<String, CachedMode> modeByOrigin = new ConcurrentHashMap<>();
+
+    private static final class CachedMode {
+        final DPoPMode mode;
+        final long expiresAtNanos;
+
+        CachedMode(DPoPMode mode, long expiresAtNanos) {
+            this.mode = mode;
+            this.expiresAtNanos = expiresAtNanos;
+        }
+    }
 
     /**
      * @param configured the requested mode; anything other than AUTO is used as-is
@@ -47,11 +64,19 @@ class DPoPModeResolver {
      *                   May be null when {@code configured} is not AUTO.
      */
     DPoPModeResolver(DPoPMode configured, @Nullable OkHttpClient httpClient) {
+        this(configured, httpClient, DEFAULT_CACHE_TTL, System::nanoTime);
+    }
+
+    /** As above, with the cache lifetime and clock exposed for tests. */
+    DPoPModeResolver(DPoPMode configured, @Nullable OkHttpClient httpClient, Duration cacheTtl,
+                     LongSupplier nanoClock) {
         this.configured = Objects.requireNonNull(configured, "configured");
         if (configured == DPoPMode.AUTO && httpClient == null) {
             throw new IllegalArgumentException("DPoP mode discovery requires an HTTP client");
         }
         this.httpClient = httpClient;
+        this.cacheTtlNanos = cacheTtl.toNanos();
+        this.nanoClock = Objects.requireNonNull(nanoClock, "nanoClock");
     }
 
     static DPoPModeResolver fixed(DPoPMode mode) {
@@ -94,7 +119,7 @@ class DPoPModeResolver {
      */
     void recordRfc9449(URL url) {
         if (configured == DPoPMode.AUTO) {
-            modeByOrigin.put(TokenSource.getOrigin(url), DPoPMode.RFC9449);
+            cache(TokenSource.getOrigin(url), DPoPMode.RFC9449);
         }
     }
 
@@ -104,14 +129,23 @@ class DPoPModeResolver {
             return configured;
         }
         String origin = TokenSource.getOrigin(url);
-        DPoPMode known = modeByOrigin.get(origin);
-        if (known != null) {
-            return known;
+        CachedMode known = modeByOrigin.get(origin);
+        // Compare by difference: nanoTime values may wrap.
+        if (known != null && nanoClock.getAsLong() - known.expiresAtNanos < 0) {
+            return known.mode;
         }
-        // Discovery runs outside any lock; concurrent first requests may each discover, which is
-        // harmless since they reach the same answer.
+        // Discovery runs outside any lock, so concurrent requests for an uncached or expired origin
+        // may each discover; the last definitive answer is kept.
         DPoPMode discovered = discover(origin);
-        return discovered == null ? DPoPMode.LEGACY : modeByOrigin.computeIfAbsent(origin, o -> discovered);
+        if (discovered == null) {
+            return DPoPMode.LEGACY;
+        }
+        cache(origin, discovered);
+        return discovered;
+    }
+
+    private void cache(String origin, DPoPMode mode) {
+        modeByOrigin.put(origin, new CachedMode(mode, nanoClock.getAsLong() + cacheTtlNanos));
     }
 
     /** @return the definitive mode, or null when the server gave no answer (don't cache). */

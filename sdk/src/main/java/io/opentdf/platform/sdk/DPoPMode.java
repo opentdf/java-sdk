@@ -8,12 +8,13 @@ package io.opentdf.platform.sdk;
  */
 public enum DPoPMode {
     /**
-     * Discover the style once per server origin from what the server advertises: the
+     * Discover the style per server origin from what the server advertises: the
      * {@code dpop} block or {@code dpop_signing_alg_values_supported} in
      * {@code /.well-known/opentdf-configuration}, then RFC 9728
      * {@code /.well-known/oauth-protected-resource}. Servers that advertise neither get
      * {@link #LEGACY}; a discovery that gets no answer uses legacy for that request and is retried.
-     * This is the default.
+     * Answers are cached per origin for a few minutes, then rediscovered, so a server that is
+     * upgraded or reconfigured is picked up without restarting the client. This is the default.
      */
     AUTO,
     /**

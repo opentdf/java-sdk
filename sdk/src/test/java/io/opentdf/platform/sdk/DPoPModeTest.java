@@ -29,12 +29,14 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.net.URL;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static io.opentdf.platform.sdk.DPoPModeResolver.OPENTDF_CONFIGURATION_PATH;
 import static io.opentdf.platform.sdk.DPoPModeResolver.PROTECTED_RESOURCE_PATH;
@@ -60,6 +62,9 @@ class DPoPModeTest {
     private final Map<String, MockResponse> wellKnown = new ConcurrentHashMap<>();
     private final List<RecordedRequest> discoveryRequests = new CopyOnWriteArrayList<>();
     private final AtomicBoolean challengeNextCall = new AtomicBoolean();
+    private static final Duration TTL = Duration.ofMinutes(5);
+    // Starts near overflow so expiry checks must tolerate a wrapping nanoTime.
+    private final AtomicLong nanos = new AtomicLong(Long.MAX_VALUE - TTL.toNanos() / 2);
 
     @BeforeAll
     static void generateKey() throws Exception {
@@ -263,6 +268,49 @@ class DPoPModeTest {
     }
 
     @Test
+    void legacyAnswerExpiresSoAnUpgradedServerIsRediscovered() {
+        DPoPModeResolver resolver = clockedResolver();
+        assertThat(resolver.modeFor(rpcUrl())).isEqualTo(DPoPMode.LEGACY);
+
+        wellKnown.put(OPENTDF_CONFIGURATION_PATH, json("{\"configuration\":{" + ALGS + "}}"));
+        nanos.addAndGet(TTL.toNanos() - 1);
+        assertThat(resolver.modeFor(rpcUrl())).isEqualTo(DPoPMode.LEGACY);
+
+        nanos.addAndGet(1);
+        assertThat(resolver.modeFor(rpcUrl())).isEqualTo(DPoPMode.RFC9449);
+        assertThat(discoveredPaths()).containsExactly(
+                OPENTDF_CONFIGURATION_PATH, PROTECTED_RESOURCE_PATH, OPENTDF_CONFIGURATION_PATH);
+    }
+
+    @Test
+    void rfc9449AnswerExpiresSoAReconfiguredServerIsRediscovered() {
+        wellKnown.put(PROTECTED_RESOURCE_PATH, json("{" + ALGS + "}"));
+        DPoPModeResolver resolver = clockedResolver();
+        assertThat(resolver.modeFor(rpcUrl())).isEqualTo(DPoPMode.RFC9449);
+
+        // E.g. the origin is now fronted by a legacy KAS or a gateway that no longer publishes metadata.
+        wellKnown.remove(PROTECTED_RESOURCE_PATH);
+        nanos.addAndGet(TTL.toNanos());
+        assertThat(resolver.modeFor(rpcUrl())).isEqualTo(DPoPMode.LEGACY);
+        assertThat(resolver.modeFor(rpcUrl())).isEqualTo(DPoPMode.LEGACY);
+        assertThat(discoveredPaths()).containsExactly(
+                OPENTDF_CONFIGURATION_PATH, PROTECTED_RESOURCE_PATH,
+                OPENTDF_CONFIGURATION_PATH, PROTECTED_RESOURCE_PATH);
+    }
+
+    @Test
+    void seededAnswerExpires() {
+        DPoPModeResolver resolver = clockedResolver();
+        resolver.recordRfc9449(resourceServer.url("/").url());
+        assertThat(resolver.modeFor(rpcUrl())).isEqualTo(DPoPMode.RFC9449);
+        assertThat(discoveryRequests).isEmpty();
+
+        nanos.addAndGet(TTL.toNanos());
+        assertThat(resolver.modeFor(rpcUrl())).isEqualTo(DPoPMode.LEGACY);
+        assertThat(discoveredPaths()).containsExactly(OPENTDF_CONFIGURATION_PATH, PROTECTED_RESOURCE_PATH);
+    }
+
+    @Test
     void bootstrapAdvertisementSeedsPlatformWithoutDiscovery() {
         Struct algs = Struct.newBuilder().putFields("dpop_signing_alg_values_supported",
                 Value.newBuilder().setListValue(ListValue.newBuilder()
@@ -356,6 +404,10 @@ class DPoPModeTest {
 
     private DPoPModeResolver autoResolver() {
         return new DPoPModeResolver(DPoPMode.AUTO, new OkHttpClient());
+    }
+
+    private DPoPModeResolver clockedResolver() {
+        return new DPoPModeResolver(DPoPMode.AUTO, new OkHttpClient(), TTL, nanos::get);
     }
 
     private TokenSource tokenSource(DPoPModeResolver resolver) {
