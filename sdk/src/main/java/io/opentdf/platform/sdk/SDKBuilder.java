@@ -50,6 +50,7 @@ import java.net.URL;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.security.cert.X509Certificate;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -71,6 +72,7 @@ public class SDKBuilder {
     private JWK dpopKey;
     private JWSAlgorithm dpopAlg;
     private DPoPMode dpopMode = DPoPMode.AUTO;
+    private Duration dpopDiscoveryCacheTtl = DPoPModeResolver.DEFAULT_CACHE_TTL;
 
     private static final Logger logger = LoggerFactory.getLogger(SDKBuilder.class);
 
@@ -268,6 +270,25 @@ public class SDKBuilder {
         return this;
     }
 
+    /**
+     * How long a server's DPoP style discovered in {@link DPoPMode#AUTO} is reused before it is
+     * discovered again. Defaults to five minutes. The legacy fallback after a discovery that got no
+     * usable answer is reused for 30 seconds, or for this TTL if shorter. {@link Duration#ZERO}
+     * disables the cache, so every request first queries the server's well-known configuration.
+     * Ignored for the fixed modes.
+     *
+     * @param ttl how long to cache each server's discovered style
+     * @return this builder instance for method chaining
+     * @throws IllegalArgumentException if ttl is null or negative
+     */
+    public SDKBuilder dpopDiscoveryCacheTtl(Duration ttl) {
+        if (ttl == null || ttl.isNegative()) {
+            throw new IllegalArgumentException("DPoP discovery cache TTL must be zero or positive");
+        }
+        this.dpopDiscoveryCacheTtl = ttl;
+        return this;
+    }
+
     private AuthInterceptor getAuthInterceptor(JWK dpopJwk, JWSAlgorithm dpopAlgorithm) {
         if (platformEndpoint == null) {
             throw new SDKException("cannot build an SDK without specifying the platform endpoint");
@@ -326,7 +347,8 @@ public class SDKBuilder {
             this.authzGrant = new ClientCredentialsGrant();
         }
         // Discovery reuses the unauthenticated bootstrap client so it never sends credentials.
-        var dpopModeResolver = new DPoPModeResolver(dpopMode, httpClient);
+        var dpopModeResolver = new DPoPModeResolver(dpopMode, httpClient, dpopDiscoveryCacheTtl, System::nanoTime,
+                DPoPModeResolver.DISCOVERY_TIMEOUT);
         // Reuse the configuration fetched above rather than discovering the platform again. Only
         // a positive is seeded: RFC 9728 metadata may still advertise.
         if (DPoPModeResolver.advertisesRfc9449(config.getConfiguration())) {
