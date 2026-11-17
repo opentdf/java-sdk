@@ -289,6 +289,21 @@ class TDFRootSignatureTest {
     }
 
     @Test
+    void segmentTooSmallToBeAnAeadMessageIsRejected() throws IOException {
+        // A segment shorter than an IV plus a tag cannot be AES-GCM output at all. The size
+        // check refuses it before any payload is read, so it fails as an invalid TDF rather
+        // than as an argument error escaping from the crypto layer.
+        var tampered = rewrite(createTdf(fourSegmentPlaintext()),
+                manifest -> segments(manifest).get(0).getAsJsonObject()
+                        .addProperty("encryptedSegmentSize", AesGcm.GCM_NONCE_LENGTH + AesGcm.GCM_TAG_LENGTH - 1),
+                UnaryOperator.identity());
+
+        assertThatThrownBy(() -> decrypt(tampered))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("cannot be shorter");
+    }
+
+    @Test
     void defaultsAreHs256RootAndGmacSegments() throws IOException {
         var integrityInformation = integrityInformation(
                 JsonParser.parseString(manifestOf(createTdf(fourSegmentPlaintext()))).getAsJsonObject());

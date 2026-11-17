@@ -74,7 +74,6 @@ class TDF {
     private static final String kKasProtocol = "kas";
     private static final int kGcmIvSize = 12;
     private static final String kGCMCipherAlgorithm = "AES-256-GCM";
-    private static final int kGMACPayloadLength = 16;
     private static final String kGmacIntegrityAlgorithm = "GMAC";
 
     private static final String kHmacIntegrityAlgorithm = "HS256";
@@ -258,11 +257,11 @@ class TDF {
                     // is the payload key; with several, the IV repeats only under distinct keys.
                     byte[] metaBytes = tdfConfig.metaData.getBytes(StandardCharsets.UTF_8);
                     AesGcm aesGcm = new AesGcm(symKey);
-                    byte[] ivAndCiphertext = aesGcm.encrypt(metadataIv, AesGcm.GCM_TAG_LENGTH, metaBytes, 0, metaBytes.length);
+                    AesGcm.Encrypted ivAndCiphertext = aesGcm.encrypt(metadataIv, metaBytes, 0, metaBytes.length);
 
                     EncryptedMetadata em = new EncryptedMetadata();
                     em.iv = encoder.encodeToString(metadataIv);
-                    em.ciphertext = encoder.encodeToString(ivAndCiphertext);
+                    em.ciphertext = encoder.encodeToString(ivAndCiphertext.asBytes());
 
                     var metadata = gson.toJson(em);
                     encryptedMetadata = encoder.encodeToString(metadata.getBytes(StandardCharsets.UTF_8));
@@ -487,7 +486,9 @@ class TDF {
                 var sigAlg = segmentIntegrityAlgorithmFromManifest(
                         manifest.encryptionInformation.integrityInformation.segmentHashAlg);
 
-                var payloadSig = calculateSignature(readBuf, payloadKey, sigAlg);
+                var encryptedSegment = AesGcm.Encrypted.wrapping(readBuf);
+
+                var payloadSig = segmentIntegrity(encryptedSegment, payloadKey, sigAlg);
                 if (isLegacyTdf) {
                     payloadSig = Hex.encodeHexString(payloadSig).getBytes(StandardCharsets.UTF_8);
                 }
@@ -496,7 +497,7 @@ class TDF {
                     throw new SDK.SegmentSignatureMismatch("segment signature miss match");
                 }
 
-                return aesGcm.decrypt(new AesGcm.Encrypted(readBuf));
+                return aesGcm.decrypt(encryptedSegment);
             } else {
                 String segmentSig = Hex.encodeHexString(digest.digest(readBuf));
                 if (segment.hash.compareTo(segmentSig) != 0) {
@@ -548,7 +549,7 @@ class TDF {
         /**
          * Resolves {@code segmentHashAlg} as read from the manifest. Both algorithms are
          * allowed: a GMAC segment hash proves nothing by itself, but unlike the root it is
-         * bracketed by keyed checks that do (see {@link TDF#aeadTag}). An unrecognized name
+         * bracketed by keyed checks that do (see {@link TDF#segmentIntegrity}). An unrecognized name
          * is still refused rather than defaulted. Contrast
          * {@link TDF#rootIntegrityAlgorithmFromManifest}, where only HS256 is meaningful.
          */
@@ -586,17 +587,64 @@ class TDF {
         return aggregateHash.toByteArray();
     }
 
-    private static byte[] calculateSignature(byte[] data, byte[] secret, Config.IntegrityAlgorithm algorithm) {
-        if (algorithm == Config.IntegrityAlgorithm.HS256) {
-            return CryptoUtils.CalculateSHA256Hmac(secret, data);
+    /**
+     * The integrity value recorded in a segment's {@code hash}.
+     * <p>
+     * Takes an {@link AesGcm.Encrypted} rather than a {@code byte[]} deliberately. Under
+     * GMAC this returns the tag AES-GCM already produced over exactly these bytes, which is
+     * a genuine authenticator only because the value came out of the cipher; the same
+     * trailing sixteen bytes taken off anything else — an aggregate hash, say — are keyless
+     * and forgeable by whoever supplied them. Demanding the AEAD's own output type makes
+     * that mistake a compile error rather than a review comment. Compare
+     * {@link #rootIntegrity}, whose parameter is a plain {@code byte[]} and which therefore
+     * cannot reach this branch at all.
+     * <p>
+     * Recovering a tag is not verifying one: comparing it against a manifest value is keyless
+     * on its own. What makes a GMAC segment hash trustworthy is the keyed checks around it:
+     * {@code loadTDF} has already validated the whole list of segment hashes against the HS256
+     * root signature, and the payload read follows the comparison with a real AES-GCM tag
+     * check under the payload key. The root signature has neither backstop, which is why
+     * {@link #rootIntegrity} does not offer this algorithm.
+     *
+     * @param segment   the whole AES-GCM message for this segment: IV, ciphertext and tag
+     * @param key       the payload key
+     * @param algorithm {@code GMAC} to reuse the segment's own AEAD tag, or {@code HS256} to
+     *                  HMAC the whole segment
+     * @throws IllegalArgumentException if {@code algorithm} is null or unsupported
+     */
+    static byte[] segmentIntegrity(AesGcm.Encrypted segment, byte[] key, Config.IntegrityAlgorithm algorithm) {
+        requireSupportedSegmentIntegrityAlgorithm(algorithm);
+        switch (algorithm) {
+            case HS256:
+                return CryptoUtils.CalculateSHA256Hmac(key, segment.bytesNoCopy());
+            case GMAC:
+                return segment.authTag();
+            default:
+                throw new IllegalArgumentException("unsupported segment integrity algorithm: " + algorithm);
         }
+    }
 
-        if (kGMACPayloadLength > data.length) {
-            throw new IllegalArgumentException("tried to calculate GMAC on too small a payload. payload is "
-                    + data.length + " bytes while GMAC is " + kGMACPayloadLength + " bytes");
-        }
-
-        return Arrays.copyOfRange(data, data.length - kGMACPayloadLength, data.length);
+    /**
+     * The integrity value recorded in {@code rootSignature.sig}, over the concatenated
+     * segment hashes.
+     * <p>
+     * HS256 only. The aggregate hash never passes through the AEAD, so there is no tag
+     * to recover from it; a "GMAC" root signature is just a copy of the last segment
+     * hash, which is attacker-controlled manifest data. Accepting one would let anyone
+     * truncate, reorder, duplicate or drop segments without holding a key, since nothing
+     * else binds a segment to its index or to the segment count.
+     * <p>
+     * The {@code byte[]} parameter is load-bearing, not incidental: it is what makes the
+     * GMAC branch of {@link #segmentIntegrity} unreachable from here, since that method
+     * takes an {@link AesGcm.Encrypted} and nothing wraps an aggregate hash in one. The
+     * runtime check below still matters — it covers the algorithm a caller or a manifest
+     * asks for — but the type is what rules out the mistake at the call site.
+     *
+     * @throws IllegalArgumentException if {@code algorithm} is anything but HS256
+     */
+    static byte[] rootIntegrity(byte[] aggregateHash, byte[] key, Config.IntegrityAlgorithm algorithm) {
+        requireSupportedRootIntegrityAlgorithm(algorithm);
+        return CryptoUtils.CalculateSHA256Hmac(key, aggregateHash);
     }
 
     /**
@@ -703,15 +751,14 @@ class TDF {
                 }
                 finished = nRead < 0;
 
-                byte[] cipherData;
+                AesGcm.Encrypted cipherData;
                 byte[] segmentSig;
 
                 // encrypt
-                cipherData = tdfObject.aesGcm.encrypt(streamIv.next(), AesGcm.GCM_TAG_LENGTH,
-                        readBuf, 0, readThisLoop);
-                payloadOutput.write(cipherData);
+                cipherData = tdfObject.aesGcm.encrypt(streamIv.next(), readBuf, 0, readThisLoop);
+                payloadOutput.write(cipherData.bytesNoCopy());
 
-                segmentSig = calculateSignature(cipherData, tdfObject.payloadKey, tdfConfig.segmentIntegrityAlgorithm);
+                segmentSig = segmentIntegrity(cipherData, tdfObject.payloadKey, tdfConfig.segmentIntegrityAlgorithm);
                 if (tdfConfig.hexEncodeRootAndSegmentHashes) {
                     segmentSig = Hex.encodeHexString(segmentSig).getBytes(StandardCharsets.UTF_8);
                 }
@@ -719,7 +766,7 @@ class TDF {
                 // Every segment we write is full except the last one, and every hash has the
                 // same length, so the compact representation always accepts them.
                 if (!segments.append(Base64.getEncoder().encodeToString(segmentSig), readThisLoop,
-                        cipherData.length)) {
+                        cipherData.size())) {
                     throw new SDKException("unable to record segment " + segments.size() + " in the manifest");
                 }
             } while (!finished);
@@ -731,7 +778,7 @@ class TDF {
 
         Manifest.RootSignature rootSignature = new Manifest.RootSignature();
 
-        byte[] rootSig = calculateSignature(aggregateHash, tdfObject.payloadKey,
+        byte[] rootSig = rootIntegrity(aggregateHash, tdfObject.payloadKey,
                 tdfConfig.integrityAlgorithm);
         byte[] encodedRootSig = tdfConfig.hexEncodeRootAndSegmentHashes
                 ? Hex.encodeHexString(rootSig).getBytes(StandardCharsets.UTF_8)
@@ -952,7 +999,7 @@ class TDF {
         if (manifest.payload.isEncrypted) {
             var sigAlg = rootIntegrityAlgorithmFromManifest(rootAlgorithm);
 
-            var sig = calculateSignature(aggregateHash, payloadKey, sigAlg);
+            var sig = rootIntegrity(aggregateHash, payloadKey, sigAlg);
             if (isLegacyTdf) {
                 sig = Hex.encodeHexString(sig).getBytes();
             }
