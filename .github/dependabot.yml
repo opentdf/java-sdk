@@ -3,10 +3,8 @@
 # Documentation:
 #   https://docs.github.com/code-security/dependabot/working-with-dependabot/dependabot-options-reference
 #
-# Dependabot only opens security update PRs here; open-pull-requests-limit: 0
-# turns off version updates. Security update PRs still use the commit-message
-# settings, which keep their titles within the scopes allowed by the PR title
-# check in workflows/checks.yaml.
+# Commit-message prefixes keep PR titles within the scopes allowed by the PR
+# title check in workflows/checks.yaml.
 
 version: 2
 updates:
@@ -20,9 +18,20 @@ updates:
       - /sdk-pqc-bc
     schedule:
       interval: weekly
+    # Security updates only.
     open-pull-requests-limit: 0
     commit-message:
       # Runtime dependencies ship in released artifacts, so cut a patch release.
       prefix: "fix(main)"
       # Test-scoped dependencies don't change released artifacts.
       prefix-development: "chore(ci)"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    # Give compromised releases time to be caught before SHA pins move to them.
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore(ci)"
